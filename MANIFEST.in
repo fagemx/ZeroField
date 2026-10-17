@@ -1,0 +1,17 @@
+include README.md AGENTS.md LICENSE pyproject.toml setup.py Dockerfile docker-compose.yml
+recursive-include db *.sql
+recursive-include static/projects *
+recursive-include project_assistant/prompts *.md
+recursive-include openbench_data *.py
+recursive-include examples *.py *.json
+recursive-include scripts *.py
+recursive-include .github/workflows *.yml
+recursive-include docs *.md *.py
+recursive-include tests *.py *.json
+include ui/package.json ui/package-lock.json ui/index.html ui/vite.config.js
+recursive-include ui/src *.js *.jsx *.css
+recursive-include ui/tests *.mjs
+prune ui/node_modules
+prune build
+prune dist
+prune .reference-repos

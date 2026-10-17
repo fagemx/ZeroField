@@ -1,0 +1,30 @@
+{
+  "head_url": "http://127.0.0.1:3020",
+  "token_env": "OPENBENCH_LIMB_TOKEN",
+  "capabilities": {
+    "llm": {
+      "adapter": "openai_compat",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "model": "REPLACE_WITH_INSTALLED_MODEL"
+    },
+    "image_gen": {
+      "adapter": "comfyui",
+      "base_url": "http://127.0.0.1:8188",
+      "workflow": "workflow_api.json",
+      "prompt_node": "6",
+      "prompt_column": 3,
+      "output_node": "9"
+    },
+    "video_gen": {
+      "adapter": "http_bridge",
+      "base_url": "http://127.0.0.1:8090",
+      "api_key_env": "MEDIA_BRIDGE_TOKEN"
+    },
+    "media_assemble": {
+      "adapter": "ffmpeg",
+      "width": 1280,
+      "height": 720,
+      "fps": 24
+    }
+  }
+}

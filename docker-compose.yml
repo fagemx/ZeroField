@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: openbench
+      POSTGRES_DB: openbench
+      POSTGRES_PASSWORD: ${OPENBENCH_DB_PASSWORD:?Set OPENBENCH_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openbench -d openbench"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:3020:3020"
+    environment:
+      OPENBENCH_DB_HOST: db
+      OPENBENCH_DB_NAME: openbench
+      OPENBENCH_DB_USER: openbench
+      OPENBENCH_DB_PASSWORD: ${OPENBENCH_DB_PASSWORD:?Set OPENBENCH_DB_PASSWORD}
+      OPENBENCH_AUTH_MODE: token
+      OPENBENCH_TOKENS: ${OPENBENCH_TOKENS:?Set OPENBENCH_TOKENS JSON token-to-member map}
+      OPENBENCH_SESSION_SECRET: ${OPENBENCH_SESSION_SECRET:-}
+      OPENBENCH_COOKIE_SECURE: ${OPENBENCH_COOKIE_SECURE:-0}
+      OPENBENCH_PROVIDER: ${OPENBENCH_PROVIDER:-openai_compat}
+      OPENBENCH_API_BASE: ${OPENBENCH_API_BASE:-https://api.openai.com/v1}
+      OPENBENCH_API_KEY: ${OPENBENCH_API_KEY:-}
+      OPENBENCH_MODEL: ${OPENBENCH_MODEL:-gpt-4.1}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres-data:

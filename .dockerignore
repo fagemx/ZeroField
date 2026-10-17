@@ -1,0 +1,14 @@
+.git
+.reference-repos
+.openbench*
+.venv
+build
+dist
+*.egg-info
+ui/node_modules
+node_modules
+**/__pycache__
+*.env
+.env*
+tests
+docs

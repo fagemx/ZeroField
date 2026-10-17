@@ -1,0 +1,104 @@
+{
+  "inspected_on": "2026-10-16",
+  "local_root": ".reference-repos",
+  "repositories": [
+    {
+      "name": "baserow",
+      "url": "https://github.com/baserow/baserow.git",
+      "commit": "0d332bec4934573693ac49397480b9ecd561a761",
+      "commit_date": "2026-10-16T22:10:05+08:00",
+      "sparse_paths": [
+        "backend/src/baserow/contrib/assistant",
+        "backend/src/baserow/contrib/database/fields",
+        "docs/decisions",
+        "web-frontend/modules/database/components/view/gallery",
+        "web-frontend/modules/database/components/view/grid",
+        "web-frontend/modules/database/utils"
+      ],
+      "license_file": "LICENSE",
+      "mode": "depth-1, blob:none, sparse, no-tags"
+    },
+    {
+      "name": "teable",
+      "url": "https://github.com/teableio/teable.git",
+      "commit": "b91d88eeb0e923263db24b7f8d29ddb4f50a544e",
+      "commit_date": "2026-10-16T16:44:10+08:00",
+      "sparse_paths": [
+        "packages/core/src/models/view",
+        "packages/sdk/src/components",
+        "packages/sdk/src/views"
+      ],
+      "license_file": "LICENSE",
+      "mode": "depth-1, blob:none, sparse, no-tags"
+    },
+    {
+      "name": "activepieces",
+      "url": "https://github.com/activepieces/activepieces.git",
+      "commit": "82300fe8029390e614f63eeac079ccc6db60eba6",
+      "commit_date": "2026-10-16T18:47:59+08:00",
+      "sparse_paths": [
+        "docs/install/architecture",
+        "packages/core/execution/src/lib/flow-run/waitpoint",
+        "packages/web/src/app/builder/data-selector",
+        "packages/web/src/app/builder/flow-canvas",
+        "packages/web/src/app/builder/piece-properties",
+        "packages/web/src/app/builder/step-settings",
+        "packages/web/src/app/builder/test-step"
+      ],
+      "license_file": "LICENSE",
+      "mode": "depth-1, blob:none, sparse, no-tags"
+    },
+    {
+      "name": "affine",
+      "url": "https://github.com/toeverything/AFFiNE.git",
+      "commit": "0b69a6da21e8fd35beb85667bb8496d9b3852238",
+      "commit_date": "2026-10-11T22:49:18+08:00",
+      "sparse_paths": [
+        "blocksuite/affine/blocks/database/src",
+        "blocksuite/affine/data-view/src/view-presets",
+        "packages/backend/server"
+      ],
+      "license_file": "LICENSE",
+      "mode": "depth-1, blob:none, sparse, no-tags"
+    },
+    {
+      "name": "windmill",
+      "url": "https://github.com/windmill-labs/windmill.git",
+      "commit": "33d4049db029e1dc478b1251c562232f0127fc8a",
+      "commit_date": "2026-10-16T16:16:22+08:00",
+      "sparse_paths": [
+        "backend/windmill-common/src",
+        "backend/windmill-queue/src",
+        "frontend/src/lib/components/flows"
+      ],
+      "license_file": "LICENSE",
+      "mode": "depth-1, blob:none, sparse, no-tags"
+    },
+    {
+      "name": "xyflow",
+      "url": "https://github.com/xyflow/xyflow.git",
+      "commit": "654ba5a5e04f3404bc4db2eee88bfa15866d203d",
+      "commit_date": "2026-10-16T16:37:14+08:00",
+      "sparse_paths": [
+        "examples/react/src/examples/SaveRestore",
+        "examples/react/src/examples/Validation",
+        "packages/react"
+      ],
+      "license_file": "LICENSE",
+      "mode": "depth-1, blob:none, sparse, no-tags"
+    },
+    {
+      "name": "univer",
+      "url": "https://github.com/dream-num/univer.git",
+      "commit": "7e73a4d83edbb2c5b1996dc93bb32cb9a5c951f6",
+      "commit_date": "2026-10-16T21:17:37+08:00",
+      "sparse_paths": [
+        "docs/tldr",
+        "packages/core/src/services/command",
+        "packages/core/src/services/plugin"
+      ],
+      "license_file": "LICENSE",
+      "mode": "depth-1, blob:none, sparse, no-tags"
+    }
+  ]
+}

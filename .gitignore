@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Node / UI build cache
+ui/node_modules/
+node_modules/
+
+# Runtime & local databases
+.openbench_pg/
+.openbench_test_pg16/
+.openbench_runtime/
+.cache/
+.superpowers/
+.reference-repos/
+build/
+dist/
+*.env
+.env.*
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

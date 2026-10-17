@@ -1,0 +1,9 @@
+{
+  "doc": {"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"專案"}]},{"type":"paragraph","content":[{"type":"text","text":"甲乙"},{"type":"hardBreak"},{"type":"text","text":"丙丁"},{"type":"status","attrs":{"fid":"field001","label":"已完成"}}]}]},
+  "text":"專案\n甲乙\n丙丁",
+  "cases":[
+    {"name":"unchanged","text":"每日報表完成","anchor":{"quote":"報表","start":2,"prefix":"每日","suffix":"完成"},"expect":[2,4,true]},
+    {"name":"prefix inserted","text":"新每日報表完成","anchor":{"quote":"報表","start":2,"prefix":"每日","suffix":"完成"},"expect":[3,5,true]},
+    {"name":"removed","text":"全段已刪除","anchor":{"quote":"原始報表內容","start":0,"prefix":"","suffix":""},"expect":null}
+  ]
+}
