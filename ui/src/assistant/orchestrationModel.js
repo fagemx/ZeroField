@@ -1,9 +1,10 @@
+import { t as uiText } from '../i18n/index.js';
 export const EMPTY_COUNTS = { needs_you: 0, working: 0, done: 0, idle: 0 };
 
 export function cancellationRequest(base, slug, item) {
   if (item.kind === 'flow') return { path: `/projects/api/${slug}/tabs/${item.target.tab_key}/flow/runs/${item.flow_run_id}/cancel`, body: {} };
-  if (item.gate_id && item.run_id) return { path: `${base}/runs/${item.run_id}/cancel`, body: { reason: "Batch canceled from Agent Board" } };
-  return { path: `${base}/dispatches/${item.dispatch_id}/cancel`, body: { admission_no: item.admission_no, reason: "Canceled from Agent Board" } };
+  if (item.gate_id && item.run_id) return { path: `${base}/runs/${item.run_id}/cancel`, body: { reason: uiText("orchestrationModel.batchCanceledFromAgentBoard") } };
+  return { path: `${base}/dispatches/${item.dispatch_id}/cancel`, body: { admission_no: item.admission_no, reason: uiText("orchestrationModel.canceledFromAgentBoard") } };
 }
 export const emptyBoard = () => ({ needs_you: [], working: [], done: [], idle: [], counts: { ...EMPTY_COUNTS }, cursor: null,
   ui: { selected: null, drafts: {}, selectedProposalId: null } });
@@ -36,12 +37,12 @@ export function reconcileBoard(previous, next, context = {}) {
 }
 
 export function raceSelectionPayload(gate, proposalId, requestId) {
-  if (!Number.isInteger(proposalId) || proposalId <= 0) throw new Error("Select a candidate that is ready for review.");
+  if (!Number.isInteger(proposalId) || proposalId <= 0) throw new Error(uiText("orchestrationModel.selectACandidateThatIsReadyForReview"));
   return { client_request_id: requestId, resolution: { proposal_id: proposalId } };
 }
 
 export function assignmentRequest({ objective, strategy = 'single', agentKey, raceAgents, scope, target, requestId, mode = 'proposal' }) {
-  if (!objective?.trim()) throw new Error("Describe the task.");
+  if (!objective?.trim()) throw new Error(uiText("orchestrationModel.describeTheTask"));
   return { client_request_id: requestId, objective: objective.trim(), strategy, write_mode: mode,
     ...(agentKey && strategy !== 'race' ? { agent_key: agentKey } : {}),
     ...(strategy === 'race' ? { race_agents: [...raceAgents] } : {}),
@@ -51,6 +52,6 @@ export function assignmentRequest({ objective, strategy = 'single', agentKey, ra
 export function proposalChanges(proposal) {
   const review = proposal.target?.review || proposal.review;
   if (review?.groups?.length) return review.groups;
-  return [{ label: proposal.action || "Proposed Changes", changes: [{ column: proposal.target?.tab_title || "Content",
+  return [{ label: proposal.action || uiText("orchestrationModel.proposedChanges"), changes: [{ column: proposal.target?.tab_title || uiText("orchestrationModel.content"),
     before: proposal.target?.quote || '', after: proposal.content || '' }] }];
 }

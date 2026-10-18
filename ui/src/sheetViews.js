@@ -1,5 +1,6 @@
+import { t as uiText } from './i18n/index.js';
 import { evaluate, mediaOf, tableEditPayload } from './sheetModel.js';
-import { STATUSES, LEGACY_STATUSES, statusLabel } from './format.js';
+import { STATUSES, LEGACY_STATUSES, statusLabel, normalizeStatus } from './format.js';
 
 const MODES = ['grid', 'gallery', 'kanban'];
 const COMMON_STATUSES = STATUSES;
@@ -29,7 +30,7 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}) {
     const index = indexById.get(row.rid);
     const media = coverColumn < 0 ? null : mediaOf(row.cells[coverColumn]?.value, 'image');
     return {
-      row, index, title: String(row.cells[0]?.value || `Row ${index + 1}`),
+      row, index, title: String(row.cells[0]?.value || uiText("sheetViews.row", {v0: (index + 1)})),
       cover: media?.kind === 'image' ? {...media, column: coverColumn, value: row.cells[coverColumn].value} : null,
       summary: row.cells.flatMap((cell, c) => c === 0 || c === coverColumn || statusColumns.some(s => s.index === c) || mediaOf(cell.value, parsed.table.attrs.column_types?.[c]) || !String(cell.value ?? '').trim() ? [] : [{
         label: parsed.headers[c], value: evaluate(cell.value, parsed.rows, new Set(), parsed.table.attrs.worksheet_name ? parsed.table.attrs.source_header_row || 1 : 0),
@@ -41,7 +42,7 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}) {
     for (const value of statusOptions(parsed, groupColumn)) groups.set(value, {value, label: statusLabel(value), cards: []});
     for (const card of cards) {
       const value = String(card.row.cells[groupColumn]?.value ?? '');
-      if (!groups.has(value)) groups.set(value, {value, label: statusLabel(value) || "Not Configured", cards: []});
+      if (!groups.has(value)) groups.set(value, {value, label: statusLabel(value) || uiText("sheetViews.notConfigured"), cards: []});
       groups.get(value).cards.push(card);
     }
   }
@@ -50,11 +51,11 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}) {
 
 export function statusMovePayload(parsed, rowId, column, value) {
   const rowIndex = parsed.rows.findIndex(row => row.rid === rowId);
-  if (rowIndex < 0) throw new Error("This row no longer exists. Refresh the page.");
-  if (!viewColumns(parsed).statusColumns.some(c => c.index === column)) throw new Error("Select a status column first.");
+  if (rowIndex < 0) throw new Error(uiText("sheetViews.thisRowNoLongerExistsRefreshThePage"));
+  if (!viewColumns(parsed).statusColumns.some(c => c.index === column)) throw new Error(uiText("sheetViews.selectAStatusColumnFirst"));
   const row = parsed.rows[rowIndex];
   const options = statusOptions(parsed, column, row);
-  if (!(value === '' && row.cells[column]?.kind !== 'status') && !options.includes(value) && !(value in LEGACY_STATUSES && options.includes(statusLabel(value)))) throw new Error("Choose a valid status option.");
+  if (!(value === '' && row.cells[column]?.kind !== 'status') && !options.includes(value) && !(value in LEGACY_STATUSES && options.includes(normalizeStatus(value)))) throw new Error(uiText("sheetViews.chooseAValidStatusOption"));
   return tableEditPayload(parsed, rowIndex, column, [[value]]);
 }
 

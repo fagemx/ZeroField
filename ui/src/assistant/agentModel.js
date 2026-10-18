@@ -1,3 +1,4 @@
+import { t as uiText } from '../i18n/index.js';
 export function openReplies(thread = []) {
   return new Map(thread.filter(m => m.role === 'assistant' && ['queued', 'running'].includes(m.status))
     .map(m => [m.agent_key || 'coordinator', m]));
@@ -9,13 +10,13 @@ export function resolveAgentTarget(text, explicitKey, agents = []) {
   const keys = new Set();
   for (const token of tokens) {
     const found = agents.filter(a => a.agent_key === token || a.display_name === token);
-    if (found.length !== 1) throw new Error(`No unique agent found for @${token}`);
+    if (found.length !== 1) throw new Error(uiText("agentModel.noUniqueAgentFoundFor", {v0: (token)}));
     keys.add(found[0].agent_key);
   }
-  if (keys.size > 1 || (keys.size && explicitKey && !keys.has(explicitKey))) throw new Error("Choose one agent per conversation. Use batch delegation for multiple agents.");
+  if (keys.size > 1 || (keys.size && explicitKey && !keys.has(explicitKey))) throw new Error(uiText("agentModel.chooseOneAgentPerConversationUseBatchDelegationFor"));
   const key = explicitKey || [...keys][0] || 'coordinator';
   const agent = agents.find(a => a.agent_key === key);
-  if (!agent || !agent.enabled || agent.role_kind === 'observer' || agent.runtime_kind !== 'builtin_llm') throw new Error("This agent cannot receive chat messages right now.");
+  if (!agent || !agent.enabled || agent.role_kind === 'observer' || agent.runtime_kind !== 'builtin_llm') throw new Error(uiText("agentModel.thisAgentCannotReceiveChatMessagesRightNow"));
   return key;
 }
 
@@ -28,5 +29,5 @@ export function agentSuggestions(text, agents = []) {
 
 export function messagePersona(message) {
   const profile = message.agent_snapshot || {};
-  return `${profile.icon || '✦'} ${profile.display_name || message.agent_key || "Studio Assistant"}${message.model ? ` · ${message.model}` : ''}`;
+  return `${profile.icon || '✦'} ${profile.display_name || message.agent_key || uiText("agentModel.studioAssistant")}${message.model ? ` · ${message.model}` : ''}`;
 }

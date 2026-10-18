@@ -1,9 +1,13 @@
+import { roleLabel } from './format.js';
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 ﻿import { useEffect, useRef, useState } from "react";
 
 import { avatarColors, initial } from "./format.js";
 import { filterMembers, mentionQuery, serializeParts, splitMentions } from "./mentions.js";
 
 export function Avatar({ id, name, size }) {
+  const locale = useLocale();
   const { bg, fg } = avatarColors(id);
   const style = { background: bg, color: fg };
   if (size) Object.assign(style, { width: size, height: size, fontSize: Math.round(size * 0.5) });
@@ -11,15 +15,17 @@ export function Avatar({ id, name, size }) {
 }
 
 export function MentionText({ body, members, meId }) {
+  const locale = useLocale();
   const byId = Object.fromEntries((members || []).map((m) => [m.actor_id, m]));
   return splitMentions(body).map((part, index) => (part.type === "mention"
-    ? <span key={index} className={"mention" + (part.id === meId ? " me" : "")}>@{byId[part.id] ? byId[part.id].name : "(no longer on the crew)"}</span>
+    ? <span key={index} className={"mention" + (part.id === meId ? " me" : "")}>@{byId[part.id] ? byId[part.id].name : uiText("talk.noLongerOnTheCrew")}</span>
     : <span key={index}>{part.text}</span>));
 }
 
 // 留言框：contenteditable，打 @ 跳出名單，選了變成一顆名字（存的是那個人，不是字）。
 // children：送出按鈕左邊的其他按鈕（解決、取消）；note：左下角的小字（例如「等 Mia 處理」）。
 export function Composer({ members, agents = [], me, onSend, busy, placeholder, autoFocus, initialText = '', note, children }) {
+  const locale = useLocale();
   const box = useRef(null);
   const [picker, setPicker] = useState(null); // {query, index}
   const [empty, setEmpty] = useState(true);
@@ -57,7 +63,7 @@ export function Composer({ members, agents = [], me, onSend, busy, placeholder, 
   };
 
   const options = picker ? [...filterMembers(others, picker.query), ...agents.filter(agent => agent.enabled && agent.runtime_kind === 'builtin_llm' && agent.role_kind !== 'observer'
-    && (agent.agent_key.includes(picker.query) || agent.display_name.includes(picker.query))).map(agent => ({ actor_id: `agent:${agent.agent_key}`, name: agent.display_name, agent_key: agent.agent_key, role_label: `Agent @${agent.agent_key}` }))] : [];
+    && (agent.agent_key.includes(picker.query) || agent.display_name.includes(picker.query))).map(agent => ({ actor_id: `agent:${agent.agent_key}`, name: agent.display_name, agent_key: agent.agent_key, role_label: uiText("talk.agent", {v0: (agent.agent_key)}) }))] : [];
 
   const choose = (member) => {
     const caret = caretText();
@@ -114,9 +120,9 @@ export function Composer({ members, agents = [], me, onSend, busy, placeholder, 
 
   return (
     <div className="reply">
-      <div className="as">As {me.name}({me.role_label}) identity</div>
+      <div className="as">{uiText("talk.asIdentity", {v0: (me.name), v1: (roleLabel(me.role, me.role_label))})}</div>
       <div ref={box} className={"box" + (empty ? " empty" : "")} contentEditable suppressContentEditableWarning role="textbox"
-        aria-multiline="true" aria-label={"Comment"} data-ph={placeholder || "Reply. Type @ to notify a crew member."}
+        aria-multiline="true" aria-label={uiText("talk.comment")} data-ph={placeholder || "Reply. Type @ to notify a crew member."}
         onInput={refresh} onKeyUp={(event) => { if (!["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) refresh(); }}
         onClick={refresh}
         onPaste={(event) => { event.preventDefault(); document.execCommand("insertText", false, event.clipboardData.getData("text/plain")); }}
@@ -133,13 +139,13 @@ export function Composer({ members, agents = [], me, onSend, busy, placeholder, 
         }} />
       {picker && options.length > 0 && (
         <div className="picker" role="listbox">
-          <div className="hd">{agents.length ? "Choose a crew member or agent. Mentioning an agent creates a task." : "Select a crew member to notify"}</div>
+          <div className="hd">{agents.length ? uiText("talk.chooseACrewMemberOrAgentMentioningAnAgent") : uiText("talk.selectACrewMemberToNotify")}</div>
           {options.map((member, index) => (
             <button type="button" key={member.actor_id} role="option" aria-selected={index === picker.index}
               className={index === picker.index ? "sel" : undefined}
               onMouseDown={(event) => { event.preventDefault(); choose(member); }}>
               <Avatar id={member.actor_id} name={member.name} size={20} />
-              {member.name}<small>{member.role_label}</small>
+              {member.name}<small>{roleLabel(member.role, member.role_label)}</small>
             </button>
           ))}
         </div>
@@ -147,7 +153,7 @@ export function Composer({ members, agents = [], me, onSend, busy, placeholder, 
       <div className="row">
         <span className="grow">{note}</span>
         {children}
-        <button type="button" className="primary" onClick={send} disabled={busy || empty}>Send</button>
+        <button type="button" className="primary" onClick={send} disabled={busy || empty}>{uiText("talk.send")}</button>
       </div>
     </div>
   );

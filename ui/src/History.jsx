@@ -1,3 +1,5 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -8,20 +10,20 @@ import { Avatar } from "./Talk.jsx";
 
 // 修改紀錄（10/15 起大家一起編輯：大家都能改字，所以大家都要看得到誰改了什麼、改錯了能改回）。
 // 一筆＝同一個人連續改的一次；每一處都可以單獨改回，改回本身也記成一筆。
-export const HISTORY_RULE = "The crew can see and restore changes. Consecutive edits by one person form a revision; editing after a 10-minute pause starts another."
-  + "Restoring affects only the selected content. Other edits remain, and the restoration is recorded as a new revision.";
+export const HISTORY_RULE = () => uiText("history.theCrewCanSeeAndRestoreChangesConsecutiveEdits") + " " + uiText("history.restoringAffectsOnlyTheSelectedContentOtherEditsRemain");
 const SHOWN = 3; // 一筆先列幾處，其他的收在「還有 N 處」
 
 export function headline(group) {
   const n = group.changes.length;
-  if (group.kind === "create") return "Created Page";
-  if (group.kind === "revert") return `Restore ${n}  changes`;
-  if (group.kind === "restore") return `Restored this page to an earlier revision, changing ${n}  changes`;
-  if (group.kind === "rewrite") return `Rewrote the page, changing ${n}  changes`;
-  return n ? `Changed ${n}  changes` : null; // 沒有差別：另外寫「改了又改回」
+  if (group.kind === "create") return uiText("history.createdPage");
+  if (group.kind === "revert") return uiText("history.restoreChanges", {v0: (n)});
+  if (group.kind === "restore") return uiText("history.restoredThisPageToAnEarlierRevisionChangingChanges", {v0: (n)});
+  if (group.kind === "rewrite") return uiText("history.rewroteThePageChangingChanges", {v0: (n)});
+  return n ? uiText("history.changedChanges", {v0: (n)}) : null; // 沒有差別：另外寫「改了又改回」
 }
 
 function Segments({ segments }) {
+  const locale = useLocale();
   const changed = segments.some(([kind]) => kind !== "=");
   return (
     <div className="txt">
@@ -35,6 +37,7 @@ function Segments({ segments }) {
 }
 
 export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, onReverted, flush, onClose, onError, onToast }) {
+  const locale = useLocale();
   const ref = useRef(null);
   const [scope, setScope] = useState("tab");
   const [data, setData] = useState(null);
@@ -67,7 +70,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
 
   const revert = async (group, change, force = false) => {
     if (flush && (await flush()) === false) {
-      onError("Save pending edits before restoring a revision.");
+      onError(uiText("history.savePendingEditsBeforeRestoringARevision"));
       return;
     }
     const body = change.field_id
@@ -77,7 +80,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
     try {
       const result = await api.post(`/projects/api/${slug}/tabs/${group.tab_key}/revert`, force ? { ...body, force: true } : body);
       setConfirm(null);
-      onToast(result.already ? "This content already matches its earlier version." : "Restored. This restoration is also recorded in Change History.");
+      onToast(result.already ? uiText("history.thisContentAlreadyMatchesItsEarlierVersion") : uiText("history.restoredThisRestorationIsAlsoRecordedInChangeHistory"));
       onReverted(group.tab_key, result, Boolean(change.field_id));
       load();
     } catch (error) {
@@ -104,14 +107,14 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
         <div className="grp-hd">
           <Avatar id={group.actor_id || ""} name={group.name} size={18} />
           <b>{group.name}</b>
-          {head || <span className="noop">No difference after restoring</span>}
+          {head || <span className="noop">{uiText("history.noDifferenceAfterRestoring")}</span>}
           <span className="t">{shortTime(group.at)}</span>
         </div>
         {scope === "all" && group.tab_title && <div className="grp-tab">{group.tab_title}</div>}
         {list.map((change) => {
           const key = group.id + "|" + change.key;
           return (
-            <div className="ch" key={change.key} role="button" tabIndex={0} title={"Locate on Page"}
+            <div className="ch" key={change.key} role="button" tabIndex={0} title={uiText("history.locateOnPage")}
               onClick={() => onPick(group, change)} onKeyDown={(event) => { if (event.key === "Enter") onPick(group, change); }}>
               <div className="what">
                 {change.label}
@@ -119,7 +122,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
                   <span className="acts">
                     <button type="button" className="ghost xs" disabled={busy === key}
                       onClick={(event) => { event.stopPropagation(); revert(group, change); }}>
-                      {busy === key ? "Restoring…" : change.button}
+                      {busy === key ? uiText("history.restoring") : change.button}
                     </button>
                   </span>
                 )}
@@ -129,9 +132,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
           );
         })}
         {all.length > SHOWN && !isOpen && (
-          <button type="button" className="more-ch" onClick={() => setExpanded(new Set(expanded).add(group.id))}>
-            Also {all.length - SHOWN}  changes ▾
-          </button>
+          <button type="button" className="more-ch" onClick={() => setExpanded(new Set(expanded).add(group.id))}>{uiText("history.alsoChanges", {v0: (all.length - SHOWN)})}</button>
         )}
       </div>
     );
@@ -139,26 +140,26 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
 
   const current = data && data.scope === scope && (scope === "all" || data.key === tabKey) ? data : null;
   let body;
-  if (!current) body = <div className="empty">Loading…</div>;
-  else if (!current.groups.length) body = <div className="empty">No changes recorded yet.</div>;
+  if (!current) body = <div className="empty">{uiText("history.loading")}</div>;
+  else if (!current.groups.length) body = <div className="empty">{uiText("history.noChangesRecordedYet")}</div>;
   else {
     body = current.groups.map(item);
-    if (current.more) body.push(<div className="empty" key="more">Showing the latest {current.groups.length}  items</div>);
+    if (current.more) body.push(<div className="empty" key="more">{uiText("history.showingTheLatestItems", {v0: (current.groups.length)})}</div>);
   }
 
   let dialog = null;
   if (confirm) {
     const { group, change, info } = confirm;
-    const unit = change.field_id ? "this cell" : change.rid ? "this row" : "this passage";
-    const people = (info.later || []).map((p) => p.name).join("、") || "Another crew member";
+    const unit = change.field_id ? uiText("history.thisCell") : change.rid ? uiText("history.thisRow") : uiText("history.thisPassage");
+    const people = (info.later || []).map((p) => p.name).join("、") || uiText("history.anotherCrewMember");
     const last = (info.later || []).slice(-1)[0];
     dialog = createPortal(
-      <Dialog title={`${change.button}？`} confirmLabel={"Restore"}
-        message={`${unit}after${group.name} changed it,${people} changed it again${last ? `(${shortTime(last.at)})` : ""}. Restoring will also replace${people}’s changes.`}
+      <Dialog title={uiText("history.message", {v0: (change.button)})} confirmLabel={uiText("history.restore")}
+        message={uiText("history.restoreConflict", {v0: (unit), v1: (group.name), v2: (people), v3: (last ? `(${shortTime(last.at)})` : ""), v4: (people)})}
         onConfirm={() => revert(group, change, true)} onCancel={() => setConfirm(null)}>
         <div className="hist-preview">
-          <div className="hd">After restoring</div>
-          {info.preview || "(empty)"}
+          <div className="hd">{uiText("history.afterRestoring")}</div>
+          {info.preview || uiText("history.empty")}
         </div>
       </Dialog>,
       document.body,
@@ -166,15 +167,15 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
   }
 
   return (
-    <div className="pop on hist" ref={ref} role="dialog" aria-label={"Change History"}>
+    <div className="pop on hist" ref={ref} role="dialog" aria-label={uiText("history.changeHistory")}>
       <div className="pop-hd">
-        <b>Change History</b>
+        <b>{uiText("history.changeHistory")}</b>
         {scope === "tab" && tabTitle && <span className="pop-sub">{tabTitle}</span>}
       </div>
       <div className="pop-tabs">
-        <button type="button" className={scope === "tab" ? "on" : undefined} onClick={() => setScope("tab")}>This Page</button>
-        <button type="button" className={scope === "all" ? "on" : undefined} onClick={() => setScope("all")}>All Pages</button>
-        <span className="info" tabIndex={0} data-tip={HISTORY_RULE} aria-label={HISTORY_RULE}>ⓘ</span>
+        <button type="button" className={scope === "tab" ? "on" : undefined} onClick={() => setScope("tab")}>{uiText("history.thisPage")}</button>
+        <button type="button" className={scope === "all" ? "on" : undefined} onClick={() => setScope("all")}>{uiText("history.allPages")}</button>
+        <span className="info" tabIndex={0} data-tip={HISTORY_RULE()} aria-label={HISTORY_RULE()}>ⓘ</span>
       </div>
       <div className="pop-list">{body}</div>
       {dialog}

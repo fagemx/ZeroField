@@ -1,7 +1,10 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { useEffect, useRef, useState } from "react";
 
 // 簡單的對話框：一行輸入（可選）、一個下拉（可選）、確定／取消。
-export function Dialog({ title, message, input, inputLabel, select, confirmLabel = "Confirm", cancelLabel = "Cancel", danger, onConfirm, onCancel, children, hideConfirm = false, className = '', returnFocusRef }) {
+export function Dialog({ title, message, input, inputLabel, select, confirmLabel = uiText("dialog.confirm"), cancelLabel = uiText("dialog.cancel"), danger, onConfirm, onCancel, children, hideConfirm = false, className = '', returnFocusRef }) {
+  const locale = useLocale();
   const [text, setText] = useState(input && input.value ? input.value : "");
   const [choice, setChoice] = useState(select && select.value ? select.value : "");
   const field = useRef(null);

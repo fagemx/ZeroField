@@ -1,3 +1,6 @@
+import { LanguageSwitch } from './i18n/react.jsx';
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "./api.js";
@@ -49,23 +52,26 @@ function usePref(key, fallback) {
 }
 
 function ProjectList() {
+  const locale = useLocale();
   const [state, setState] = useState({ loading: true });
   const load = useCallback(() => {
     api.get("/projects/api/projects").then((data) => setState({ data })).catch((error) => setState({ error: error.message }));
   }, []);
   useEffect(() => { load(); }, [load]);
-  if (state.loading) return <div className="center-note">Loading…</div>;
+  if (state.loading) return <div className="center-note">{uiText("app.loading")}</div>;
   if (state.error) return <div className="center-note">{state.error}</div>;
   return <ProjectHub data={state.data} onReload={load} />;
 }
 
 export function App() {
+  const locale = useLocale();
   const initial = useMemo(() => parseLocation(window.location.pathname, window.location.hash), []);
   if (!initial.slug) return <ProjectList />;
   return <ProjectPage slug={initial.slug} />;
 }
 
 function ProjectPage({ slug }) {
+  const locale = useLocale();
   const [data, setData] = useState(null);
   const [fatal, setFatal] = useState(null);
   const [tabKey, setTabKey] = useState(() => parseLocation(window.location.pathname, window.location.hash).tab);
@@ -298,7 +304,7 @@ function ProjectPage({ slug }) {
   }, [tabKey, data]);
 
   const pick = useCallback(async (a) => {
-    if (a.orphaned_at) { showToast("Source text not found. Use Reattach to select a new location."); return; }
+    if (a.orphaned_at) { showToast(uiText("app.sourceTextNotFoundUseReattachToSelectA")); return; }
     setPanel(false);
     if (a.tab_key !== tabKey) {
       if (surfaceControl.current && !(await surfaceControl.current.flush())) return;
@@ -312,7 +318,7 @@ function ProjectPage({ slug }) {
     setPanel(false);
     setAttachId(a.id);
     if (a.tab_key !== tabKey) await navigate(a.tab_key);
-    showToast("Select text, then choose Attach Here in the toolbar.");
+    showToast(uiText("app.selectTextThenChooseAttachHereInTheToolbar"));
   }, [tabKey, navigate, showToast]);
 
   const resolveFromPanel = useCallback(async (a) => {
@@ -329,9 +335,9 @@ function ProjectPage({ slug }) {
     const url = `${window.location.origin}/projects/${slug}/${tabHash(tabKey, thread)}`;
     try {
       await navigator.clipboard.writeText(url);
-      showToast(thread ? "Annotation link copied" : "Page link copied");
+      showToast(thread ? uiText("app.annotationLinkCopied") : uiText("app.pageLinkCopied"));
     } catch {
-      window.prompt("Copy this link:", url);
+      window.prompt(uiText("app.copyThisLink"), url);
     }
   };
 
@@ -344,7 +350,7 @@ function ProjectPage({ slug }) {
       const tab = docs[a.tab_key];
       if (!tab) continue;
       if (!cache[a.tab_key]) cache[a.tab_key] = anchorsOf(tab.doc);
-      out[a.id] = cache[a.tab_key][a.anchor.rid] || "this row";
+      out[a.id] = cache[a.tab_key][a.anchor.rid] || uiText("app.thisRow");
     }
     return out;
   }, [data, docs]);
@@ -364,7 +370,7 @@ function ProjectPage({ slug }) {
     if (proposal && proposal.status === "applied") {
       showToast(appliedLabel(proposal) + "：" + ((proposal.target && proposal.target.display) || ""));
     }
-    else if (proposal && proposal.status === "failed") showToast("Could not apply:" + (proposal.error || ""), "error");
+    else if (proposal && proposal.status === "failed") showToast(uiText("app.couldNotApply") + (proposal.error || ""), "error");
     if (notes && notes.length) showToast(notes.join(" "));
   }, [loadProject, loadTab, showToast]);
   const assistant = useAssistant(slug, paEnabled, paMode !== "off", onError, onApplied, data?.project?.privacy_mode);
@@ -390,16 +396,16 @@ function ProjectPage({ slug }) {
   }, [assistant.setScope]);
   const assignBackground = useCallback(async (text, scope, options = null) => {
     if (!options?.strategy) { askAssistant(text, null, scope); return true; }
-    if (surfaceControl.current && !(await surfaceControl.current.flush())) throw new Error("Save the source and resolve editing conflicts first.");
+    if (surfaceControl.current && !(await surfaceControl.current.flush())) throw new Error(uiText("app.saveTheSourceAndResolveEditingConflictsFirst"));
     const request = assignmentRequest({ objective: text, scope, target: options.target, strategy: options.strategy,
       agentKey: options.agentKey, raceAgents: options.raceAgents, mode: options.writeMode || 'proposal', requestId: options.requestId });
     await assistant.startRun(request);
-    setPaView('agents'); openAssistant(); showToast("Task queued. Results will be available for review.");
+    setPaView('agents'); openAssistant(); showToast(uiText("app.taskQueuedResultsWillBeAvailableForReview"));
     return true;
   }, [assistant.startRun, askAssistant, openAssistant, showToast]);
   const onAgentRouted = useCallback(async request => {
     assistant.setSelectedAgent(request.agent_key); setPaView('chat'); openAssistant();
-    await assistant.reload(); showToast("Comment sent to the agent. The reply will appear in Studio Assistant.");
+    await assistant.reload(); showToast(uiText("app.commentSentToTheAgentTheReplyWillAppear"));
   }, [assistant.setSelectedAgent, assistant.reload, openAssistant, showToast]);
   // 點專案頁那一列的「✦ 一起回答」：打開助理、直接開始（上一句還在答時，先放進輸入框）
   const onAssistRow = useCallback(async (rid) => {
@@ -450,7 +456,7 @@ function ProjectPage({ slug }) {
       return;
     }
     if (!flashChange(id)) {
-      showToast(change.change === "removed" ? `This content was deleted. Use “${change.button}” to restore it.` : "This content is no longer on the page.");
+      showToast(change.change === "removed" ? uiText("app.thisContentWasDeletedUseToRestoreIt", {v0: (change.button)}) : uiText("app.thisContentIsNoLongerOnThePage"));
     }
   }, [tabKey, navigate, flashChange, showToast]);
   useEffect(() => {
@@ -462,7 +468,7 @@ function ProjectPage({ slug }) {
       if (pendingFlash.current !== id) return;
       if (flashChange(id)) { pendingFlash.current = null; return; }
       tries += 1;
-      if (tries > 20) { pendingFlash.current = null; showToast("This content is no longer on the page."); return; }
+      if (tries > 20) { pendingFlash.current = null; showToast(uiText("app.thisContentIsNoLongerOnThePage")); return; }
       timer = setTimeout(attempt, 150);
     };
     timer = setTimeout(attempt, 100);
@@ -477,12 +483,12 @@ function ProjectPage({ slug }) {
   if (fatal) {
     return (
       <div className="center-note">
-        <p>{fatal.status === 404 ? "Production not found." : fatal.message}</p>
-        <button type="button" className="ghost" onClick={() => window.location.reload()}>Refresh</button>
+        <p>{fatal.status === 404 ? uiText("app.productionNotFound") : fatal.message}</p>
+        <button type="button" className="ghost" onClick={() => window.location.reload()}>{uiText("app.refresh")}</button>
       </div>
     );
   }
-  if (!data) return <div className="center-note">Loading…</div>;
+  if (!data) return <div className="center-note">{uiText("app.loading")}</div>;
 
   const me = data.me;
   const tabs = data.tabs;
@@ -494,8 +500,8 @@ function ProjectPage({ slug }) {
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
       <header className="top">
         <button type="button" className="icon-btn" onClick={() => (window.innerWidth <= 860 ? setRailOpen(!railOpen) : setRailHidden(!railHidden))}
-          aria-label={"Toggle pages"}>☰ <span className="label">Pages</span></button>
-        <a href="/projects/" className="icon-btn" title={"Back to productions"} style={{ textDecoration: "none" }}>← <span className="label">All Productions</span></a>
+          aria-label={uiText("app.togglePages")}>☰ <span className="label">{uiText("app.pages")}</span></button>
+        <a href="/projects/" className="icon-btn" title={uiText("app.backToProductions")} style={{ textDecoration: "none" }}>← <span className="label">{uiText("app.allProductions")}</span></a>
         <span className="doc-name">{data.project.title}</span>
         {data.project.status && PROJECT_STATUS[data.project.status] && (
           <span style={{
@@ -507,26 +513,26 @@ function ProjectPage({ slug }) {
           </span>
         )}
         <span className="spacer" />
-        <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title={"Choose which highlights and underlines to show"}
+        <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title={uiText("app.chooseWhichHighlightsAndUnderlinesToShow")}
           onClick={(event) => setViewMenu(viewMenu ? null : event.currentTarget.getBoundingClientRect())}>
           <PenIcon /><span className="label">{VIEW_LABEL[view] || VIEW_LABEL.all}</span> ▾
         </button>
-        <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={"Annotations: Needs You and All"}
+        <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={uiText("app.annotationsNeedsYouAndAll")}
           onClick={() => { setPanel(!panel); setHistoryOpen(false); if (!panel && paMode === "side") setPaMode("off"); }}>
-          <NoteIcon /><span className="label">Annotations</span>{todo > 0 && <span className="count">{todo}</span>}
+          <NoteIcon /><span className="label">{uiText("app.annotations")}</span>{todo > 0 && <span className="count">{todo}</span>}
         </button>
         {paEnabled && (
-          <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title={"Studio Assistant"}
+          <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title={uiText("app.studioAssistant")}
             onClick={() => { if (paMode === 'off') { if (assistant.orchestrationCounts?.needs_you || assistant.orchestrationCounts?.working) setPaView('agents'); openAssistant(); } else setPaMode('off'); }}>
-            <span className="spark">✦</span><span className="label">Studio Assistant</span>
+            <span className="spark">✦</span><span className="label">{uiText("app.studioAssistant")}</span>
             {paMode === 'off' && assistant.orchestrationCounts?.needs_you > 0 && <span className="count">? {assistant.orchestrationCounts.needs_you}</span>}
             {paMode === 'off' && assistant.orchestrationCounts?.working > 0 && <span className="count">⟳ {assistant.orchestrationCounts.working}</span>}
           </button>
         )}
-        <button type="button" className="icon-btn" onClick={copyLink} title={"Copy a link to this page or annotation"} aria-label={"Copy Link"}>
-          <LinkIcon /><span className="label">Copy Link</span>
+        <button type="button" className="icon-btn" onClick={copyLink} title={uiText("app.copyALinkToThisPageOrAnnotation")} aria-label={uiText("app.copyLink")}>
+          <LinkIcon /><span className="label">{uiText("app.copyLink")}</span>
         </button>
-        <WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
+        <LanguageSwitch /><WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
         <IdentityBadge me={me} members={data.members} />
       </header>
       <ViewMenu open={Boolean(viewMenu)} rect={viewMenu} view={view} showResolved={showResolved}
@@ -546,7 +552,7 @@ function ProjectPage({ slug }) {
           onError={onError} onToast={showToast} />
         <main className="main">
           <div className="doc-host">
-          {!tab && <div className="center-note">Loading…</div>}
+          {!tab && <div className="center-note">{uiText("app.loading")}</div>}
           {tab && tab.surface_type === "sheet" && !versionsFor && !(docModeTabs && docModeTabs[tab.key]) && (
             <SheetSurface
               key={tab.key}

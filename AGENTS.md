@@ -1,5 +1,7 @@
 # ZeroField Studio — Agent Instructions & Guardrails (`AGENTS.md`)
 
+> **2026-10-18 bilingual interface update (user-approved batches 1–2):** English is the first-run default and fallback; users may explicitly select Traditional Chinese. All new product UI must use semantic keys in `ui/src/i18n/locales/en.json` and `zh-TW.json`. Keep wire values, M8 / ACP keys, user content and custom names independent of display language. Use `normalizeStatus()` for logic and `statusLabel()` for display. Translated templates, project / AI language settings and video development remain later work. See [`docs/bilingual-baseline.json`](./docs/bilingual-baseline.json).
+
 > **2026-10-18 English contest baseline:** The M8-A–D / ACP / E1 engine is retained. English UI, crew labels, a five-page `zerofield_studio` planning template, and legacy status compatibility are implemented. Backend 241 / frontend 78 tests, UI build, wheel resources, and isolated desktop UI checks passed; see [`docs/english-baseline.json`](./docs/english-baseline.json). Video-specific development, generation workflows, real sample renders, and `run_studio.py` are the next phase. Use README’s Available now section for current capability claims.
 
 > **給接手的 AI 代理（Codex / Claude / Antigravity）**：
@@ -20,39 +22,41 @@
   - 後端 [`project_docs/doc_schema.py`](./project_docs/doc_schema.py) 第 17 行的 `STATUSES` 是資料庫存檔的嚴格白名單！
   - 新增英文狀態（`"Queued"`, `"In Progress"`, `"Rendering Image"`, `"Rendering Video"`, `"Pending Review"`, `"Retake"`, `"Blocked"`, `"Approved"`）時，**必須同時更新 `project_docs/doc_schema.py` 的 `STATUSES` 與前端 `ui/src/format.js`**，且在後端 `doc_schema.py` 保留舊中文狀態字串以免既有單元測試失敗！
 
-### ② 解除舊版「不顯示影片播放器」限制 — 全面開啟格內 `<video>` 播放與上傳
-- 在 [`ui/src/MediaCell.jsx`](./ui/src/MediaCell.jsx) 中，`kind === "video"` 時**必須渲染內嵌 `<video controls muted loop playsInline preload="metadata">` 播放器**（不可只顯示「影片附件」文字卡），並開啟影片格的 `onRegenerate`（`"✦ Re-shoot Take"`）按鈕。
-- 在 [`project_docs/service.py`](./project_docs/service.py) 與 [`project_docs/http.py`](./project_docs/http.py) 的互動媒體上傳路由中，除圖片外**必須允許使用者從瀏覽器直接上傳 `video/mp4` 與 `video/webm`（上限 64 MB）**，供 OpenJutsu V2V 欄位上傳實拍原片。
+### ② 解除舊版「不顯示影片播放器」限制 — 全面開啟格內 `<video>`、畫廊封面與競速盲測播放
+- 在 [`ui/src/MediaCell.jsx`](./ui/src/MediaCell.jsx) 中，`kind === "video"` 時**必須渲染內嵌 `<video>` 播放器**（緊湊模式下支援 Hover-to-Play 預覽，完整模式下支援 `controls`），不可只顯示「Video attachment」文字卡，並開啟影片格的 `onRegenerate` 按鈕。
+- 在 [`ui/src/sheetViews.js`](./ui/src/sheetViews.js) 與 [`ui/src/SheetCards.jsx`](./ui/src/SheetCards.jsx) 中，`coverColumns` 必須同時納入 `image` 與 `video` 欄位，讓 `Gallery` 與 `Board` 視圖能直接顯示分鏡與 OpenJutsu 影片卡片。
+- 在 [`ui/src/assistant/ProposalRaceView.jsx`](./ui/src/assistant/ProposalRaceView.jsx) 中，當候選提案為影片時，必須渲染並排 `<video>` 播放器供盲測挑片。
 
-### ③ 100% Open Weights & 合規素材（鎖定 RTX 5090 + LTX \$2,000 + Best Overall \$10,000）
-- `workflows/` 內的所有 ComfyUI API JSON **嚴禁使用任何閉源付費 Partner Nodes**，100% 採用開放權重模型：**`LTX-2.5`**（核心 I2V 運鏡與 V2V 動作轉移／換物）＋ **`FLUX 3 Image Klein (5.6B)`**（核心角色資產與首幀）。
+### ③ Comfy Developer Platform 合規（Comfy Router / SDK）＋ Open Weights 核心工作流
+- 比賽規定必須建構於 **Comfy Developer Platform（Comfy Router 和／或 Comfy SDK）** 之上，不可只依賴裸打本機 `127.0.0.1:8188/prompt`。
+- `workflows/` 內的預設工作流採用 100% 開放權重模型（**`LTX-2.5`** 作為核心影片模型以符合 LTX \$2,000 加碼獎資格 ＋ **`FLUX`** 作為角色／場景資產與首幀模型），同時符合 **Best Overall** 與 **Open Weights Only** 參賽條件。
 - `samples/` 與預設專案素材必須 **100% SFW、無版權爭議、無真實名人姓名或肖像**。
 
 ### ④ 改完前端 `ui/src/` 必跑 `npm run build --prefix ui`
 - `server.py` 讀取的是編譯後的 `static/projects/`。每次修改 `ui/src/` 後，**必須執行 `npm run build --prefix ui`**，否則瀏覽器畫面不會更新！
 
-### ⑤ 影音播放效能、快取與記憶體管理（防爆 RAM 與解碼器崩潰）
-- **`/meta` 零 Blob 查詢**：在 [`project_docs/repository.py`](./project_docs/repository.py) 新增 `get_asset_meta()` 只查 `SELECT content_type, byte_size FROM projectops.asset`，嚴禁在 `/meta` 路由呼叫 `get_asset()` 把 64 MB 影片撈進記憶體！
-- **HTTP `Range` (`206 Partial Content`) + `ETag` (`304`) + 本地磁碟快取**：在 [`project_docs/http.py`](./project_docs/http.py) 的 `asset` 路由實作 `If-None-Match` 短路、`.cache/assets/` 磁碟快取與 `Range: bytes=start-end` 區段讀取，讓 `<video>` 能秒開與自由拖曳時間軸。
-- **前端 `MediaCell.jsx` 記憶體防護**：建立模組級 `META_CACHE = new Map()` 避免重複打 `/meta`；表格內的 `<video>` 預設 `preload="metadata"` 靜止顯示首幀，**僅在滑鼠懸停（Hover）或點開審核時才播放（`play()`）**，移開即 `pause()`，避免超過瀏覽器硬體解碼器上限（~16–32 個）。
+### ⑤ 影音播放效能與零 Blob `/meta` 查詢（防爆 RAM 與解碼器崩潰）
+- **`/meta` 零 Blob 查詢**：在 [`project_docs/repository.py`](./project_docs/repository.py) 新增 `get_asset_meta()` 只查 `SELECT content_type, byte_size FROM projectops.asset`，並在 [`project_docs/http.py`](./project_docs/http.py) 的 `asset_meta` 路由改呼 `get_asset_meta()`，嚴禁呼叫 `get_asset()` 把 64 MB 影片撈進記憶體！
+- **`If-None-Match` (`304`) 短路 + `server.py` 既有 `Range` (`206`) 串流**：`server.py:send_skillops_bytes` 已實作 `206 Partial Content`；請在 `http.py` 的 `asset` 路由補上 `If-None-Match` 命中時直接回傳 `304 Not Modified`（不讀 `data` bytea）。
+- **前端 `MediaCell.jsx` 記憶體防護**：建立模組級 `META_CACHE = new Map()` 避免重複打 `/meta`；表格內的 `<video>` 預設 `preload="metadata"` 靜止顯示首幀，**僅在滑鼠懸停（Hover）或點開審核時才播放（`play()`）**，移開即 `pause()`。
 - **FFmpeg `+faststart`**：所有 `limb_worker.py` 產出的 MP4（含 `side_by_side` 對比片）一律加上 `-movflags +faststart`。
 
 ---
 
 ## 2. 優先施工任務（詳見 `docs/ZEROFIELD_SPEC.md`）
 
-1. **Task 1 — 後端 `limb_worker.py` 與影片上傳升級**：
-   - 在 `comfyui()` 支援 `video_node`（自動上傳分鏡表中的 `.mp4` 原片至 ComfyUI `/upload/image` 綁定 `LoadVideo` 節點）。
-   - 支援 `param_bindings` 與光學預設編譯（將表格中的 `Optical Rig`、`Camera Motion` 注入 ComfyUI 節點）。
-   - 在 `ffmpeg()` 新增 `layout: "side_by_side"`（`hstack` 左右並排對比影片合成，一鍵產出「原片 vs. LTX-2.5 改造片」Viral MP4）。
-   - 放寬 `service.py` 互動上傳支援 `.mp4` / `.webm`（64 MB）。
-2. **Task 2 — 旗艦英文範本 `zerofield_studio`（`project_docs/templates.py` & `doc_schema.py`）**：
-   - 擴充 `doc_schema.py` 的 `STATUSES` 白名單。
-   - 建立內建英文展示專案與範本，包含：`director-brief`、`soul-cast`、`cinema-studio`、`openjutsu-lab`、`comfy-pipeline`。
-3. **Task 3 — 前端 `ui/src/` 英文影視級改造**：
-   - 英文化 `Surfaces.jsx`、`MediaCell.jsx`、`Fields.jsx`、`format.js`、`SheetReview.jsx`、`FlowPanels.jsx`。
-   - 開啟影片格內嵌 `<video>` 播放器與 Multi-Take 版本切換。
-   - 新增 **Director's Optical & Motion Picker**（快速選擇 ARRI/RED 機身、Anamorphic 焦段、Dolly/Handheld/Orbit 運鏡）。
-   - 執行 `npm run build --prefix ui` 並驗證畫面。
-4. **Task 4 — 一鍵啟動器 `run_studio.py` 與預載 Open-Weights Workflows (`workflows/`)**：
-   - 讓評審只需一行指令即可同時啟動 Server + Worker 並看到預載的展示專案。
+> **注意**：`ce80b94` 已完成全英文 UI 基底、5 頁 `zerofield_studio` 範本、英文與舊中文 `STATUSES` 相容、M8 多代理編排、`media.py` 64 MB MP4/WebM 驗證與 `server.py` HTTP `Range` 串流。請直接從以下 4 個 Task 接續實作：
+
+1. **Task 1 — 格內 `<video>` 播放、零 Blob `/meta`、`Gallery/Board` 影片封面與 `ProposalRaceView` 影片盲測**：
+   - `repository.py` 新增 `get_asset_meta()`，`http.py` 的 `asset_meta` 改用零 Blob 查詢並在 `asset` 支援 `304 Not Modified`。
+   - `MediaCell.jsx` 加上 `META_CACHE` 與格內 `<video>`（Hover-to-Play）及影片 `onRegenerate`。
+   - `sheetViews.js` 與 `SheetCards.jsx` 支援 `video` 欄位作為 `Gallery` / `Board` 卡片封面。
+   - `SheetWorkspace.jsx` 支援空媒體格直接點擊上傳、修正 `SheetReview` 影片重抽 `capability: "video_gen"`；`ProposalRaceView.jsx` 支援候選影片並排播放。
+2. **Task 2 — `@Asset` 跨分頁自動綁定 ＋ Cinema Studio 4.0 結構化鏡頭編譯與快速選擇器**：
+   - 在 `limb_worker.py` 實作 `resolve_studio_context(task)`：自動掃描分鏡或 OpenJutsu 列中的 `@CAST-01`、`@SET-01`、`@PROP-01` 代號，從 `soul-cast` 分頁自動提取對應的參考圖片 URL 與固定外觀 Prompt / Seed，並依序編譯 `Optical Rig` + `Camera Motion` + `Action Prompt`。
+   - 在前端表格編輯列（`.sheet-edit-strip`）提供 `Optical Rig`、`Camera Motion`、`Jutsu Mode` 與 `@Asset` 的快速點選膠囊。
+3. **Task 3 — 整合 Comfy Developer Platform（`Comfy Router` / `Comfy SDK` + Local ComfyUI）與多輸入工作流**：
+   - 升級 `limb_worker.py:comfyui()` 支援 `ComfyPlatformClient`（相容 Comfy Router / SDK 與本機 ComfyUI）、`video_node`（上傳 `.mp4` 綁定 `LoadVideo`）、`reference_image_node`（綁定 `@Asset` 參考圖）與 `param_bindings`，並在 `ffmpeg()` 新增 `layout: "side_by_side"`。
+   - 在 `workflows/` 建立 3 個開放權重工作流 JSON（`flux3_klein_soul_cast.json`、`ltx25_cinema_shot.json`、`ltx25_openjutsu_v2v.json`）。
+4. **Task 4 — 一鍵啟動器 `run_studio.py` 與預載展示素材 (`samples/`)**：
+   - 建立 `run_studio.py` 一鍵啟動並自動掛載 Worker 與範例短劇素材（注意保持 `templates.tab_specs()` 原始呼叫的空媒體格行為以通過 `tests/test_zerofield_baseline.py`）。

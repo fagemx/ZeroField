@@ -1,3 +1,4 @@
+import { useLocale } from './i18n/react.jsx';
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { menuPosition } from "./menuPosition.js";
@@ -13,6 +14,7 @@ export function useOutside(ref, onOutside, active) {
 }
 
 export function Menu({ items, onClose, rect, hint }) {
+  const locale = useLocale();
   const ref = useRef(null);
   const [height, setHeight] = useState(0);
   // 畫出來之前先量高度，放不下就換位置（useLayoutEffect：不會先閃一下在錯的位置）

@@ -1,8 +1,9 @@
+import { t as uiText } from './i18n/index.js';
 import { tablesOf } from "./sheetModel.js";
 
-export const CAPABILITIES = { llm: "Text & Reasoning", image_gen: "Image Generation", video_gen: "Video Generation", media_assemble: "Audio & Assembly" };
-export const TASK_LABELS = { blocked: "Waiting for Upstream", queued: "Queued", running: "Running", awaiting_approval: "Pending Review", succeeded: "Completed", failed: "Failed", canceled: "Canceled" };
-export const SCOPE_LABELS = { once: "Run Once", rows: "Per Row", aggregate: "Aggregate After Completion", legacy: "Use Batch Selection" };
+export const CAPABILITIES = { get llm() { return uiText("flowModel.textReasoning"); }, get image_gen() { return uiText("flowModel.imageGeneration"); }, get video_gen() { return uiText("flowModel.videoGeneration"); }, get media_assemble() { return uiText("flowModel.audioAssembly"); } };
+export const TASK_LABELS = { get blocked() { return uiText("flowModel.waitingForUpstream"); }, get queued() { return uiText("flowModel.queued"); }, get running() { return uiText("flowModel.running"); }, get awaiting_approval() { return uiText("flowModel.pendingReview"); }, get succeeded() { return uiText("flowModel.completed"); }, get failed() { return uiText("flowModel.failed"); }, get canceled() { return uiText("flowModel.canceled"); } };
+export const SCOPE_LABELS = { get once() { return uiText("flowModel.runOnce"); }, get rows() { return uiText("flowModel.perRow"); }, get aggregate() { return uiText("flowModel.aggregateAfterCompletion"); }, get legacy() { return uiText("flowModel.useBatchSelection"); } };
 
 export const STEP_KINDS = {
   read: { title: "Read & Extract", description: "Extract relevant content from a document or slate", capability: "llm", prompt: "Extract relevant content while preserving source references." },
@@ -36,11 +37,11 @@ export function flowToCanvas(definition, selectedIds = [], tabs = [], tasks = []
   return {
     nodes: definition.nodes.map((node) => ({ id: node.id, type: "workStep", position: { x: node.x ?? 0, y: node.y ?? 0 },
       selected: selectedIds.includes(node.id), data: { title: node.title, scope: node.scope || "legacy",
-        source: name(node.row_source?.tab_key || node.input_tabs?.[0]) || "No Source Selected",
-        target: name(node.target?.tab_key) || "Keep Result", status: summarizeTasks(tasks.filter((t) => t.node_id === node.id)).status },
-      ariaLabel: `${node.title}；${name(node.row_source?.tab_key || node.input_tabs?.[0]) || "No Source Selected"} → ${name(node.target?.tab_key) || "Keep Result"}` })),
+        source: name(node.row_source?.tab_key || node.input_tabs?.[0]) || uiText("flowModel.noSourceSelected"),
+        target: name(node.target?.tab_key) || uiText("flowModel.keepResult"), status: summarizeTasks(tasks.filter((t) => t.node_id === node.id)).status },
+      ariaLabel: `${node.title}；${name(node.row_source?.tab_key || node.input_tabs?.[0]) || uiText("flowModel.noSourceSelected")} → ${name(node.target?.tab_key) || uiText("flowModel.keepResult")}` })),
     edges: definition.edges.map((edge) => ({ id: `${edge.source}--${edge.target}`, source: edge.source, target: edge.target,
-      label: "Run After Completion", ariaLabel: "Run after the previous step completes and is approved; output is identified by its source step", markerEnd: { type: "arrowclosed" } })),
+      label: uiText("flowModel.runAfterCompletion"), ariaLabel: uiText("flowModel.runAfterThePreviousStepCompletesAndIsApproved"), markerEnd: { type: "arrowclosed" } })),
   };
 }
 
@@ -66,13 +67,13 @@ export function seedDefinition(doc, values) {
 }
 
 export function connectNodes(definition, source, target) {
-  if (source === target) throw new Error("A node cannot connect to itself.");
-  if (!definition.nodes.some((n) => n.id === source) || !definition.nodes.some((n) => n.id === target)) throw new Error("Connection node not found.");
+  if (source === target) throw new Error(uiText("flowModel.aNodeCannotConnectToItself"));
+  if (!definition.nodes.some((n) => n.id === source) || !definition.nodes.some((n) => n.id === target)) throw new Error(uiText("flowModel.connectionNodeNotFound"));
   if (definition.edges.some((e) => e.source === source && e.target === target)) return definition;
   const edges = [...definition.edges, { source, target }];
   const visited = new Set();
   const visit = (id, path = new Set()) => {
-    if (path.has(id)) throw new Error("This connection would create a cycle.");
+    if (path.has(id)) throw new Error(uiText("flowModel.thisConnectionWouldCreateACycle"));
     if (visited.has(id)) return;
     for (const edge of edges.filter((e) => e.source === id)) visit(edge.target, new Set([...path, id]));
     visited.add(id);
@@ -120,5 +121,5 @@ export function taskSourceContext(task, run, tabs = []) {
   return { tabKey, tableId: row?.table_id || source.table_id, rowId: task.row_id, colIndex: 0,
     title: row?.title || inputTab?.title || tabs.find((item) => item.key === tabKey)?.title || tabKey,
     revision: row?.revision ?? inputTab?.revision,
-    label: (row?.cells || []).slice(0, 2).map(cellText).filter(Boolean).join(" · ") || "Source Rows" };
+    label: (row?.cells || []).slice(0, 2).map(cellText).filter(Boolean).join(" · ") || uiText("flowModel.sourceRows") };
 }

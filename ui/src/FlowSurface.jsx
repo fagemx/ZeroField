@@ -1,3 +1,5 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Background, Controls, Handle, Position, ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -8,11 +10,12 @@ import { SCOPE_LABELS, STEP_KINDS, TASK_LABELS, applyCanvasPositions, connectNod
 import { FlowInspector, FlowPreflight, FlowResults, Status } from "./FlowPanels.jsx";
 
 function WorkStep({ data, selected, isConnectable }) {
+  const locale = useLocale();
   return <article className={`flow-step-card ${selected ? "is-selected" : ""}`}>
-    <Handle type="target" position={Position.Left} isConnectable={isConnectable} aria-label={`${data.title}  input connections`} />
+    <Handle type="target" position={Position.Left} isConnectable={isConnectable} aria-label={uiText("flowSurface.inputConnections", {v0: (data.title)})} />
     <strong>{data.title}</strong><span className="flow-step-route">{data.source} → {data.target}</span>
     <div><small>{SCOPE_LABELS[data.scope]}</small><Status status={data.status} /></div>
-    <Handle type="source" position={Position.Right} isConnectable={isConnectable} aria-label={`${data.title}  output connections`} />
+    <Handle type="source" position={Position.Right} isConnectable={isConnectable} aria-label={uiText("flowSurface.outputConnections", {v0: (data.title)})} />
   </article>;
 }
 const nodeTypes = { workStep: WorkStep };
@@ -21,6 +24,7 @@ const emptyHistory = { past: [], present: null, future: [] };
 const docResponse = (data) => ({ ...(data.tab || data), values: data.values || data.tab?.values || {} });
 
 export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode, onToast, onError, controlRef, onInspectorChange, onOpenProposals, onOpenSource, assistantOpen }) {
+  const locale = useLocale();
   const base = `/projects/api/${slug}/tabs/${tab.key}/flow`;
   const [history, setHistory] = useState(emptyHistory);
   const definition = history.present;
@@ -67,7 +71,7 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
     return rows;
   }, [sourceTables, selected?.row_source]);
   const tasks = detail?.tasks || [];
-  const canvas = useMemo(() => { if (!definition) return { nodes: [], edges: [] }; const result = flowToCanvas(definition, selectedIds, tabs, tasks); return { ...result, edges: result.edges.map((edge) => ({ ...edge, selected: selectedEdgeIds.includes(edge.id) })) }; }, [definition, selectedIds, selectedEdgeIds, tabs, detail]);
+  const canvas = useMemo(() => { if (!definition) return { nodes: [], edges: [] }; const result = flowToCanvas(definition, selectedIds, tabs, tasks); return { ...result, edges: result.edges.map((edge) => ({ ...edge, selected: selectedEdgeIds.includes(edge.id) })) }; }, [definition, selectedIds, selectedEdgeIds, tabs, detail, locale]);
   const canControl = writable && detail && (detail.run.created_by === me?.actor_id || me?.is_admin || me?.role === "admin");
   const report = (problem) => { const message = problem.message || String(problem); setError(message); onError?.(message); };
   const work = async (fn) => { setBusy(true); setError(""); try { return await fn(); } catch (problem) { report(problem); } finally { setBusy(false); } };
@@ -132,7 +136,7 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
   }, [dirty]);
   const save = async () => {
     finishEdit();
-    if (!definition) throw new Error("Pipeline has not loaded.");
+    if (!definition) throw new Error(uiText("flowSurface.pipelineHasNotLoaded"));
     const data = await api.post(base, { definition, revision });
     setRevision(data.revision); setHistory((old) => ({ ...old, present: data.definition })); setSavedJSON(JSON.stringify(data.definition)); return data;
   };
@@ -146,20 +150,20 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
     const saved = dirty || !revision ? await save() : { revision };
     const input = single ? { execution_mode: "single_step", node_id: selectedId, input_mode: "current_sources", ...(selected?.row_source ? { sample_row_id: sampleRow } : {}) }
       : { ...(batch && selection ? { target_tab: selection.target_tab, row_ids: selection.row_ids } : {}), ...((startNode || (batch && redrawStart(definition, selection))) ? { start_node_id: startNode || redrawStart(definition, selection) } : {}) };
-    if (!single && batch && !selection) throw new Error("Select rows in the table or turn off selected-row execution.");
-    if (!single && batch && selection?.capability && !input.start_node_id) throw new Error("No step matches this cell. Select a starting step.");
+    if (!single && batch && !selection) throw new Error(uiText("flowSurface.selectRowsInTheTableOrTurnOffSelected"));
+    if (!single && batch && selection?.capability && !input.start_node_id) throw new Error(uiText("flowSurface.noStepMatchesThisCellSelectAStartingStep"));
     input.definition_revision = saved.revision;
     const data = await api.post(`${base}/preflight`, input);
-    if (single && sourceDoc && data.source_revisions[sourceKey] !== sourceDoc.revision) throw new Error("The source changed after the sample loaded. Refresh and review the sample before testing this step.");
+    if (single && sourceDoc && data.source_revisions[sourceKey] !== sourceDoc.revision) throw new Error(uiText("flowSurface.theSourceChangedAfterTheSampleLoadedRefreshAnd"));
     setPreview(data); setPreviewInput(input); setAdding(false);
   });
   const execute = () => work(async () => {
-    if (!preview?.ready || dirty) throw new Error("Review the run scope again.");
+    if (!preview?.ready || dirty) throw new Error(uiText("flowSurface.reviewTheRunScopeAgain"));
     const data = await api.post(`${base}/runs`, { ...previewInput, source_revisions: preview.source_revisions });
     setDetail(data); setRunId(data.run.id); setRuns((old) => [data.run, ...old.filter((run) => run.id !== data.run.id)]);
-    setPreview(null); setResultsOpen(true); onToast?.("Queued for execution; not complete yet.");
+    setPreview(null); setResultsOpen(true); onToast?.(uiText("flowSurface.queuedForExecutionNotCompleteYet"));
   });
-  const control = (action) => work(async () => { const data = await api.post(`${base}/runs/${runId}/${action}`, {}); setDetail(data); onToast?.(action === "cancel" ? "Remaining tasks canceled" : "Retrying incomplete tasks with the original settings"); });
+  const control = (action) => work(async () => { const data = await api.post(`${base}/runs/${runId}/${action}`, {}); setDetail(data); onToast?.(action === "cancel" ? uiText("flowSurface.remainingTasksCanceled") : uiText("flowSurface.retryingIncompleteTasksWithTheOriginalSettings")); });
   const connect = (source, target) => { try { change(connectNodes(definition, source, target)); } catch (problem) { report(problem); } };
   const removeNodes = (ids) => { change((current) => ({ ...current, nodes: current.nodes.filter((node) => !ids.includes(node.id)), edges: current.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); setSelectedIds((current) => current.filter((id) => !ids.includes(id))); };
   const nodeChanges = (changes) => {
@@ -180,33 +184,33 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
   };
   const add = (kind) => { const node = createStep(kind, newId(), definition.nodes.length); change({ ...definition, nodes: [...definition.nodes, node] }); select(node.id); };
 
-  return <section className="canvas flow-workspace" aria-label={"Pipeline Editor"} onKeyDown={keyboard}>
-    <header className="flow-topbar"><div className="flow-heading"><strong>{tab.title}</strong><small role="status">{busy ? "Processing…" : dirty ? "Not Saved" : `Saved · v${revision}`}</small></div><div className="flow-top-actions">
-      <button title={"Undo Ctrl+Z"} disabled={!writable || busy || !history.past.length} onClick={() => { setHistory(undoDefinition); setPreview(null); }}>Undo</button><button title={"Redo Ctrl+Shift+Z"} disabled={!writable || busy || !history.future.length} onClick={() => { setHistory(redoDefinition); setPreview(null); }}>Redo</button><button disabled={busy} onClick={() => work(async () => { if (dirty) await save(); onSwitchDocMode(); })}>Document</button>
-      {writable && <><button disabled={busy || !definition || definition.nodes.length >= 100} onClick={() => { setAdding(!adding); setSelectedIds([]); setPreview(null); }}>Add Step</button><button disabled={busy || !dirty} onClick={() => work(save)}>Save</button><button className="primary" disabled={busy || !definition?.nodes.length} onClick={() => check(false)}>Review &amp; Run</button></>}
+  return <section className="canvas flow-workspace" aria-label={uiText("flowSurface.pipelineEditor")} onKeyDown={keyboard}>
+    <header className="flow-topbar"><div className="flow-heading"><strong>{tab.title}</strong><small role="status">{busy ? uiText("flowSurface.processing") : dirty ? uiText("flowSurface.notSaved") : uiText("flowSurface.savedV", {v0: (revision)})}</small></div><div className="flow-top-actions">
+      <button title={uiText("flowSurface.undoCtrlZ")} disabled={!writable || busy || !history.past.length} onClick={() => { setHistory(undoDefinition); setPreview(null); }}>{uiText("flowSurface.undo")}</button><button title={uiText("flowSurface.redoCtrlShiftZ")} disabled={!writable || busy || !history.future.length} onClick={() => { setHistory(redoDefinition); setPreview(null); }}>{uiText("flowSurface.redo")}</button><button disabled={busy} onClick={() => work(async () => { if (dirty) await save(); onSwitchDocMode(); })}>{uiText("flowSurface.document")}</button>
+      {writable && <><button disabled={busy || !definition || definition.nodes.length >= 100} onClick={() => { setAdding(!adding); setSelectedIds([]); setPreview(null); }}>{uiText("flowSurface.addStep")}</button><button disabled={busy || !dirty} onClick={() => work(save)}>{uiText("flowSurface.save")}</button><button className="primary" disabled={busy || !definition?.nodes.length} onClick={() => check(false)}>{uiText("flowSurface.reviewRun")}</button></>}
     </div></header>
-    {error && <div className="flow-feedback" role="alert"><span>{error}</span><button aria-label={"Dismiss Error"} onClick={() => setError("")}>×</button></div>}
+    {error && <div className="flow-feedback" role="alert"><span>{error}</span><button aria-label={uiText("flowSurface.dismissError")} onClick={() => setError("")}>×</button></div>}
     <div className={`flow-main ${selected || adding || preview ? "with-panel" : ""}`}><div className="flow-stage">
-      <div className="flow-canvas-tools"><label><input placeholder={"Search steps…"} aria-label={"Search Steps"} value={search} onChange={(event) => setSearch(event.target.value)} /></label>{search && <div className="flow-search-results">{definition?.nodes.filter((node) => node.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((node) => <button key={node.id} onClick={() => { focusNode(node.id); setSearch(""); }}>{node.title}</button>)}</div>}<span>{definition?.nodes.length || 0}  steps</span><button disabled={!runId} onClick={() => setResultsOpen(!resultsOpen)}>{resultsOpen ? "Collapse Results" : "Results & History"}{detail && ` · ${TASK_LABELS[detail.run.status]}`}</button></div>
-      {!definition ? <p className="flow-empty-message" role="status">Loading pipeline…</p> : <ReactFlow nodes={canvas.nodes} edges={canvas.edges} nodeTypes={nodeTypes} onInit={(flow) => { instance.current = flow; }}
+      <div className="flow-canvas-tools"><label><input placeholder={uiText("flowSurface.searchSteps")} aria-label={uiText("flowSurface.searchSteps2")} value={search} onChange={(event) => setSearch(event.target.value)} /></label>{search && <div className="flow-search-results">{definition?.nodes.filter((node) => node.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((node) => <button key={node.id} onClick={() => { focusNode(node.id); setSearch(""); }}>{node.title}</button>)}</div>}<span>{uiText("flowSurface.steps", {v0: (definition?.nodes.length || 0)})}</span><button disabled={!runId} onClick={() => setResultsOpen(!resultsOpen)}>{resultsOpen ? uiText("flowSurface.collapseResults") : uiText("flowSurface.resultsHistory")}{detail && ` · ${TASK_LABELS[detail.run.status]}`}</button></div>
+      {!definition ? <p className="flow-empty-message" role="status">{uiText("flowSurface.loadingPipeline")}</p> : <ReactFlow nodes={canvas.nodes} edges={canvas.edges} nodeTypes={nodeTypes} onInit={(flow) => { instance.current = flow; }}
         onNodesChange={nodeChanges} onEdgesChange={(changes) => { const selections = changes.filter((item) => item.type === "select"); if (selections.length) setSelectedEdgeIds((ids) => selections.reduce((current, item) => item.selected ? [...current.filter((id) => id !== item.id), item.id] : current.filter((id) => id !== item.id), ids)); if (!writable || busy) return; const ids = changes.filter((item) => item.type === "remove").map((item) => item.id); if (ids.length) change((current) => ({ ...current, edges: current.edges.filter((edge) => !ids.includes(`${edge.source}--${edge.target}`)) })); }}
         onNodeClick={(_, node) => { setAdding(false); setPreview(null); setSelectedIds((ids) => ids.includes(node.id) ? ids : [node.id]); }} onPaneClick={() => select(null)}
         onNodeDragStart={() => { dragStart.current = definition; }} onNodeDragStop={() => { const before = dragStart.current; dragStart.current = null; if (before) setHistory((old) => JSON.stringify(before) === JSON.stringify(old.present) ? old : { ...old, past: [...old.past.slice(-49), before], future: [] }); }}
         onConnect={({ source, target }) => connect(source, target)} nodesDraggable={writable && !busy} nodesConnectable={writable && !busy} edgesReconnectable={false} deleteKeyCode={writable && !busy ? ["Backspace", "Delete"] : null}
         fitView fitViewOptions={initialFitOptions} minZoom={0.25} maxZoom={1.8} selectionOnDrag panOnDrag={[1, 2]} panOnScroll zoomOnScroll={false} zoomOnPinch selectionKeyCode="Shift" multiSelectionKeyCode="Shift"
-        ariaLabelConfig={{ "controls.zoomIn.ariaLabel": "Zoom In", "controls.zoomOut.ariaLabel": "Zoom Out", "controls.fitView.ariaLabel": "Fit View", "node.a11yDescription.default": "Enter selects a step. Arrow keys move it; Delete removes it.", "edge.a11yDescription.default": "Enter selects a connection; Delete removes it." }}>
-        <Background gap={24} size={1} color="#dce1e8" /><Controls showInteractive={false} />{!definition.nodes.length && <div className="flow-empty-message"><strong>Start with a Production Task</strong><p>Add a step, select its source, and test one result.</p>{writable && <button className="primary" onClick={() => setAdding(true)}>Add the First Step</button>}</div>}
+        ariaLabelConfig={{ "controls.ariaLabel": uiText("flowSurface.controlPanel"), "controls.zoomIn.ariaLabel": uiText("flowSurface.zoomIn"), "controls.zoomOut.ariaLabel": uiText("flowSurface.zoomOut"), "controls.fitView.ariaLabel": uiText("flowSurface.fitView"), "node.a11yDescription.default": uiText("flowSurface.nodeKeyboard"), "edge.a11yDescription.default": uiText("flowSurface.edgeKeyboard") }}>
+        <Background gap={24} size={1} color="#dce1e8" /><Controls showInteractive={false} />{!definition.nodes.length && <div className="flow-empty-message"><strong>{uiText("flowSurface.startWithAProductionTask")}</strong><p>{uiText("flowSurface.addAStepSelectItsSourceAndTestOne")}</p>{writable && <button className="primary" onClick={() => setAdding(true)}>{uiText("flowSurface.addTheFirstStep")}</button>}</div>}
       </ReactFlow>}
-      <p className="flow-navigation-help">Drag to select · Middle / right drag to pan · Shift for multi-select · Zoom controls at bottom left</p>
+      <p className="flow-navigation-help">{uiText("flowSurface.dragToSelectMiddleRightDragToPanShift")}</p>
     </div>
-      {adding && <aside className="flow-sidepanel" aria-label={"Add Pipeline Step"}><div className="flow-panel-title"><strong>Choose a Task</strong><button aria-label={"Close Add Step"} onClick={() => setAdding(false)}>×</button></div><div className="flow-kind-list">{Object.entries(STEP_KINDS).map(([kind, preset]) => <button key={kind} onClick={() => add(kind)}><strong>{preset.title}</strong><small>{preset.description}</small></button>)}</div></aside>}
+      {adding && <aside className="flow-sidepanel" aria-label={uiText("flowSurface.addPipelineStep")}><div className="flow-panel-title"><strong>{uiText("flowSurface.chooseATask")}</strong><button aria-label={uiText("flowSurface.closeAddStep")} onClick={() => setAdding(false)}>×</button></div><div className="flow-kind-list">{Object.entries(STEP_KINDS).map(([kind, preset]) => <button key={kind} onClick={() => add(kind)}><strong>{uiText("stepTitles." + kind)}</strong><small>{uiText("stepDescriptions." + kind)}</small></button>)}</div></aside>}
       {preview && <FlowPreflight preview={preview} busy={busy} writable={writable} onClose={() => setPreview(null)} onFocus={focusNode} onExecute={execute} />}
       {selected && !preview && !adding && <FlowInspector {...{ selected, selectedId, definition, tabs, tab, workers, agents, writable, busy, sourceDoc, sourceTables, sourceTable, targetTables, targetTable, sourceKey, targetKey, samples, sampleRow, update, change, connect }}
         onEditStart={() => { editStart.current = definition; }} onEditEnd={finishEdit}
         tasks={tasks.filter((task) => task.node_id === selectedId)} onClose={() => select(null)} onSample={(id) => { setSampleRow(id); setPreview(null); }} onRemove={() => removeNodes([selectedId])} onTest={() => check(true)} onResults={() => setResultsOpen(true)}
         onRefresh={() => work(async () => { setSourceDoc(docResponse(await api.get(`/projects/api/${slug}/tabs/${sourceKey}`))); setPreview(null); })} />}
     </div>
-    {!preview && <div className="flow-run-scope"><details><summary>Run Scope{batch && selection ? ` · ${selection.row_ids.length}  selected rows` : "· full pipeline"}</summary><div><label><input type="checkbox" checked={batch} onChange={(event) => setBatch(event.target.checked)} />Use Selected Table Rows</label>{selection && <span>{tabs.find((item) => item.key === selection.target_tab)?.title || selection.target_tab} · {selection.row_ids.length} rows</span>}<label>Starting Step<select value={startNode || (batch && definition ? redrawStart(definition, selection) : "")} onChange={(event) => setStartNode(event.target.value)}><option value="">Run All</option>{definition?.nodes.map((node) => <option value={node.id} key={node.id}>{node.title}  and all downstream steps</option>)}</select></label><small>Continuing starts a new run without reusing earlier upstream results.</small></div></details></div>}
+    {!preview && <div className="flow-run-scope"><details><summary>{uiText("flowSurface.runScope", {v0: (batch && selection ? ` · ${selection.row_ids.length}  selected rows` : uiText("flowSurface.fullPipeline"))})}</summary><div><label><input type="checkbox" checked={batch} onChange={(event) => setBatch(event.target.checked)} />{uiText("flowSurface.useSelectedTableRows")}</label>{selection && <span>{uiText("flowSurface.rows", {v0: (tabs.find((item) => item.key === selection.target_tab)?.title || selection.target_tab), v1: (selection.row_ids.length)})}</span>}<label>{uiText("flowSurface.startingStep")}<select value={startNode || (batch && definition ? redrawStart(definition, selection) : "")} onChange={(event) => setStartNode(event.target.value)}><option value="">{uiText("flowSurface.runAll")}</option>{definition?.nodes.map((node) => <option value={node.id} key={node.id}>{uiText("flowSurface.andAllDownstreamSteps", {v0: (node.title)})}</option>)}</select></label><small>{uiText("flowSurface.continuingStartsANewRunWithoutReusingEarlierUpstream")}</small></div></details></div>}
     {resultsOpen && <FlowResults {...{ detail, tasks, runs, runId, canControl, busy, revision, tabs, me, onOpenProposals, onOpenSource }} progress={summarizeTasks(tasks)} onRun={setRunId} onClose={() => setResultsOpen(false)} onFocus={focusNode} onControl={control} />}
   </section>;
 }

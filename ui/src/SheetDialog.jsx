@@ -1,6 +1,9 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { useEffect, useRef } from "react";
 
 export function SheetDialog({ title, onClose, children, wide = false }) {
+  const locale = useLocale();
   const box = useRef(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -21,7 +24,7 @@ export function SheetDialog({ title, onClose, children, wide = false }) {
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
         }
       }}>
-      <header className="sheet-dialog-header"><h2>{title}</h2><button type="button" aria-label={"Close Panel"} onClick={onClose}>✕</button></header>
+      <header className="sheet-dialog-header"><h2>{title}</h2><button type="button" aria-label={uiText("sheetDialog.closePanel")} onClick={onClose}>✕</button></header>
       {children}
     </section>
   </div>;

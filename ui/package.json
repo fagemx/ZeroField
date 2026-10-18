@@ -17,8 +17,10 @@
     "@tiptap/react": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "@xyflow/react": "12.12.0",
+    "i18next": "26.5.2",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "react-i18next": "17.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "5.0.4",

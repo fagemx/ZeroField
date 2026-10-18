@@ -126,12 +126,15 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
         return json.loads(raw.decode("utf-8"))
 
     def send_json(self, status: int, payload: dict) -> None:
+        if status >= 400:
+            from project_docs.locale import error_details
+            payload = error_details(payload)
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
 
     def send_skillops_bytes(self, status: int, content_type: str, data: bytes, *,
                             cache_control: str = "no-store", etag: str | None = None,
-                            disposition: str | None = None) -> None:
+                            disposition: str | None = None, extra_headers: dict | None = None) -> None:
         total, content_range = len(data), None
         if status == 200 and content_type.startswith(("audio/", "video/")) and self.headers.get("Range"):
             match = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers["Range"])
@@ -155,6 +158,8 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
             self.send_header("ETag", etag)
         if disposition:
             self.send_header("Content-Disposition", disposition)
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(data)
 
@@ -205,11 +210,11 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
         self.send_json(404, {"error": "Not found"})
 
     def _login_page(self, error=""):
-        mode = auth.config()["mode"]
-        content = ('<form method="post" action="/login"><label>Access Token <input name="token" type="password" autocomplete="current-password" required></label><button>Sign In</button></form>'
-                   if mode == "token" else '<p>Sign in through the configured reverse proxy.</p>' if mode == "header" else '<a href="/projects/">Open Studio</a>')
-        page = '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ZeroField Studio — Sign In</title><style>body{font:16px system-ui;max-width:480px;margin:12vh auto;padding:24px;background:#f8fafc;color:#1e293b}input,button{padding:12px;margin:12px 0;display:block;width:100%;box-sizing:border-box}button{background:#4338ca;color:white;border:0;border-radius:6px}</style><h1>ZeroField Studio</h1><p>' + html.escape(error) + '</p>' + content + '</html>'
-        self.send_skillops_bytes(200, "text/html; charset=utf-8", page.encode())
+        from project_docs.locale import request_locale, login_html, preference_headers
+        locale = request_locale(self)
+        page = login_html(auth.config()["mode"], locale, error)
+        self.send_skillops_bytes(200, "text/html; charset=utf-8", page.encode("utf-8"),
+                                extra_headers=preference_headers(locale))
 
     def _login(self, logout=False):
         cfg = auth.config()

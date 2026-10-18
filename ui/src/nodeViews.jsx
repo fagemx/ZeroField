@@ -1,3 +1,5 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { createContext, useContext } from "react";
 
@@ -9,6 +11,7 @@ import { shortTime } from "./format.js";
 export const FieldsContext = createContext({ values: {}, onField: async () => false });
 
 function StatusView({ node }) {
+  const locale = useLocale();
   const { values, onField } = useContext(FieldsContext);
   const info = values[node.attrs.fid] || null;
   return (
@@ -20,6 +23,7 @@ function StatusView({ node }) {
 }
 
 function FillView({ node }) {
+  const locale = useLocale();
   const { values, onField } = useContext(FieldsContext);
   const info = values[node.attrs.fid] || null;
   return (
@@ -30,14 +34,15 @@ function FillView({ node }) {
 }
 
 function TaskItemView({ node }) {
+  const locale = useLocale();
   const { values, onField } = useContext(FieldsContext);
   const info = values[node.attrs.fid] || null;
   const checked = info ? info.value === "true" : Boolean(node.attrs.checked);
   return (
     <NodeViewWrapper as="div" className="task-row" data-checked={checked ? "true" : "false"}>
       <label contentEditable={false} data-interactive="" suppressContentEditableWarning>
-        <input type="checkbox" checked={checked} aria-label={"Select"}
-          title={info && info.by_name ? `${info.by_name}・${shortTime(info.at)}` : "Select to save"}
+        <input type="checkbox" checked={checked} aria-label={uiText("nodeViews.select")}
+          title={info && info.by_name ? uiText("nodeViews.message", {v0: (info.by_name), v1: (shortTime(info.at))}) : uiText("nodeViews.selectToSave")}
           onMouseDown={(event) => event.stopPropagation()}
           onChange={() => node.attrs.fid && onField(node.attrs.fid, checked ? "false" : "true")} />
       </label>

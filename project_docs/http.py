@@ -14,6 +14,7 @@ from openbench_data import resource_path
 from project_assistant import service as assistant_service
 from project_docs import repository as repo
 from project_docs import service, members, media
+from project_docs.locale import problem_details
 
 STATIC_DIR = resource_path("static", "projects")
 SLUG = r"([a-z0-9][a-z0-9-]{0,40})"
@@ -27,6 +28,7 @@ _SCHEMA_READY = False
 _SCHEMA_LOCK = threading.Lock()
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 _HOST = re.compile(r"^[A-Za-z0-9.-]{1,200}(:\d{1,5})?$")
+PROBLEM_PAGES = {problem: problem_details(problem) for problem in ('login', 'membership', 'unavailable')}
 
 
 def _public_base(handler, slug: str):
@@ -93,26 +95,12 @@ def _redirect(handler, location: str) -> None:
     handler.end_headers()
 
 
-PROBLEM_PAGES = {
-    "login": (401, "請先登入", "請先登入工作台帳號後再打開這個網址。"),
-    "membership": (403, "還沒開放給你", "這裡只開放給專案名單上的成員。你的帳號還沒加入名單，請聯絡專案管理員。"),
-    "unavailable": (503, "暫時無法確認身分", "登入驗證暫時連不上，請稍後重新整理。"),
-}
-
-
 def _problem_page(handler, problem: str, identity=None) -> None:
-    status, title, message = PROBLEM_PAGES[problem]
-    email = html.escape(str((identity or {}).get("email") or ""))
-    who = f"<p class=who>目前登入：{email}</p>" if email else ""
-    body = (
-        "<!doctype html><html lang=zh-Hant><meta charset=utf-8>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>{title}</title><style>body{{font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;"
-        "color:#34332f;background:#fff;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}"
-        "main{max-width:460px;padding:24px}h1{font-size:22px;color:#1f1e1c}p{line-height:1.7}.who{color:#74726b;font-size:14px}"
-        f"</style><main><h1>{title}</h1><p>{message}</p>{who}<a href='/login'>前往登入</a></main></html>"
-    )
-    handler.send_skillops_bytes(status, "text/html; charset=utf-8", body.encode("utf-8"))
+    from project_docs.locale import request_locale, problem_html, preference_headers
+    locale = request_locale(handler)
+    status, body = problem_html(problem, locale, (identity or {}).get("email") or "")
+    handler.send_skillops_bytes(status, "text/html; charset=utf-8", body.encode("utf-8"),
+                                extra_headers=preference_headers(locale))
 
 
 def _send_static(handler, relative: str) -> None:

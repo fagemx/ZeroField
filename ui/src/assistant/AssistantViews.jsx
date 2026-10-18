@@ -1,4 +1,7 @@
-import { ACTION_LABEL, statusLabel } from "../format.js";
+import { agentLabel } from '../format.js';
+import { useLocale } from '../i18n/react.jsx';
+import { t as uiText } from '../i18n/index.js';
+import { ACTION_LABEL, statusLabel, normalizeStatus } from "../format.js";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { shortTime } from "../format.js";
@@ -17,12 +20,11 @@ import {
 
 const INFO = (privacyMode) => (
   <>
-    <b>Context:</b>Production pages, indexed worksheet structures and formulas, crew comments, and annotations.<br />
-    <b>Data access:</b>{privacyMode === "mask_numbers" ? "Numeric masking is enabled. Text is masked before reaching the model; image attachments are disabled." : "The model can read complete content, including numbers and attached images."}Other crew members’ private conversations are excluded.<br />
-    <b>Applying changes:</b>Review each proposal before it updates a production page.
-  </>
+    <b>{uiText("assistantViews.context")}</b>{uiText("assistantViews.productionPagesIndexedWorksheetStructuresAndFormulasCrewComments")}<br />
+    <b>{uiText("assistantViews.dataAccess")}</b>{uiText("assistantViews.otherCrewMembersPrivateConversationsAreExcluded", {v0: (privacyMode === "mask_numbers" ? uiText("assistantViews.numericMaskingIsEnabledTextIsMaskedBeforeReaching") : uiText("assistantViews.theModelCanReadCompleteContentIncludingNumbersAnd"))})}<br />
+    <b>{uiText("assistantViews.applyingChanges")}</b>{uiText("assistantViews.reviewEachProposalBeforeItUpdatesAProductionPage")}</>
 );
-const STARTERS = ["Summarize this production and its next steps", "Find missing slate information and propose improvements", "Use the production brief to suggest next steps"];
+const STARTERS = () => [uiText("assistantViews.summarizeThisProductionAndItsNextSteps"), uiText("assistantViews.findMissingSlateInformationAndProposeImprovements"), uiText("assistantViews.useTheProductionBriefToSuggestNextSteps")];
 
 const COPY_ICON = (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
@@ -56,9 +58,10 @@ async function copyText(text) {
 }
 
 function CopyButton({ text, title }) {
+  const locale = useLocale();
   const [done, setDone] = useState(false);
   return (
-    <button type="button" className={"icon-copy" + (done ? " done" : "")} title={done ? "Copied" : title} aria-label={title}
+    <button type="button" className={"icon-copy" + (done ? " done" : "")} title={done ? uiText("assistantViews.copied") : title} aria-label={title}
       onClick={async () => {
         if (await copyText(text || "")) {
           setDone(true);
@@ -75,11 +78,12 @@ function attachmentUrl(slug, id, which) {
 }
 
 function Attachments({ slug, items, onZoom }) {
+  const locale = useLocale();
   if (!items || !items.length) return null;
   return (
     <div className="u-att">
       {items.map((a) => (a.kind === "image"
-        ? <button type="button" key={a.id} className="u-img" title={`${a.name}(open full-size image)`}
+        ? <button type="button" key={a.id} className="u-img" title={uiText("assistantViews.openFullSizeImage", {v0: (a.name)})}
           onClick={() => onZoom && onZoom({ src: attachmentUrl(slug, a.id, "preview"), name: a.name })}>
           <img src={attachmentUrl(slug, a.id, "thumb")} alt={a.name} />
         </button>
@@ -89,6 +93,7 @@ function Attachments({ slug, items, onZoom }) {
 }
 
 function Lightbox({ image, onClose }) {
+  const locale = useLocale();
   useEffect(() => {
     if (!image) return undefined;
     const key = (event) => { if (event.key === "Escape") onClose(); };
@@ -99,7 +104,7 @@ function Lightbox({ image, onClose }) {
   return (
     <div className="pa-zoom" role="dialog" aria-label={image.name} onClick={onClose}>
       <img src={image.src} alt={image.name} />
-      <div className="cap">{image.name}　· Click or press Esc to close</div>
+      <div className="cap">{uiText("assistantViews.clickOrPressEscToClose", {v0: (image.name)})}</div>
     </div>
   );
 }
@@ -122,6 +127,7 @@ function savedWidth() {
 }
 
 function ResizeEdge() {
+  const locale = useLocale();
   const [drag, setDrag] = useState(false);
   const dragging = useRef(false);  // 拖動中每一下都要讀到最新的，不等畫面重畫
   const width = useRef(null);
@@ -144,7 +150,7 @@ function ResizeEdge() {
     try { if (width.current) localStorage.setItem(WIDTH_KEY, String(width.current)); } catch { /* 私密視窗 */ }
   };
   return (
-    <div className={"pa-resize" + (drag ? " on" : "")} title={"Drag to resize; double-click to reset"} aria-hidden="true"
+    <div className={"pa-resize" + (drag ? " on" : "")} title={uiText("assistantViews.dragToResizeDoubleClickToReset")} aria-hidden="true"
       onPointerDown={(event) => {
         event.preventDefault();
         try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* 指標已經放開 */ }
@@ -161,13 +167,15 @@ function ResizeEdge() {
 }
 
 function NewConversation({ assistant, onDone }) {
+  const locale = useLocale();
   return (
-    <button type="button" className="ghost" title={"Start a new conversation; archive this conversation"}
-      onClick={async () => { if (await assistant.newConversation()) onDone(); }}>＋ New Chat</button>
+    <button type="button" className="ghost" title={uiText("assistantViews.startANewConversationArchiveThisConversation")}
+      onClick={async () => { if (await assistant.newConversation()) onDone(); }}>{uiText("assistantViews.newChat")}</button>
   );
 }
 
 function Inline({ text }) {
+  const locale = useLocale();
   return inlineParts(text).map((part, index) => {
     if (part.kind === "strong") return <strong key={index}>{part.text}</strong>;
     if (part.kind === "code") return <code key={index}>{part.text}</code>;
@@ -177,6 +185,7 @@ function Inline({ text }) {
 }
 
 function Rich({ text }) {
+  const locale = useLocale();
   return blocks(text).map((block, index) => {
     if (block.kind === "p") return <p key={index}><Inline text={block.text} /></p>;
     const Tag = block.kind;
@@ -185,6 +194,7 @@ function Rich({ text }) {
 }
 
 function Sources({ items, tabs, onOpenTab }) {
+  const locale = useLocale();
   if (!items.length) return null;
   return (
     <div className="sources">
@@ -198,12 +208,13 @@ function Sources({ items, tabs, onOpenTab }) {
 }
 
 function ProposalCard({ proposal, compact, onApply, onDismiss }) {
+  const locale = useLocale();
   const [text, setText] = useState(proposal.content || "");
   const [busy, setBusy] = useState(false);
   const display = (proposal.target && proposal.target.display) || "";
   const copy = proposalCopy(proposal);
   const actionLabel = ACTION_LABEL[proposal.action] || proposal.action;
-  if (proposal.race_group_task_id && proposal.status === 'pending') return <div className="pcard">Candidates are ready. Compare and select a version in Agent Tasks.</div>;
+  if (proposal.race_group_task_id && proposal.status === 'pending') return <div className="pcard">{uiText("assistantViews.candidatesAreReadyCompareAndSelectAVersionIn")}</div>;
   if (proposal.status === "applied") {
     return (
       <div className="pcard sent"><div className="h">✓ {appliedLabel(proposal)}</div>
@@ -211,7 +222,7 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
     );
   }
   if (proposal.status === "dismissed") return <div className="pcard cancelled">{copy.dismissed}：{actionLabel} → {display}</div>;
-  if (proposal.status === "failed") return <div className="pcard cancelled">{copy.failed}：{proposal.error || "Ask the assistant to revise the proposal."}</div>;
+  if (proposal.status === "failed") return <div className="pcard cancelled">{copy.failed}：{proposal.error || uiText("assistantViews.askTheAssistantToReviseTheProposal")}</div>;
   if (compact) return <div className="pcard">{copy.compactLead}{actionLabel} → <b>{display}</b>。{copy.compactTail}</div>;
   if (proposal.action === "table_edit") return <TableProposalReview proposal={proposal} onApply={onApply} onDismiss={onDismiss} />;
   const editable = !["改狀態", "table_edit"].includes(proposal.action);
@@ -225,11 +236,11 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
       <div className="where">{actionLabel} → <b>{display}</b></div>
       {editable
         ? <textarea value={text} rows={4} aria-label={copy.field} onChange={(event) => setText(event.target.value)} />
-        : <div className="where" style={{whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto"}}>{proposal.action === "table_edit" ? proposal.content : `Change to “${statusLabel(proposal.content)}”`}</div>}
+        : <div className="where" style={{whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto"}}>{proposal.action === "table_edit" ? proposal.content : uiText("assistantViews.changeTo", {v0: (statusLabel(proposal.content))})}</div>}
       <div className="acts">
         <button type="button" className="btn primary" disabled={busy}
           onClick={() => run(() => onApply(proposal, editable ? text : proposal.content))}>{copy.confirm}</button>
-        <button type="button" className="btn" disabled={busy} onClick={() => run(() => onDismiss(proposal))}>Not Now</button>
+        <button type="button" className="btn" disabled={busy} onClick={() => run(() => onDismiss(proposal))}>{uiText("assistantViews.notNow")}</button>
         <span className="note">{copy.note}</span>
       </div>
     </div>
@@ -237,17 +248,18 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
 }
 
 function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, onApply, onDismiss, onZoom }) {
+  const locale = useLocale();
   if (message.role === "user") {
     const files = message.attachments || [];
     return (
       <>
         <div className="msg-u">
-          <CopyButton text={message.body || files.map((f) => f.name).join("、")} title={"Copy Message"} />
+          <CopyButton text={message.body || files.map((f) => f.name).join("、")} title={uiText("assistantViews.copyMessage")} />
           <div className="bubble">
             <Attachments slug={slug} items={files} onZoom={onZoom} />
             {message.body && <Inline text={message.body} />}
-            {message.source_ref && <small className="message-scope">Task from an annotation</small>}
-            {message.request_scope && <small className="message-scope">{message.request_scope.kind === 'doc' ? `Selected passages:${message.request_scope.tab_title} · ${message.request_scope.block_ids.length}  passages` : `Selected scope:${message.request_scope.table_name} · ${message.request_scope.row_ids?.length} rows ·  ${message.request_scope.column_ids?.length} columns`}</small>}
+            {message.source_ref && <small className="message-scope">{uiText("assistantViews.taskFromAnAnnotation")}</small>}
+            {message.request_scope && <small className="message-scope">{message.request_scope.kind === 'doc' ? uiText("assistantViews.selectedPassagesPassages", {v0: (message.request_scope.tab_title), v1: (message.request_scope.block_ids.length)}) : uiText("assistantViews.selectedScopeRowsColumns", {v0: (message.request_scope.table_name), v1: (message.request_scope.row_ids?.length), v2: (message.request_scope.column_ids?.length)})}</small>}
           </div>
         </div>
         {(message.notes || []).map((note) => <div key={note} className="guard">🛡 {note}</div>)}
@@ -256,8 +268,8 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
   }
   if (message.role === "lead") {
     return (
-      <div className="msg-a kai"><div className="who-a">Owner</div><div className="bubble"><Rich text={message.body} /></div>
-        <div className="msg-meta"><CopyButton text={message.body} title={"Copy"} /></div></div>
+      <div className="msg-a kai"><div className="who-a">{uiText("assistantViews.owner")}</div><div className="bubble"><Rich text={message.body} /></div>
+        <div className="msg-meta"><CopyButton text={message.body} title={uiText("assistantViews.copy")} /></div></div>
     );
   }
   if (message.status === "queued" || message.status === "running") {
@@ -269,7 +281,7 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
       <>
         <div className="msg-a writing">
           <div className="who-a">{messagePersona(message)}</div>
-          {lookedLive.length > 0 && <div className="looked">Read:{lookedLive.join("、")}</div>}
+          {lookedLive.length > 0 && <div className="looked">{uiText("assistantViews.read", {v0: (lookedLive.join("、"))})}</div>}
           <div className="bubble"><Rich text={live} /></div>
         </div>
         {working}
@@ -283,14 +295,14 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
     <>
       <div className={"msg-a" + (message.status === "failed" ? " failed" : "")}>
         <div className="who-a">{messagePersona(message)}</div>
-        {looked.length > 0 && <div className="looked">Read:{looked.join("、")}</div>}
+        {looked.length > 0 && <div className="looked">{uiText("assistantViews.read", {v0: (looked.join("、"))})}</div>}
         <div className="bubble"><Rich text={main} /></div>
-        {download && <a className="doc-dl" href={download} download>⬇ Download Word</a>}
+        {download && <a className="doc-dl" href={download} download>{uiText("assistantViews.downloadWord")}</a>}
         <Sources items={sources} tabs={tabs} onOpenTab={onOpenTab} />
         {message.status === "done" && (
           <div className="msg-meta">
-            <CopyButton text={message.body} title={"Copy Response"} />
-            {seconds != null && <span title={"Time from submission to completed response"}>{formatSeconds(seconds)}</span>}
+            <CopyButton text={message.body} title={uiText("assistantViews.copyResponse")} />
+            {seconds != null && <span title={uiText("assistantViews.timeFromSubmissionToCompletedResponse")}>{formatSeconds(seconds)}</span>}
           </div>
         )}
       </div>
@@ -302,6 +314,7 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
 }
 
 function Chat({ assistant, tabs, compact, ownerName, onOpenTab, onStarter }) {
+  const locale = useLocale();
   const ref = useRef(null);
   const thread = (assistant.state && assistant.state.thread) || [];
   const proposals = (assistant.state && assistant.state.proposals) || [];
@@ -326,18 +339,18 @@ function Chat({ assistant, tabs, compact, ownerName, onOpenTab, onStarter }) {
       <Lightbox image={zoom} onClose={() => setZoom(null)} />
       {earlier.length > 0 && (
         <div className="earlier">
-          <div className="earlier-t">Earlier conversations have {earlier.length}  responses awaiting approval</div>
+          <div className="earlier-t">{uiText("assistantViews.earlierConversationsHaveResponsesAwaitingApproval", {v0: (earlier.length)})}</div>
           {earlier.map((p) => <ProposalCard key={p.id} proposal={p} compact={compact} onApply={assistant.apply} onDismiss={assistant.dismiss} />)}
         </div>
       )}
       {!thread.length && (
         <>
-          <div className="msg-a"><div className="who-a">✦ Studio Assistant</div><div className="bubble">
-            <p>{ownerName}, what would you like to work on? I can read production pages and slates, identify gaps, and propose changes.</p>
-            <p>I will prepare changes for your review before applying them.</p>
+          <div className="msg-a"><div className="who-a">{uiText("assistantViews.studioAssistant")}</div><div className="bubble">
+            <p>{uiText("assistantViews.whatWouldYouLikeToWorkOnICan", {v0: (ownerName)})}</p>
+            <p>{uiText("assistantViews.iWillPrepareChangesForYourReviewBeforeApplying")}</p>
           </div></div>
           <div className="chips">
-            {STARTERS.map((s) => <button type="button" key={s} className="chip" onClick={() => onStarter(s)}>{s}</button>)}
+            {STARTERS().map((s) => <button type="button" key={s} className="chip" onClick={() => onStarter(s)}>{s}</button>)}
           </div>
         </>
       )}
@@ -361,6 +374,7 @@ function named(file) {
 }
 
 function Composer({ assistant, value, onChange, inputRef }) {
+  const locale = useLocale();
   const busy = assistant.busyForSelectedAgent || assistant.sending;
   const agents = assistant.state?.agents || [];
   const suggestions = agentSuggestions(value, agents);
@@ -402,33 +416,32 @@ function Composer({ assistant, value, onChange, inputRef }) {
         take(event.dataTransfer.files);
       }}>
       <AgentSelector agents={agents} value={assistant.selectedAgent} onChange={assistant.setSelectedAgent} disabled={assistant.sending} />
-      {suggestions.length > 0 && <div className="agent-suggestions" aria-label={"Agent mentions"}>{suggestions.map(agent => <button key={agent.agent_key} type="button" onClick={() => {
+      {suggestions.length > 0 && <div className="agent-suggestions" aria-label={uiText("assistantViews.agentMentions")}>{suggestions.map(agent => <button key={agent.agent_key} type="button" onClick={() => {
         assistant.setSelectedAgent(agent.agent_key); onChange(value.replace(/@[^\s@]*$/, `@${agent.agent_key} `)); inputRef.current?.focus();
-      }}>{agent.icon} {agent.display_name} <small>@{agent.agent_key}</small></button>)}</div>}
-      {assistant.scope && <div className="request-scope"><button type="button" aria-label={"Clear Selected Scope"} disabled={busy} onClick={() => assistant.setScope(null)}>✕</button>
-        <b>{assistant.scope.table_name || "Selected Data"}</b> · {assistant.scope.row_ids.length} rows ·  {assistant.scope.column_ids.length} columns
-        <small>Changes are limited to this selection. Switching pages does not change the target.</small></div>}
+      }}>{agent.icon} {agentLabel(agent)} <small>@{agent.agent_key}</small></button>)}</div>}
+      {assistant.scope && <div className="request-scope"><button type="button" aria-label={uiText("assistantViews.clearSelectedScope")} disabled={busy} onClick={() => assistant.setScope(null)}>✕</button>
+        <b>{assistant.scope.table_name || uiText("assistantViews.selectedData")}</b>{uiText("assistantViews.rowsColumns", {v0: (assistant.scope.row_ids.length), v1: (assistant.scope.column_ids.length)})}<small>{uiText("assistantViews.changesAreLimitedToThisSelectionSwitchingPagesDoes")}</small></div>}
       {files.length > 0 && (
         <div className="att-tray">
           {files.map((f) => (
             <span key={f.key} className={"att" + (f.kind === "image" ? "" : " file") + (f.status === "uploading" ? " busy" : "")}
-              title={f.status === "uploading" ? "Uploading…" : f.name}>
+              title={f.status === "uploading" ? uiText("assistantViews.uploading") : f.name}>
               {f.kind === "image"
                 ? <img src={f.local || (f.attachment ? attachmentUrl(assistant.slug, f.attachment.id, "thumb") : "")} alt="" />
                 : <span className="ic">{fileIcon(f.kind)}</span>}
-              <span className="nm">{f.status === "uploading" ? "Uploading…" : f.name}</span>
-              <button type="button" className="rm" title={"Remove"} aria-label={`Remove ${f.name}`} onClick={() => assistant.removeFile(f.key)}>✕</button>
+              <span className="nm">{f.status === "uploading" ? uiText("assistantViews.uploading") : f.name}</span>
+              <button type="button" className="rm" title={uiText("assistantViews.remove")} aria-label={uiText("assistantViews.remove2", {v0: (f.name)})} onClick={() => assistant.removeFile(f.key)}>✕</button>
             </span>
           ))}
         </div>
       )}
       <div className="composer">
-        <button type="button" className="attach-btn" title={"Attach files or paste an image"} aria-label={"Attach Files"}
+        <button type="button" className="attach-btn" title={uiText("assistantViews.attachFilesOrPasteAnImage")} aria-label={uiText("assistantViews.attachFiles")}
           disabled={files.length >= 5} onClick={() => picker.current && picker.current.click()}>{CLIP_ICON}</button>
         <input ref={picker} type="file" multiple hidden accept={ACCEPT_FILES}
           onChange={(event) => { take(event.target.files); event.target.value = ""; }} />
-        <textarea ref={inputRef} rows={1} value={value} aria-label={"Message Studio Assistant"}
-          placeholder={assistant.busyForSelectedAgent ? "This agent is responding. You can choose another agent…" : "Describe the task, or type @ to choose an agent…"}
+        <textarea ref={inputRef} rows={1} value={value} aria-label={uiText("assistantViews.messageStudioAssistant")}
+          placeholder={assistant.busyForSelectedAgent ? uiText("assistantViews.thisAgentIsRespondingYouCanChooseAnotherAgent") : uiText("assistantViews.describeTheTaskOrTypeToChooseAnAgent")}
           onChange={(event) => {
             const text = event.target.value; onChange(text);
             if (/@[a-zA-Z\u3400-\u9fff]/.test(text)) {
@@ -447,7 +460,7 @@ function Composer({ assistant, value, onChange, inputRef }) {
               submit();
             }
           }} />
-        <button type="button" className="send" title={assistant.uploading ? "Files are still uploading" : "Send"} aria-label={"Send"}
+        <button type="button" className="send" title={assistant.uploading ? uiText("assistantViews.filesAreStillUploading") : uiText("assistantViews.send")} aria-label={uiText("assistantViews.send")}
           disabled={busy || assistant.uploading || (!value.trim() && !ready.length)} onClick={submit}>↑</button>
       </div>
       <div className="hint">{attachmentHint(files, assistant.privacyMode)}</div>
@@ -457,6 +470,7 @@ function Composer({ assistant, value, onChange, inputRef }) {
 
 // 「紀錄」分頁：回到目前的對話點「對話」分頁就好，這裡不再放返回鈕；按「接著這段聊」或點目前那段＝onClose 切回「對話」
 function HistoryView({ assistant, tabs, compact, onOpenTab, onClose }) {
+  const locale = useLocale();
   const [list, setList] = useState(null);
   const [open, setOpen] = useState(null);
   const [zoom, setZoom] = useState(null);
@@ -477,20 +491,19 @@ function HistoryView({ assistant, tabs, compact, onOpenTab, onClose }) {
   return (
     <div className="scroll chat hist">
       <Lightbox image={zoom} onClose={() => setZoom(null)} />
-      {list === null && <div className="hist-empty">Loading…</div>}
-      {list && list.filter((c) => !c.current || c.messages).length === 0 && <div className="hist-empty">No earlier conversations.</div>}
+      {list === null && <div className="hist-empty">{uiText("assistantViews.loading")}</div>}
+      {list && list.filter((c) => !c.current || c.messages).length === 0 && <div className="hist-empty">{uiText("assistantViews.noEarlierConversations")}</div>}
       {(list || []).map((c) => (
         <button type="button" key={c.id} className={"hist-item" + (c.current ? " current" : "") + (open && open.id === c.id ? " on" : "")}
           onClick={() => (c.current ? onClose() : view(c.id))}>
-          <span className="d">{c.current ? "Current · " : ""}{shortTime(c.last_at || c.created_at)}</span>
-          <span className="n">{c.messages}  messages</span>
-          <span className="q">{c.first_text || "(new conversation)"}</span>
+          <span className="d">{c.current ? uiText("assistantViews.current") : ""}{shortTime(c.last_at || c.created_at)}</span>
+          <span className="n">{uiText("assistantViews.messages", {v0: (c.messages)})}</span>
+          <span className="q">{c.first_text || uiText("assistantViews.newConversation")}</span>
         </button>
       ))}
       {open && (
         <div className="hist-old">
-          <div className="hist-bar">Preview:{picked ? shortTime(picked.last_at || picked.created_at) + "’s conversation" : "Conversation History"}
-            <button type="button" className="btn primary" onClick={resume}>Continue Conversation</button></div>
+          <div className="hist-bar">{uiText("assistantViews.preview", {v0: (picked ? shortTime(picked.last_at || picked.created_at) + uiText("assistantViews.sConversation") : uiText("assistantViews.conversationHistory"))})}<button type="button" className="btn primary" onClick={resume}>{uiText("assistantViews.continueConversation")}</button></div>
           {open.messages.map((message) => (
             <Message key={message.id} slug={assistant.slug} message={message} tabs={tabs} compact onOpenTab={onOpenTab}
               seconds={elapsedSeconds(message, open.messages)} onZoom={setZoom}
@@ -503,23 +516,24 @@ function HistoryView({ assistant, tabs, compact, onOpenTab, onClose }) {
 }
 
 function TodoList({ todo, focus, onPick, onOpenTab }) {
+  const locale = useLocale();
   const groups = todoGroups(todo);
   const on = (item) => isPicked(focus, item);
   const row = (item, label) => (
-    <button type="button" key={item.rid} className={"ti" + (statusLabel(item.status) === "Approved" ? " done" : "") + (on(item) ? " on" : "")}
+    <button type="button" key={item.rid} className={"ti" + (normalizeStatus(item.status) === "Approved" ? " done" : "") + (on(item) ? " on" : "")}
       title={item.why || item.what || ""} onClick={() => onPick(item)}>
-      <span className="dot">{statusLabel(item.status) === "Approved" ? "✓" : ""}</span><span>{label}</span>
+      <span className="dot">{normalizeStatus(item.status) === "Approved" ? "✓" : ""}</span><span>{label}</span>
     </button>
   );
   return (
     <>
-      {groups.notes.length > 0 && <h5>Assigned by the owner</h5>}
+      {groups.notes.length > 0 && <h5>{uiText("assistantViews.assignedByTheOwner")}</h5>}
       {groups.notes.map((n) => <div key={"n" + n.id} className="ti kai"><span className="dot" /><span>{n.text}</span></div>)}
-      <h5>Open Questions</h5>
+      <h5>{uiText("assistantViews.openQuestions")}</h5>
       {groups.questions.map((q) => row(q, <><span className="n">{q.number}.</span>{clip(q.text, 24)}</>))}
-      {groups.handoff.length > 0 && <h5>Your deliverables</h5>}
+      {groups.handoff.length > 0 && <h5>{uiText("assistantViews.yourDeliverables")}</h5>}
       {groups.handoff.map((h) => row(h, h.text))}
-      {groups.mentions.length > 0 && <h5>Unresolved mentions</h5>}
+      {groups.mentions.length > 0 && <h5>{uiText("assistantViews.unresolvedMentions")}</h5>}
       {groups.mentions.map((m) => (
         <button type="button" key={"m" + m.annotation_id} className="ti" onClick={() => onOpenTab(m.tab_key)}>
           <span className="dot" /><span>{clip(m.text, 40)}</span>
@@ -530,6 +544,7 @@ function TodoList({ todo, focus, onPick, onOpenTab }) {
 }
 
 function Bench({ assistant, focus, onOpenTab }) {
+  const locale = useLocale();
   const state = assistant.state || {};
   const pending = (state.proposals || []).filter((p) => p.status === "pending");
   const current = currentFocus(state.thread, focus);
@@ -545,51 +560,53 @@ function Bench({ assistant, focus, onOpenTab }) {
       {question && (
         <>
           <div className="qcard">
-            <div className="qn">Open Question {question.number}  · [{question.status}〕</div>
+            <div className="qn">{uiText("assistantViews.openQuestion", {v0: (question.number), v1: (question.status)})}</div>
             <div className="qt">{question.text}</div>
-            {question.why && <div className="why"><b>Why this matters:</b>{question.why}</div>}
-            {criteria && criteria.use && <div className="why"><b>How the owner will use this:</b>{criteria.use}</div>}
+            {question.why && <div className="why"><b>{uiText("assistantViews.whyThisMatters")}</b>{question.why}</div>}
+            {criteria && criteria.use && <div className="why"><b>{uiText("assistantViews.howTheOwnerWillUseThis")}</b>{criteria.use}</div>}
           </div>
           {criteria && criteria.criteria.length > 0 && (
             <>
-              <div className="sec-t">A complete response includes</div>
+              <div className="sec-t">{uiText("assistantViews.aCompleteResponseIncludes")}</div>
               <ul className="check">{criteria.criteria.map((c) => <li key={c}><span className="box" /><span className="t">{c}</span></li>)}</ul>
             </>
           )}
-          {!pending.length && <div className="draft"><div className="wait">Still discussing. A complete response will appear here for your approval before it is applied.</div></div>}
+          {!pending.length && <div className="draft"><div className="wait">{uiText("assistantViews.stillDiscussingACompleteResponseWillAppearHereFor")}</div></div>}
         </>
       )}
       {handoff && (
         <div className="qcard">
-          <div className="qn">Your deliverable · [{handoff.status}〕</div>
+          <div className="qn">{uiText("assistantViews.yourDeliverable", {v0: (handoff.status)})}</div>
           <div className="qt">{handoff.text}</div>
           {handoff.what && <div className="why">{handoff.what}</div>}
-          <button type="button" className="src" onClick={() => onOpenTab(handoff.tab_key)}>↗ Open Deliverables</button>
+          <button type="button" className="src" onClick={() => onOpenTab(handoff.tab_key)}>{uiText("assistantViews.openDeliverables")}</button>
         </div>
       )}
       {!pending.length && !question && !handoff && (
         <>
-          <div className="empty">Agent proposals appear here. Review the content and target page before applying changes.</div>
-          <div className="sec-t">What the Agent Can Read</div>
+          <div className="empty">{uiText("assistantViews.agentProposalsAppearHereReviewTheContentAndTarget")}</div>
+          <div className="sec-t">{uiText("assistantViews.whatTheAgentCanRead")}</div>
           <div className="empty">{INFO(assistant.privacyMode)}</div>
         </>
       )}
-      {looked.length > 0 && <><div className="sec-t">Read in the Previous Turn</div><div className="empty">{looked.join("、")}</div></>}
+      {looked.length > 0 && <><div className="sec-t">{uiText("assistantViews.readInThePreviousTurn")}</div><div className="empty">{looked.join("、")}</div></>}
     </>
   );
 }
 
 function Seg({ view, onView }) {
+  const locale = useLocale();
   return (
     <div className="seg">
-      <button type="button" className={view === "chat" ? "on" : ""} onClick={() => onView("chat")}>Chat</button>
-      <button type="button" className={view === "manage" ? "on" : ""} onClick={() => onView("manage")}>Manage</button>
+      <button type="button" className={view === "chat" ? "on" : ""} onClick={() => onView("chat")}>{uiText("assistantViews.chat")}</button>
+      <button type="button" className={view === "manage" ? "on" : ""} onClick={() => onView("manage")}>{uiText("assistantViews.manage")}</button>
     </div>
   );
 }
 
 export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft, inputRef, view, onView, onExpand, onClose,
   onOpenTab, onStarter, onError, onToast }) {
+  const locale = useLocale();
   const [info, setInfo] = useState(false);
   const [history, setHistory] = useState(false);
   const manager = Boolean(assistant.state && assistant.state.flags && assistant.state.flags.manager);
@@ -608,24 +625,24 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
   };
   // 10/15 負責人：上面太亂 → 標題列只留名字、ⓘ 和視窗按鈕；下面一列分頁（跟「標註」清單同一套）＋「＋ 新對話」
   return (
-    <aside className="pa" aria-label={"Studio Assistant"}>
+    <aside className="pa" aria-label={uiText("assistantViews.studioAssistant2")}>
       <ResizeEdge />
       <div className="pa-top">
-        <span className="t"><span className="spark">✦</span>Studio Assistant</span>
-        <button type="button" className={"info" + (info ? " on" : "")} title={"What the Agent Can Read"} aria-label={"What the Agent Can Read"}
+        <span className="t"><span className="spark">✦</span>{uiText("assistantViews.studioAssistant2")}</span>
+        <button type="button" className={"info" + (info ? " on" : "")} title={uiText("assistantViews.whatTheAgentCanRead")} aria-label={uiText("assistantViews.whatTheAgentCanRead")}
           aria-expanded={info} onClick={() => setInfo(!info)}>ⓘ</button>
         <span className="grow" />
-        <button type="button" className="icon-btn" title={"Expand Workspace"} aria-label={"Expand Workspace"} onClick={onExpand}>⤢</button>
-        <button type="button" className="icon-btn x" title={"Collapse"} aria-label={"Collapse"} onClick={onClose}>✕</button>
+        <button type="button" className="icon-btn" title={uiText("assistantViews.expandWorkspace")} aria-label={uiText("assistantViews.expandWorkspace")} onClick={onExpand}>⤢</button>
+        <button type="button" className="icon-btn x" title={uiText("assistantViews.collapse")} aria-label={uiText("assistantViews.collapse")} onClick={onClose}>✕</button>
       </div>
-      <div className="pop-tabs" role="tablist" aria-label={"Studio Assistant Tabs"}>
+      <div className="pop-tabs" role="tablist" aria-label={uiText("assistantViews.studioAssistantTabs")}>
         {paneTabs(manager, forwardsOpen).map((t) => (
           <button type="button" key={t.key} role="tab" aria-selected={tab === t.key} className={tab === t.key ? "on" : undefined}
-            title={t.count ? `There are ${t.count}  private questions awaiting your reply` : undefined} onClick={() => pick(t.key)}>
+            title={t.count ? uiText("assistantViews.thereArePrivateQuestionsAwaitingYourReply", {v0: (t.count)}) : undefined} onClick={() => pick(t.key)}>
             {t.label}{t.count > 0 && <span className="n hot">{t.count}</span>}
           </button>
         ))}
-        <button type="button" role="tab" aria-selected={tab === 'agents'} className={tab === 'agents' ? 'on' : undefined} onClick={() => pick('agents')}>Agent Tasks</button>
+        <button type="button" role="tab" aria-selected={tab === 'agents'} className={tab === 'agents' ? 'on' : undefined} onClick={() => pick('agents')}>{uiText("assistantViews.agentTasks")}</button>
         {view !== "manage" && view !== 'agents' && <NewConversation assistant={assistant} onDone={() => setHistory(false)} />}
       </div>
       <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => pick('agents')} />
@@ -636,7 +653,7 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
         <div className="pa-chat"><HistoryView assistant={assistant} tabs={tabs} onOpenTab={onOpenTab} onClose={() => setHistory(false)} /></div>
       ) : (
         <>
-          {task && <div className="pa-task on"><span>{task}</span><button type="button" className="src" onClick={onExpand}>Open in Workspace</button></div>}
+          {task && <div className="pa-task on"><span>{task}</span><button type="button" className="src" onClick={onExpand}>{uiText("assistantViews.openInWorkspace")}</button></div>}
           <div className="pa-chat"><Chat assistant={assistant} tabs={tabs} ownerName={me.name} onOpenTab={onOpenTab} onStarter={onStarter} /></div>
           <Composer assistant={assistant} value={draft} onChange={onDraft} inputRef={inputRef} />
         </>
@@ -647,6 +664,7 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
 
 export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, draft, onDraft, inputRef, view, onView,
   onCollapse, onOpenTab, onStarter, onError, onToast }) {
+  const locale = useLocale();
   const [mtab, setMtab] = useState("chat");
   const [history, setHistory] = useState(false);
   const [help, setHelp] = useState(() => {
@@ -667,44 +685,44 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
   };
   const hideHelp = () => {
     setHelp(false);
-    try { localStorage.setItem("pa.help", "min"); } catch { /* 私密視窗沒有 localStorage */ }
+    try { localStorage.setItem("pa.help", uiText("assistantViews.min")); } catch { /* 私密視窗沒有 localStorage */ }
   };
   return (
-    <div className="ws" aria-label={"Studio Assistant Workspace"}>
+    <div className="ws" aria-label={uiText("assistantViews.studioAssistantWorkspace")}>
       <div className="ws-head">
-        <h1><span className="spark">✦</span>Studio Assistant</h1>
+        <h1><span className="spark">✦</span>{uiText("assistantViews.studioAssistant2")}</h1>
         <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => onView('agents')} />
-        <span className="sub">{me.name}’s workspace | Move the production forward</span>
+        <span className="sub">{uiText("assistantViews.sWorkspaceMoveTheProductionForward", {v0: (me.name)})}</span>
         {manager && <Seg view={view} onView={onView} />}
         <div className="pills">
-          <span className="pill">Open Questions Completed <b>{counts.questionsDone}</b>/{counts.questions}</span>
-          {counts.handoff > 0 && <span className="pill">Deliverables <b>{counts.handoffDone}</b>/{counts.handoff}</span>}
+          <span className="pill">{uiText("assistantViews.openQuestionsCompleted")}<b>{counts.questionsDone}</b>/{counts.questions}</span>
+          {counts.handoff > 0 && <span className="pill">{uiText("assistantViews.deliverables")}<b>{counts.handoffDone}</b>/{counts.handoff}</span>}
           {manager && (assistant.state.forwards_open || 0) > 0 && (
-            <button type="button" className="pill" onClick={() => onView("manage")}>Private questions awaiting your reply <b>{assistant.state.forwards_open}</b></button>
+            <button type="button" className="pill" onClick={() => onView("manage")}>{uiText("assistantViews.privateQuestionsAwaitingYourReply")}<b>{assistant.state.forwards_open}</b></button>
           )}
         </div>
-        <button type="button" className="btn" onClick={onCollapse}><span className="lg">⤡ Return to Sidebar</span><span className="sm">← Back to Production</span></button>
+        <button type="button" className="btn" onClick={onCollapse}><span className="lg">{uiText("assistantViews.returnToSidebar")}</span><span className="sm">{uiText("assistantViews.backToProduction")}</span></button>
       </div>
       {view === 'agents' ? <AgentBoard assistant={assistant} me={me} onOpenTarget={onOpenTab} /> : view === "manage" ? (
         <div className="kai-full"><ManagerPanel slug={slug} onError={onError} onToast={onToast} /></div>
       ) : (
         <>
           {help && (
-            <div className="ws-help"><button type="button" onClick={hideHelp}>Collapse</button><b>Workspace</b>: Select a task on the left, discuss it in the center, and review results on the right. Collapse to return to your page.</div>
+            <div className="ws-help"><button type="button" onClick={hideHelp}>{uiText("assistantViews.collapse")}</button><b>{uiText("assistantViews.workspace")}</b>{uiText("assistantViews.selectATaskOnTheLeftDiscussItIn")}</div>
           )}
           <div className="mtabs">
-            {[["todo", "To Do"], ["chat", "Conversation"], ["bench", "Workbench"]].map(([key, label]) => (
+            {[["todo", uiText("assistantViews.toDo")], ["chat", uiText("assistantViews.conversation")], ["bench", uiText("assistantViews.workbench")]].map(([key, label]) => (
               <button type="button" key={key} className={mtab === key ? "on" : ""} onClick={() => setMtab(key)}>{label}</button>
             ))}
           </div>
           <div className="ws-grid">
-            <section className={"col todo-col" + (mtab === "todo" ? " show" : "")}><h4>To Do</h4>
+            <section className={"col todo-col" + (mtab === "todo" ? " show" : "")}><h4>{uiText("assistantViews.toDo")}</h4>
               <div className="scroll todo"><TodoList todo={assistant.state && assistant.state.todo} focus={focusNow} onPick={pick} onOpenTab={onOpenTab} /></div>
             </section>
             <section className={"col chat-col" + (mtab === "chat" ? " show" : "")}>
               <h4 className="tabbed">
-                <button type="button" className={history ? undefined : "on"} onClick={() => setHistory(false)}>Chat</button>
-                <button type="button" className={history ? "on" : undefined} onClick={() => setHistory(true)}>History</button>
+                <button type="button" className={history ? undefined : "on"} onClick={() => setHistory(false)}>{uiText("assistantViews.chat")}</button>
+                <button type="button" className={history ? "on" : undefined} onClick={() => setHistory(true)}>{uiText("assistantViews.history")}</button>
                 <span className="h4-acts"><NewConversation assistant={assistant} onDone={() => setHistory(false)} /></span>
               </h4>
               {history ? (
@@ -716,7 +734,7 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
                 </>
               )}
             </section>
-            <section className={"col bench-col" + (mtab === "bench" ? " show" : "")}><h4>Workbench</h4>
+            <section className={"col bench-col" + (mtab === "bench" ? " show" : "")}><h4>{uiText("assistantViews.workbench")}</h4>
               <div className="scroll bench"><Bench assistant={assistant} focus={focus} onOpenTab={onOpenTab} /></div>
             </section>
           </div>

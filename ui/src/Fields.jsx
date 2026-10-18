@@ -1,10 +1,13 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { STATUSES, shortTime, statusClass, statusLabel } from "./format.js";
+import { STATUSES, shortTime, statusClass, statusLabel, normalizeStatus } from "./format.js";
 
 // 狀態膠囊：點了選，選了就存。選單放在最上層（不會被表格的捲動區切掉），上次是誰改的寫在下面。
 export function StatusPill({ value, info, onChange }) {
+  const locale = useLocale();
   const [rect, setRect] = useState(null);
   const button = useRef(null);
   const menu = useRef(null);
@@ -43,14 +46,13 @@ export function StatusPill({ value, info, onChange }) {
           {STATUSES.map((label) => (
             <button type="button" key={label} role="menuitem"
               onClick={() => { setRect(null); if (label !== value) onChange(label); }}>
-              <span className={"badge " + statusClass(label)}>{label}</span>
-              {label === statusLabel(value) && <span className="tick">✓</span>}
+              <span className={"badge " + statusClass(label)}>{statusLabel(label)}</span>
+              {label === normalizeStatus(value) && <span className="tick">✓</span>}
             </button>
           ))}
           <span className="who">
-            {info && info.by_name ? `Last changed:${info.by_name}・${shortTime(info.at)}` : "No changes yet"}
-            <br />Select to save. Your change is recorded in this row’s discussion.
-          </span>
+            {info && info.by_name ? uiText("fields.lastChanged", {v0: (info.by_name), v1: (shortTime(info.at))}) : uiText("fields.noChangesYet")}
+            <br />{uiText("fields.selectToSaveYourChangeIsRecordedInThis")}</span>
         </span>,
         document.body,
       )}
@@ -60,6 +62,7 @@ export function StatusPill({ value, info, onChange }) {
 
 // 大家可填的格子：點了打字，離開格子或按 Enter 就存（Shift+Enter 換行）。
 export function FillField({ value, info, onSave }) {
+  const locale = useLocale();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value || "");
   const [saved, setSaved] = useState(false);
@@ -93,13 +96,13 @@ export function FillField({ value, info, onSave }) {
     );
   }
   return (
-    <span className="fill-field" role="button" tabIndex={0} title={"Click to add notes; click outside to save"} data-interactive=""
+    <span className="fill-field" role="button" tabIndex={0} title={uiText("fields.clickToAddNotesClickOutsideToSave")} data-interactive=""
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => setEditing(true)}
       onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); setEditing(true); } }}>
-      {value ? <span className="fill-value">{value}</span> : <span className="ph">Click to add director notes…</span>}
+      {value ? <span className="fill-value">{value}</span> : <span className="ph">{uiText("fields.clickToAddDirectorNotes")}</span>}
       {value && info && info.by_name && <span className="by">{info.by_name}・{shortTime(info.at)}</span>}
-      {saved && <span className="saved-tip">Saved</span>}
+      {saved && <span className="saved-tip">{uiText("fields.saved")}</span>}
     </span>
   );
 }

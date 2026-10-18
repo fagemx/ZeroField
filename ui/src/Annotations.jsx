@@ -1,3 +1,6 @@
+import { roleLabel } from './format.js';
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 // 標註的畫面：卡片、右邊欄（寬螢幕放卡片、窄一點放小圓點）、手機下方卡片、右上的標註清單、標記檢視選單。
 // 規則（誰該處理、誰能解決）在 rules.js；這裡只負責畫。
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -8,48 +11,50 @@ import {
 } from "./rules.js";
 import { Avatar, Composer, MentionText } from "./Talk.jsx";
 
-export const PANEL_RULE = "Needs You includes mentions awaiting your reply and changes to text you previously approved."
-  + "Unassigned questions and revision requests go to the showrunner.";
+export const PANEL_RULE = () => uiText("annotations.needsYouIncludesMentionsAwaitingYourReplyAndChanges") + " " + uiText("annotations.unassignedQuestionsAndRevisionRequestsGoToTheShowrunner");
 
 export function hasCard(a, adding) {
   return a.kind === "row" || Boolean(a.label) || comments(a).length > 0 || Boolean(a.draft) || adding.has(a.id);
 }
 
 function Who({ actor, members }) {
+  const locale = useLocale();
   const member = (members || []).find((m) => m.actor_id === actor.actor_id);
   return (
     <>
       <b>{actor.name}</b>
-      {member && <span className="role">{member.role_label}</span>}
+      {member && <span className="role">{roleLabel(member.role, member.role_label)}</span>}
     </>
   );
 }
 
 function Chips({ a, rowLabel }) {
+  const locale = useLocale();
   const chip = chipFor(a);
   return (
     <div className="hd">
       {(a.reconfirm || a.label) && <span className={"chip " + chip.cls}>{chip.text}</span>}
-      {a.kind === "row" && <span className="chip row">Row | {rowLabel || "this row"}</span>}
-      {a.orphaned_at && <span className="chip orphan">Source changed</span>}
+      {a.kind === "row" && <span className="chip row">{uiText("annotations.row", {v0: (rowLabel || uiText("annotations.thisRow"))})}</span>}
+      {a.orphaned_at && <span className="chip orphan">{uiText("annotations.sourceChanged")}</span>}
     </div>
   );
 }
 
 // 一則標註的卡片。focused：展開（看得到原文、回覆框、按鈕）。
 export function AnnotationCard({ a, focused, me, members, agents, rowLabel, busy, adding, onAct }) {
+  const locale = useLocale();
   const isAdmin = me.role === "admin";
   if (isRecordOnly(a) && !adding.has(a.id)) {
     return (
       <div className={"card compact" + (focused ? " focus" : "")} data-ann={a.id}>
-        <span className="chip lb-ok">✓ Approved</span>
+        <span className="chip lb-ok">{uiText("annotations.approved")}</span>
         <Avatar id={a.label_by || a.created_by} name={a.created_by_name} size={18} />
         <b>{nameOf(members, a.label_by || a.created_by, a.created_by_name)}</b>
         <span className="t">{shortTime(a.label_at || a.created_at)}</span>
         {focused && (
           <span className="acts-inline">
-            <button type="button" className="linkish" data-act="add-note">Add note</button>
-            {canDelete(a, me.actor_id, isAdmin) && <button type="button" className="linkish danger" data-act="remove">Remove approval</button>}
+            <button type="button" className="linkish" data-act="add-note">{uiText("annotations.addNote")}</button>
+            {canDelete(a, me.actor_id, isAdmin) && <button type="button" className="linkish danger" data-act="remove">{uiText("annotations.removeApproval")}</button>}
           </span>
         )}
       </div>
@@ -57,20 +62,18 @@ export function AnnotationCard({ a, focused, me, members, agents, rowLabel, busy
   }
   const real = comments(a);
   const wait = isOpen(a) ? waitingOn(a, members) : [];
-  const placeholder = a.draft ? "Add a note. Type @ to notify a crew member."
-    : (real.length || a.kind === "row" ? "Reply. Type @ to notify a crew member." : "Optional note. Type @ to notify a crew member.");
+  const placeholder = a.draft ? uiText("annotations.addANoteTypeToNotifyACrewMember")
+    : (real.length || a.kind === "row" ? uiText("annotations.replyTypeToNotifyACrewMember") : uiText("annotations.optionalNoteTypeToNotifyACrewMember"));
   return (
     <div className={"card" + (focused ? " focus" : "")} data-ann={a.id}>
       <Chips a={a} rowLabel={rowLabel} />
       {(focused || a.orphaned_at) && a.kind === "text" && <div className="quote">“{a.anchor.quote}”</div>}
       {a.reconfirm && (
-        <div className="reconfirm">
-          {nameOf(members, a.label_by, "")}  approved text was changed: “{a.reconfirm.from}”→“{a.reconfirm.to}”
-          {focused && <><br /><button type="button" className="ghost ok" data-act="reconfirm">✓ Approve again</button></>}
+        <div className="reconfirm">{uiText("annotations.approvedTextWasChanged", {v0: (nameOf(members, a.label_by, "")), v1: (a.reconfirm.from), v2: (a.reconfirm.to)})}{focused && <><br /><button type="button" className="ghost ok" data-act="reconfirm">{uiText("annotations.approveAgain")}</button></>}
         </div>
       )}
       {!a.reconfirm && a.moved && (
-        <div className="moved">This note moved with the revised text: “{a.moved.from}”→“{a.moved.to}”</div>
+        <div className="moved">{uiText("annotations.thisNoteMovedWithTheRevisedText", {v0: (a.moved.from), v1: (a.moved.to)})}</div>
       )}
       {!real.length && !a.draft && a.kind === "text" && (
         <div className="msg">
@@ -78,7 +81,7 @@ export function AnnotationCard({ a, focused, me, members, agents, rowLabel, busy
           <div className="b">
             <div className="who"><Who actor={{ actor_id: a.created_by, name: a.created_by_name }} members={members} />
               <span className="t">{shortTime(a.created_at)}</span></div>
-            <div className="text">{a.label ? `Marked “${LABELS[a.label].name}”` : (a.style === "ul" ? "Underline" : "Highlight")}</div>
+            <div className="text">{a.label ? uiText("annotations.marked", {v0: (LABELS[a.label].name)}) : (a.style === "ul" ? uiText("annotations.underline") : uiText("annotations.highlight"))}</div>
           </div>
         </div>
       )}
@@ -89,7 +92,7 @@ export function AnnotationCard({ a, focused, me, members, agents, rowLabel, busy
             <div className="who">
               <Who actor={m.actor} members={members} /><span className="t">{shortTime(m.at)}</span>
               {focused && m.actor.actor_id === me.actor_id && (
-                <button type="button" className="linkish del" data-act="del-comment" data-comment={m.id}>Delete</button>
+                <button type="button" className="linkish del" data-act="del-comment" data-comment={m.id}>{uiText("annotations.delete")}</button>
               )}
             </div>
             <div className="text"><MentionText body={m.body} members={members} meId={me.actor_id} /></div>
@@ -99,9 +102,7 @@ export function AnnotationCard({ a, focused, me, members, agents, rowLabel, busy
         <div className="sysline" key={m.id}>{activityLine(m)} · {shortTime(m.at)}</div>
       )))}
       {a.resolved_at ? (
-        <div className="resolved-line">
-          ✓ {nameOf(members, a.resolved_by, "")} Resolved ·  {shortTime(a.resolved_at)}
-          {focused && <button type="button" className="linkish" data-act="reopen">Reopen</button>}
+        <div className="resolved-line">{uiText("annotations.resolved", {v0: (nameOf(members, a.resolved_by, "")), v1: (shortTime(a.resolved_at))})}{focused && <button type="button" className="linkish" data-act="reopen">{uiText("annotations.reopen")}</button>}
         </div>
       ) : focused ? (
         <>
@@ -110,22 +111,22 @@ export function AnnotationCard({ a, focused, me, members, agents, rowLabel, busy
             placeholder={placeholder} note={wait.length ? `Waiting for ${wait.join("、")}  to respond` : ""}
             onSend={(body) => onAct(a, "send", { body })}>
             {a.draft
-              ? <button type="button" className="ghost" data-act="cancel">Cancel</button>
+              ? <button type="button" className="ghost" data-act="cancel">{uiText("annotations.cancel")}</button>
               : (isOpen(a) && !a.reconfirm && canResolve(a, me.actor_id, isAdmin)
-                ? <button type="button" className="ghost ok" data-act="resolve">✓ Resolve</button> : null)}
+                ? <button type="button" className="ghost ok" data-act="resolve">{uiText("annotations.resolve")}</button> : null)}
           </Composer>
           {!a.draft && a.kind === "text" && canDelete(a, me.actor_id, isAdmin) && (
-            <div className="remove-line"><button type="button" className="linkish danger" data-act="remove">Delete annotation</button></div>
+            <div className="remove-line"><button type="button" className="linkish danger" data-act="remove">{uiText("annotations.deleteAnnotation")}</button></div>
           )}
         </>
-      ) : (wait.length > 0 && <div className="t wait">Waiting for {wait.join("、")}  to respond</div>)}
+      ) : (wait.length > 0 && <div className="t wait">{uiText("annotations.waitingForToRespond", {v0: (wait.join("、"))})}</div>)}
     </div>
   );
 }
 
 function nameOf(members, id, fallback) {
   const member = (members || []).find((m) => m.actor_id === id);
-  return member ? member.name : (fallback || "(no longer on the crew)");
+  return member ? member.name : (fallback || uiText("annotations.noLongerOnTheCrew"));
 }
 
 function bubbleText(a) {
@@ -145,6 +146,7 @@ function bubbleClass(a) {
 // 右邊欄。items：[{a, want}]（want＝這則在內文上的高度，相對內文頂端），已經照 want 排好。
 // mode：wide＝卡片排在右邊；slim＝小圓點，點了卡片浮出來。
 export function Margin({ mode, items, focusId, orphans, minHeight, cardProps, onBubble, onCardClick, onOrphans }) {
+  const locale = useLocale();
   const ref = useRef(null);
   useLayoutEffect(() => {
     const root = ref.current;
@@ -170,8 +172,7 @@ export function Margin({ mode, items, focusId, orphans, minHeight, cardProps, on
     return (
       <aside className="margin" ref={ref} style={{ minHeight }} onClick={onCardClick}>
         {orphans > 0 && (
-          <div className="orphan-note">{orphans}  annotations have no matching source
-            <button type="button" className="linkish" onClick={onOrphans}>View</button></div>
+          <div className="orphan-note">{uiText("annotations.annotationsHaveNoMatchingSource", {v0: (orphans)})}<button type="button" className="linkish" onClick={onOrphans}>{uiText("annotations.view")}</button></div>
         )}
         {items.map((it) => (
           <AnnotationCard key={it.a.id} a={it.a} focused={it.a.id === focusId} rowLabel={it.rowLabel} {...cardProps} />
@@ -189,14 +190,14 @@ export function Margin({ mode, items, focusId, orphans, minHeight, cardProps, on
         const n = comments(it.a).length;
         return (
           <button type="button" key={it.a.id} className={"bub " + bubbleClass(it.a) + (it.a.id === focusId ? " on" : "")}
-            style={{ top }} title={(it.a.reconfirm ? "Approval required again" : it.a.label ? LABELS[it.a.label].name : "Conversation") + (n ? `｜${n}  items` : "")}
+            style={{ top }} title={(it.a.reconfirm ? uiText("annotations.approvalRequiredAgain") : it.a.label ? LABELS[it.a.label].name : uiText("annotations.conversation")) + (n ? uiText("annotations.items", {v0: (n)}) : "")}
             onClick={(event) => { event.stopPropagation(); onBubble(it.a.id); }}>
             {bubbleText(it.a)}
           </button>
         );
       })}
       {orphans > 0 && (
-        <button type="button" className="bub orph" title={`${orphans}  annotations have no matching source`} onClick={onOrphans}>!{orphans}</button>
+        <button type="button" className="bub orph" title={uiText("annotations.annotationsHaveNoMatchingSource", {v0: (orphans)})} onClick={onOrphans}>!{orphans}</button>
       )}
       {focused && (
         <div className="float-wrap" style={{ top: Math.max(-20, focused.want - 6) }}>
@@ -209,10 +210,11 @@ export function Margin({ mode, items, focusId, orphans, minHeight, cardProps, on
 
 // 手機：卡片從下面拉上來
 export function Sheet({ item, tabTitle, cardProps, onClose, onCardClick }) {
+  const locale = useLocale();
   if (!item) return null;
   return (
     <div className="sheet on" onClick={onCardClick}>
-      <div className="close"><span>{tabTitle}</span><button type="button" className="linkish" onClick={onClose}>Close</button></div>
+      <div className="close"><span>{tabTitle}</span><button type="button" className="linkish" onClick={onClose}>{uiText("annotations.close")}</button></div>
       <AnnotationCard a={item.a} focused rowLabel={item.rowLabel} {...cardProps} />
     </div>
   );
@@ -220,6 +222,7 @@ export function Sheet({ item, tabTitle, cardProps, onClose, onCardClick }) {
 
 // 右上「標註」清單
 export function AnnotationPanel({ open, annotations, me, members, tabs, rowLabels, section, onSection, onPick, onReattach, onResolve, onClose }) {
+  const locale = useLocale();
   const ref = useRef(null);
   const [tab, setTab] = useState("todo");
   const [mineOnly, setMineOnly] = useState(false);
@@ -256,12 +259,12 @@ export function AnnotationPanel({ open, annotations, me, members, tabs, rowLabel
   const item = (a) => {
     const last = comments(a).slice(-1)[0];
     const chip = chipFor(a);
-    const quote = a.kind === "row" ? (rowLabels[a.id] || "this row") : a.anchor.quote;
+    const quote = a.kind === "row" ? (rowLabels[a.id] || uiText("annotations.thisRow")) : a.anchor.quote;
     const who = last ? last.actor : { actor_id: a.created_by, name: a.created_by_name };
     let line;
-    if (a.reconfirm) line = `Approved text changed to “${a.reconfirm.to}”`;
+    if (a.reconfirm) line = uiText("annotations.approvedTextChangedTo", {v0: (a.reconfirm.to)});
     else if (last) line = <MentionText body={last.body} members={members} meId={me.actor_id} />;
-    else if (a.label) line = `Marked “${LABELS[a.label].name}”`;
+    else if (a.label) line = uiText("annotations.marked", {v0: (LABELS[a.label].name)});
     else line = (a.messages || []).length ? activityLine(a.messages[a.messages.length - 1]) : "";
     return (
       <div key={a.id} className={"item" + (a.resolved_at ? " done" : "")} role="button" tabIndex={0}
@@ -269,7 +272,7 @@ export function AnnotationPanel({ open, annotations, me, members, tabs, rowLabel
         onKeyDown={(event) => { if (event.key === "Enter") onPick(a); }}>
         <div className="r1">
           <span className={"chip " + chip.cls}>{chip.text}</span>
-          {a.orphaned_at && <span className="chip orphan">Source changed</span>}
+          {a.orphaned_at && <span className="chip orphan">{uiText("annotations.sourceChanged")}</span>}
           <span className="where">{titleOf(a.tab_key)}</span>
           <span className="t">{shortTime(latestAt(a))}</span>
         </div>
@@ -278,10 +281,10 @@ export function AnnotationPanel({ open, annotations, me, members, tabs, rowLabel
         {a.orphaned_at && !a.resolved_at && (
           <div className="acts">
             {a.kind === "text" && (isAdmin || a.created_by === me.actor_id) && (
-              <button type="button" className="ghost xs" data-act="reattach" onClick={() => onReattach(a)}>Reattach</button>
+              <button type="button" className="ghost xs" data-act="reattach" onClick={() => onReattach(a)}>{uiText("annotations.reattach")}</button>
             )}
             {canResolve(a, me.actor_id, isAdmin) && (
-              <button type="button" className="ghost xs" data-act="resolve" onClick={() => onResolve(a)}>Resolve</button>
+              <button type="button" className="ghost xs" data-act="resolve" onClick={() => onResolve(a)}>{uiText("annotations.resolve2")}</button>
             )}
           </div>
         )}
@@ -303,30 +306,27 @@ export function AnnotationPanel({ open, annotations, me, members, tabs, rowLabel
   const all = groups.open.length + groups.orphan.length + groups.done.length;
   let body;
   if (tab === "todo") {
-    body = groups.todo.length ? groups.todo.map(item) : <div className="empty">No annotations need your attention.</div>;
+    body = groups.todo.length ? groups.todo.map(item) : <div className="empty">{uiText("annotations.noAnnotationsNeedYourAttention")}</div>;
   } else {
     body = all ? [
-      sectionBlock("open", "Open", groups.open),
-      sectionBlock("orphan", "Source changed", groups.orphan),
-      sectionBlock("done", "Resolved", groups.done, true),
-    ] : <div className="empty">No annotations yet.</div>;
+      sectionBlock("open", uiText("annotations.open"), groups.open),
+      sectionBlock("orphan", uiText("annotations.sourceChanged"), groups.orphan),
+      sectionBlock("done", uiText("annotations.resolved2"), groups.done, true),
+    ] : <div className="empty">{uiText("annotations.noAnnotationsYet")}</div>;
   }
   return (
-    <div className="pop on" ref={ref} role="dialog" aria-label={"Annotations"}>
+    <div className="pop on" ref={ref} role="dialog" aria-label={uiText("annotations.annotations")}>
       <div className="pop-hd">
-        <b>Annotations</b>
+        <b>{uiText("annotations.annotations")}</b>
         <label className="switch">
-          <input type="checkbox" checked={mineOnly} onChange={(event) => setMineOnly(event.target.checked)} /><i />Only mine
-        </label>
+          <input type="checkbox" checked={mineOnly} onChange={(event) => setMineOnly(event.target.checked)} /><i />{uiText("annotations.onlyMine")}</label>
       </div>
       <div className="pop-tabs">
-        <button type="button" className={tab === "todo" ? "on" : undefined} onClick={() => setTab("todo")}>
-          Needs You{groups.todo.length > 0 && <span className="n hot">{groups.todo.length}</span>}
+        <button type="button" className={tab === "todo" ? "on" : undefined} onClick={() => setTab("todo")}>{uiText("annotations.needsYou")}{groups.todo.length > 0 && <span className="n hot">{groups.todo.length}</span>}
         </button>
-        <button type="button" className={tab === "all" ? "on" : undefined} onClick={() => setTab("all")}>
-          All<span className="n">{all}</span>
+        <button type="button" className={tab === "all" ? "on" : undefined} onClick={() => setTab("all")}>{uiText("annotations.all")}<span className="n">{all}</span>
         </button>
-        <span className="info" tabIndex={0} data-tip={PANEL_RULE} aria-label={PANEL_RULE}>ⓘ</span>
+        <span className="info" tabIndex={0} data-tip={PANEL_RULE()} aria-label={PANEL_RULE()}>ⓘ</span>
       </div>
       <div className="pop-list">{body}</div>
     </div>
@@ -339,6 +339,7 @@ export function todoCount(annotations, me) {
 
 // 標記檢視：只影響自己的畫面
 export function ViewMenu({ open, rect, view, showResolved, onView, onResolved, onClose }) {
+  const locale = useLocale();
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -352,18 +353,19 @@ export function ViewMenu({ open, rect, view, showResolved, onView, onResolved, o
   );
   return (
     <div className="menu on view-menu" ref={ref} style={{ top: rect.bottom + 4, left: Math.max(8, Math.min(rect.left, window.innerWidth - 268)) }}>
-      {option("all", "Show all highlights and underlines")}
-      {option("mine", "Show only mine")}
-      {option("none", "Hide highlights and underlines")}
-      <button type="button" onClick={() => { onResolved(!showResolved); onClose(); }}>Show resolved annotations{showResolved && <span className="tick">✓</span>}</button>
-      <div className="note">This changes your view only. Questions, revision requests, approvals, and notes remain visible.</div>
+      {option("all", uiText("annotations.showAllHighlightsAndUnderlines"))}
+      {option("mine", uiText("annotations.showOnlyMine"))}
+      {option("none", uiText("annotations.hideHighlightsAndUnderlines"))}
+      <button type="button" onClick={() => { onResolved(!showResolved); onClose(); }}>{uiText("annotations.showResolvedAnnotations")}{showResolved && <span className="tick">✓</span>}</button>
+      <div className="note">{uiText("annotations.thisChangesYourViewOnlyQuestionsRevisionRequestsApprovals")}</div>
     </div>
   );
 }
 
-export const VIEW_LABEL = { all: "Markup: All", mine: "Markup: Mine", none: "Markup: Hidden" };
+export const VIEW_LABEL = { get all() { return uiText("annotations.markupAll"); }, get mine() { return uiText("annotations.markupMine"); }, get none() { return uiText("annotations.markupHidden"); } };
 
 export function PenIcon() {
+  const locale = useLocale();
   return (
     <svg className="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5L11 18H6v-5z" /><path d="M4 21h9" /></svg>
@@ -371,6 +373,7 @@ export function PenIcon() {
 }
 
 export function NoteIcon() {
+  const locale = useLocale();
   return (
     <svg className="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -380,6 +383,7 @@ export function NoteIcon() {
 }
 
 export function LinkIcon() {
+  const locale = useLocale();
   return (
     <svg className="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

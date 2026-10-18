@@ -779,3 +779,9 @@ body.wide .doc > p, body.wide .doc > ul, body.wide .doc > ol, body.wide .doc > h
   .sheet-dialog { padding: 20px; }
   .sheet-dialog-actions { flex-wrap: wrap; }
 }
+/* Locale controls keep their names stable in either language. */
+.language-switch{display:flex;align-items:center;flex-shrink:0;gap:2px;padding:2px;border:1px solid #deddd7;border-radius:6px;margin-inline:6px}
+.language-switch button{font:inherit;font-size:12px;line-height:1.3;padding:5px 7px;border:0;border-radius:4px;background:transparent;color:inherit;white-space:nowrap;cursor:pointer}
+.language-switch button[aria-pressed="true"]{background:#e9e6df;color:#25231f;font-weight:650}
+.language-switch button:focus-visible{outline:2px solid #615bce;outline-offset:2px}
+html[lang="zh-TW"] .top .icon-btn .label{letter-spacing:0}

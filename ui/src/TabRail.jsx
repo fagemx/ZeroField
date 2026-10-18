@@ -1,3 +1,5 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -16,6 +18,7 @@ const SURFACE_ICON = { doc: "▤ ", sheet: "▦ ", flow: "⑂ ", board: "▥ " }
 
 export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsChanged, flush, onRenamed, onVersions,
   onError, onToast }) {
+  const locale = useLocale();
   const admin = Boolean(me.can_edit);
   const [menu, setMenu] = useState(null); // { key, rect }
   const [dialog, setDialog] = useState(null);
@@ -29,7 +32,7 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
   const importing = Boolean(importQueue);
   const importFiles = async (files, target = null) => {
     if (me.can_write === false || importing || !(await flush())) return;
-    if (target && files.length !== 1) { onError("Drop one file at a time to update a page."); return; }
+    if (target && files.length !== 1) { onError(uiText("tabRail.dropOneFileAtATimeToUpdateA")); return; }
     if (files.length) {
       try {
         const latest = target ? await api.get(`/projects/api/${slug}/tabs/${target.key}`) : null;
@@ -75,27 +78,27 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
       catch (error) { onError(error.message); }
     };
     const exports = [
-      ...(me.can_write !== false ? [{ key: "replace-file", icon: "↑", label: "Update Page from File…", disabled: importing,
+      ...(me.can_write !== false ? [{ key: "replace-file", icon: "↑", label: uiText("tabRail.updatePageFromFile"), disabled: importing,
         run: () => { replacementTarget.current = t; replacementInput.current?.click(); } }] : []),
-      { key: "export", icon: "↓", label: `Export ${format.toUpperCase()}`, run: () => exportFile(format) },
-      ...(t.surface_type === "sheet" ? [{ key: "export-new", icon: "↓", label: "Save as New Excel Workbook", run: () => exportFile("xlsx", "new_workbook") }] : []),
-      ...(t.source_filename ? [{ key: "export-source", icon: "↓", label: "Download Original File", run: () => exportFile(format, "source") }] : []),
-      ...(format !== "md" ? [{ key: "export-md", icon: "↓", label: "Export Markdown", run: () => exportFile("md") }] : []),
+      { key: "export", icon: "↓", label: uiText("tabRail.export", {v0: (format.toUpperCase())}), run: () => exportFile(format) },
+      ...(t.surface_type === "sheet" ? [{ key: "export-new", icon: "↓", label: uiText("tabRail.saveAsNewExcelWorkbook"), run: () => exportFile("xlsx", "new_workbook") }] : []),
+      ...(t.source_filename ? [{ key: "export-source", icon: "↓", label: uiText("tabRail.downloadOriginalFile"), run: () => exportFile(format, "source") }] : []),
+      ...(format !== "md" ? [{ key: "export-md", icon: "↓", label: uiText("tabRail.exportMarkdown"), run: () => exportFile("md") }] : []),
     ];
     if (!canManageTab(t, me)) return exports;
     return [
       ...exports, "sep",
-      ...(admin && !t.parent_key ? [{ key: "child", icon: "＋", label: "Add a Child Page",
+      ...(admin && !t.parent_key ? [{ key: "child", icon: "＋", label: uiText("tabRail.addAChildPage"),
         run: () => { setNewSurface("doc"); setDialog({ kind: "new", parent: t.key }); } }, "sep"] : []),
-      { key: "rename", icon: "✎", label: "Rename", run: () => setDialog({ kind: "rename", tab: t }) },
-      { key: "up", icon: "↑", label: "Move Up", run: () => act(meta, { move: "up" }) },
-      { key: "down", icon: "↓", label: "Move Down", run: () => act(meta, { move: "down" }) },
-      { key: "parent", icon: "↳", label: t.parent_key ? "Move to the Top Level or Another Page" : "Move Under Another Page",
-        disabled: hasChildren, note: hasChildren ? "Has Child Pages" : undefined, run: () => setDialog({ kind: "parent", tab: t }) },
+      { key: "rename", icon: "✎", label: uiText("tabRail.rename"), run: () => setDialog({ kind: "rename", tab: t }) },
+      { key: "up", icon: "↑", label: uiText("tabRail.moveUp"), run: () => act(meta, { move: "up" }) },
+      { key: "down", icon: "↓", label: uiText("tabRail.moveDown"), run: () => act(meta, { move: "down" }) },
+      { key: "parent", icon: "↳", label: t.parent_key ? uiText("tabRail.moveToTheTopLevelOrAnotherPage") : uiText("tabRail.moveUnderAnotherPage"),
+        disabled: hasChildren, note: hasChildren ? uiText("tabRail.hasChildPages") : undefined, run: () => setDialog({ kind: "parent", tab: t }) },
       "sep",
-      ...(admin ? [{ key: "history", icon: "🕘", label: "Version History…", run: () => onVersions(t.key) }] : []),
-      { key: "delete", icon: "🗑", label: "Delete Page", danger: true, run: () => setDialog({ kind: "delete", tab: t }) },
-      ...(admin ? ["sep", { key: "deleted", icon: "↺", label: "Deleted Pages…", note: "All Pages",
+      ...(admin ? [{ key: "history", icon: "🕘", label: uiText("tabRail.versionHistory"), run: () => onVersions(t.key) }] : []),
+      { key: "delete", icon: "🗑", label: uiText("tabRail.deletePage"), danger: true, run: () => setDialog({ kind: "delete", tab: t }) },
+      ...(admin ? ["sep", { key: "deleted", icon: "↺", label: uiText("tabRail.deletedPages"), note: uiText("tabRail.allPages"),
         run: () => setDialog({ kind: "deleted" }) }] : []),
     ];
   };
@@ -107,8 +110,8 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
       event.target.value = "";
       if (files.length) importFiles(files, replacementTarget.current);
     }} />
-    <nav className="rail" aria-label={"Pages"} ref={navRef} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); importFiles([...e.dataTransfer.files]); } }}>
-      {me.can_write !== false && <><input ref={fileInput} type="file" accept=".xlsx,.docx,.md,.csv" multiple hidden onChange={(e) => { importFiles([...e.target.files]); e.target.value = ""; }} /><button className="rail-add" disabled={importing} onClick={() => fileInput.current?.click()}>{importing ? "Importing…" : "↑ Import Files"}</button><small className="rail-hint">Drop files to add pages; drop onto a page to update its revision</small></>}
+    <nav className="rail" aria-label={uiText("tabRail.pages")} ref={navRef} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); importFiles([...e.dataTransfer.files]); } }}>
+      {me.can_write !== false && <><input ref={fileInput} type="file" accept=".xlsx,.docx,.md,.csv" multiple hidden onChange={(e) => { importFiles([...e.target.files]); e.target.value = ""; }} /><button className="rail-add" disabled={importing} onClick={() => fileInput.current?.click()}>{importing ? uiText("tabRail.importing") : uiText("tabRail.importFiles")}</button><small className="rail-hint">{uiText("tabRail.dropFilesToAddPagesDropOntoAPage")}</small></>}
       {tabs.map((t) => {
         const n = openCount(t.key);
         const can = canManageTab(t, me);
@@ -117,15 +120,15 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
         return (
           <div key={t.key} className={"item" + (can ? " can" : "")} onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); importFiles([...e.dataTransfer.files], t); } }}>
             <a href={tabHash(t.key)} className={(t.parent_key ? "child " : "") + (t.key === tabKey ? "on" : "")}
-              aria-current={t.key === tabKey ? "page" : undefined} title={n ? `${n}  unresolved` : undefined}
+              aria-current={t.key === tabKey ? "page" : undefined} title={n ? uiText("tabRail.unresolved", {v0: (n)}) : undefined}
               onClick={(event) => { event.preventDefault(); closeMenu(); onNavigate(t.key); }}>
               {icon}{t.title}
-              {!admin && t.created_by === me.actor_id && <span className="mine">Added by Me</span>}
+              {!admin && t.created_by === me.actor_id && <span className="mine">{uiText("tabRail.addedByMe")}</span>}
               {n > 0 && <span className="n">{n}</span>}
             </a>
             {(
               <button type="button" className={"more" + (open ? " on" : "")} aria-haspopup="menu" aria-expanded={open}
-                aria-label={`“${t.title}”: export and page options`} title={"Export & Page Options"}
+                aria-label={uiText("tabRail.exportAndPageOptions", {v0: (t.title)})} title={uiText("tabRail.exportPageOptions")}
                 onClick={(event) => setMenu(open ? null : { key: t.key, rect: event.currentTarget.getBoundingClientRect() })}>⋯</button>
             )}
             {open && createPortal(
@@ -138,9 +141,7 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
           </div>
         );
       })}
-      <button type="button" disabled={me.can_write === false} className="rail-add" onClick={() => { closeMenu(); setNewSurface("doc"); setDialog({ kind: "new", parent: null }); }}>
-        ＋ Add Page
-      </button>
+      <button type="button" disabled={me.can_write === false} className="rail-add" onClick={() => { closeMenu(); setNewSurface("doc"); setDialog({ kind: "new", parent: null }); }}>{uiText("tabRail.addPage")}</button>
     </nav>
 
     {/* 對話框放在清單外面：手機上清單收起來時對話框不會跟著不見 */}
@@ -151,9 +152,9 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
         }} />}
 
       {dialog && dialog.kind === "new" && (
-        <Dialog title={"Add Page"} input={{ required: true, placeholder: "Page Title" }} inputLabel={"Name"} confirmLabel={"Add"}
-          message={"The new page opens immediately and is visible to the crew."}
-          select={{ label: "Location", value: dialog.parent || "", options: [{ value: "", label: "Top Level (at the end)" },
+        <Dialog title={uiText("tabRail.addPage2")} input={{ required: true, placeholder: uiText('common.dialogPageTitle') }} inputLabel={uiText("common.inputName")} confirmLabel={uiText("tabRail.add")}
+          message={uiText("tabRail.newPageExplanation")}
+          select={{ label: uiText('common.dialogLocation'), value: dialog.parent || "", options: [{ value: "", label: uiText('common.dialogTopLevelAtTheEnd') },
             ...topLevel.map((t) => ({ value: t.key, label: `“${t.title}”` }))] }}
           onCancel={closeDialog}
           onConfirm={async ({ text, choice }) => {
@@ -164,18 +165,18 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
             if (result && result.tab) onNavigate(result.tab.key);
           }}>
           <label className="modal-field">
-            <span>Canvas Type</span>
+            <span>{uiText("tabRail.canvasType")}</span>
             <select value={newSurface} onChange={(e) => setNewSurface(e.target.value)}>
-              <option value="doc">Document — Write, Read &amp; Annotate</option>
-              <option value="sheet">Table — Slates, Formulas &amp; Images</option>
-              <option value="flow">Pipeline — Connect Tasks &amp; Agents</option>
+              <option value="doc">{uiText("tabRail.documentWriteReadAnnotate")}</option>
+              <option value="sheet">{uiText("tabRail.tableSlatesFormulasImages")}</option>
+              <option value="flow">{uiText("tabRail.pipelineConnectTasksAgents")}</option>
             </select>
           </label>
         </Dialog>
       )}
       {dialog && dialog.kind === "rename" && (
-        <Dialog title={"Rename Page"} input={{ required: true, value: dialog.tab.title }} inputLabel={"Name"} confirmLabel={"Rename"}
-          message={"The page heading is renamed too if it still matches the old title."}
+        <Dialog title={uiText("tabRail.renamePage")} input={{ required: true, value: dialog.tab.title }} inputLabel={uiText("common.inputName")} confirmLabel={uiText("tabRail.rename")}
+          message={uiText("tabRail.renameExplanation")}
           onCancel={closeDialog}
           onConfirm={async ({ text }) => {
             setDialog(null);
@@ -184,8 +185,8 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
           }} />
       )}
       {dialog && dialog.kind === "parent" && (
-        <Dialog title={"Move To"} confirmLabel={"Move"} onCancel={closeDialog}
-          select={{ label: "Location", value: dialog.tab.parent_key || "", options: [{ value: "", label: "Top Level" },
+        <Dialog title={uiText("tabRail.moveTo")} confirmLabel={uiText("tabRail.move")} onCancel={closeDialog}
+          select={{ label: uiText('common.dialogLocation'), value: dialog.tab.parent_key || "", options: [{ value: "", label: uiText('common.dialogTopLevel') },
             ...topLevel.filter((t) => t.key !== dialog.tab.key).map((t) => ({ value: t.key, label: `“${t.title}”` }))] }}
           onConfirm={async ({ choice }) => {
             setDialog(null);
@@ -193,9 +194,9 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
           }} />
       )}
       {dialog && dialog.kind === "delete" && (
-        <Dialog title={`Delete “${dialog.tab.title}”？`} danger confirmLabel={"Delete"}
-          message={`After deletion${admin ? "Restore from any page’s menu: ⋯ → Deleted Pages…" : "The showrunner can restore this page."}。`
-            + (tabs.some((c) => c.parent_key === dialog.tab.key) ? "Child pages will move to the top level." : "")}
+        <Dialog title={uiText("tabRail.delete", {v0: (dialog.tab.title)})} danger confirmLabel={uiText("tabRail.delete")}
+          message={uiText("tabRail.afterDeletion", {v0: (admin ? "Restore from any page’s menu: ⋯ → Deleted Pages…" : "The showrunner can restore this page.")})
+            + (tabs.some((c) => c.parent_key === dialog.tab.key) ? uiText("tabRail.childPagesMove") : "")}
           onCancel={closeDialog}
           onConfirm={async () => {
             setDialog(null);
@@ -215,18 +216,19 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
 }
 
 function DeletedTabs({ slug, onClose, onRestore, onError }) {
+  const locale = useLocale();
   const [tabs, setTabs] = useState(null);
   useEffect(() => {
     api.get(`/projects/api/${slug}/deleted-tabs`).then((data) => setTabs(data.tabs)).catch((error) => { onError(error.message); onClose(); });
   }, [slug, onClose, onError]);
   return (
-    <Dialog title={"Deleted Pages"} confirmLabel={"Close"} onCancel={onClose} onConfirm={onClose}>
-      {!tabs && <p className="modal-msg">Loading…</p>}
-      {tabs && tabs.length === 0 && <p className="modal-msg">No deleted pages.</p>}
+    <Dialog title={uiText("tabRail.deletedPages2")} confirmLabel={uiText("tabRail.close")} onCancel={onClose} onConfirm={onClose}>
+      {!tabs && <p className="modal-msg">{uiText("tabRail.loading")}</p>}
+      {tabs && tabs.length === 0 && <p className="modal-msg">{uiText("tabRail.noDeletedPages")}</p>}
       {tabs && tabs.map((t) => (
         <div key={t.key} className="deleted-row">
-          <span>{t.title}<small>Deleted {shortTime(t.deleted_at)}</small></span>
-          <button type="button" className="ghost" onClick={() => onRestore(t.key, t.title)}>Undo</button>
+          <span>{t.title}<small>{uiText("tabRail.deleted", {v0: (shortTime(t.deleted_at))})}</small></span>
+          <button type="button" className="ghost" onClick={() => onRestore(t.key, t.title)}>{uiText("tabRail.undo")}</button>
         </div>
       ))}
     </Dialog>

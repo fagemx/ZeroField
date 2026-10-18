@@ -1,3 +1,4 @@
+import { t as uiText, currentLocale } from './i18n/index.js';
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
 import { TaskItem } from "@tiptap/extension-list";
 import { Fragment, Slice } from "@tiptap/pm/model";
@@ -111,16 +112,16 @@ function lockChip(at, name) {
     const chip = document.createElement("span");
     chip.className = "pd-lockchip";
     chip.contentEditable = "false";
-    chip.textContent = `${name}  is editing`;
+    chip.textContent = uiText("editorExtensions.editing", {v0: (name)});
     return chip;
-  }, { side: 1, ignoreSelection: true, key: `lock-${name}-${at}` });
+  }, { side: 1, ignoreSelection: true, key: `lock-${name}-${at}-${currentLocale()}` });
 }
 
 function ownerNote(node, ctx) {
   const owner = node.attrs.owner;
   if (!owner || ctx.adminIds.has(owner)) return null;
-  const name = ctx.names.get(owner) || "Former Crew Member";
-  return `— ${name} Add${node.attrs.created ? " · " + shortTime(node.attrs.created) : ""}`;
+  const name = ctx.names.get(owner) || uiText("editorExtensions.formerCrewMember");
+  return uiText("editorExtensions.add", {v0: (name), v1: (node.attrs.created ? " · " + shortTime(node.attrs.created) : "")});
 }
 
 function permissionDecorations(doc, ctx) {
@@ -377,7 +378,7 @@ export const FillNode = Node.create({
     return [{ tag: "span[data-fill]" }];
   },
   renderHTML({ HTMLAttributes }) {
-    return ["span", mergeAttributes(HTMLAttributes, { "data-fill": "", class: "fill-chip" }), "Shared Field"];
+    return ["span", mergeAttributes(HTMLAttributes, { "data-fill": "", class: "fill-chip" }), uiText("editorExtensions.sharedField")];
   },
   renderText() {
     return "";
@@ -405,7 +406,7 @@ function assistChip(at, rid, label, ctx) {
     chip.className = "pa-chip";
     chip.contentEditable = "false";
     chip.textContent = "✦ " + label;
-    chip.title = "Work on this with Studio Assistant";
+    chip.title = uiText("editorExtensions.workOnThisWithStudioAssistant");
     chip.addEventListener("mousedown", (event) => event.preventDefault());
     chip.addEventListener("click", (event) => {
       event.preventDefault();

@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-18",
+  "branch": "codex/bilingual-ui",
+  "base": "ce80b944526e04b8e9a3d195d1891f632bbf327b",
+  "scope": "Batches 1–2: English / Traditional Chinese interface, English default, retained M8 / ACP / E1 and legacy data.",
+  "locales": {
+    "supported": [
+      "en",
+      "zh-TW"
+    ],
+    "default": "en",
+    "fallback": "en",
+    "preference_cookie": "zerofield_locale",
+    "messages_per_locale": 1741,
+    "static_translation_calls_checked": 1286
+  },
+  "verification": {
+    "backend": {
+      "command": "python -m unittest discover -s tests -v",
+      "passed": 245,
+      "failed": 0,
+      "skipped": 0,
+      "exit_code": 0,
+      "seconds": 179.921,
+      "database": "zerofield_bilingual_test",
+      "port": 55623,
+      "database_stopped": true,
+      "log_sha256": "f3dcff1b69be52a26dc113326320651dd0ef761cd5c9f835abda8c0bd6020a27"
+    },
+    "frontend": {
+      "command": "npm test --prefix ui",
+      "passed": 83,
+      "failed": 0,
+      "skipped": 0,
+      "log_sha256": "7db297ee6927708a2a5dabba44a02f213b18e56a723d966f94d41f9333c8cb63"
+    },
+    "build": {
+      "command": "npm run build --prefix ui",
+      "passed": true,
+      "log_sha256": "5a207510bb9ac8d0fa7eedfc10b9279c364cb3eb5273d23b9d6d8c5aafa30e96",
+      "note": "Vite emits a non-fatal large-chunk advisory; both bundled locales are available synchronously when switching."
+    },
+    "wheel": {
+      "wheel": "C:\\ai_project\\ZeroField\\dist\\openbench-0.2.0-py3-none-any.whl",
+      "sha256": "3debb64eddf7dd7ddb514f27db6cbf362e131e5790970b7c3064d18d079decac",
+      "resources_match_checkout": true
+    }
+  },
+  "browser_checks": [
+    "First use opens in English; explicit Traditional Chinese choice survives reload.",
+    "Switching preserves the current search, unsent assistant draft, dirty table-cell text and focused input.",
+    "Selecting 待審核 saves Pending Review; switching displays the corresponding English label.",
+    "M8 board, four built-in specialist labels, crew settings and five saved workflow nodes remain available.",
+    "Flow controls, keyboard accessibility descriptions and server-rendered sign-in switch languages.",
+    "Existing production/page titles and documents remain untouched; the temporary table draft was canceled."
+  ],
+  "screenshots": {
+    "docs/research/screenshots/zerofield-bilingual-en.png": "ebb40605d7241a6ab2cf1299b06494c03c7cdeb5c2ec457743ffa73c2144ec69",
+    "docs/research/screenshots/zerofield-bilingual-zh-TW.png": "ff0c78e59e3fa58ccc44daf254502667a8b993fda6545fbcacf665a79eae6953"
+  },
+  "compatibility": [
+    "No project-data or schema migration. English and legacy Chinese status wire values remain valid.",
+    "M8 / ACP tool keys, permissions, agent routing and lease behavior remain stable.",
+    "API errors retain their error and policy code fields, adding message_key and message_params when recognized."
+  ],
+  "deferred": [
+    "Video features",
+    "Translated project templates",
+    "Project content / AI output-language settings"
+  ],
+  "limits": [
+    "Unknown external/provider errors retain their original readable fallback.",
+    "No real external model/ACP adapter calls, Docker run or remote CI run in this interface-only phase."
+  ],
+  "cleanup": {
+    "temporary_browser_tab_closed": true,
+    "browser_viewport_restored": true,
+    "isolated_preview_stopped": true,
+    "isolated_test_database_stopped": true
+  }
+}

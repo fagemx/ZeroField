@@ -1,11 +1,12 @@
+import { t as uiText } from './i18n/index.js';
 // 標註的規則：誰該處理、誰能解決、清單怎麼分組、內文上用什麼樣子。跟伺服器 service.py 的權限一致。
 
 export const LABELS = {
-  q: { name: "Question", cls: "lb-q", open: true, hint: "Ask a question. It stays open until someone resolves it." },
-  fix: { name: "Revise", cls: "lb-fix", open: true, hint: "Request a correction or rewrite. It stays open until resolved." },
-  ok: { name: "Approved", cls: "lb-ok", open: false, hint: "Approve this passage. Changes to its text will require approval again." },
+  q: { name: "Question", cls: "lb-q", open: true, get hint() { return uiText("rules.askAQuestionItStaysOpenUntilSomeoneResolves"); } },
+  fix: { name: "Revise", cls: "lb-fix", open: true, get hint() { return uiText("rules.requestACorrectionOrRewriteItStaysOpenUntil"); } },
+  ok: { name: "Approved", cls: "lb-ok", open: false, get hint() { return uiText("rules.approveThisPassageChangesToItsTextWillRequire"); } },
 };
-export const COLORS = { y: ["Yellow", "#ffd400"], g: ["Green", "#46c864"], b: ["Blue", "#5096ff"], p: ["Pink", "#ff64a0"] };
+export const COLORS = { get y() { return [uiText("rules.yellow"), "#ffd400"]; }, get g() { return [uiText("rules.green"), "#46c864"]; }, get b() { return [uiText("rules.blue"), "#5096ff"]; }, get p() { return [uiText("rules.pink"), "#ff64a0"]; } };
 
 export const comments = (a) => (a.messages || []).filter((m) => m.kind === "comment");
 
@@ -68,10 +69,10 @@ export function panelGroups(list, me, isAdmin, mineOnly) {
 }
 
 export function chipFor(a) {
-  if (a.reconfirm) return { cls: "re", text: "Approval required again" };
+  if (a.reconfirm) return { cls: "re", text: uiText("rules.approvalRequiredAgain") };
   if (a.label) return { cls: LABELS[a.label].cls, text: LABELS[a.label].name };
-  if (a.kind === "row") return { cls: "row", text: "Whole Row" };
-  return { cls: "nt", text: "Add Note" };
+  if (a.kind === "row") return { cls: "row", text: uiText("rules.wholeRow") };
+  return { cls: "nt", text: uiText("rules.addNote") };
 }
 
 // 內文上這一則畫成什麼樣子

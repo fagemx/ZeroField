@@ -1,3 +1,4 @@
+import { t as uiText } from '../i18n/index.js';
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../api.js";
@@ -77,10 +78,10 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
   const addFiles = useCallback((incoming) => {
     const room = MAX_FILES - filesRef.current.length;
     const picked = [...(incoming || [])];
-    if (picked.length > room) onError(`Attach up to ${MAX_FILES}  files at a time`);
+    if (picked.length > room) onError(uiText("useAssistant.attachUpToFilesAtATime", {v0: (MAX_FILES)}));
     for (const file of picked.slice(0, Math.max(0, room))) {
       if (file.size > MAX_BYTES) {
-        onError(`“${file.name}” exceeds 8 MB`);
+        onError(uiText("useAssistant.exceedsMB", {v0: (file.name)}));
         continue;
       }
       seq.current += 1;
@@ -91,7 +92,7 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
       api.upload(`${base}/attachments`, file, file.name).then((result) => {
         patchFile(key, { status: "ready", attachment: result.attachment, kind: result.attachment.kind });
       }).catch((error) => {
-        onError(`“${file.name}” was not attached:${error.message}`);
+        onError(uiText("useAssistant.attachmentFailed", {v0: (file.name), v1: (error.message)}));
         dropFile(key);
       });
     }

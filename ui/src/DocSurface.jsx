@@ -1,3 +1,5 @@
+import { useLocale } from './i18n/react.jsx';
+import { t as uiText } from './i18n/index.js';
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -35,25 +37,25 @@ const NARROW = "(max-width: 860px)";
 
 function blockItems(pickImage) {
   return [
-    { key: "text", label: "Body Text", icon: "¶", words: "text paragraph body", run: (e) => e.chain().focus().setParagraph().run() },
-    { key: "h1", label: "Heading 1", icon: "H1", words: "heading h1 title", run: (e) => e.chain().focus().setNode("heading", { level: 1 }).run() },
-    { key: "h2", label: "Heading 2", icon: "H2", words: "heading h2", run: (e) => e.chain().focus().setNode("heading", { level: 2 }).run() },
-    { key: "h3", label: "Heading 3", icon: "H3", words: "heading h3 subtitle", run: (e) => e.chain().focus().setNode("heading", { level: 3 }).run() },
-    { key: "bullet", label: "Bullet List", icon: "•", words: "bullet list", run: (e) => e.chain().focus().toggleBulletList().run() },
-    { key: "numbered", label: "Numbered List", icon: "1.", words: "numbered ordered list", run: (e) => e.chain().focus().toggleOrderedList().run() },
-    { key: "check", label: "Checklist", icon: "☑", words: "check todo task", run: (e) => e.chain().focus().toggleTaskList().run() },
-    { key: "quote", label: "Quote", icon: "❝", words: "quote citation", run: (e) => e.chain().focus().toggleBlockquote().run() },
-    { key: "divider", label: "Divider", icon: "—", words: "divider hr", run: (e) => e.chain().focus().setHorizontalRule().run() },
-    { key: "table", label: "Table", icon: "▦", words: "table", run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
-    { key: "image", label: "Image", icon: "🖼", words: "image photo", run: () => pickImage() },
-    { key: "status", label: "Status", icon: "●", words: "status progress",
+    { key: "text", label: uiText("docSurface.bodyText"), icon: "¶", words: uiText("docSurface.textParagraphBody"), run: (e) => e.chain().focus().setParagraph().run() },
+    { key: "h1", label: uiText("docSurface.heading"), icon: "H1", words: uiText("docSurface.headingH1Title"), run: (e) => e.chain().focus().setNode("heading", { level: 1 }).run() },
+    { key: "h2", label: uiText("docSurface.heading2"), icon: "H2", words: uiText("docSurface.headingH2"), run: (e) => e.chain().focus().setNode("heading", { level: 2 }).run() },
+    { key: "h3", label: uiText("docSurface.heading3"), icon: "H3", words: uiText("docSurface.headingH3Subtitle"), run: (e) => e.chain().focus().setNode("heading", { level: 3 }).run() },
+    { key: "bullet", label: uiText("docSurface.bulletList"), icon: "•", words: uiText("docSurface.bulletList2"), run: (e) => e.chain().focus().toggleBulletList().run() },
+    { key: "numbered", label: uiText("docSurface.numberedList"), icon: "1.", words: uiText("docSurface.numberedOrderedList"), run: (e) => e.chain().focus().toggleOrderedList().run() },
+    { key: "check", label: uiText("docSurface.checklist"), icon: "☑", words: uiText("docSurface.checkTodoTask"), run: (e) => e.chain().focus().toggleTaskList().run() },
+    { key: "quote", label: uiText("docSurface.quote"), icon: "❝", words: uiText("docSurface.quoteCitation"), run: (e) => e.chain().focus().toggleBlockquote().run() },
+    { key: "divider", label: uiText("docSurface.divider"), icon: "—", words: uiText("docSurface.dividerHr"), run: (e) => e.chain().focus().setHorizontalRule().run() },
+    { key: "table", label: uiText("docSurface.table"), icon: "▦", words: uiText("docSurface.table2"), run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+    { key: "image", label: uiText("docSurface.image"), icon: "🖼", words: uiText("docSurface.imagePhoto"), run: () => pickImage() },
+    { key: "status", label: uiText("docSurface.status"), icon: "●", words: uiText("docSurface.statusProgress"),
       run: (e) => e.chain().focus().insertContent([{ type: "status", attrs: { label: "Queued" } }, { type: "text", text: " " }]).run() },
-    { key: "fill", label: "Shared Field", icon: "✎", words: "fill editable field", run: (e) => e.chain().focus().insertContent({ type: "fill", attrs: { label: "" } }).run() },
+    { key: "fill", label: uiText("docSurface.sharedField"), icon: "✎", words: uiText("docSurface.fillEditableField"), run: (e) => e.chain().focus().insertContent({ type: "fill", attrs: { label: "" } }).run() },
   ];
 }
 
 // 「＋」新增的區塊
-const NEW_BLOCKS = [["p", "¶", "Paragraph"], ["h2", "H", "Subheading"], ["ul", "•", "Bullet List"], ["task", "☑", "Checklist"], ["quote", "❝", "Quote"], ["table", "▦", "Table"]];
+const NEW_BLOCKS = () => [["p", "¶", uiText("docSurface.paragraph")], ["h2", "H", uiText("docSurface.subheading")], ["ul", "•", uiText("docSurface.bulletList")], ["task", "☑", uiText("docSurface.checklist")], ["quote", "❝", uiText("docSurface.quote")], ["table", "▦", uiText("docSurface.table")]];
 
 // 標註欄要文件區夠寬才放得下寬版（300px 卡片）。原本只看視窗寬度（1600 以下收成窄邊），
 // 但右邊的專案助理側邊欄也會吃掉寬度（還可以拖拉調寬）：改看文件區實際的寬度。
@@ -165,6 +167,7 @@ function cursorBid(editor) {
 export function DocSurface({ slug, tab, tabs, me, members, values, annotations, locks, focusId, focusRequest, flashId, view,
   showResolved, attachId, onField, onFocus, onAnnotation, onAnnotations, onNavigate, onSaved, versionsFor, onVersionsShown,
   onOpenPanel, onOpenHistory, onAttachDone, onError, onToast, controlRef, assistRows, onAssistRow, agents = [], onAgentRouted }) {
+  const locale = useLocale();
   const admin = me.role === "admin";
   const editorRef = useRef(null);
   const surfaceRef = useRef(null);
@@ -223,29 +226,29 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         blockedAt.current = Date.now();
         const id = unit.node.attrs.bid;
         const who = lockMap.get(id) || (unit.table && lockMap.get(unit.table.attrs.bid));
-        latest.current.onToast(`${who || "Another crew member"}  is editing this passage. Wait until they finish.`);
+        latest.current.onToast(uiText("docSurface.isEditingThisPassageWaitUntilTheyFinish", {v0: (who || uiText("docSurface.anotherCrewMember"))}));
       },
     };
     ownerRef.current = admin ? null : me.actor_id;
     const editor = editorRef.current;
     if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(permissionKey, true));
-  }, [locks, members, memberNames, me.actor_id, admin, tab.key, ready]);
+  }, [locks, members, memberNames, me.actor_id, admin, tab.key, ready, locale]);
 
   // 左邊分頁「⋯ → 找回以前的內容…」：換到這一頁後打開版本紀錄
   useEffect(() => {
     if (!versionsFor || versionsFor !== tab.key) return;
     setDialog({ kind: "versions" });
     if (onVersionsShown) onVersionsShown();
-  }, [versionsFor, tab.key, onVersionsShown]);
+  }, [versionsFor, tab.key, onVersionsShown, locale]);
 
   // 專案助理的「✦ 一起回答」跟著待辦變（裝飾，不改文件）
   useEffect(() => {
     const editor = editorRef.current;
     if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(assistKey, true));
-  }, [assistRows, ready]);
+  }, [assistRows, ready, locale]);
 
   const pickImage = useCallback(() => { if (fileInput.current) fileInput.current.click(); }, []);
-  const items = useMemo(() => blockItems(pickImage), [pickImage]);
+  const items = useMemo(() => blockItems(pickImage), [pickImage, locale]);
 
   // ---------- 跟伺服器同步 ----------
   const resetSync = (serverDoc, revision, savedAt) => {
@@ -355,10 +358,10 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         applyServer(result.doc, result.revision, result.saved_at, { clean: sentClean, sent: sentBids, force });
         if (result.conflicts && result.conflicts.length) {
           const first = result.conflicts[0];
-          const name = first.owner_name || "Another crew member";
-          latest.current.onToast(first.reason === "locked" ? `${name}  is editing this passage. Your changes were not saved; the latest content has been restored.`
-            : first.reason === "changed" ? "This passage changed elsewhere. The latest content is shown; try your edit again."
-              : "A passage could not be edited with your permissions. Its original content was restored.");
+          const name = first.owner_name || uiText("docSurface.anotherCrewMember");
+          latest.current.onToast(first.reason === "locked" ? uiText("docSurface.isEditingThisPassageYourChangesWereNotSaved", {v0: (name)})
+            : first.reason === "changed" ? uiText("docSurface.thisPassageChangedElsewhereTheLatestContentIsShown")
+              : uiText("docSurface.aPassageCouldNotBeEditedWithYourPermissions"));
         }
         setSaveState({ kind: "saved", at: result.saved_at });
         latest.current.onSaved({ revision: result.revision, saved_at: result.saved_at, doc: result.doc });
@@ -407,7 +410,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         applyServer(sync.current.server, sync.current.revision, sync.current.savedAt, { force: new Set([table ? bidOf(table) : unit]) });
         ctxRef.current.locks.set(unit, result.by_name);
         editor.view.dispatch(editor.state.tr.setMeta(permissionKey, true));
-        latest.current.onToast(`${result.by_name}  is editing this passage. Wait until they finish.`);
+        latest.current.onToast(uiText("docSurface.isEditingThisPassageWaitUntilTheyFinish", {v0: (result.by_name)}));
       });
     }
   };
@@ -490,9 +493,9 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       setEditing((state) => (state && !dirty.current && !inflight.current ? null : state));
       return;
     }
-    const what = unit.kind === "row" ? `Table row (${clip(rowLabel(unit.node.toJSON()), 12) || "New Row"})`
-      : ({ heading: "Title", paragraph: "this passage", bulletList: "this list", orderedList: "this list", taskList: "this checklist",
-        blockquote: "this quote", table: "this table" })[unit.node.type.name] || "this block";
+    const what = unit.kind === "row" ? uiText("docSurface.tableRow", {v0: (clip(rowLabel(unit.node.toJSON()), 12) || uiText("docSurface.newRow"))})
+      : ({ heading: uiText("docSurface.title"), paragraph: uiText("docSurface.thisPassage"), bulletList: uiText("docSurface.thisList"), orderedList: uiText("docSurface.thisList"), taskList: uiText("docSurface.thisChecklist"),
+        blockquote: uiText("docSurface.thisQuote"), table: uiText("docSurface.thisTable") })[unit.node.type.name] || uiText("docSurface.thisBlock");
     setEditing({ what });
   };
 
@@ -560,7 +563,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     ],
     content: tab.doc,
     editorProps: {
-      attributes: { class: "doc doc-surface-editor", "aria-label": "Body Text" },
+      attributes: { class: "doc doc-surface-editor", "aria-label": uiText("docSurface.bodyText") },
       handleKeyDown: (_view, event) => {
         const state = slashRef.current;
         if (!state || !state.list.length) return false;
@@ -594,7 +597,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           const busyUnit = units.find((unit) => !unitEditable(unit, ctx) && unitEditable(unit, free));
           if (busyUnit) {
             const who = ctx.locks.get(busyUnit.node.attrs.bid) || (busyUnit.table && ctx.locks.get(busyUnit.table.attrs.bid));
-            if (who) latest.current.onToast(`${who}  is editing this passage. Wait until they finish.`);
+            if (who) latest.current.onToast(uiText("docSurface.isEditingThisPassageWaitUntilTheyFinish", {v0: (who)}));
           }
         }
         const a = annotationAt(view.state, pos);
@@ -744,10 +747,10 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       anchor: a.anchor,
       cls: markClass(a, String(focusId) === String(a.id)) + (String(flashId) === String(a.id) ? " pd-flash" : ""),
       title: hasCard(a, adding) ? undefined
-        : `${a.created_by_name} ’s${a.style === "ul" ? "Underline" : "Highlight"} · ${shortTime(a.created_at)}`,
+        : `${a.created_by_name} ’s${a.style === "ul" ? uiText("docSurface.underline") : uiText("docSurface.highlight")} · ${shortTime(a.created_at)}`,
     }));
     instance.view.dispatch(instance.state.tr.setMeta(annotationKey, { items: list }).setMeta("addToHistory", false));
-  }, [tabAnns, markVisible, focusId, flashId, adding, ready]);
+  }, [tabAnns, markVisible, focusId, flashId, adding, ready, locale]);
 
   // ---------- 右邊欄、列旁的 💬、＋ 新增一列：照內文的位置擺 ----------
   const cardAnns = useMemo(() => tabAnns.filter((a) => {
@@ -899,7 +902,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     if (to < from) [from, to] = [to, from];
     const picked = selectionAnchor(instance.state.doc, from, to);
     if (!picked) { setSel(null); return; }
-    if (picked.tooLong) { latest.current.onToast("Select up to 300 characters for an annotation."); setSel(null); return; }
+    if (picked.tooLong) { latest.current.onToast(uiText("docSurface.selectUpToCharactersForAnAnnotation")); setSel(null); return; }
     const units = unitsInRange(instance.state.doc, from, to);
     const editable = !attachId && units.length > 0 && units.every((unit) => unitEditable(unit, ctxRef.current));
     const rect = range.getBoundingClientRect();
@@ -960,11 +963,11 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   const tipOnce = () => {
     if (firstTip.current) return;
     firstTip.current = true;
-    onToast("Highlights and underlines are visible to everyone without sending notifications. Choose the same color again to remove it.");
+    onToast(uiText("docSurface.highlightsAndUnderlinesAreVisibleToEveryoneWithoutSending"));
   };
 
   const createAnnotation = async (body) => {
-    if (!(await flush())) throw new Error("Save the source and resolve editing conflicts first.");
+    if (!(await flush())) throw new Error(uiText("docSurface.saveTheSourceAndResolveEditingConflictsFirst"));
     const result = await api.post(`/projects/api/${slug}/annotations`, { tab_key: tab.key, ...body, source_revision: sync.current.revision });
     onAnnotation(result.annotation);
     if (result.annotation.agent_request) onAgentRouted?.(result.annotation.agent_request);
@@ -993,13 +996,13 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
         onAnnotation({ deleted: a.id });
       }
-      onToast("Highlight removed");
+      onToast(uiText("docSurface.highlightRemoved"));
     } else if (hls.length) {
       for (const a of hls) {
         const result = await api.post(`/projects/api/${slug}/annotations/${a.id}/style`, { style: "hl", color });
         onAnnotation(result.annotation);
       }
-      onToast(`Changed to${COLORS[color][0]} color`);
+      onToast(uiText("docSurface.changedToColor", {v0: (COLORS[color][0])}));
     } else {
       await createAnnotation({ anchor: current.anchor, style: "hl", color });
       tipOnce();
@@ -1016,7 +1019,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
         onAnnotation({ deleted: a.id });
       }
-      onToast("Underline removed");
+      onToast(uiText("docSurface.underlineRemoved"));
     } else {
       await createAnnotation({ anchor: current.anchor, style: "ul" });
       tipOnce();
@@ -1031,7 +1034,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
       onAnnotation({ deleted: a.id });
     }
-    onToast(`Removed ${current.mine.length}  highlights / underlines`);
+    onToast(uiText("docSurface.removedHighlightsUnderlines", {v0: (current.mine.length)}));
   });
 
   const onLabel = (label) => run(async () => {
@@ -1040,7 +1043,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     if (!current) return;
     const created = await createAnnotation({ anchor: current.anchor, label });
     if (label === "ok") {
-      onToast(`Recorded:${me.name}  approved this passage`);
+      onToast(uiText("docSurface.recordedApprovedThisPassage", {v0: (me.name)}));
     } else {
       setAdding((set) => new Set(set).add(created.id));
       onFocus(created.id);
@@ -1068,7 +1071,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     const result = await api.post(`/projects/api/${slug}/annotations/${attachId}/reattach`, { anchor: current.anchor });
     onAnnotation(result.annotation);
     onAttachDone();
-    onToast("Reattached");
+    onToast(uiText("docSurface.reattached"));
     onFocus(result.annotation.id, { flash: true });
   });
 
@@ -1104,7 +1107,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         if (a.draft && a.kind === "row") result = await createAnnotation({ row: a.anchor.rid, body: extra.body });
         else if (a.draft) result = await createAnnotation({ anchor: a.anchor, body: extra.body });
         else {
-          if (!(await flush())) throw new Error("Save the source and resolve editing conflicts first.");
+          if (!(await flush())) throw new Error(uiText("docSurface.saveTheSourceAndResolveEditingConflictsFirst"));
           const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/comments`, { body: extra.body, source_revision: sync.current.revision });
           onAnnotation(data.annotation);
           if (data.annotation.agent_request) onAgentRouted?.(data.annotation.agent_request);
@@ -1116,7 +1119,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       if (a.draft) { setDrafts((list) => list.filter((d) => d.id !== a.id)); onFocus(sent.id); }
       const mentioned = [...new Set((extra.body.match(/@\{([0-9a-f-]{36})\}/g) || []).map((token) => token.slice(2, -1)))]
         .filter((id) => id !== me.actor_id).map((id) => memberNames.get(id)).filter(Boolean);
-      onToast(mentioned.length ? `Sent.${mentioned.join("、")}  will see this in Needs You` : "Sent");
+      onToast(mentioned.length ? uiText("docSurface.sentWillSeeThisInNeedsYou", {v0: (mentioned.join("、"))}) : uiText("docSurface.sent"));
       return true;
     }
     if (action === "cancel") { setDrafts((list) => list.filter((d) => d.id !== a.id)); onFocus(null); return true; }
@@ -1125,26 +1128,26 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       if (action === "resolve" || action === "reopen") {
         const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/resolve`, { resolved: action === "resolve" });
         onAnnotation(data.annotation);
-        if (action === "resolve") { onFocus(null); onToast("Resolved. Reopen it from Annotations → All."); }
+        if (action === "resolve") { onFocus(null); onToast(uiText("docSurface.resolvedReopenItFromAnnotationsAll")); }
         return true;
       }
       if (action === "reconfirm") {
         const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/reconfirm`, {});
         onAnnotation(data.annotation);
-        onToast(`Recorded:${me.name}  approved this passage again`);
+        onToast(uiText("docSurface.recordedApprovedThisPassageAgain", {v0: (me.name)}));
         return true;
       }
       if (action === "remove") {
         const others = comments(a).some((m) => m.actor.actor_id !== me.actor_id);
-        if (others && !window.confirm("Delete this annotation and its crew replies?")) return false;
+        if (others && !window.confirm(uiText("docSurface.deleteThisAnnotationAndItsCrewReplies"))) return false;
         await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
         onAnnotation({ deleted: a.id });
         onFocus(null);
-        onToast(a.label === "ok" && !comments(a).length ? "Approval removed" : "Deleted");
+        onToast(a.label === "ok" && !comments(a).length ? uiText("docSurface.approvalRemoved") : uiText("docSurface.deleted"));
         return true;
       }
       if (action === "del-comment") {
-        if (!window.confirm("Delete this comment?")) return false;
+        if (!window.confirm(uiText("docSurface.deleteThisComment"))) return false;
         await api.post(`/projects/api/${slug}/comments/${extra.comment}/delete`, {});
         onAnnotation({ ...a, messages: (a.messages || []).filter((m) => String(m.id) !== String(extra.comment)) });
         return true;
@@ -1224,7 +1227,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     else if (type === "task") node = n.taskList.create(attrs, n.taskItem.create({ checked: false }, para()));
     else if (type === "quote") node = n.blockquote.create(attrs, para());
     else {
-      const head = n.tableRow.create(ownerAttrs(), [1, 2, 3].map((i) => n.tableHeader.create(null, para(`Column ${i}`))));
+      const head = n.tableRow.create(ownerAttrs(), [1, 2, 3].map((i) => n.tableHeader.create(null, para(uiText("docSurface.column", {v0: (i)})))));
       const body = n.tableRow.create(ownerAttrs(), [1, 2, 3].map(() => n.tableCell.create(null, para())));
       node = n.table.create(attrs, [head, body]);
     }
@@ -1300,14 +1303,14 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   }, [markPop, insMenu]);
 
   async function uploadImage(file) {
-    if (!IMAGE_TYPES.includes(file.type)) { latest.current.onError("Choose a PNG, JPEG, GIF, or WebP image."); return; }
-    if (file.size > 8 * 1024 * 1024) { latest.current.onError("Images must be 8 MB or smaller."); return; }
+    if (!IMAGE_TYPES.includes(file.type)) { latest.current.onError(uiText("docSurface.chooseAPNGJPEGGIFOrWebPImage")); return; }
+    if (file.size > 8 * 1024 * 1024) { latest.current.onError(uiText("docSurface.imagesMustBeMBOrSmaller")); return; }
     try {
-      latest.current.onToast("Uploading image…");
+      latest.current.onToast(uiText("docSurface.uploadingImage"));
       const result = await api.upload(`/projects/api/${slug}/assets`, file);
       const caption = file.name.replace(/\.[^.]+$/, "");
       editorRef.current.chain().focus().insertContent({ type: "image", attrs: { src: result.src, alt: caption, title: caption } }).run();
-      latest.current.onToast("Image added");
+      latest.current.onToast(uiText("docSurface.imageAdded"));
     } catch (error) {
       latest.current.onError(error.message);
     }
@@ -1324,7 +1327,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       setSaveState({ kind: "saved", at: result.saved_at });
       onSaved({ revision: result.revision, saved_at: result.saved_at, doc: result.doc, title: result.title });
       if (result.annotations) onAnnotations(result.annotations);
-      onToast(`Restored revision ${revision} . The previous content remains available in Version History.`);
+      onToast(uiText("docSurface.restoredRevisionThePreviousContentRemainsAvailableInVersion", {v0: (revision)}));
     } catch (error) {
       onError(error.message);
     }
@@ -1341,20 +1344,20 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
 
   const menus = editor ? {
     table: ownTable ? [
-      { key: "ins", label: "Insert table with a header row", run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+      { key: "ins", label: uiText("docSurface.insertTableWithAHeaderRow"), run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
       "sep",
-      { key: "rb", label: "Insert Row Above", disabled: !editor.can().addRowBefore(), run: () => editor.chain().focus().addRowBefore().run() },
-      { key: "ra", label: "Insert Row Below", disabled: !editor.can().addRowAfter(), run: () => editor.chain().focus().addRowAfter().run() },
-      { key: "cb", label: "Insert Column Left", disabled: !editor.can().addColumnBefore(), run: () => editor.chain().focus().addColumnBefore().run() },
-      { key: "ca", label: "Insert Column Right", disabled: !editor.can().addColumnAfter(), run: () => editor.chain().focus().addColumnAfter().run() },
+      { key: "rb", label: uiText("docSurface.insertRowAbove"), disabled: !editor.can().addRowBefore(), run: () => editor.chain().focus().addRowBefore().run() },
+      { key: "ra", label: uiText("docSurface.insertRowBelow"), disabled: !editor.can().addRowAfter(), run: () => editor.chain().focus().addRowAfter().run() },
+      { key: "cb", label: uiText("docSurface.insertColumnLeft"), disabled: !editor.can().addColumnBefore(), run: () => editor.chain().focus().addColumnBefore().run() },
+      { key: "ca", label: uiText("docSurface.insertColumnRight"), disabled: !editor.can().addColumnAfter(), run: () => editor.chain().focus().addColumnAfter().run() },
       "sep",
-      { key: "dr", label: "Delete Row", disabled: !editor.can().deleteRow(), run: () => editor.chain().focus().deleteRow().run() },
-      { key: "dc", label: "Delete Column", disabled: !editor.can().deleteColumn(), run: () => editor.chain().focus().deleteColumn().run() },
-      { key: "dt", label: "Delete Table", danger: true, disabled: !editor.can().deleteTable(), run: () => editor.chain().focus().deleteTable().run() },
+      { key: "dr", label: uiText("docSurface.deleteRow"), disabled: !editor.can().deleteRow(), run: () => editor.chain().focus().deleteRow().run() },
+      { key: "dc", label: uiText("docSurface.deleteColumn"), disabled: !editor.can().deleteColumn(), run: () => editor.chain().focus().deleteColumn().run() },
+      { key: "dt", label: uiText("docSurface.deleteTable"), danger: true, disabled: !editor.can().deleteTable(), run: () => editor.chain().focus().deleteTable().run() },
     ] : [
-      { key: "ins", label: "Insert table with a header row", run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+      { key: "ins", label: uiText("docSurface.insertTableWithAHeaderRow"), run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
       ...(cursorTable && canAddRow(cursorTable, ctxRef.current)
-        ? [{ key: "add", label: "Append a row to this table", run: () => addRow(cursorTable.attrs.bid) }] : []),
+        ? [{ key: "add", label: uiText("docSurface.appendARowToThisTable"), run: () => addRow(cursorTable.attrs.bid) }] : []),
     ],
     plus: items.map((item) => ({ ...item, run: () => item.run(editor) })),
   } : {};
@@ -1373,13 +1376,13 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   };
 
   const stateText = {
-    saved: "Saved",
-    dirty: "Editing",
-    saving: "Saving…",
-    error: "Not saved. Retrying in 5 seconds.",
+    saved: uiText("docSurface.saved"),
+    dirty: uiText("docSurface.editing"),
+    saving: uiText("docSurface.saving"),
+    error: uiText("docSurface.notSavedRetryingInSeconds"),
   }[saveState.kind];
   const stateTip = saveState.kind === "error" ? saveState.message
-    : `${editing ? `Editing:${editing.what}。` : ""}Click outside to save automatically${saveState.at ? `; last saved ${shortTime(saveState.at)}` : ""}`;
+    : uiText("docSurface.clickOutsideToSaveAutomatically", {v0: (editing ? uiText("docSurface.editing2", {v0: (editing.what)}) : ""), v1: (saveState.at ? `; last saved ${shortTime(saveState.at)}` : "")});
 
   const fields = useMemo(() => ({ values: values || {}, onField }), [values, onField]);
   const cardProps = { me, members, agents, busy, adding, onAct: act };
@@ -1391,30 +1394,29 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   return (
     <div className="surface-wrap" ref={wrapRef}>
       <div className="edit-slot">
-      <div className={"toolbar" + (showToolbar ? " on" : "")} ref={toolbarRef} role="toolbar" aria-label={"Editing Tools"}
+      <div className={"toolbar" + (showToolbar ? " on" : "")} ref={toolbarRef} role="toolbar" aria-label={uiText("docSurface.editingTools")}
         onMouseDown={(event) => { if (event.target === event.currentTarget) event.preventDefault(); }}>
-        <button type="button" className="tb" title={"Undo (Ctrl+Z)"} aria-label={"Undo"} disabled={!history.undo}
+        <button type="button" className="tb" title={uiText("docSurface.undoCtrlZ")} aria-label={uiText("docSurface.undo")} disabled={!history.undo}
           onMouseDown={(event) => { event.preventDefault(); editor && editor.chain().focus().undo().run(); }}>↶</button>
-        <button type="button" className="tb" title={"Redo (Ctrl+Y)"} aria-label={"Redo"} disabled={!history.redo}
+        <button type="button" className="tb" title={uiText("docSurface.redoCtrlY")} aria-label={uiText("docSurface.redo")} disabled={!history.redo}
           onMouseDown={(event) => { event.preventDefault(); editor && editor.chain().focus().redo().run(); }}>↷</button>
-        <button type="button" className={"tb" + (wide ? " on" : "")} title={"Page Width"} aria-label={"Page Width"}
+        <button type="button" className={"tb" + (wide ? " on" : "")} title={uiText("docSurface.pageWidth")} aria-label={uiText("docSurface.pageWidth")}
           onMouseDown={(event) => { event.preventDefault(); setWide(!wide); }}>↔</button>
         <span className="vsep" />
-        {toolButton("table", "▦ ▾", { title: "Table" })}
-        <button type="button" className="tb" title={"Insert Image"} aria-label={"Insert Image"} onMouseDown={(event) => { event.preventDefault(); pickImage(); }}>🖼</button>
-        <button type="button" className="tb" title={"Checklist"} aria-label={"Checklist"}
+        {toolButton("table", "▦ ▾", { title: uiText("docSurface.table") })}
+        <button type="button" className="tb" title={uiText("docSurface.insertImage")} aria-label={uiText("docSurface.insertImage")} onMouseDown={(event) => { event.preventDefault(); pickImage(); }}>🖼</button>
+        <button type="button" className="tb" title={uiText("docSurface.checklist")} aria-label={uiText("docSurface.checklist")}
           onMouseDown={(event) => { event.preventDefault(); editor && editor.chain().focus().toggleTaskList().run(); }}>☑</button>
-        {toolButton("plus", "＋ ▾", { title: "Insert", hint: "Type / in the document to open this menu" })}
+        {toolButton("plus", "＋ ▾", { title: uiText("docSurface.insert"), hint: uiText("docSurface.typeInTheDocumentToOpenThisMenu") })}
         <span className="spacer" />
         <span className={"save-state " + saveState.kind} role="status" title={stateTip}>{stateText}</span>
-        <button type="button" className="tb" title={"Done Editing (click outside to save)"}
-          onMouseDown={(event) => { event.preventDefault(); if (editor) editor.commands.blur(); setEditing(null); flush().then(() => releaseIdle()); }}>Complete</button>
+        <button type="button" className="tb" title={uiText("docSurface.doneEditingClickOutsideToSave")}
+          onMouseDown={(event) => { event.preventDefault(); if (editor) editor.commands.blur(); setEditing(null); flush().then(() => releaseIdle()); }}>{uiText("docSurface.complete")}</button>
         <input ref={fileInput} type="file" accept={IMAGE_TYPES.join(",")} hidden
           onChange={(event) => { const file = event.target.files[0]; event.target.value = ""; if (file) uploadImage(file); }} />
       </div>
       {!showToolbar && (
-        <div className="meta-line">Last updated {shortTime(tab.updated_at)}{tab.updated_by_name ? `・${tab.updated_by_name}` : ""}
-          {onOpenHistory && <button type="button" className="hist-link" onClick={onOpenHistory}>Change History</button>}
+        <div className="meta-line">{uiText("docSurface.lastUpdated", {v0: (shortTime(tab.updated_at)), v1: (tab.updated_by_name ? `・${tab.updated_by_name}` : "")})}{onOpenHistory && <button type="button" className="hist-link" onClick={onOpenHistory}>{uiText("docSurface.changeHistory")}</button>}
         </div>
       )}
       </div>
@@ -1432,7 +1434,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
             editorRef.current.chain().focus("end").run();
           }}>
           {gutter && mode !== "sheet" && (
-            <button type="button" className="gutter on" style={{ top: gutter.top }} title={"Add content below this block"}
+            <button type="button" className="gutter on" style={{ top: gutter.top }} title={uiText("docSurface.addContentBelowThisBlock")}
               onMouseEnter={() => clearTimeout(gutterHide.current)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={(event) => {
@@ -1446,17 +1448,17 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
             <EditorContent editor={editor} />
           </FieldsContext.Provider>
           {tableBar && editor && (
-            <div className="table-bar" role="toolbar" aria-label={"Table"} style={{ top: tableBar.top, left: tableBar.left }}>
+            <div className="table-bar" role="toolbar" aria-label={uiText("docSurface.table")} style={{ top: tableBar.top, left: tableBar.left }}>
               {[
-                ["＋ Row Above", () => editor.chain().focus().addRowBefore().run()],
-                ["＋ Row Below", () => editor.chain().focus().addRowAfter().run()],
-                ["＋ Column Left", () => editor.chain().focus().addColumnBefore().run()],
-                ["＋ Column Right", () => editor.chain().focus().addColumnAfter().run()],
+                [uiText("docSurface.rowAbove"), () => editor.chain().focus().addRowBefore().run()],
+                [uiText("docSurface.rowBelow"), () => editor.chain().focus().addRowAfter().run()],
+                [uiText("docSurface.columnLeft"), () => editor.chain().focus().addColumnBefore().run()],
+                [uiText("docSurface.columnRight"), () => editor.chain().focus().addColumnAfter().run()],
                 "sep",
-                ["Delete Row", () => editor.chain().focus().deleteRow().run()],
-                ["Delete Column", () => editor.chain().focus().deleteColumn().run()],
+                [uiText("docSurface.deleteRow"), () => editor.chain().focus().deleteRow().run()],
+                [uiText("docSurface.deleteColumn"), () => editor.chain().focus().deleteColumn().run()],
                 "sep",
-                ["Delete Table", () => editor.chain().focus().deleteTable().run(), "danger"],
+                [uiText("docSurface.deleteTable"), () => editor.chain().focus().deleteTable().run(), "danger"],
               ].map((item, index) => (item === "sep" ? <span key={index} className="vsep" /> : (
                 <button type="button" key={item[0]} className={item[2] || undefined}
                   onMouseDown={(event) => { event.preventDefault(); item[1](); }}>{item[0]}</button>
@@ -1470,13 +1472,13 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
             {layout.rows.map((row) => (
               <button type="button" key={"row" + row.rid} className={"rowbtn" + (row.has ? " has" : "")}
                 style={row.left === null ? { top: row.top } : { top: row.top, left: row.left, right: "auto" }}
-                title={"Row discussion and status history"} aria-label={"Row discussion and status history"} onClick={() => openRowTalk(row.rid)}>
+                title={uiText("docSurface.rowDiscussionAndStatusHistory")} aria-label={uiText("docSurface.rowDiscussionAndStatusHistory")} onClick={() => openRowTalk(row.rid)}>
                 💬{row.count ? ` ${row.count}` : ""}
               </button>
             ))}
             {layout.adds.map((add) => (
               <button type="button" key={"add" + add.table} className="addrow" style={{ top: add.top, left: add.left }}
-                onMouseDown={(event) => event.preventDefault()} onClick={() => addRow(add.table)}>＋ Add Row</button>
+                onMouseDown={(event) => event.preventDefault()} onClick={() => addRow(add.table)}>{uiText("docSurface.addRow")}</button>
             ))}
           </div>
         </div>
@@ -1492,7 +1494,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       )}
 
       {sel && (
-        <div className="seltb on" role="toolbar" aria-label={"Annotation Tools"} ref={seltbRef}
+        <div className="seltb on" role="toolbar" aria-label={uiText("docSurface.annotationTools")} ref={seltbRef}
           style={mode === "sheet" ? undefined : {
             left: Math.max(8, sel.rect.left),
             top: Math.min(window.innerHeight - 56, Math.max(58, sel.rect.top - 48)),
@@ -1500,34 +1502,34 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           onMouseDown={(event) => event.preventDefault()}>
           {attachId ? (
             <>
-              <button type="button" onClick={onAttach}>Attach Here</button>
-              <button type="button" onClick={() => { finishSel(); onAttachDone(); }}>Cancel</button>
+              <button type="button" onClick={onAttach}>{uiText("docSurface.attachHere")}</button>
+              <button type="button" onClick={() => { finishSel(); onAttachDone(); }}>{uiText("docSurface.cancel")}</button>
             </>
           ) : (
             <>
               {sel.editable && (
                 <span className="fmt">
-                  <button type="button" title={"Bold"} onClick={() => applyFormat("bold")}>B</button>
-                  <button type="button" title={"Italic"} onClick={() => applyFormat("italic")}><i>I</i></button>
-                  <button type="button" title={"Strikethrough"} onClick={() => applyFormat("strike")}><s>S</s></button>
-                  <button type="button" title={"Link"} onClick={() => applyFormat("link")}>🔗</button>
+                  <button type="button" title={uiText("docSurface.bold")} onClick={() => applyFormat("bold")}>B</button>
+                  <button type="button" title={uiText("docSurface.italic")} onClick={() => applyFormat("italic")}><i>I</i></button>
+                  <button type="button" title={uiText("docSurface.strikethrough")} onClick={() => applyFormat("strike")}><s>S</s></button>
+                  <button type="button" title={uiText("docSurface.link")} onClick={() => applyFormat("link")}>🔗</button>
                 </span>
               )}
-              <span className="grp"><span>Highlight</span>
+              <span className="grp"><span>{uiText("docSurface.highlight")}</span>
                 {Object.entries(COLORS).map(([key, [name, color]]) => (
                   <button type="button" key={key} className={"dot" + (sel.mine.some((a) => a.style === "hl" && a.color === key) ? " on" : "")}
-                    title={`${name} highlight (choose again to remove)`} disabled={busy} onClick={() => onHighlight(key)}>
+                    title={uiText("docSurface.highlightChooseAgainToRemove", {v0: (name)})} disabled={busy} onClick={() => onHighlight(key)}>
                     <i style={{ background: color }} />
                   </button>
                 ))}
               </span>
               <button type="button" className={sel.mine.some((a) => a.style === "ul") ? "on" : undefined}
-                title={"Underline this text; choose again to remove"} disabled={busy} onClick={onUnderline}><span className="u">Underline</span></button>
-              {sel.mine.length > 0 && <button type="button" className="rm" title={"Remove your highlights and underlines from this passage"} disabled={busy} onClick={onRemoveMine}>✕ Remove</button>}
-              <button type="button" title={"Mark as Question, Revise, or Approved"} onClick={() => setLabelMenu(!labelMenu)}>Annotate ▾</button>
-              <button type="button" title={"Add a note and @mention crew members"} onClick={() => onNote()}>Add Note</button>
+                title={uiText("docSurface.underlineThisTextChooseAgainToRemove")} disabled={busy} onClick={onUnderline}><span className="u">{uiText("docSurface.underline")}</span></button>
+              {sel.mine.length > 0 && <button type="button" className="rm" title={uiText("docSurface.removeYourHighlightsAndUnderlinesFromThisPassage")} disabled={busy} onClick={onRemoveMine}>{uiText("docSurface.remove")}</button>}
+              <button type="button" title={uiText("docSurface.markAsQuestionReviseOrApproved")} onClick={() => setLabelMenu(!labelMenu)}>{uiText("docSurface.annotate")}</button>
+              <button type="button" title={uiText("docSurface.addANoteAndMentionCrewMembers")} onClick={() => onNote()}>{uiText("docSurface.addNote")}</button>
               {me.can_write && agents.some(agent => agent.agent_key === 'doc_writer' && agent.enabled) &&
-                <button type="button" title={"Create an agent task for the selected passage; processing starts after submission"} onClick={() => onNote('doc_writer')}>Assign to Agent</button>}
+                <button type="button" title={uiText("docSurface.createAnAgentTaskForTheSelectedPassageProcessing")} onClick={() => onNote('doc_writer')}>{uiText("docSurface.assignToAgent")}</button>}
             </>
           )}
         </div>
@@ -1545,19 +1547,19 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       {markPop && (
         <div className="markpop on" style={{ top: markPop.top, left: markPop.left }}>
           <Avatar id={markPop.a.created_by} name={markPop.a.created_by_name} size={18} />
-          <span><b>{markPop.a.created_by_name}</b> ’s{markPop.a.style === "ul" ? "Underline" : "Highlight"} · {shortTime(markPop.a.created_at)}</span>
-          <button type="button" className="linkish" onClick={() => { const a = markPop.a; setMarkPop(null); setAdding((set) => new Set(set).add(a.id)); onFocus(a.id); }}>Add note</button>
+          <span><b>{markPop.a.created_by_name}</b>{uiText("docSurface.s", {v0: (markPop.a.style === "ul" ? uiText("docSurface.underline") : uiText("docSurface.highlight")), v1: (shortTime(markPop.a.created_at))})}</span>
+          <button type="button" className="linkish" onClick={() => { const a = markPop.a; setMarkPop(null); setAdding((set) => new Set(set).add(a.id)); onFocus(a.id); }}>{uiText("docSurface.addNote2")}</button>
           {(admin || markPop.a.created_by === me.actor_id) && (
-            <button type="button" className="linkish danger" onClick={() => { const a = markPop.a; setMarkPop(null); act(a, "remove"); }}>Remove</button>
+            <button type="button" className="linkish danger" onClick={() => { const a = markPop.a; setMarkPop(null); act(a, "remove"); }}>{uiText("docSurface.remove2")}</button>
           )}
         </div>
       )}
       {insMenu && (
         <div className="menu on ins-menu" style={{ top: insMenu.top, left: insMenu.left }} onMouseDown={(event) => event.preventDefault()}>
-          {NEW_BLOCKS.map(([key, icon, label]) => (
+          {NEW_BLOCKS().map(([key, icon, label]) => (
             <button type="button" key={key} onClick={() => insertBlock(insMenu.index, key)}><span className="mi">{icon}</span>{label}</button>
           ))}
-          <div className="note">Add below “{insMenu.label || "this block"}”{admin ? "" : `, attributed to ${me.name} `}。</div>
+          <div className="note">{uiText("docSurface.addBelow", {v0: (insMenu.label || uiText("docSurface.thisBlock")), v1: (admin ? "" : `, attributed to ${me.name} `)})}</div>
         </div>
       )}
 
@@ -1574,19 +1576,19 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       )}
 
       {linkPop && editor && (
-        <div className="link-pop" style={{ top: linkPop.top, left: linkPop.left }} role="dialog" aria-label={"Link"}>
+        <div className="link-pop" style={{ top: linkPop.top, left: linkPop.left }} role="dialog" aria-label={uiText("docSurface.link")}>
           <button type="button" className="go" onMouseDown={(event) => { event.preventDefault(); setLinkPop(null); openLink(linkPop.href); }}>
             {internalTab(linkPop.href)
-              ? `Go to “${(tabs.find((t) => t.key === internalTab(linkPop.href)) || {}).title || linkPop.href}”`
-              : <>Open <span className="url">{linkPop.href}</span> ↗</>}
+              ? uiText("docSurface.goTo", {v0: ((tabs.find((t) => t.key === internalTab(linkPop.href)) || {}).title || linkPop.href)})
+              : <>{uiText("docSurface.open")}<span className="url">{linkPop.href}</span> ↗</>}
           </button>
           <span className="vsep" />
-          <button type="button" onMouseDown={(event) => { event.preventDefault(); setDialog({ kind: "link" }); }}>Edit</button>
+          <button type="button" onMouseDown={(event) => { event.preventDefault(); setDialog({ kind: "link" }); }}>{uiText("docSurface.edit")}</button>
           <button type="button" onMouseDown={(event) => {
             event.preventDefault();
             editor.chain().focus().extendMarkRange("link").unsetLink().run();
             setLinkPop(null);
-          }}>Remove Link</button>
+          }}>{uiText("docSurface.removeLink")}</button>
         </div>
       )}
 
@@ -1595,14 +1597,14 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           onPick={(revision) => setDialog({ kind: "restore", revision })} />
       )}
       {dialog && dialog.kind === "restore" && (
-        <Dialog title={`Restore revision ${dialog.revision} ?`} confirmLabel={"Restore"}
-          message={"The current content stays in Version History. Annotations will be reattached to the restored text."} onCancel={() => setDialog(null)}
+        <Dialog title={uiText("docSurface.restoreRevision", {v0: (dialog.revision)})} confirmLabel={uiText("docSurface.restore")}
+          message={uiText("docSurface.restoreExplanation")} onCancel={() => setDialog(null)}
           onConfirm={() => restore(dialog.revision)} />
       )}
       {dialog && dialog.kind === "link" && editor && (
-        <Dialog title={"Link"} input={{ value: editor.getAttributes("link").href || "", placeholder: "https://… (or select a page below)" }}
-          inputLabel={"URL"} confirmLabel={"Apply"}
-          select={{ label: "Or Link to a Page", value: "", options: [{ value: "", label: "(none)" }, ...tabs.map((t) => ({ value: "#" + t.key, label: t.title }))] }}
+        <Dialog title={uiText("docSurface.link")} input={{ value: editor.getAttributes("link").href || "", placeholder: uiText('common.dialogHttpsOrSelectAPageBelow') }}
+          inputLabel={uiText("common.inputURL")} confirmLabel={uiText("docSurface.apply")}
+          select={{ label: uiText('common.dialogOrLinkToAPage'), value: "", options: [{ value: "", label: uiText('common.dialogNone') }, ...tabs.map((t) => ({ value: "#" + t.key, label: t.title }))] }}
           onCancel={() => setDialog(null)}
           onConfirm={({ text, choice }) => {
             setDialog(null);
@@ -1624,6 +1626,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
 
 // 找回以前的內容：重新整理或關掉頁面之後，復原（Ctrl+Z）的紀錄就沒了，要從這裡找。
 function VersionsDialog({ slug, tabKey, flush, onClose, onPick, onError }) {
+  const locale = useLocale();
   const [revisions, setRevisions] = useState(null);
   useEffect(() => {
     let alive = true;
@@ -1640,14 +1643,14 @@ function VersionsDialog({ slug, tabKey, flush, onClose, onPick, onError }) {
     return () => { alive = false; };
   }, [slug, tabKey, flush, onClose, onError]);
   return (
-    <Dialog title={"Version History"} confirmLabel={"Close"} onCancel={onClose} onConfirm={onClose}
-      message={"Use Undo (Ctrl+Z) for recent edits. Version History restores earlier content after a refresh or a new session. Editing after a 10-minute pause starts a new revision."}>
-      {!revisions && <p className="modal-msg">Loading…</p>}
+    <Dialog title={uiText("docSurface.versionHistory")} confirmLabel={uiText("docSurface.close")} onCancel={onClose} onConfirm={onClose}
+      message={uiText("docSurface.undoExplanation")}>
+      {!revisions && <p className="modal-msg">{uiText("docSurface.loading")}</p>}
       {revisions && revisions.map((rev, index) => (
         <div key={rev.revision} className="deleted-row">
-          <span>{shortTime(rev.saved_at)}・{rev.saved_by_name || "—"}{rev.restored ? "(restored)" : ""}
-            <small>Revision {rev.revision}  items{index === 0 ? "· current content" : ""}</small></span>
-          {index > 0 && <button type="button" className="ghost" onClick={() => onPick(rev.revision)}>Restore This Revision</button>}
+          <span>{shortTime(rev.saved_at)}・{rev.saved_by_name || "—"}{rev.restored ? uiText("docSurface.restored") : ""}
+            <small>{uiText("docSurface.revisionItems", {v0: (rev.revision), v1: (index === 0 ? uiText("docSurface.currentContent") : "")})}</small></span>
+          {index > 0 && <button type="button" className="ghost" onClick={() => onPick(rev.revision)}>{uiText("docSurface.restoreThisRevision")}</button>}
         </div>
       ))}
     </Dialog>

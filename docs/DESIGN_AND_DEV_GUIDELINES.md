@@ -1,5 +1,7 @@
 # ZeroField Studio — 設計與開發規範 (`DESIGN_AND_DEV_GUIDELINES.md`)
 
+> **2026-10-18 使用者核准更新：** 介面支援 English／繁體中文手動切換；首次開啟及缺漏翻譯時預設英文。下文的 English-First 以英文預設展示為準。新增介面文案須加入 `ui/src/i18n/locales/en.json` 與 `zh-TW.json`，使用語意鍵與完整句子參數。資料庫狀態、工具名稱、角色 ID 與 M8／ACP 協定固定；`normalizeStatus()` 處理狀態邏輯，`statusLabel()` 僅負責顯示。範本與使用者內容保留原文，影片功能仍為下一階段。
+
 本規範適用於所有參與 **`C:\ai_project\ZeroField`** 開發的 AI 代理與工程師。  
 目標是確保作品在 **ComfyUI Open Source Higgsfield Challenge**（國際評審團：ComfyOrg、NVIDIA、LTX、Black Forest Labs）獲得最高評分，同時避免破壞底層架構與既有測試。
 

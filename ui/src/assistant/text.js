@@ -1,3 +1,4 @@
+import { t as uiText } from '../i18n/index.js';
 // 專案助理畫面用的純函式：不碰 React、不碰網路。回答一律當純文字處理，只認 **粗體**、`程式碼`、▢ 三種標記。
 
 export function splitSources(text) {
@@ -76,10 +77,10 @@ export function lookedAt(tools) {
 
 export function workingLine(reply) {
   if (!reply) return "";
-  if (reply.status === "queued") return reply.attempts > 0 ? "Retrying…" : "Queued…";
-  if (reply.status === "running" && reply.body) return "Writing…";
+  if (reply.status === "queued") return reply.attempts > 0 ? uiText("text.retrying") : uiText("text.queued");
+  if (reply.status === "running" && reply.body) return uiText("text.writing");
   const looked = lookedAt(reply.tools);
-  return looked.length ? "Reading: " + looked.slice(-3).join(", ") : "Thinking…";
+  return looked.length ? uiText("text.reading") + looked.slice(-3).join(", ") : uiText("text.thinking");
 }
 
 // 還在寫的回答：助理邊寫，資料庫那一則就邊存（worker 的 write_partial），畫面先把寫好的部分秀出來。
@@ -147,17 +148,17 @@ export function formatSeconds(seconds) {
   if (seconds == null) return "";
   if (seconds < 60) return `${seconds} s`;
   const minutes = Math.floor(seconds / 60);
-  return seconds % 60 ? `${minutes} m ${seconds % 60} s` : `${minutes} min`;
+  return seconds % 60 ? `${minutes} m ${seconds % 60} s` : uiText("text.minutes", {v0: (minutes)});
 }
 
 export const DEFAULT_HINT = "The assistant can read numbers and formulas. Keep credentials out of production content.";
 
 export function attachmentHint(files, privacyMode = "full_access") {
   const kinds = new Set((files || []).map((f) => f.kind));
-  if (privacyMode === "mask_numbers") return "Numeric masking is enabled. Sensitive values are masked and images are excluded.";
-  if (kinds.has("image")) return "Images, numbers, and formulas are shared according to production settings. Keep credentials out of attachments.";
-  if (kinds.size) return "Attachment text, numbers, and formulas are available for analysis and editing proposals.";
-  return DEFAULT_HINT;
+  if (privacyMode === "mask_numbers") return uiText("text.numericMaskingIsEnabledSensitiveValuesAreMaskedAnd");
+  if (kinds.has("image")) return uiText("text.imagesNumbersAndFormulasAreSharedAccordingToProduction");
+  if (kinds.size) return uiText("text.attachmentTextNumbersAndFormulasAreAvailableForAnalysis");
+  return uiText("text.theAssistantCanReadNumbersAndFormulasKeepCredentials");
 }
 
 export const ACCEPT_FILES = "image/png,image/jpeg,image/gif,image/webp,.xlsx,.xlsm,.docx,.pdf,.txt,.csv,.tsv,.md,.json,.log";
@@ -207,8 +208,8 @@ export function progressCounts(todo) {
 }
 
 export function draftPrompt(item) {
-  if (item.kind === "question") return `Let’s work on question ${item.number}`;
-  if (item.kind === "handoff") return `Let’s work on the deliverable “${item.text}”`;
+  if (item.kind === "question") return uiText("text.letSWorkOnQuestion", {v0: (item.number)});
+  if (item.kind === "handoff") return uiText("text.letSWorkOnTheDeliverable", {v0: (item.text)});
   return "";
 }
 
@@ -217,18 +218,18 @@ export function assistRows(todo) {
   const rows = new Map();
   for (const item of todo || []) {
     if (!item.rid) continue;
-    if (item.kind === "question") rows.set(item.rid, { label: "Work Together", cell: 1, prompt: draftPrompt(item) });
-    if (item.kind === "handoff") rows.set(item.rid, { label: "Plan This Delivery", cell: 0, prompt: draftPrompt(item) });
+    if (item.kind === "question") rows.set(item.rid, { label: uiText("text.workTogether"), cell: 1, prompt: draftPrompt(item) });
+    if (item.kind === "handoff") rows.set(item.rid, { label: uiText("text.planThisDelivery"), cell: 0, prompt: draftPrompt(item) });
   }
   return rows;
 }
 
 export function taskLine(state, focus) {
   const pending = ((state && state.proposals) || []).filter((p) => p.status === "pending");
-  if (pending.length) return pending.length > 1 ? `There are ${pending.length}  responses awaiting approval` : "Response ready for approval";
+  if (pending.length) return pending.length > 1 ? uiText("text.thereAreResponsesAwaitingApproval", {v0: (pending.length)}) : uiText("text.responseReadyForApproval");
   const current = currentFocus(state && state.thread, focus);
-  if (current && current.kind === "question") return `Working on question ${current.number}`;
-  if (current && current.kind === "handoff") return `Working on:${current.text}`;
+  if (current && current.kind === "question") return uiText("text.workingOnQuestion", {v0: (current.number)});
+  if (current && current.kind === "handoff") return uiText("text.workingOn", {v0: (current.text)});
   return "";
 }
 
@@ -246,39 +247,39 @@ export function documentUrl(slug, message) {
 
 // 確認後的說法：私下轉給負責人不會出現在專案頁，不能說「已放上專案頁」。
 export function appliedLabel(proposal) {
-  return proposal && proposal.action === "私下轉給負責人" ? "Forwarded privately to owner" : "Applied to production";
+  return proposal && proposal.action === "私下轉給負責人" ? uiText("text.forwardedPrivatelyToOwner") : uiText("text.appliedToProduction");
 }
 
 // 卡片上的說法：私下轉給負責人只有負責人看得到、不會放上專案頁，整張卡都不能出現「放上去」
 export function proposalCopy(proposal) {
   if (proposal?.action === "table_edit") {
     return {
-      ask: "Apply these table changes?", confirm: "Apply Changes", field: "Change Details",
-      note: "The table updates after approval. Changed source data will require another review.",
-      dismissed: "Not Applied", failed: "Could Not Apply",
-      compactLead: "Proposal ready:", compactTail: "Review the proposal in the workbench, then apply it.",
+      ask: uiText("text.applyTheseTableChanges"), confirm: uiText("text.applyChanges"), field: uiText("text.changeDetails"),
+      note: uiText("text.theTableUpdatesAfterApprovalChangedSourceDataWill"),
+      dismissed: uiText("text.notApplied"), failed: uiText("text.couldNotApply"),
+      compactLead: uiText("text.proposalReady"), compactTail: uiText("text.reviewTheProposalInTheWorkbenchThenApplyIt"),
     };
   }
   if (proposal && proposal.action === "私下轉給負責人") {
     return {
-      ask: "Send a private question to the owner?", confirm: "Send to Owner", field: "Question for the Owner",
-      note: "Only the owner can see this. Edit the text before sending.",
-      dismissed: "Do Not Forward", failed: "Not Forwarded",
-      compactLead: "Private question ready:", compactTail: "Approve in the workbench to send privately to the owner.",
+      ask: uiText("text.sendAPrivateQuestionToTheOwner"), confirm: uiText("text.sendToOwner"), field: uiText("text.questionForTheOwner"),
+      note: uiText("text.onlyTheOwnerCanSeeThisEditTheText"),
+      dismissed: uiText("text.doNotForward"), failed: uiText("text.notForwarded"),
+      compactLead: uiText("text.privateQuestionReady"), compactTail: uiText("text.approveInTheWorkbenchToSendPrivatelyToThe"),
     };
   }
   return {
-    ask: "Apply this to the production page?", confirm: "Apply to Page", field: "Content to Apply", note: "Edit the text before approving.",
-    dismissed: "Not Now", failed: "Not Applied",
-    compactLead: "Response ready:", compactTail: "Approve in the workbench to apply it to the page.",
+    ask: uiText("text.applyThisToTheProductionPage"), confirm: uiText("text.applyToPage"), field: uiText("text.contentToApply"), note: uiText("text.editTheTextBeforeApproving"),
+    dismissed: uiText("text.notNow"), failed: uiText("text.notApplied"),
+    compactLead: uiText("text.responseReady"), compactTail: uiText("text.approveInTheWorkbenchToApplyItToThe"),
   };
 }
 
 // 側邊欄的分頁（10/15 跟「標註」清單同一套）：對話、紀錄（以前的對話）、管理（只有管理者）。
 // 私下問題等負責人回覆的數字掛在「管理」上，不另外佔一條。
 export function paneTabs(manager, forwardsOpen) {
-  const tabs = [{ key: "chat", label: "Chat" }, { key: "history", label: "History" }];
-  if (manager) tabs.push({ key: "manage", label: "Manage", count: forwardsOpen > 0 ? forwardsOpen : 0 });
+  const tabs = [{ key: "chat", label: uiText("text.chat") }, { key: "history", label: uiText("text.history") }];
+  if (manager) tabs.push({ key: "manage", label: uiText("text.manage"), count: forwardsOpen > 0 ? forwardsOpen : 0 });
   return tabs;
 }
 

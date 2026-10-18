@@ -1,3 +1,4 @@
+import { t as uiText } from '../i18n/index.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { emptyBoard, reconcileBoard, cancellationRequest } from './orchestrationModel.js';
@@ -43,7 +44,7 @@ export function useOrchestration(slug, enabled, open, onApplied, reloadAssistant
     pagedRef.current = true; setPaged(true);
   }, [base, board.cursor, slug]);
   const mutate = useCallback(async (path, body) => {
-    if (currentSlug.current !== slug) throw new Error("The workspace changed. Reopen this task.");
+    if (currentSlug.current !== slug) throw new Error(uiText("useOrchestration.theWorkspaceChangedReopenThisTask"));
     const data = await api.post(path, body);
     if (currentSlug.current !== slug) return data;
     if (data.proposal?.status === 'applied') callbacks.current.onApplied?.(data.proposal, []);

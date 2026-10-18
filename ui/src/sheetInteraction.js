@@ -1,3 +1,4 @@
+import { t as uiText } from './i18n/index.js';
 export function nextCell(active, key, visibleRows, columns) {
   if (!visibleRows.length || !columns || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return null;
   let row = Math.max(0, visibleRows.indexOf(active.r));
@@ -19,10 +20,10 @@ export function historyForRow(groups, rowId, tableId) {
 export function sheetRequest(title, table, ids, instruction) {
   const picked = ids == null ? null : new Set(ids);
   const rows = table.rows.map((row, i) => ({...row, index: i + 1})).filter((row) => picked?.has(row.rid));
-  if (picked && (!picked.size || rows.length !== picked.size)) throw new Error("The selected row no longer exists. Select another row.");
-  const scope = picked ? `${rows.length} selected rows: ${rows.map((row) => `Row ${row.index} “${String(row.cells[0]?.value || "Untitled").slice(0, 60)}”`).join(", ")}` : "the entire table";
-  const draft = `Read “${table.name}” in “${title}” and process ${scope}.\n\n${instruction.trim()}\n\nCheck the latest content and row names, then prepare a proposal for my review before applying changes.`;
-  if (draft.length > 4000) throw new Error("The brief and selected rows are too long. Shorten the brief or select fewer rows.");
+  if (picked && (!picked.size || rows.length !== picked.size)) throw new Error(uiText("sheetInteraction.theSelectedRowNoLongerExistsSelectAnotherRow"));
+  const scope = picked ? uiText("sheetInteraction.selectedRows", {v0: (rows.length), v1: (rows.map((row) => uiText("sheetInteraction.row", {v0: (row.index), v1: (String(row.cells[0]?.value || uiText("sheetInteraction.untitled")).slice(0, 60))})).join(", "))}) : uiText("sheetInteraction.theEntireTable");
+  const draft = uiText("sheetInteraction.readInAndProcessCheckTheLatestContentAnd", {v0: (table.name), v1: (title), v2: (scope), v3: (instruction.trim())});
+  if (draft.length > 4000) throw new Error(uiText("sheetInteraction.theBriefAndSelectedRowsAreTooLongShorten"));
   return draft;
 }
 
@@ -42,17 +43,17 @@ export function rangeTSV(parsed, range) {
 
 export function visiblePastePayload(parsed, visibleIds, active, grid, visibleColumns = parsed.headers.map((_,i)=>i)) {
   const rowAt = visibleIds.indexOf(parsed.rows[active.r]?.rid), colAt = visibleColumns.indexOf(active.c);
-  if (rowAt < 0 || rowAt + grid.length > visibleIds.length) throw new Error("The paste exceeds visible rows. Add rows or clear filters first.");
-  if (colAt < 0 || grid.some(row => row.length + colAt > visibleColumns.length)) throw new Error("The paste exceeds visible columns. Show or add columns first.");
+  if (rowAt < 0 || rowAt + grid.length > visibleIds.length) throw new Error(uiText("sheetInteraction.thePasteExceedsVisibleRowsAddRowsOrClear"));
+  if (colAt < 0 || grid.some(row => row.length + colAt > visibleColumns.length)) throw new Error(uiText("sheetInteraction.thePasteExceedsVisibleColumnsShowOrAddColumns"));
   const row_edits = grid.map((values,i) => {
     const old = parsed.rows.find(row=>row.rid===visibleIds[rowAt+i]);
-    if (!old) throw new Error("The selected row no longer exists. Select another row.");
+    if (!old) throw new Error(uiText("sheetInteraction.theSelectedRowNoLongerExistsSelectAnotherRow"));
     const cells = {}, expected_cells = {};
     values.forEach((value,j) => {
       const c = visibleColumns[colAt+j], type = parsed.table.attrs.column_types?.[c];
-      if (type === 'number' && value.trim() && (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()) || !Number.isFinite(Number(value)))) throw new Error(`“${parsed.headers[c]}” requires a number without thousands separators; use a formula column for formulas. Nothing has been pasted.`);
+      if (type === 'number' && value.trim() && (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()) || !Number.isFinite(Number(value)))) throw new Error(uiText("sheetInteraction.requiresANumberWithoutThousandsSeparatorsUseAFormula", {v0: (parsed.headers[c])}));
       const options = parsed.table.attrs.column_options?.[parsed.table.attrs.column_ids?.[c]]?.options;
-      if (type === 'status' && options?.length && value && !options.includes(value)) throw new Error(`“${parsed.headers[c]}” does not include the status “${value}”. Configure this option first.`);
+      if (type === 'status' && options?.length && value && !options.includes(value)) throw new Error(uiText("sheetInteraction.doesNotIncludeTheStatusConfigureThisOptionFirst", {v0: (parsed.headers[c]), v1: (value)}));
       cells[c] = value; expected_cells[c] = old.cells[c]?.value ?? '';
     });
     const column_ids = Object.fromEntries(Object.keys(cells).filter(c=>parsed.table.attrs.column_ids?.[c]).map(c=>[c,parsed.table.attrs.column_ids[c]]));
@@ -62,22 +63,22 @@ export function visiblePastePayload(parsed, visibleIds, active, grid, visibleCol
 }
 
 export function inverseOperation(operation) {
-  if (operation.new_rows?.length) throw new Error("Restore added rows through Version History; cell undo does not remove them.");
+  if (operation.new_rows?.length) throw new Error(uiText("sheetInteraction.restoreAddedRowsThroughVersionHistoryCellUndoDoes"));
   return {...operation,row_edits:operation.row_edits.map(row=>({...row,cells:{...row.expected_cells},expected_cells:{...row.cells}}))};
 }
 
 // This is only offered after the user has reviewed a conflict. Automatic retry
 // always reuses the original expected values instead of overwriting new work.
 export function rebaseOperation(parsed, operation) {
-  if(parsed.tableId!==operation.table_id)throw new Error("The source table no longer exists.");
+  if(parsed.tableId!==operation.table_id)throw new Error(uiText("sheetInteraction.theSourceTableNoLongerExists"));
   const ids=parsed.table.attrs.column_ids||[];
   const row_edits=operation.row_edits.map(edit=>{
     const row=parsed.rows.find(r=>r.rid===edit.row_id);
-    if(!row)throw new Error("The selected row no longer exists. Your draft is preserved.");
+    if(!row)throw new Error(uiText("sheetInteraction.theSelectedRowNoLongerExistsYourDraftIs"));
     const cells={},expected_cells={},column_ids={};
     for(const [oldIndex,value] of Object.entries(edit.cells)){
       const id=edit.column_ids?.[oldIndex],c=id?ids.indexOf(id):Number(oldIndex);
-      if(c<0||c>=parsed.headers.length)throw new Error("The selected column no longer exists. Your draft is preserved.");
+      if(c<0||c>=parsed.headers.length)throw new Error(uiText("sheetInteraction.theSelectedColumnNoLongerExistsYourDraftIs"));
       cells[c]=value;expected_cells[c]=row.cells[c]?.value??'';if(id)column_ids[c]=id;
     }
     return{row_id:row.rid,cells,expected_cells,...(Object.keys(column_ids).length?{column_ids}:{})};
@@ -87,7 +88,7 @@ export function rebaseOperation(parsed, operation) {
 
 export function freezeSheetScope(tab, parsed, ids = null, columns = parsed.headers.map((_,i)=>i)) {
   const rows = ids == null ? parsed.rows.map(row=>row.rid) : [...ids];
-  if (!rows.length || rows.some(id=>!parsed.rows.some(row=>row.rid===id))) throw new Error("The selected rows no longer exist or contain no data. Select rows again.");
+  if (!rows.length || rows.some(id=>!parsed.rows.some(row=>row.rid===id))) throw new Error(uiText("sheetInteraction.theSelectedRowsNoLongerExistOrContainNo"));
   return {target_tab:tab.key,table_id:parsed.tableId,table_name:parsed.name,base_revision:tab.revision,
     row_ids:rows,column_ids:columns.map(c=>parsed.table.attrs.column_ids?.[c]).filter(Boolean),column_indices:[...columns]};
 }
