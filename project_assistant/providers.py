@@ -98,7 +98,8 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                 with opener(req, timeout=max(5.0, left)) as resp:
                     data = json.loads(resp.read().decode("utf-8", "replace"))
             except urllib.error.HTTPError as exc:
-                detail = exc.read()[:400].decode("utf-8", "replace")
+                # Error bodies can echo API credentials; return only the HTTP status.
+                detail = f'模型端點回應 HTTP {exc.code}'
                 if exc.code == 429:
                     raise model_client.ModelError("quota", detail) from None
                 if exc.code in (401, 403):

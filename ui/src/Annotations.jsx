@@ -37,7 +37,7 @@ function Chips({ a, rowLabel }) {
 }
 
 // 一則標註的卡片。focused：展開（看得到原文、回覆框、按鈕）。
-export function AnnotationCard({ a, focused, me, members, rowLabel, busy, adding, onAct }) {
+export function AnnotationCard({ a, focused, me, members, agents, rowLabel, busy, adding, onAct }) {
   const isAdmin = me.role === "admin";
   if (isRecordOnly(a) && !adding.has(a.id)) {
     return (
@@ -105,7 +105,8 @@ export function AnnotationCard({ a, focused, me, members, rowLabel, busy, adding
         </div>
       ) : focused ? (
         <>
-          <Composer members={members} me={me} busy={busy} autoFocus={Boolean(a.draft || adding.has(a.id))}
+          <Composer members={members} agents={agents} me={me} busy={busy} autoFocus={Boolean(a.draft || adding.has(a.id))}
+            initialText={a.initialText || ''}
             placeholder={placeholder} note={wait.length ? `等 ${wait.join("、")} 處理` : ""}
             onSend={(body) => onAct(a, "send", { body })}>
             {a.draft

@@ -14,6 +14,7 @@ import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { AssistantSide, AssistantWorkspace } from "./assistant/AssistantViews.jsx";
 import { appliedLabel, assistRows, waitingCount } from "./assistant/text.js";
 import { useAssistant } from "./assistant/useAssistant.js";
+import { assignmentRequest } from './assistant/orchestrationModel.js';
 import "./assistant/assistant.css";
 import "./workbench.css";
 
@@ -387,6 +388,19 @@ function ProjectPage({ slug }) {
     setPaMode((current) => (current === "off" ? (narrow() ? "full" : "side") : current));
     setTimeout(() => paInput.current && paInput.current.focus(), 60);
   }, [assistant.setScope]);
+  const assignBackground = useCallback(async (text, scope, options = null) => {
+    if (!options?.strategy) { askAssistant(text, null, scope); return true; }
+    if (surfaceControl.current && !(await surfaceControl.current.flush())) throw new Error('來源尚未儲存，請先處理編輯衝突');
+    const request = assignmentRequest({ objective: text, scope, target: options.target, strategy: options.strategy,
+      agentKey: options.agentKey, raceAgents: options.raceAgents, mode: options.writeMode || 'proposal', requestId: options.requestId });
+    await assistant.startRun(request);
+    setPaView('agents'); openAssistant(); showToast('工作已排入，結果會先提供核對');
+    return true;
+  }, [assistant.startRun, askAssistant, openAssistant, showToast]);
+  const onAgentRouted = useCallback(async request => {
+    assistant.setSelectedAgent(request.agent_key); setPaView('chat'); openAssistant();
+    await assistant.reload(); showToast('留言已送給代理，回覆會出現在專案助理');
+  }, [assistant.setSelectedAgent, assistant.reload, openAssistant, showToast]);
   // 點專案頁那一列的「✦ 一起回答」：打開助理、直接開始（上一句還在答時，先放進輸入框）
   const onAssistRow = useCallback(async (rid) => {
     const item = ((assistant.state && assistant.state.todo) || []).find((i) => i.rid === rid);
@@ -402,10 +416,22 @@ function ProjectPage({ slug }) {
     const sent = await assistant.send(row.prompt);
     if (!sent) setPaDraft(row.prompt);
   }, [assistant, paRows, askAssistant]);
-  const openFromAssistant = useCallback((key) => {
+  const openFromAssistant = useCallback(async (key) => {
+    const target = typeof key === 'string' ? { tab_key: key } : key;
+    if (!target?.tab_key) return;
     if (paMode === "full") setPaMode(narrow() ? "off" : "side");
-    navigate(key);
-  }, [paMode, navigate]);
+    if (await navigate(target.tab_key)) {
+      if (target.row_id) {
+        let tableId = target.table_id;
+        if (!tableId) {
+          const loaded = await api.get(`/projects/api/${slug}/tabs/${target.tab_key}`);
+          tableId = loaded.tab.doc.content.find(node => node.type === 'table' && node.content.some(row => row.attrs?.bid === target.row_id))?.attrs.bid;
+        }
+        setSheetFocus({ tabKey: target.tab_key, tableId, rowId: target.row_id, colIndex: target.col_index ?? 0, nonce: Date.now() });
+      }
+      if (target.block_id && !surfaceControl.current?.flashUnit?.(target.block_id)) pendingFlash.current = target.block_id;
+    }
+  }, [paMode, navigate, slug]);
   const starter = useCallback((text) => askAssistant(text, null), [askAssistant]);
 
   // ---------- 修改紀錄 ----------
@@ -491,9 +517,10 @@ function ProjectPage({ slug }) {
         </button>
         {paEnabled && (
           <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title="專案助理"
-            onClick={() => (paMode === "off" ? openAssistant() : setPaMode("off"))}>
+            onClick={() => { if (paMode === 'off') { if (assistant.orchestrationCounts?.needs_you || assistant.orchestrationCounts?.working) setPaView('agents'); openAssistant(); } else setPaMode('off'); }}>
             <span className="spark">✦</span><span className="label">專案助理</span>
-            {paMode === "off" && waitingCount(assistant.state) > 0 && <span className="count">{waitingCount(assistant.state)}</span>}
+            {paMode === 'off' && assistant.orchestrationCounts?.needs_you > 0 && <span className="count">? {assistant.orchestrationCounts.needs_you}</span>}
+            {paMode === 'off' && assistant.orchestrationCounts?.working > 0 && <span className="count">⟳ {assistant.orchestrationCounts.working}</span>}
           </button>
         )}
         <button type="button" className="icon-btn" onClick={copyLink} title="複製這一頁（或目前這則標註）的連結" aria-label="複製連結">
@@ -533,7 +560,9 @@ function ProjectPage({ slug }) {
               focusRow={sheetFocus}
               onField={setField}
               onReloadTab={async () => { await loadTab(tab.key, true); await loadProject(); }}
-              onAskAgent={paEnabled ? (prompt, scope) => askAssistant(prompt, null, scope) : null}
+              onAskAgent={paEnabled ? assignBackground : null}
+              agents={assistant.state?.agents || []}
+              onAgentRouted={onAgentRouted}
               assistantOpen={paMode !== "off" || panel || historyOpen}
               onPanelChange={onSurfacePanel}
               onSwitchDocMode={async () => { if (await flushSurface()) setDocModeTabs((prev) => ({ ...(prev || {}), [tab.key]: true })); }}
@@ -582,7 +611,7 @@ function ProjectPage({ slug }) {
                 versionsFor={versionsFor} onVersionsShown={versionsShown} onOpenPanel={(where) => { setSection(where); setPanel(true); }}
                 onOpenHistory={() => { setHistoryOpen(!historyOpen); setPanel(false); if (paMode === "side") setPaMode("off"); }}
                 onAttachDone={() => setAttachId(null)} onError={onError} onToast={showToast} controlRef={surfaceControl}
-                assistRows={paRows} onAssistRow={onAssistRow} />
+                assistRows={paRows} onAssistRow={onAssistRow} agents={assistant.state?.agents || []} onAgentRouted={onAgentRouted} />
             </>
           )}
           </div>

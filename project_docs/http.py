@@ -189,6 +189,8 @@ def _raw_body(handler, too_big="圖片最大 8 MB"):
 # ---------- API 分派 ----------
 
 GET_ROUTES = [
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/board"), "orchestration_board"),
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/runs/([0-9a-f-]{{36}})"), "orchestration_detail"),
     (re.compile(rf"/projects/api/{SLUG}/agents"), "agents"),
     (re.compile(r"/projects/api/members"), "members"),
     (re.compile(rf"/projects/api/{SLUG}/tabs/{KEY}/export"), "export_tab"),
@@ -211,6 +213,11 @@ GET_ROUTES = [
 ]
 ANN = r"(\d{1,18})"
 POST_ROUTES = [
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/runs"), "orchestration_create"),
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/runs/([0-9a-f-]{{36}})/cancel"), "orchestration_cancel_run"),
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/dispatches/([0-9a-f-]{{36}})/cancel"), "orchestration_cancel_dispatch"),
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/gates/([0-9a-f-]{{36}})/resolve"), "orchestration_resolve"),
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/tasks/([0-9a-f-]{{36}})/retry"), "orchestration_retry"),
     (re.compile(rf"/projects/api/{SLUG}/agents"), "save_agent"),
     (re.compile(rf"/projects/api/{SLUG}/agents/([a-z][a-z0-9_-]{{0,63}})/toggle"), "toggle_agent"),
     (re.compile(rf"/projects/api/{SLUG}/tabs/{KEY}/table-edit"), "table_edit"),
@@ -303,6 +310,18 @@ def _assistant_call(name, conn, me, args, body, raw=b""):
 
 
 def _call(name, conn, me, args, query, body, raw):
+    if name.startswith('orchestration_'):
+        from project_assistant import orchestration_service as control
+        if name=='orchestration_board':
+            return control.board(conn,me,args[0],cursor=(query.get('cursor') or [None])[0],limit=(query.get('limit') or [50])[0],
+                counts_only=(query.get('counts_only') or ['false'])[0]=='true')
+        if name=='orchestration_detail':
+            return control.run_detail(conn,me,*args,cursor=(query.get('cursor') or [None])[0])
+        if name=='orchestration_create':
+            return control.create_run_request(conn,me,args[0],body)
+        actions={'orchestration_cancel_run':control.cancel_run_request,'orchestration_cancel_dispatch':control.cancel_dispatch_request,
+                 'orchestration_resolve':control.resolve_gate_request,'orchestration_retry':control.retry_task_request}
+        return actions[name](conn,me,*args,body)
     if name in ('agents','save_agent','toggle_agent'):
         from project_assistant import agent_registry
         try:
@@ -395,10 +414,15 @@ def _call(name, conn, me, args, query, body, raw):
         return service.restore_revision(conn, me, args[0], args[1], int(args[2]))
     if name == "set_field":
         return service.set_field(conn, me, args[0], body)
-    if name == "create_annotation":
-        return service.create_annotation(conn, me, args[0], body)
-    if name == "comment_annotation":
-        return service.comment_annotation(conn, me, args[0], int(args[1]), body)
+    if name in ('create_annotation','comment_annotation'):
+        from project_assistant import comment_routing,agent_registry
+        try:
+            prepared=comment_routing.prepare(conn,me,args[0],body,int(args[1]) if name=='comment_annotation' else None)
+            code,payload=(service.create_annotation(conn,me,args[0],body) if name=='create_annotation' else
+                service.comment_annotation(conn,me,args[0],int(args[1]),body))
+            return comment_routing.route_result(conn,me,args[0],prepared,payload) if code<400 else (code,payload)
+        except agent_registry.AgentError as exc:
+            return exc.status,{'error':str(exc),'code':exc.code}
     if name == "resolve_annotation":
         return service.resolve_annotation(conn, me, args[0], int(args[1]), body)
     if name == "reconfirm_annotation":

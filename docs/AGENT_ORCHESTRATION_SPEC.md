@@ -1,6 +1,6 @@
 # OpenBench 多代理管理、編排與任務執行層規格書 (`AGENT_ORCHESTRATION_SPEC.md`)
 
-- **狀態**：Draft / Ready for Implementation
+- **狀態**：2026-10-18 已實作 M8-A～D；本機工程與合成路徑驗證，最終證據見 AGENT_ORCHESTRATION_ACCEPTANCE.md。使用者日常協作尚待驗收。
 - **建立日期**：2026-10-18
 - **適用專案**：`C:\ai_project\OpenBench`
 - **參考架構**：
@@ -508,3 +508,22 @@ ALTER TABLE projectops.assistant_proposal
   2. 啟動子程序時強制執行 `env_clear` 白名單（僅傳遞必要環境變數，隔離 Head Token），並自動將 `mcp_stdio.py` 注入該 CLI 代理的 MCP Server 清單，使其能使用受控的畫布讀取與提案工具。
 - **驗收條件**：
   - 使用 Mock ACP stdio 程序（`tests/test_acp_bridge.py`）驗證 JSON-RPC 握手、工具呼叫轉發、Lease 續約、以及當 Head 租約失效時自動終止子程序。
+
+
+## 7. 本輪實作裁定（優先於前文示意介面）
+
+本輪使用者授權包含 ACP，原「選配」不作為略過交付的依據。實際操作與部署契約見 [執行 API](EXECUTION_API.md)、[Workers](WORKERS.md)、[驗證證據](AGENT_ORCHESTRATION_ACCEPTANCE.md)。
+
+- migration 分為 158 profiles、159 orchestration、160 races、161 human comment routes；不回寫已交付階段。Profile 管理限現有 admin；一般可寫成員可交辦，viewer 僅可讀。Run／Gate／proposal 只對發起人可讀可裁決，admin 的取消權不增加私聊讀取權。
+- 角色工具存具體名稱；worker 只能使用獲准的提問工具，不能因工具清單含委派名稱而取得 primary 權限。工具與結構化最終輸出共用寫入權限；自訂 LLM 要明確授予表格或文件提案工具。非 LLM 媒體手腳僅有狹窄產出契約。
+- 以短的 project advisory transaction lock 統一 metadata 鎖序；模型／網路呼叫在交易外。Slot 區分 single、agent、row；重試只取代同槽。租約、admission、current role、member、write mode、scope 每次重查；handle 本身不是憑證。
+- 固定來源 snapshot 與明確 target 都是權限上限；child 只能縮小。Flow 保留 DAG 與逐列展開權；profile bridge 不再排第二套 DAG，舊 SQL claim 不領 profile 節點。執行前與啟動時依 profile 本身的 Worker 連接狀態判斷。
+- 問題提交後釋放 lease／thread，續跑用新 admission 並帶 continuation。尚未決定的既有提案複製到續跑嘗試，保存 source_proposal_id，舊提案作廢。核對與畫布寫回及下游放行同交易；來源衝突保留 pending 並回 409。
+- Race 候選 2～3 位，固定候選清單與同來源快照，只有一個可決策 Gate。Winner 關聯在鎖定交易驗證與寫入，避免額外 PostgreSQL 版本需求；勝出套用與落選作廢不可拆開。一般 apply/dismiss 入口不能繞過。
+- 結案通知採確定性執行摘要，發回原對話一次，不另增加一次付費模型整理回合。錯誤只顯示安全摘要，不保存供應商可能回顯的金鑰正文。
+- 人類留言只在明確 POST 送出時，透過同交易「留言＋既有對話入列」點名代理；載入、一般人類 mention、模型接受後的標註不派發。同 persona 忙碌時 409 並保留草稿。161 source_ref 保存來源並去重，不新增第二個佇列。
+- 每個 profile 的 Prompt／knowledge 與共用 runtime safety prompt 分離，不繼承舊業務知識。模型可見 scope 不含私有 fingerprint；遠端逐列 slot 僅收到本列。
+- ACP 使用 `runtime_kind=acp_stdio` 與既有 `llm` capability，僅驗證官方 `@agentclientprotocol/codex-acp` 2.2.2／ACP v1。前文其他 CLI 名稱仍是候選，不是支援承諾。command 是可信部署 argv，環境／MCP 憑證隔離並不等同任意執行檔的 OS 沙箱。
+
+
+最終審查補強：相依任務的來源在核准上游變更後推進，ready邊界再次核對；不是在建立待執行任務時永久固定舊輸入。同任務提案只有在寫回前來源仍符合既有guard時才rebase；無關人工修改不會被接受另一提案而放行。排程以task savepoint隔離預期政策錯誤；pending race先保存候選；chat Gate移交私有journal與已送模型的原回合脈絡。看板可明確取消整批候選，關閉比較只返回看板。舊PROJECT_ASSISTANT_ENGINE=codex保留CLI路由。

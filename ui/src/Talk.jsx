@@ -19,12 +19,24 @@ export function MentionText({ body, members, meId }) {
 
 // 留言框：contenteditable，打 @ 跳出名單，選了變成一顆名字（存的是那個人，不是字）。
 // children：送出按鈕左邊的其他按鈕（解決、取消）；note：左下角的小字（例如「等 Mia 處理」）。
-export function Composer({ members, me, onSend, busy, placeholder, autoFocus, note, children }) {
+export function Composer({ members, agents = [], me, onSend, busy, placeholder, autoFocus, initialText = '', note, children }) {
   const box = useRef(null);
   const [picker, setPicker] = useState(null); // {query, index}
   const [empty, setEmpty] = useState(true);
   const others = (members || []).filter((m) => m.actor_id !== me.actor_id);
 
+  useEffect(() => {
+    if (initialText && box.current) {
+      box.current.textContent = initialText;
+      setEmpty(false);
+      const range = document.createRange();
+      range.selectNodeContents(box.current);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }, []); // Initial draft only; polling must preserve the user's edits.
   useEffect(() => {
     if (autoFocus && box.current) box.current.focus({ preventScroll: true });
   }, [autoFocus]);
@@ -44,7 +56,8 @@ export function Composer({ members, me, onSend, busy, placeholder, autoFocus, no
     setPicker(query === null ? null : { query, index: 0 });
   };
 
-  const options = picker ? filterMembers(others, picker.query) : [];
+  const options = picker ? [...filterMembers(others, picker.query), ...agents.filter(agent => agent.enabled && agent.runtime_kind === 'builtin_llm' && agent.role_kind !== 'observer'
+    && (agent.agent_key.includes(picker.query) || agent.display_name.includes(picker.query))).map(agent => ({ actor_id: `agent:${agent.agent_key}`, name: agent.display_name, agent_key: agent.agent_key, role_label: `代理 @${agent.agent_key}` }))] : [];
 
   const choose = (member) => {
     const caret = caretText();
@@ -58,7 +71,8 @@ export function Composer({ members, me, onSend, busy, placeholder, autoFocus, no
     const chip = document.createElement("span");
     chip.className = "mention";
     chip.contentEditable = "false";
-    chip.dataset.id = member.actor_id;
+    if (member.agent_key) chip.dataset.agent = member.agent_key;
+    else chip.dataset.id = member.actor_id;
     chip.textContent = "@" + member.name;
     range.insertNode(chip);
     const space = document.createTextNode(" ");
@@ -78,6 +92,7 @@ export function Composer({ members, me, onSend, busy, placeholder, autoFocus, no
     const walk = (node) => {
       node.childNodes.forEach((child) => {
         if (child.nodeType === 3) out.push({ text: child.textContent });
+        else if (child.dataset && child.dataset.agent) out.push({ text: '@' + child.dataset.agent });
         else if (child.dataset && child.dataset.id) out.push({ mention: child.dataset.id });
         else if (child.nodeName === "BR") out.push({ text: "\n" });
         else { walk(child); if (/^(DIV|P)$/.test(child.nodeName)) out.push({ text: "\n" }); }
@@ -106,6 +121,7 @@ export function Composer({ members, me, onSend, busy, placeholder, autoFocus, no
         onClick={refresh}
         onPaste={(event) => { event.preventDefault(); document.execCommand("insertText", false, event.clipboardData.getData("text/plain")); }}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.keyCode === 229) return;
           if (picker && options.length) {
             if (event.key === "ArrowDown") { event.preventDefault(); setPicker({ ...picker, index: (picker.index + 1) % options.length }); return; }
             if (event.key === "ArrowUp") { event.preventDefault(); setPicker({ ...picker, index: (picker.index - 1 + options.length) % options.length }); return; }
@@ -117,7 +133,7 @@ export function Composer({ members, me, onSend, busy, placeholder, autoFocus, no
         }} />
       {picker && options.length > 0 && (
         <div className="picker" role="listbox">
-          <div className="hd">選要通知的人（只能選名單上的人）</div>
+          <div className="hd">{agents.length ? '選擇成員或代理；點名代理會建立工作' : '選要通知的人（只能選名單上的人）'}</div>
           {options.map((member, index) => (
             <button type="button" key={member.actor_id} role="option" aria-selected={index === picker.index}
               className={index === picker.index ? "sel" : undefined}

@@ -70,6 +70,12 @@ def validate_definition(value, *, allow_empty=False):
                 uuid.UUID(node["limb_id"])
             except (ValueError, TypeError, AttributeError):
                 raise ValueError("limb_id 必須是 Worker UUID") from None
+        if node.get('agent_key'):
+            from project_assistant.agent_registry import AGENT_KEY
+            if not isinstance(node['agent_key'],str) or not AGENT_KEY.fullmatch(node['agent_key']):
+                raise ValueError('agent_key 格式不正確')
+            if node.get('limb_id') or node['write_mode']=='direct':
+                raise ValueError('代理角色不能同時綁定手腳，且必須先核對提案')
         for key in ("x", "y"):
             if key in node and (type(node[key]) not in (int, float) or not -100000 <= node[key] <= 100000):
                 raise ValueError("節點座標無效")
@@ -165,6 +171,11 @@ def _get_run(conn, run_id, slug=None, key=None, lock=False):
 
 def _check_tabs(conn, slug, definition):
     for node in definition["nodes"]:
+        if node.get('agent_key'):
+            from project_assistant import agent_registry
+            profile=agent_registry.get_agent(conn,slug,node['agent_key'])
+            if not profile or not profile['enabled'] or profile['role_kind']=='observer' or node['capability'] not in profile['capabilities']:
+                raise ExecutionError(400,'節點代理不存在、已停用或能力不符')
         for key in node["input_tabs"] + ([node["target"]["tab_key"]] if node["target"].get("tab_key") else []) + ([node["row_source"]["tab_key"]] if node.get("row_source") else []):
             if not repo.get_tab(conn, slug, key):
                 raise ExecutionError(400, f"節點 {node['id']} 找不到分頁 {key}")
@@ -214,6 +225,14 @@ def definition(conn, slug, key):
         cur.execute("SELECT definition,revision FROM projectops.flow_definition WHERE project_slug=%s AND tab_key=%s", (slug, key))
         row = cur.fetchone()
     return {"definition": repo._loads(row[0]) if row else {"nodes": [], "edges": []}, "revision": row[1] if row else 0}
+
+
+def _node_connected(conn, slug, node, workers):
+    if node.get('agent_key'):
+        from project_assistant.orchestration_flow import profile_connected
+        return profile_connected(conn,slug,node['agent_key'])
+    return any(node['capability'] in w['capabilities'] and
+               (not node.get('limb_id') or node['limb_id']==w['id']) for w in workers)
 
 
 def save_definition(conn, me, slug, key, body):
@@ -288,7 +307,9 @@ def preflight(conn, me, slug, key, body):
             continue
         entry = {"node_id": node["id"], "title": node["title"], "scope": node.get("scope", "legacy"),
                  "row_count": 1, "row_ids": [], "write_mode": "proposal" if single else node["write_mode"],
-                 "worker_connected": any(node["capability"] in w["capabilities"] and (not node.get("limb_id") or node["limb_id"] == w["id"]) for w in workers)}
+                 "worker_connected": _node_connected(conn,slug,node,workers)}
+        if node.get('agent_key'):
+            entry['agent_key']=node['agent_key']
         nodes.append(entry)
         if not entry["worker_connected"]:
             errors.append({"node_id": node["id"], "message": "執行服務尚未連接，請在工作台設定連接對應 Worker"})
@@ -447,7 +468,7 @@ def start(conn, me, slug, key, body):
             raise ExecutionError(400, "選取列已不存在，請重新讀取表格")
     workers = limbs.connected_workers(conn, slug)
     for node in value["nodes"]:
-        if not any(node["capability"] in w["capabilities"] and (not node.get("limb_id") or node["limb_id"] == w["id"]) for w in workers):
+        if not _node_connected(conn,slug,node,workers):
             raise ExecutionError(409, f"尚未連接 {node['capability']} 手腳；請先註冊並啟動對應 Worker")
     for row_id in rows or [""]:
         for node in value["nodes"]:
@@ -592,7 +613,7 @@ def _start_scoped(conn, me, slug, key, body, value, revision):
     for node in value["nodes"]:
         if node["id"] not in active:
             continue
-        if not any(node["capability"] in w["capabilities"] and (not node.get("limb_id") or node["limb_id"] == w["id"]) for w in workers):
+        if not _node_connected(conn,slug,node,workers):
             raise ExecutionError(409, f"尚未連接 {node['capability']} 手腳；請先註冊並啟動對應 Worker")
         if node.get("scope") != "rows":
             _check_cell_target(conn, slug, node["target"])
@@ -724,6 +745,8 @@ def detail(conn, slug, key, identifier):
 
 def control(conn, me, slug, key, identifier, action):
     _write_permission(me)
+    from project_assistant import orchestrator,orchestration_flow
+    orchestrator.lock_project(conn,slug)
     run = _get_run(conn, identifier, slug, key, lock=True)
     if run["created_by"] != me.actor_id and me.role != "admin":
         raise ExecutionError(403, "只有發起人或管理者能控制此工作流")
@@ -735,6 +758,8 @@ def control(conn, me, slug, key, identifier, action):
         else:
             if run["status"] not in ("failed", "canceled"):
                 raise ExecutionError(409, "只能重試失敗或取消的執行")
+            orchestration_flow.reset_for_flow_retry(conn,slug,identifier)
+            run['execution']=_get_run(conn,identifier)['execution']
             cur.execute("""UPDATE projectops.limb_task SET status='blocked',attempts=0,error=NULL,lease_hash=NULL,lease_until=NULL,
                            proposal_id=NULL,target_snapshot=NULL,output=NULL,updated_at=NOW()
                            WHERE run_id=%s AND status IN ('failed','canceled','blocked')""", (identifier,))
@@ -751,14 +776,9 @@ def _creator(conn, run):
     return service.Identity(member["actor_id"], member["name"], member["role"])
 
 
-def _snapshot(conn, slug, target):
-    if not target.get("tab_key"):
-        return None
-    tab = repo.get_tab(conn, slug, target["tab_key"])
-    if not tab:
-        raise ExecutionError(409, "輸出分頁已刪除")
-    return {"doc": tab["doc"], "revision": tab["revision"], "title": tab["title"],
-            "values": repo.field_values(conn, slug).get(target["tab_key"], {})}
+def _snapshot(conn,slug,target):
+    from project_assistant.proposal_output import snapshot_target
+    return snapshot_target(conn,slug,target)
 
 
 def _inputs(conn, run, task, node):
@@ -892,13 +912,16 @@ def claim(conn, worker):
         with conn.cursor() as cur:
             cur.execute(f"""SELECT {_TASK_COLUMNS} FROM projectops.limb_task WHERE run_id=%s AND status='queued'
                             AND capability=ANY(%s) AND (assigned_limb IS NULL OR assigned_limb=%s)
+                            AND NOT (node_id=ANY(%s))
                             ORDER BY created_at,node_id,row_id FOR UPDATE SKIP LOCKED LIMIT 1""",
-                        (run["id"], worker["capabilities"], worker["id"]))
+                        (run["id"], worker["capabilities"], worker["id"],[n['id'] for n in run['definition']['nodes'] if n.get('agent_key')]))
             row = cur.fetchone()
             if not row:
                 continue
             task = _task(row)
             node = next(n for n in run["definition"]["nodes"] if n["id"] == task["node_id"])
+            if node.get('agent_key'):
+                continue
             try:
                 _creator(conn, run)
                 if run.get("execution", {}).get("mode") == "single_step":
@@ -950,68 +973,9 @@ def renew(conn, worker, body):
     return {"task_id": task["id"], "lease_until": repo._iso(until)}
 
 
-def _result_target(conn, run, task, output):
-    target, snapshot = task["target"], task["target_snapshot"]
-    if not target.get("tab_key"):
-        return None, ""
-    if not snapshot:
-        raise ExecutionError(409, "任務缺少輸出分頁快照，請重試")
-    if target.get("kind") == "doc":
-        from project_docs.doc_schema import new_id, safe_href
-        text = output.get("text", "")
-        if not isinstance(text, str):
-            raise ExecutionError(400, "文件輸出需要 text")
-        asset_url = safe_href(output["asset_url"]) if output.get("asset_url") else None
-        if output.get("asset_url") and not asset_url:
-            raise ExecutionError(400, "文件媒體連結無效")
-        preview = text + (("\n\n" if text else "") + f"[產出媒體]({asset_url})" if asset_url else "")
-        if not preview.strip() or len(preview) > 100000:
-            raise ExecutionError(400, "文件輸出需要 1～100000 字")
-        before = snapshot["doc"].get("content", [])
-        ops = []
-        if target.get("mode", "append") == "replace":
-            ops = [{"op": "del", "bid": b["attrs"]["bid"], "base": b} for b in before]
-            previous = None
-        else:
-            previous = before[-1].get("attrs", {}).get("bid") if before else None
-        paragraphs = [[{"type": "text", "text": line}] if line else [] for line in text.splitlines()]
-        if asset_url:
-            paragraphs.append([{"type": "text", "text": "產出媒體", "marks": [{"type": "link", "attrs": {"href": asset_url}}]}])
-        for content in paragraphs:
-            bid = new_id("b")
-            ops.append({"op": "put", "bid": bid, "base": None, "after": previous,
-                        "node": {"type": "paragraph", "attrs": {"bid": bid},
-                                 "content": content}})
-            previous = bid
-        if len(ops) > 200:
-            raise ExecutionError(400, "文件輸出最多 200 個區塊操作，請縮短段落數")
-        return {"tab_key": target["tab_key"], "tab_title": snapshot["title"], "display": snapshot["title"],
-                "ops": ops, "field_edits": [], "expected_revision": snapshot["revision"]}, preview
-    if target.get("row_id") and "col_index" in target:
-        text = output.get("asset_url") if "asset_url" in output else output.get("text")
-        if not isinstance(text, (str, int, float)):
-            raise ExecutionError(400, "儲存格輸出需要 text 或已上傳的 asset_url")
-        if "asset_url" in output:
-            prefix = f"/projects/api/{run['project_slug']}/assets/"
-            asset_id = str(text)[len(prefix):] if str(text).startswith(prefix) else ""
-            if not re.fullmatch(r"pa_[0-9a-f]{32}", asset_id) or not repo.get_asset(conn, run["project_slug"], asset_id):
-                raise ExecutionError(400, "asset_url 必須指向已上傳至本專案的媒體")
-            mime, _ = repo.get_asset(conn, run["project_slug"], asset_id)
-            kind = mime.split("/", 1)[0]
-            text = f"![圖片]({text})" if kind == "image" else f"[{kind}]({text})"
-        row_edits, new_rows = [{"row_id": target["row_id"], "cells": {str(target["col_index"]): text}}], []
-    else:
-        row_edits, new_rows = output.get("row_edits", []), output.get("new_rows", [])
-        # A selected-row run cannot write other rows or append unrelated rows.
-        if task["row_id"] and (new_rows or any(e.get("row_id") != task["row_id"] for e in row_edits if isinstance(e, dict))):
-            raise ExecutionError(400, "批次任務只能寫入自己選取的列")
-    try:
-        ops, fields, preview = table_edits.prepare(snapshot["doc"], row_edits, new_rows, snapshot["values"], output.get("table_id"))
-    except ValueError as exc:
-        raise ExecutionError(400, str(exc)) from exc
-    return {"tab_key": target["tab_key"], "tab_title": snapshot["title"], "display": snapshot["title"],
-            "ops": ops, "field_edits": fields,
-            **({"expected_revision": snapshot["revision"]} if new_rows else {})}, preview
+def _result_target(conn,run,task,output):
+    from project_assistant.proposal_output import prepare_output
+    return prepare_output(task["target"],task["target_snapshot"],output,conn=conn,slug=run["project_slug"],row_id=task["row_id"])
 
 
 def complete(conn, worker, body):
@@ -1065,6 +1029,9 @@ def proposal_decided(conn, proposal_id, applied):
         cur.execute("SELECT run_id FROM projectops.limb_task WHERE proposal_id=%s", (proposal_id,))
         row = cur.fetchone()
     if not row:
+        return
+    from project_assistant.orchestration_store import one
+    if one(conn,'''SELECT t.id FROM projectops.orchestration_task t JOIN projectops.limb_task l ON l.id=t.flow_task_id WHERE l.proposal_id=%s''',(proposal_id,)):
         return
     run = _get_run(conn, str(row[0]), lock=True)
     with conn.cursor() as cur:

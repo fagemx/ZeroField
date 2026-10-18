@@ -32,6 +32,7 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
   const selectedId = selectedIds.at(-1) || null;
   const selected = definition?.nodes.find((node) => node.id === selectedId);
   const [workers, setWorkers] = useState([]);
+  const [agents, setAgents] = useState([]);
   const [runs, setRuns] = useState([]);
   const [runId, setRunId] = useState("");
   const [detail, setDetail] = useState(null);
@@ -93,7 +94,8 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
     let alive = true, timer;
     const poll = async () => {
       try {
-        const [workerData, runData] = await Promise.all([api.get(`/projects/api/limbs?project_slug=${encodeURIComponent(slug)}`), api.get(`${base}/runs`)]);
+        const [workerData, runData, agentData] = await Promise.all([api.get(`/projects/api/limbs?project_slug=${encodeURIComponent(slug)}`), api.get(`${base}/runs`), api.get(`/projects/api/${slug}/agents`)]);
+        if (alive) setAgents(agentData.agents || []);
         if (alive) { setWorkers(workerData.limbs || workerData.workers || []); setRuns(runData.runs || []); setRunId((current) => current || runData.runs?.[0]?.id || ""); }
       } catch (problem) { if (alive) setError(problem.message); }
       if (alive) timer = setTimeout(poll, 5000);
@@ -199,7 +201,7 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
     </div>
       {adding && <aside className="flow-sidepanel" aria-label="新增工作步驟"><div className="flow-panel-title"><strong>選擇要做的工作</strong><button aria-label="關閉新增步驟" onClick={() => setAdding(false)}>×</button></div><div className="flow-kind-list">{Object.entries(STEP_KINDS).map(([kind, preset]) => <button key={kind} onClick={() => add(kind)}><strong>{preset.title}</strong><small>{preset.description}</small></button>)}</div></aside>}
       {preview && <FlowPreflight preview={preview} busy={busy} writable={writable} onClose={() => setPreview(null)} onFocus={focusNode} onExecute={execute} />}
-      {selected && !preview && !adding && <FlowInspector {...{ selected, selectedId, definition, tabs, tab, workers, writable, busy, sourceDoc, sourceTables, sourceTable, targetTables, targetTable, sourceKey, targetKey, samples, sampleRow, update, change, connect }}
+      {selected && !preview && !adding && <FlowInspector {...{ selected, selectedId, definition, tabs, tab, workers, agents, writable, busy, sourceDoc, sourceTables, sourceTable, targetTables, targetTable, sourceKey, targetKey, samples, sampleRow, update, change, connect }}
         onEditStart={() => { editStart.current = definition; }} onEditEnd={finishEdit}
         tasks={tasks.filter((task) => task.node_id === selectedId)} onClose={() => select(null)} onSample={(id) => { setSampleRow(id); setPreview(null); }} onRemove={() => removeNodes([selectedId])} onTest={() => check(true)} onResults={() => setResultsOpen(true)}
         onRefresh={() => work(async () => { setSourceDoc(docResponse(await api.get(`/projects/api/${slug}/tabs/${sourceKey}`))); setPreview(null); })} />}

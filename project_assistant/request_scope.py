@@ -25,6 +25,23 @@ def validate_scope(raw, tab, values):
         raise ValueError("找不到本次處理範圍，請重新選取資料")
     if type(raw.get("base_revision")) is not int or raw["base_revision"] != tab.get("revision"):
         raise ValueError("來源已更新，請回到表格確認並重新選取處理範圍")
+    if raw.get('kind')=='doc':
+        ids=raw.get('block_ids')
+        blocks={b.get('attrs',{}).get('bid'):b for b in tab['doc'].get('content',[])}
+        if not isinstance(ids,list) or not 0<len(ids)<=200 or any(not isinstance(k,str) or k not in blocks for k in ids) or len(set(ids))!=len(ids):
+            raise ValueError('選取段落已改變或不存在，請重新選取')
+        selected=[blocks[k] for k in ids]
+        fids=set()
+        def visit(node):
+            fid=node.get('attrs',{}).get('fid')
+            if fid: fids.add(fid)
+            for child in node.get('content',[]): visit(child)
+        for block in selected: visit(block)
+        fingerprint=hashlib.sha256(json.dumps([selected,{k:values.get(k) for k in sorted(fids)}],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+        return {'kind':'doc','target_tab':tab['key'],'tab_title':tab.get('title',tab['key']),
+                'base_revision':tab['revision'],'block_ids':list(ids),'fingerprint':fingerprint}
+    if raw.get('kind') not in (None,'sheet'):
+        raise ValueError('處理範圍型態不正確')
     table = _tables(tab).get(raw.get("table_id"))
     if not table: raise ValueError("本次處理的工作表已不存在")
     rows = {r.get("attrs", {}).get("bid"): r for r in table.get("content", []) if not all(c.get("type") == "tableHeader" for c in r.get("content", []))}
@@ -49,13 +66,15 @@ def validate_scope(raw, tab, values):
 def verify_source(scope, tab, values):
     """Rebase unrelated edits while retaining every selected input's fingerprint."""
     current = validate_scope({**scope, "base_revision": tab["revision"]}, tab, values)
-    if current["fingerprint"] != scope.get("fingerprint") or current["column_indices"] != scope.get("column_indices"):
+    if current["fingerprint"] != scope.get("fingerprint") or current.get("column_indices") != scope.get("column_indices"):
         raise ValueError("本次選取的來源已變更，請重新核對來源再產生提案")
     return current
 
 
 def guard_edits(scope, tab, values, row_edits, new_rows, table_id):
     if not scope: return
+    if scope.get('kind')=='doc':
+        raise ValueError('本次只修改選取段落，不能改表格')
     current = validate_scope(scope, tab, values)
     if current["fingerprint"] != scope.get("fingerprint"):
         raise ValueError("本次選取的內容已更新，請重新核對來源再提出修改")
@@ -65,3 +84,21 @@ def guard_edits(scope, tab, values, row_edits, new_rows, table_id):
     for edit in row_edits:
         if edit.get("row_id") not in scope["row_ids"] or not set(edit.get("cells", {})).issubset(allowed):
             raise ValueError("修改超出使用者固定的列／欄範圍，請限制在本次選取資料")
+
+
+def guard_child_scope(parent,child):
+    if not parent:
+        return
+    if not child or parent.get('kind','sheet')!=child.get('kind','sheet') or parent['target_tab']!=child['target_tab']:
+        raise ValueError('子任務不能擴大父任務的處理範圍')
+    if parent.get('kind')=='doc':
+        if not set(child['block_ids']).issubset(parent['block_ids']):
+            raise ValueError('子任務不能修改未選取的段落')
+    elif (parent['table_id']!=child['table_id'] or not set(child['row_ids']).issubset(parent['row_ids'])
+          or not set(child['column_ids']).issubset(parent['column_ids'])):
+        raise ValueError('子任務不能修改未選取的列欄')
+
+
+def for_model(scope):
+    """Keep the server's content fingerprint out of model and adapter payloads."""
+    return {key:value for key,value in scope.items() if key!='fingerprint'} if scope else None

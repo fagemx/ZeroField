@@ -9,9 +9,9 @@ import sys
 import urllib.error
 import urllib.request
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tool_specs import TOOL_NAMES, TOOLS  # noqa: E402
+from project_assistant.tool_specs import TOOL_NAMES, TOOLS  # noqa: E402
 
 PROTOCOL = "2025-06-18"
 

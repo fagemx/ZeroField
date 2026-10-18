@@ -1,11 +1,19 @@
 import io
 import json
 import unittest
+import urllib.error
 
 from project_assistant import providers, worker
 
 
 class ProviderTests(unittest.TestCase):
+    def test_provider_error_body_is_not_persisted_or_echoed_as_a_secret(self):
+        def opener(request,timeout):
+            raise urllib.error.HTTPError(request.full_url,401,'Unauthorized',{},io.BytesIO(b'provider echoed private-fixture-secret'))
+        result=providers.run_openai_compat_turn(config=providers.ProviderConfig('openai_compat','http://127.0.0.1/v1','private-fixture-secret','fixture'),
+            instructions='',turn_text='',call_tool=lambda *_:'',timeout=5,opener=opener)
+        self.assertEqual(result.error_kind,'auth')
+        self.assertNotIn('private-fixture-secret',result.error)
     def test_default_is_standard_api_and_cli_is_explicit(self):
         self.assertEqual(providers.provider_from_env({}).kind, "openai_compat")
         configured = worker.settings_from_env({"OPENBENCH_PROVIDER": "codex_cli", "OPENBENCH_MODEL": "chosen-model"})

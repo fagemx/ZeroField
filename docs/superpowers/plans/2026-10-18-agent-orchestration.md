@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 本文件日期：2026-10-18（Asia/Taipei）。狀態：**執行計畫已編寫；M8 尚未實作／驗收**。本次授權範圍是接手寫 plan。
+- 本文件日期：2026-10-18（Asia/Taipei）。狀態：**使用者已授權依序實作全部階段，並明確要求 ACP**。A～D 已完成實作與本機驗證；E1 最終審查與交接持續記錄於驗證報告。
 - 接手基準 SHA：`72670290a9c60737478f2becc89c77110948a031`。當時工作區已有未追蹤的 `docs/AGENT_ORCHESTRATION_SPEC.md`；保留這份交接成果。開工前重新核對 HEAD／工作區差異。
 - 所有產品修改在 OpenBench 範圍內；參考庫只讀，不複製私人平台程式／業務資料，不引入公司內部識別資訊。
 - 延續「建立專案 → 放入文件／表格 → 描述工作 → 核對提案 → 確認寫回」；空白專案預設不變；**影片僅附件與下載，不顯示播放器**。
@@ -65,9 +65,9 @@
 | M8-B | B1～B6 | 持久化 DAG、精確租約、問題／提案閘門、對話與 Flow／遠端手腳打通 | A |
 | M8-C | C1～C2 | 2～3 候選選用、集中看板、表格／段落交辦 | B |
 | 驗證交接 | E1 | 三類合成工作操作證據、回歸及部署界線 | A～C |
-| M8-D 選配 | D1 | 一個實測 ACP adapter ＋ mock 契約測試 | B、E1；獨立排程 |
+| M8-D 本輪必交付 | D1 | 一個實測 ACP adapter ＋ mock 契約測試 | B、C；E1 前驗證 |
 
-主路徑：`A1 → A2 → A3 → B1 → B2 → B3 → B4 → B5 → B6 → C1 → C2 → E1`。預設循序施工；先交付 A 的可操作版本，再開 B。D 不阻塞 A～C。
+本輪實際主路徑：`A1 → A2 → A3 → B1 → B2 → B3 → B4 → B5 → B6 → C1 → C2 → D1 → E1`。預設循序施工；先交付 A 的可操作版本，再開 B。D 不阻塞 A～C。
 
 - `agent_registry.py`：profile 種子／設定／路由／公開 roster；`agent_policy.py`：工具及 action 白名單；`agent_runtime.py`：兩種任務共用的模型執行入口。
 - `orchestrator.py`：交易狀態轉換；`orchestration_store.py`：集中 SQL／claim／查詢，不另造通用 repository framework；`orchestration_service.py`：HTTP 權限與 payload。
@@ -147,7 +147,7 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `ensure_default_agents(conn, slug)->None`; `get_agent(conn,slug,key)->dict|None`; `list_agents(conn,slug,*,capability=None,labels=None)->list[dict]`; `save_agent(conn,me,slug,body)->dict`; `resolve_mention(conn,slug,text,explicit_key=None)->str`; `tool_specs_for(profile)->list[dict]`; `authorize_tool(ctx,conn,name,args)->None`（拒絕 raise ToolError）。A1 即在 `ToolContext` 加 `agent_key='coordinator'`，其餘 execution 欄位由 B1 補上。
 
-- [ ] **1. 寫失敗測試。** `test_defaults_are_idempotent`：重跑 seed 恰好四個 key，自訂 prompt／停用狀態不被覆蓋；既有專案 migration backfill＋新專案 create 都有角色。`test_profile_validation`：observer、unknown tool、0/33 concurrency、跨專案 bound limb 被拒；editor 不存在，member 不可改設定。
+- [x] **1. 寫失敗測試。** `test_defaults_are_idempotent`：重跑 seed 恰好四個 key，自訂 prompt／停用狀態不被覆蓋；既有專案 migration backfill＋新專案 create 都有角色。`test_profile_validation`：observer、unknown tool、0/33 concurrency、跨專案 bound limb 被拒；editor 不存在，member 不可改設定。
 
   此處與後續範例使用各測試 setUp 建立的隔離 `self.conn/self.slug/self.me`；沿用現有 PostgreSQL fixture 方式，測試自己的 teardown 依 FK 順序清理。
 
@@ -158,10 +158,10 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
       self.assertEqual({p['agent_key'] for p in agent_registry.list_agents(self.conn, self.slug)},
                        {'coordinator', 'doc_writer', 'sheet_ops', 'qa_critic'})
   ```
-- [ ] **2. 執行確認 red。** `python -m unittest discover -s tests -p test_agent_registry.py -v`；預期新模組／契約尚不存在而失敗，不接受缺 DB 造成 skip 作 red。
-- [ ] **3. 實作 registry／migration／policy。** 158 只加 profile、message.agent_key、proposal.agent_key、種子所需欄位；依具體工具名產生種子、profile 管理留 audit。ensure_schema 完成 DDL 後對既有 project 呼叫 seed，create_project 同交易 seed；種子插入用 ON CONFLICT DO NOTHING，不重置舊訊息。舊訊息缺省 coordinator。讀取 GET 不靠稍後 rollback 的 seed 寫入初始化。
-- [ ] **4. 執行 green 與行為負例。** 同命令通過；`test_qa_cannot_change_status` 斷言 QA `propose(action='改狀態')` 拒絕且 proposal count 不變，合法標註可建立；API payload／log 不含任何測試 secret。
-- [ ] **5. 記錄並提交此 slice。** 僅 stage 此任務實際差異，建議 `feat: add project agent profiles and tool policy`。依當時工作區／使用者提交規則執行，勿攜帶他人未提交成果。
+- [x] **2. 執行確認 red。** `python -m unittest discover -s tests -p test_agent_registry.py -v`；預期新模組／契約尚不存在而失敗，不接受缺 DB 造成 skip 作 red。
+- [x] **3. 實作 registry／migration／policy。** 158 只加 profile、message.agent_key、proposal.agent_key、種子所需欄位；依具體工具名產生種子、profile 管理留 audit。ensure_schema 完成 DDL 後對既有 project 呼叫 seed，create_project 同交易 seed；種子插入用 ON CONFLICT DO NOTHING，不重置舊訊息。舊訊息缺省 coordinator。讀取 GET 不靠稍後 rollback 的 seed 寫入初始化。
+- [x] **4. 執行 green 與行為負例。** 同命令通過；`test_qa_cannot_change_status` 斷言 QA `propose(action='改狀態')` 拒絕且 proposal count 不變，合法標註可建立；API payload／log 不含任何測試 secret。
+- [x] **5. 記錄並提交此 slice。** 僅 stage 此任務實際差異，建議 `feat: add project agent profiles and tool policy`。依當時工作區／使用者提交規則執行，勿攜帶他人未提交成果。
 
 ### Task A2：每角色 provider 與可靠的並行回覆
 
@@ -169,7 +169,7 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `open_reply(conn,slug,owner_id,agent_key=None)->dict|None`（None 保留任一角色查詢）；`add_user_message(conn,slug,owner_id,body,notes,request_scope=None,*,agent_key='coordinator')->tuple[int,int]`；`run_agent(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on_tool=None,images=())->Outcome`。Outcome 將現有 worker dataclass 移至 agent_runtime，worker import，避免循環依賴。Provider/Responses 原 run 函式加 `tool_specs=None`，None 僅供舊 caller 相容；profile runtime 一律傳明確清單。
 
-- [ ] **1. 寫失敗測試。** `test_two_roles_can_queue_same_owner` 斷言 doc_writer 與 sheet_ops 同時 200，同角色第二筆 409；`test_concurrent_same_role_has_one_reply` 用兩連線 barrier 送同角色，只產生一組 user/reply。`test_all_provider_paths_reject_disallowed_tool` 覆蓋 openai_compat、Responses、MCP 強行呼叫禁止工具。
+- [x] **1. 寫失敗測試。** `test_two_roles_can_queue_same_owner` 斷言 doc_writer 與 sheet_ops 同時 200，同角色第二筆 409；`test_concurrent_same_role_has_one_reply` 用兩連線 barrier 送同角色，只產生一組 user/reply。`test_all_provider_paths_reject_disallowed_tool` 覆蓋 openai_compat、Responses、MCP 強行呼叫禁止工具。
 
   ```python
   def test_two_roles_can_queue_same_owner(self):
@@ -177,10 +177,10 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
       self.assertEqual(service.send(self.conn, self.me, self.slug, {'text': '核對表格', 'agent_key': 'sheet_ops'})[0], 200)
       self.assertEqual(service.send(self.conn, self.me, self.slug, {'text': '再寫一段', 'agent_key': 'doc_writer'})[0], 409)
   ```
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p test_agent_runtime.py -v`，上述斷言在現況失敗。
-- [ ] **3. 接線。** 以 owner row／交易鎖序列化 enqueue，配合 `(project_slug,owner_id,agent_key)` 在 assistant queued/running 的 partial unique index；歷史重複 active reply 先保留最早一筆，其餘標 failed 並記 migration audit。158 加 message.agent_snapshot JSONB 保存本次名稱／設定及工具清單（不含 secret），profile 設定變更不重寫歷史；仍即時檢查停用／撤權。訊息查詢／claim 都帶 agent_key。從 worker 提取模型呼叫至 run_agent，保留現有 streaming／附件／privacy，不複製第二份 tool loop。MCP tools/list 從經驗證的 ToolHost 取得該回合工具表。
-- [ ] **4. 跑 green。** 新測試及 `test_providers.py` 通過；不同 profile endpoint/model 接到各自 fixture；指定 provider 失敗不偷偷換供應商；撤銷角色／成員後工具呼叫無副作用。歷史依原 reply_to 所在 conversation 讀取，不使用當下 active conversation。
-- [ ] **5. 提交 slice。** 建議 `feat: route assistant turns through agent profiles`；A1/A2 尚未發佈時才可一起整理 158，發佈後修正須新 migration。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p test_agent_runtime.py -v`，上述斷言在現況失敗。
+- [x] **3. 接線。** 以 owner row／交易鎖序列化 enqueue，配合 `(project_slug,owner_id,agent_key)` 在 assistant queued/running 的 partial unique index；歷史重複 active reply 先保留最早一筆，其餘標 failed 並記 migration audit。158 加 message.agent_snapshot JSONB 保存本次名稱／設定及工具清單（不含 secret），profile 設定變更不重寫歷史；仍即時檢查停用／撤權。訊息查詢／claim 都帶 agent_key。從 worker 提取模型呼叫至 run_agent，保留現有 streaming／附件／privacy，不複製第二份 tool loop。MCP tools/list 從經驗證的 ToolHost 取得該回合工具表。
+- [x] **4. 跑 green。** 新測試及 `test_providers.py` 通過；不同 profile endpoint/model 接到各自 fixture；指定 provider 失敗不偷偷換供應商；撤銷角色／成員後工具呼叫無副作用。歷史依原 reply_to 所在 conversation 讀取，不使用當下 active conversation。
+- [x] **5. 提交 slice。** 建議 `feat: route assistant turns through agent profiles`；A1/A2 尚未發佈時才可一起整理 158，發佈後修正須新 migration。
 
 ### Task A3：選角、點名與多角色 UI
 
@@ -188,7 +188,7 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `AgentSelector({agents,value,onChange,disabled})`；`resolveAgentTarget(text,explicitKey,agents)` 與後端 A1 使用相同 fixture 語意；`openReplies(thread)->Map<agent_key,message>`；hook 回傳 `selectedAgent,setSelectedAgent,busyForSelectedAgent,anyReplyBusy`，`send(text,{agentKey}={})`。
 
-- [ ] **1. 寫失敗測試。** Node `test('other agent running does not block selected agent')`；mention fixture 覆蓋明確鍵、中文顯示名、底線、停用、重名、email、member token、code／quote、兩 agent 歧義。`test('failed send preserves draft scope and attachments')` 測實際送出狀態 reducer。
+- [x] **1. 寫失敗測試。** Node `test('other agent running does not block selected agent')`；mention fixture 覆蓋明確鍵、中文顯示名、底線、停用、重名、email、member token、code／quote、兩 agent 歧義。`test('failed send preserves draft scope and attachments')` 測實際送出狀態 reducer。
 
   ```js
   test('other agent running does not block selected agent', () => {
@@ -197,10 +197,10 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
     assert.equal(busy.has('sheet_ops'), false);
   });
   ```
-- [ ] **2. 跑 red。** `node --test ui/tests/agents.test.mjs`；應因待新增純函式／語意失敗。
-- [ ] **3. 實作。** 下拉與 @ autocomplete 共用 roster；訊息包括執行當時名稱／模型，profile 後來改名不回寫歷史。Composer busy 只管選定角色，conversation 控制用 anyReplyBusy。管理設定提供 prompt、具體工具清單、provider reference 及啟用開關，錯誤原位保留；非 admin 不顯示可修改 controls。
-- [ ] **4. 跑 green／操作。** Node tests、`npm run build --prefix ui`；以 fixture worker 操作兩角色並行、中文 IME Enter 不誤送、切角色不丟草稿／範圍、失敗不清附件、停用後不能送出。1280×720 選單不遮住輸入與送出；記錄截圖。
-- [ ] **5. 提交與 A 驗收。** 建議 `feat: add agent selection and profile settings`。全套後端／前端回歸成功且角色端到端走通，才標 M8-A 工程交付。
+- [x] **2. 跑 red。** `node --test ui/tests/agents.test.mjs`；應因待新增純函式／語意失敗。
+- [x] **3. 實作。** 下拉與 @ autocomplete 共用 roster；訊息包括執行當時名稱／模型，profile 後來改名不回寫歷史。Composer busy 只管選定角色，conversation 控制用 anyReplyBusy。管理設定提供 prompt、具體工具清單、provider reference 及啟用開關，錯誤原位保留；非 admin 不顯示可修改 controls。
+- [x] **4. 跑 green／操作（真 IME／125% 未實測，見驗證界線）。** Node tests、`npm run build --prefix ui`；以 fixture worker 操作兩角色並行、中文 IME Enter 不誤送、切角色不丟草稿／範圍、失敗不清附件、停用後不能送出。1280×720 選單不遮住輸入與送出；記錄截圖。
+- [x] **5. 提交與 A 驗收。** 建議 `feat: add agent selection and profile settings`。全套後端／前端回歸成功且角色端到端走通，才標 M8-A 工程交付。
 
 ## 5. M8-B：編排核心與執行接合
 
@@ -210,11 +210,11 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `create_run(conn,me,slug,objective,*,client_request_id,limits=None,conversation_id=None,deadline_at=None)->dict`; `create_task(conn,me,slug,run_id,*,objective,agent_key=None,label_selector=None,scope=None,target=None,depends_on=(),strategy='single',write_mode='proposal',parent_dispatch_id=None)->dict`；`ready_tasks(conn,slug,run_id)->list[dict]`。`ToolContext` 新增 optional `agent_key,dispatch_id,admission_no,lease_token,scope,write_mode`（舊 caller 相容，dispatch context 只由 runtime 填）。
 
-- [ ] **1. 寫失敗測試。** `test_same_request_id_creates_one_run`、`test_dependency_must_be_same_run_and_acyclic`、`test_child_scope_cannot_expand`、`test_snapshot_is_stable_after_tab_edit`、`test_analysis_only_cannot_propose`。新增/舊 schema 重跑兩次、刪除測試專案都驗證 FK 正確。
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestrator.py -v`。
-- [ ] **3. 實作。** 依 §3 建表及狀態約束；保留原五元組，不另加事件總線。scope 嚴格驗證原值／固定欄位 id，doc scope 覆蓋 annotation actions；target 與 input snapshot 同交易取得。200 上限計算持久 task，fanout slot 另限制 200、race 3，不准繞過上限產生無限 dispatch。
-- [ ] **4. 跑 green。** 斷言 201st task 拒絕、200 accepted；跨專案／自依賴／cycle 不留下半成品；model 傳 actor/chain 被拒。test DB cleanup 更新為按 FK 順序清理，禁止以關閉 constraint 解決。
-- [ ] **5. 提交 slice。** 建議 `feat: persist orchestration runs tasks and snapshots`。
+- [x] **1. 寫失敗測試。** `test_same_request_id_creates_one_run`、`test_dependency_must_be_same_run_and_acyclic`、`test_child_scope_cannot_expand`、`test_snapshot_is_stable_after_tab_edit`、`test_analysis_only_cannot_propose`。新增/舊 schema 重跑兩次、刪除測試專案都驗證 FK 正確。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestrator.py -v`。
+- [x] **3. 實作。** 依 §3 建表及狀態約束；保留原五元組，不另加事件總線。scope 嚴格驗證原值／固定欄位 id，doc scope 覆蓋 annotation actions；target 與 input snapshot 同交易取得。200 上限計算持久 task，fanout slot 另限制 200、race 3，不准繞過上限產生無限 dispatch。
+- [x] **4. 跑 green。** 斷言 201st task 拒絕、200 accepted；跨專案／自依賴／cycle 不留下半成品；model 傳 actor/chain 被拒。test DB cleanup 更新為按 FK 順序清理，禁止以關閉 constraint 解決。
+- [x] **5. 提交 slice。** 建議 `feat: persist orchestration runs tasks and snapshots`。
 
 ### Task B2：Admission、租約、容量與恢復
 
@@ -222,11 +222,11 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `spawn_dispatch(conn,slug,task_id,*,agent_key,slot_key,caller_dispatch_id=None,requested_deadline=None)->dict`; `claim_dispatch(conn,worker_id,supported_agent_keys,*,allowed_projects,lease_seconds=120)->dict|None`; `renew_dispatch(conn,identity,handle,lease_token)->dict`; `complete_dispatch(conn,identity,handle,lease_token,*,outcome,output,proposal_ids)->dict`; `cancel_dispatch(conn,me,slug,handle,reason)->dict`; `sweep(conn)->int`。caller chain 從 DB 建構，沒有模型傳 chain 參數。
 
-- [ ] **1. 寫失敗測試。** `test_stale_completion_after_retry`：取 attempt1→取消→重試 attempt2→回傳 attempt1，回 `STALE_DISPATCH`，attempt2、proposal、asset count 都不變。`test_claim_capacity_across_two_connections`：profile=2、run=6 不超額；`test_worker_done_is_written_once` 同 output 重播無第二事件，不同 output 回 409。
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p 'test_orchestrat*.py' -v`（同一 process 序列執行）。
-- [ ] **3. 實作。** claim 使用 `FOR UPDATE SKIP LOCKED`，容量以 profile／run 鎖與 DB count 計算，不能只靠 Python pool。lease 完整核對 project、task、dispatch、admission、worker、token、expiry、superseded；progress／媒體／提案寫入同樣檢查。過期重派新 dispatch；retry budget 用 task slot 記錄，不重設。深度預設 1、循環、deadline clamp 皆在控制面。
-- [ ] **4. 跑 green。** `test_parent_cancel_stops_descendants`、`test_crash_after_commit_before_reply_is_idempotent`、`test_expired_lease_requeues_with_new_admission`、`test_second_failure_is_terminal`、`test_child_deadline_cannot_exceed_parent` 及 worker 無 spawn 權限測試通過；終結消息不因 finally＋sweeper 重複。
-- [ ] **5. 提交 slice。** 建議 `feat: enforce orchestration admission and lease fencing`。
+- [x] **1. 寫失敗測試。** `test_stale_completion_after_retry`：取 attempt1→取消→重試 attempt2→回傳 attempt1，回 `STALE_DISPATCH`，attempt2、proposal、asset count 都不變。`test_claim_capacity_across_two_connections`：profile=2、run=6 不超額；`test_worker_done_is_written_once` 同 output 重播無第二事件，不同 output 回 409。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p 'test_orchestrat*.py' -v`（同一 process 序列執行）。
+- [x] **3. 實作。** claim 使用 `FOR UPDATE SKIP LOCKED`，容量以 profile／run 鎖與 DB count 計算，不能只靠 Python pool。lease 完整核對 project、task、dispatch、admission、worker、token、expiry、superseded；progress／媒體／提案寫入同樣檢查。過期重派新 dispatch；retry budget 用 task slot 記錄，不重設。深度預設 1、循環、deadline clamp 皆在控制面。
+- [x] **4. 跑 green。** `test_parent_cancel_stops_descendants`、`test_crash_after_commit_before_reply_is_idempotent`、`test_expired_lease_requeues_with_new_admission`、`test_second_failure_is_terminal`、`test_child_deadline_cannot_exceed_parent` 及 worker 無 spawn 權限測試通過；終結消息不因 finally＋sweeper 重複。
+- [x] **5. 提交 slice。** 建議 `feat: enforce orchestration admission and lease fencing`。
 
 ### Task B3：共用 runtime、六工具、問題 Gate 與背景回覆
 
@@ -234,11 +234,11 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** 六工具參數沿用規格 §3.3（`scope.tab_key` 僅在外層正規化為 `target_tab`）；內部 `open_gate(conn,ctx,*,question,options,blocking_task_ids=())->dict`；`resolve_gate(conn,me,slug,gate_id,*,resolution,client_request_id)->dict`；`execute_dispatch(connection_factory,claim,settings,worker_id)->str`；`finish_run_notice(conn,run_id)->int|None`。
 
-- [ ] **1. 寫失敗測試。** `test_tool_spawn_survives_connection_close`；`test_gate_resume_uses_new_admission`；`test_wait_with_full_pool_returns_handle`；`test_coordinator_receives_one_summary_in_original_conversation`。主控建立兩獨立子任務與一 join，只有子任務完成／已接受才解鎖 join。
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p test_delegation_tools.py -v` 與 `python -m unittest discover -s tests -p test_orchestration_worker.py -v`。
-- [ ] **3. 實作。** 明確列出 mutating tools，先提交再 bounded wait。A 的種子只含當時已實作的工具；B 首次啟用時，僅對 allowed_tools 仍等於 A 原始種子的內建角色補入委派／提問權限，自訂過的 profile 保留原清單並在管理 UI 提示可選新工具。測試 `test_upgrade_preserves_custom_tool_policy`。worker 輪詢 chat 與 dispatch 輪流取件，共用同一 concurrency budget；排隊公平，不讓長隊餓死另一類。runtime 注入固定 profile／snapshot／scope；finally 記成功／失敗／提問收據，程序被殺由 sweeper 接手。只消費有權限的 run messages；ack 只作用於自身收件目標。
-- [ ] **4. 跑 green。** 問題 1/6 個選項拒絕、2/5 個接受；同 gate 重播不續跑兩次；已取消 gate 不復活；annotation／dispatch output 中注入角色變更無效。`wait=true` 使用 mock clock 驗證至多 5 秒，等候期間沒有未提交 DB transaction。
-- [ ] **5. 提交 slice。** 建議 `feat: execute delegated tasks and resumable decision gates`。此任務先提供受測工具／service，完整使用者路由在 B6 接入。
+- [x] **1. 寫失敗測試。** `test_tool_spawn_survives_connection_close`；`test_gate_resume_uses_new_admission`；`test_wait_with_full_pool_returns_handle`；`test_coordinator_receives_one_summary_in_original_conversation`。主控建立兩獨立子任務與一 join，只有子任務完成／已接受才解鎖 join。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p test_delegation_tools.py -v` 與 `python -m unittest discover -s tests -p test_orchestration_worker.py -v`。
+- [x] **3. 實作。** 明確列出 mutating tools，先提交再 bounded wait。A 的種子只含當時已實作的工具；B 首次啟用時，僅對 allowed_tools 仍等於 A 原始種子的內建角色補入委派／提問權限，自訂過的 profile 保留原清單並在管理 UI 提示可選新工具。測試 `test_upgrade_preserves_custom_tool_policy`。worker 輪詢 chat 與 dispatch 輪流取件，共用同一 concurrency budget；排隊公平，不讓長隊餓死另一類。runtime 注入固定 profile／snapshot／scope；finally 記成功／失敗／提問收據，程序被殺由 sweeper 接手。只消費有權限的 run messages；ack 只作用於自身收件目標。
+- [x] **4. 跑 green。** 問題 1/6 個選項拒絕、2/5 個接受；同 gate 重播不續跑兩次；已取消 gate 不復活；annotation／dispatch output 中注入角色變更無效。`wait=true` 使用 mock clock 驗證至多 5 秒，等候期間沒有未提交 DB transaction。
+- [x] **5. 提交 slice。** 建議 `feat: execute delegated tasks and resumable decision gates`。此任務先提供受測工具／service，完整使用者路由在 B6 接入。
 
 ### Task B4：提案產出、核對與下游一致性
 
@@ -246,11 +246,11 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `snapshot_target(conn,slug,target)->dict`; `prepare_output(target,snapshot,output)->tuple[dict,str]`（沿用現有 doc/table ops 及 CAS）；`on_proposal_decided(conn,proposal_id,applied)->None`；`attach_proposal(conn,ctx,proposal_id)->None`。所有關聯與寫入使用呼叫者交易，不自行 commit。
 
-- [ ] **1. 寫失敗測試。** `test_apply_advances_task_in_same_transaction`；`test_dismiss_blocks_join`；`test_multi_proposal_requires_all_applied`；`test_orchestration_proposal_rejects_partial_groups`；`test_doc_output_uses_original_block_bases`；`test_canceled_dispatch_cannot_create_proposal_via_tool_host`。
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_proposals.py -v`。
-- [ ] **3. 實作。** 工具產出的所有 proposal 綁有效 dispatch，不信模型上報任意 proposal id；檢查 owner/project/scope。整合 `_own_pending` 依 §3 鎖序先鎖 run/task，再鎖 proposal/tab。apply、dismiss、失敗都同步通知兩引擎；source conflict 回 409 保留 pending，不能吞成 200 成功。
-- [ ] **4. 跑 green。** 以失敗注入證明寫回後通知出錯時整筆 rollback；target lock／來源 fingerprint 改動不寫入；非 race 一般聊天局部核對仍成功；`test_request_review*.py`、`test_table_proposals.py`、`test_execution.py` 回歸通過。
-- [ ] **5. 提交 slice。** 建議 `feat: advance orchestration only after proposal acceptance`。
+- [x] **1. 寫失敗測試。** `test_apply_advances_task_in_same_transaction`；`test_dismiss_blocks_join`；`test_multi_proposal_requires_all_applied`；`test_orchestration_proposal_rejects_partial_groups`；`test_doc_output_uses_original_block_bases`；`test_canceled_dispatch_cannot_create_proposal_via_tool_host`。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_proposals.py -v`。
+- [x] **3. 實作。** 工具產出的所有 proposal 綁有效 dispatch，不信模型上報任意 proposal id；檢查 owner/project/scope。整合 `_own_pending` 依 §3 鎖序先鎖 run/task，再鎖 proposal/tab。apply、dismiss、失敗都同步通知兩引擎；source conflict 回 409 保留 pending，不能吞成 200 成功。
+- [x] **4. 跑 green。** 以失敗注入證明寫回後通知出錯時整筆 rollback；target lock／來源 fingerprint 改動不寫入；非 race 一般聊天局部核對仍成功；`test_request_review*.py`、`test_table_proposals.py`、`test_execution.py` 回歸通過。
+- [x] **5. 提交 slice。** 建議 `feat: advance orchestration only after proposal acceptance`。
 
 ### Task B5：Flow profile 節點、逐列任務與遠端手腳
 
@@ -258,12 +258,12 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `attach_flow_task(conn,flow_run,limb_task,node)->dict`（以 task.flow_task_id 唯一映射）；`finish_profile_task(conn,flow_task_id,dispatch_result)->None`；遠端新增 `POST /projects/api/limbs/orchestration/{claim,renew,complete,fail,upload-cell-asset}`，使用既有 limb Bearer 認證與 adapter input/output 結構，附 `{dispatch_handle,task_id,lease_token}`。
 
-- [ ] **1. 寫失敗測試。** `test_profile_node_claimed_once`、`test_profile_node_preserves_single_step_source_check`、`test_fanout_selected_rows_only`、`test_limb_late_upload_does_not_create_asset`、`test_old_limb_worker_protocol_unchanged`。兩列修改審核後 join 執行一次；部分通過不得提早 join。
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_flow.py -v` 與 `python -m unittest discover -s tests -p test_orchestration_limbs.py -v`。
-- [ ] **3. 實作 Flow 轉接。** node 增 optional agent_key；與明確 limb_id 同時填入時拒絕歧義，角色能力須符合節點；新 profile 節點拒絕 direct，舊非 profile 節點行為不改。Flow 繼續產生原 limb_task、管理 DAG；有 agent_key 的 task 僅由編排橋接建立 dispatch，legacy claim 排除此類節點。編排不再複製另一份 Flow DAG。回報映射回同一 flow task，既有 proposal hook 推進 Flow；取消／重試雙向同步。`trigger_flow_run` 經既有 preflight/start；新增明確 `execution_mode`，single_step 使用 `node_id`，不得把 start_node_id 當單步。若目前固定 scope 無法容納 flow 的寫入範圍，或含未被這次使用者確認的 direct 節點，先建立 scope/approval gate，核准後以已固定的 definition_revision 啟動，未核准不排工。
-- [ ] **4. 實作 remote 入口。** 新 worker 設定 `orchestration_enabled` 明示加入新隊列；輪替 polling，既有 claim 路徑保持相容。Remote dispatch 直接在 orchestration 表，不製造假的 Flow。重用 adapter 執行、認證及 lease helper；上傳先驗 admission，再存 asset、產候選，絕不直接寫格。失去 lease 停止輪詢／本地子程序；外部已發工作取消限制如實回報。
-- [ ] **5. 跑 green。** 新測試、`test_flow_scopes.py`、`test_flow_single_step.py`、`test_limb_worker.py` 及 `node --test ui/tests/flow.test.mjs`；flowModel serialize/deserialize 保留 agent_key。控制面中斷重啟後同 flow_task_id 不重複建立 dispatch 槽。
-- [ ] **6. 提交 slice。** 建議 `feat: connect agent dispatches to flows and remote limbs`。
+- [x] **1. 寫失敗測試。** `test_profile_node_claimed_once`、`test_profile_node_preserves_single_step_source_check`、`test_fanout_selected_rows_only`、`test_limb_late_upload_does_not_create_asset`、`test_old_limb_worker_protocol_unchanged`。兩列修改審核後 join 執行一次；部分通過不得提早 join。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_flow.py -v` 與 `python -m unittest discover -s tests -p test_orchestration_limbs.py -v`。
+- [x] **3. 實作 Flow 轉接。** node 增 optional agent_key；與明確 limb_id 同時填入時拒絕歧義，角色能力須符合節點；新 profile 節點拒絕 direct，舊非 profile 節點行為不改。Flow 繼續產生原 limb_task、管理 DAG；有 agent_key 的 task 僅由編排橋接建立 dispatch，legacy claim 排除此類節點。編排不再複製另一份 Flow DAG。回報映射回同一 flow task，既有 proposal hook 推進 Flow；取消／重試雙向同步。`trigger_flow_run` 經既有 preflight/start；新增明確 `execution_mode`，single_step 使用 `node_id`，不得把 start_node_id 當單步。若目前固定 scope 無法容納 flow 的寫入範圍，或含未被這次使用者確認的 direct 節點，先建立 scope/approval gate，核准後以已固定的 definition_revision 啟動，未核准不排工。
+- [x] **4. 實作 remote 入口。** 新 worker 設定 `orchestration_enabled` 明示加入新隊列；輪替 polling，既有 claim 路徑保持相容。Remote dispatch 直接在 orchestration 表，不製造假的 Flow。重用 adapter 執行、認證及 lease helper；上傳先驗 admission，再存 asset、產候選，絕不直接寫格。失去 lease 停止輪詢／本地子程序；外部已發工作取消限制如實回報。
+- [x] **5. 跑 green。** 新測試、`test_flow_scopes.py`、`test_flow_single_step.py`、`test_limb_worker.py` 及 `node --test ui/tests/flow.test.mjs`；flowModel serialize/deserialize 保留 agent_key。控制面中斷重啟後同 flow_task_id 不重複建立 dispatch 槽。
+- [x] **6. 提交 slice。** 建議 `feat: connect agent dispatches to flows and remote limbs`。
 
 ### Task B6：HTTP 權限、看板查詢與端到端 API
 
@@ -271,11 +271,11 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `board(conn,me,slug,*,cursor=None,limit=50,counts_only=False)->tuple[int,dict]`；`run_detail(conn,me,slug,run_id,*,cursor=None)->tuple[int,dict]`；其餘 create/cancel/retry/resolve service 依 §3.4 接受 body，回 `(status,payload)`。assistant state 增 `agents,active_runs,open_gates`，沿用原欄位。
 
-- [ ] **1. 寫失敗 HTTP 測試。** `test_routes_accept_underscore_agent_key`；`test_other_owner_cannot_read_private_run`；`test_wrong_project_dispatch_is_not_found`；`test_viewer_cannot_resolve_gate`；`test_board_deduplicates_gate_and_proposal`；`test_post_replay_is_idempotent`。
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_http.py -v`。
-- [ ] **3. 接路由與查詢。** 所有 writes 登錄現有 `WRITES`、CSRF／Origin 檢查；遠端 endpoints 走 limb 認證而非瀏覽器 owner。board 組合既有 owner pending proposals、可見 Flow 與新 run，穩定 id 去重；只讀 projection，不另建快取庫。body 嚴格檢查非 dict、bool 當整數、無效 UUID、NaN、超長字串與 foreign id；請求 objective 1～4000 字，output 沿用 2 MiB 上限。
-- [ ] **4. 跑 green。** 完成 creator 建 run→claim→提問→回答→提案→接受→join→完成的 HTTP fixture；member／viewer／admin／其他 owner 權限矩陣與 expired token 負例。counts 全量、分頁不漏不重；序列化 payload 不包含 secret、lease hash、他人訊息。
-- [ ] **5. 提交與 B 驗收。** 建議 `feat: expose orchestration controls and board API`。M8-B 全部測試與真實 DB 交易驗證通過後才進 C。
+- [x] **1. 寫失敗 HTTP 測試。** `test_routes_accept_underscore_agent_key`；`test_other_owner_cannot_read_private_run`；`test_wrong_project_dispatch_is_not_found`；`test_viewer_cannot_resolve_gate`；`test_board_deduplicates_gate_and_proposal`；`test_post_replay_is_idempotent`。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_http.py -v`。
+- [x] **3. 接路由與查詢。** 所有 writes 登錄現有 `WRITES`、CSRF／Origin 檢查；遠端 endpoints 走 limb 認證而非瀏覽器 owner。board 組合既有 owner pending proposals、可見 Flow 與新 run，穩定 id 去重；只讀 projection，不另建快取庫。body 嚴格檢查非 dict、bool 當整數、無效 UUID、NaN、超長字串與 foreign id；請求 objective 1～4000 字，output 沿用 2 MiB 上限。
+- [x] **4. 跑 green。** 完成 creator 建 run→claim→提問→回答→提案→接受→join→完成的 HTTP fixture；member／viewer／admin／其他 owner 權限矩陣與 expired token 負例。counts 全量、分頁不漏不重；序列化 payload 不包含 secret、lease hash、他人訊息。
+- [x] **5. 提交與 B 驗收。** 建議 `feat: expose orchestration controls and board API`。M8-B 全部測試與真實 DB 交易驗證通過後才進 C。
 
 ## 6. M8-C：候選選用與集中操作
 
@@ -285,11 +285,11 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `start_race(conn,me,slug,task_id,agent_keys)->list[dict]`；`select_race_winner(conn,me,slug,gate_id,proposal_id,*,client_request_id)->dict`。160 新增 winner FK／同 task 歸屬約束及每有效 race dispatch 至多一張 pending candidate 的限制。
 
-- [ ] **1. 寫失敗測試。** `test_two_active_race_admissions_are_both_valid`；`test_retry_only_supersedes_same_agent_slot`；`test_concurrent_winners_apply_once`；`test_regular_apply_cannot_bypass_race_selection`；`test_changed_snapshot_rolls_back_winner_and_loser_dismissals`。
-- [ ] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_races.py -v`。
-- [ ] **3. 實作。** 只接受 2～3 個不同、enabled、可產生該 target 提案的 agent；不接受 observer／analysis-only。所有槽用同 snapshot。每候選只有一張整組提案，第二張被工具邊界拒絕；多次草稿不能默默成多張候選。至少一張候選就能核對，UI 顯示其餘仍執行；一位失敗可選其他候選；全失敗時 task failed。
-- [ ] **4. 完成原子交易。** 鎖 gate/task/有效 dispatch/proposals/target，經既有寫回與 CAS 套用勝出者，記 winning_dispatch_id，作廢落選 proposal、取消未完成 dispatch、關 gate 並推進下游；任一寫回失敗全部 rollback。所有舊 apply/dismiss 入口統一導向 race 規則，不能選落選版本或繞過 winner。重複同選用回原結果，選不同版本回 409。
-- [ ] **5. 跑 green／提交。** 新 race 測試及 B4 回歸通過，確認遲到輸出／上傳不復活落選者。建議 `feat: atomically select and apply racing proposals`。
+- [x] **1. 寫失敗測試。** `test_two_active_race_admissions_are_both_valid`；`test_retry_only_supersedes_same_agent_slot`；`test_concurrent_winners_apply_once`；`test_regular_apply_cannot_bypass_race_selection`；`test_changed_snapshot_rolls_back_winner_and_loser_dismissals`。
+- [x] **2. 跑 red。** `python -m unittest discover -s tests -p test_orchestration_races.py -v`。
+- [x] **3. 實作。** 只接受 2～3 個不同、enabled、可產生該 target 提案的 agent；不接受 observer／analysis-only。所有槽用同 snapshot。每候選只有一張整組提案，第二張被工具邊界拒絕；多次草稿不能默默成多張候選。至少一張候選就能核對，UI 顯示其餘仍執行；一位失敗可選其他候選；全失敗時 task failed。
+- [x] **4. 完成原子交易。** 鎖 gate/task/有效 dispatch/proposals/target，經既有寫回與 CAS 套用勝出者，記 winning_dispatch_id，作廢落選 proposal、取消未完成 dispatch、關 gate 並推進下游；任一寫回失敗全部 rollback。所有舊 apply/dismiss 入口統一導向 race 規則，不能選落選版本或繞過 winner。重複同選用回原結果，選不同版本回 409。
+- [x] **5. 跑 green／提交。** 新 race 測試及 B4 回歸通過，確認遲到輸出／上傳不復活落選者。建議 `feat: atomically select and apply racing proposals`。
 
 ### Task C2：看板、並排比對與畫布交辦
 
@@ -297,7 +297,7 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
 
 **Interfaces:** `AgentBoard({board,onResolve,onCancel,onRetry,onOpenTarget})`；`ProposalRaceView({gate,candidates,onSelect,onClose})`；`onAskAgent(text,scope,{agentKey,strategy,raceAgents}={})` 保持原兩參數呼叫相容；`onOpenTarget({tab_key,row_id?,block_id?})`。`groupBoardItems(items)`、`raceSelectionPayload(gate,proposalId,requestId)`、`reconcileBoard(previous,next)` 都由實際元件使用。
 
-- [ ] **1. 寫失敗 Node 測試。** `test('deduplicate gate and proposal')`、`test('poll retains selected candidate and draft answer')`、`test('race payload uses proposal id, not visible index')`、`test('selected hidden rows retain stable scope')`、`test('late response from previous project is ignored')`。
+- [x] **1. 寫失敗 Node 測試。** `test('deduplicate gate and proposal')`、`test('poll retains selected candidate and draft answer')`、`test('race payload uses proposal id, not visible index')`、`test('selected hidden rows retain stable scope')`、`test('late response from previous project is ignored')`。
 
   ```js
   test('race payload uses proposal id, not visible index', () => {
@@ -305,20 +305,20 @@ run 另加 nullable `completion_message_id` 並以 row lock 保證唯一通知�
                      {client_request_id: 'choose-1', resolution: {proposal_id: 402}});
   });
   ```
-- [ ] **2. 跑 red。** `node --test ui/tests/orchestration.test.mjs`。
-- [ ] **3. 實作看板。** 預設只留待你裁決／執行中計數；點開才展開四分組。窄 sidebar 垂直分組，競速使用寬版 Dialog，不強塞四欄。Working 顯示工具摘要／取消；Done 包含失敗／取消與重試、來源定位；Idle 區分可用、忙碌與離線，不能把已註冊等同在線。沿用 1 秒活動／30 秒閒置 polling，避免重疊；關閉面板仍以輕量 counts 更新。
-- [ ] **4. 實作交辦與比對。** 表格勾選後選代理／2～3 位競速，確認 objective 與固定列欄再送出，單列同路徑。段落標註新增「交給代理」：帶 doc scope 與明示 agent token；人類 `@{uuid}` 不變。若留言直接點名代理，只有使用者實際按送出時建立一次帶 source comment id 的需求，不在載入／編輯／背景掃描時自動派發。race 使用既有 before/after review 呈現，選用錯誤保留候選與上下文。
-- [ ] **5. 跑 green／瀏覽器走查。** Node、build 成功；1280×720 操作 2 代理→待核對→並排→選勝者→跳回原列，確認落選已略過。鍵盤可開關 Dialog／選候選，焦點返回觸發處；輪詢不重設選取；正在審核時不自動滾走。純函式測試不充當實際 React 互動驗證。
-- [ ] **6. 提交與 C 驗收。** 建議 `feat: add agent board and proposal race review`；補可重現 fixture 操作步驟與截圖。
+- [x] **2. 跑 red。** `node --test ui/tests/orchestration.test.mjs`。
+- [x] **3. 實作看板。** 預設只留待你裁決／執行中計數；點開才展開四分組。窄 sidebar 垂直分組，競速使用寬版 Dialog，不強塞四欄。Working 顯示工具摘要／取消；Done 包含失敗／取消與重試、來源定位；Idle 區分可用、忙碌與離線，不能把已註冊等同在線。沿用 1 秒活動／30 秒閒置 polling，避免重疊；關閉面板仍以輕量 counts 更新。
+- [x] **4. 實作交辦與比對。** 表格勾選後選代理／2～3 位競速，確認 objective 與固定列欄再送出，單列同路徑。段落標註新增「交給代理」：帶 doc scope 與明示 agent token；人類 `@{uuid}` 不變。若留言直接點名代理，只有使用者實際按送出時建立一次帶 source comment id 的需求，不在載入／編輯／背景掃描時自動派發。race 使用既有 before/after review 呈現，選用錯誤保留候選與上下文。
+- [x] **5. 跑 green／瀏覽器走查。** Node、build 成功；1280×720 操作 2 代理→待核對→並排→選勝者→跳回原列，確認落選已略過。鍵盤可開關 Dialog／選候選，焦點返回觸發處；輪詢不重設選取；正在審核時不自動滾走。純函式測試不充當實際 React 互動驗證。
+- [x] **6. 提交與 C 驗收。** 建議 `feat: add agent board and proposal race review`；補可重現 fixture 操作步驟與截圖。
 
 ## 7. E1：整體驗證與接手證據
 
 **Files:** Create `docs/AGENT_ORCHESTRATION_ACCEPTANCE.md`; modify `docs/AGENT_ORCHESTRATION_SPEC.md`, `docs/ARCHITECTURE_AND_HANDOFF.md`, `docs/EXECUTION_API.md`, `docs/WORKERS.md`, `README.md`, `scripts/verify_wheel.py`（僅如前任務尚未覆蓋）與 `AGENTS.md` 最新交付摘要。
 
-- [ ] **1. 開工基線。** 保存 `git status --short`／HEAD、runtime 版本、實際測試 DB 位置；確認 DB 為可清理的專用測試庫後才執行。不可直接沿用文件裡 55433，該 DB 可能還承載展示內容。先跑現有 suite，記錄 pass/fail/skip，不將舊數字複製成此次結果。
-- [ ] **2. 三條工作路徑。** 辦公：固定兩列→sheet_ops→QA→核對→週報匯總；美術：固定素材列→遠端 fixture 產資產→候選核對→只寫回選用結果；自由工作流：profile 節點→問題 Gate→兩分支→接受→join。全程使用合成專案，不修改使用者工作資料。
-- [ ] **3. 故障恢復。** 在 claim 後、proposal 建立後、completion commit 後但 HTTP response 前各中斷一次；重啟後驗證不重複寫回／計數，舊 admission 無效，沒有永遠卡住的 working 狀態。取消後再重試也跑同一套。
-- [ ] **4. 跑完整工程 gate。** 在已配置的隔離測試 DB 上依序執行：
+- [x] **1. 開工基線。** 保存 `git status --short`／HEAD、runtime 版本、實際測試 DB 位置；確認 DB 為可清理的專用測試庫後才執行。不可直接沿用文件裡 55433，該 DB 可能還承載展示內容。先跑現有 suite，記錄 pass/fail/skip，不將舊數字複製成此次結果。
+- [x] **2. 三條工作路徑。** 辦公：固定兩列→sheet_ops→QA→核對→週報匯總；美術：固定素材列→遠端 fixture 產資產→候選核對→只寫回選用結果；自由工作流：profile 節點→問題 Gate→兩分支→接受→join。全程使用合成專案，不修改使用者工作資料。
+- [x] **3. 故障恢復。** 在 claim 後、proposal 建立後、completion commit 後但 HTTP response 前各中斷一次；重啟後驗證不重複寫回／計數，舊 admission 無效，沒有永遠卡住的 working 狀態。取消後再重試也跑同一套。
+- [x] **4. 跑完整工程 gate。** 在已配置的隔離測試 DB 上依序執行：
 
 ```powershell
 python -m unittest discover -s tests -q
@@ -332,10 +332,10 @@ git diff --check
 
   期待：測試零失敗，必需 DB tests 零 skip；build 退出 0；wheel 包含 158～160 SQL、四份新 prompt、新 runtime 模組與當次 JS/CSS。新增乾淨環境「離開 checkout」載入 schema／prompt 的檢查；不要只驗原始碼目錄可執行。FFmpeg 或容器不可用須明列未驗證範圍。
 
-- [ ] **5. UI 證據。** 1280×720 及能實際確認的 125% 縮放各走查：選角、固定範圍、Gate、race、取消、返回焦點。記錄前後資料、run/task/dispatch/proposal id、截圖、失敗修正；真實 IME 未測就寫未測。外部付費模型品質／實際 ACP／Docker／遠端 CI／使用者長期試用各自標示，不由 mock 替代。
-- [ ] **6. 最終審查／交接。** 用固定完整 SHA 檢查權限、交易、scope、競速與 migration；更新規格裁定及新入口。開工前 checklist 與實際證據分開；只把已達標階段標完成。建議提交 `docs: record M8 verification and operating limits`；本計畫不自行授權 push、merge 或部署。
+- [x] **5. UI 證據。** 1280×720 及能實際確認的 125% 縮放各走查：選角、固定範圍、Gate、race、取消、返回焦點。記錄前後資料、run/task/dispatch/proposal id、截圖、失敗修正；真實 IME 未測就寫未測。外部付費模型品質／實際 ACP／Docker／遠端 CI／使用者長期試用各自標示，不由 mock 替代。
+- [x] **6. 最終審查／交接。** 用固定完整 SHA 檢查權限、交易、scope、競速與 migration；更新規格裁定及新入口。開工前 checklist 與實際證據分開；只把已達標階段標完成。建議提交 `docs: record M8 verification and operating limits`；本計畫不自行授權 push、merge 或部署。
 
-## 8. M8-D：ACP 選配，不阻塞核心交付
+## 8. M8-D：ACP（本輪使用者明確要求交付）
 
 ### Task D1：一個明確 adapter 的 ACP 契約與橋接
 
@@ -343,11 +343,11 @@ git diff --check
 
 **Interfaces:** `run_acp(*,command:list[str],cwd:str,env:dict,prompt:str,tool_proxy,deadline_at,cancel_event)->dict`。command 只能來自部署設定，不接受 prompt／HTTP payload 變成 shell；返回沿用 runtime structured output。
 
-- [ ] **1. 相容性確認。** 在此階段開始時核對實際可用 CLI／ACP adapter 的官方協定與版本，選一個完成真實 handshake；記錄支援的 protocol version、session、MCP 掛載方式與 cancellation。原規格列的 CLI 命令僅是示例，不預先宣稱都支援 ACP。未有可用 adapter 則 D 保持未交付，A～C 不回退。
-- [ ] **2. 寫 red fixture。** Mock stdio 覆蓋 handshake、分片訊息、亂序 response id、通知、未知 method、EOF、無效 JSON、timeout、工具拒絕、lease 遺失；測試綁定前一步確認的協定資料，不只測自訂 echo 協定。
-- [ ] **3. 跑 red。** `python -m unittest discover -s tests -p test_acp_bridge.py -v`。
-- [ ] **4. 實作最小橋接。** 子程序 argv／`shell=False`，乾淨 cwd，環境變數白名單。CLI 不拿 Head Bearer／DB／其他 provider keys；MCP 代理在 parent 保留 lease credentials，只向 child 暴露本次 session 的受控能力。保留 Windows 必需的系統環境但不繼承整份 environ；取消／逾時終止整個子程序樹且 worker_done 一次。
-- [ ] **5. 跑 green／交付。** fixture 通過後對所選單一 adapter 做真實讀頁→提案→核對 smoke；產物標清工具版本、OS 與是否實際呼叫模型。建議 `feat: add optional ACP stdio limb adapter`。其他 CLI 未實測只列候選，不標支援。
+- [x] **1. 相容性確認。** 在此階段開始時核對實際可用 CLI／ACP adapter 的官方協定與版本，選一個完成真實 handshake；記錄支援的 protocol version、session、MCP 掛載方式與 cancellation。原規格列的 CLI 命令僅是示例，不預先宣稱都支援 ACP。未有可用 adapter 則 D 保持未交付，A～C 不回退。
+- [x] **2. 寫 red fixture。** Mock stdio 覆蓋 handshake、分片訊息、亂序 response id、通知、未知 method、EOF、無效 JSON、timeout、工具拒絕、lease 遺失；測試綁定前一步確認的協定資料，不只測自訂 echo 協定。
+- [x] **3. 跑 red。** `python -m unittest discover -s tests -p test_acp_bridge.py -v`。
+- [x] **4. 實作最小橋接。** 子程序 argv／`shell=False`，乾淨 cwd，環境變數白名單。CLI 不拿 Head Bearer／DB／其他 provider keys；MCP 代理在 parent 保留 lease credentials，只向 child 暴露本次 session 的受控能力。保留 Windows 必需的系統環境但不繼承整份 environ；取消／逾時終止整個子程序樹且 worker_done 一次。
+- [x] **5. 跑 green／交付。** fixture 通過後對所選單一 adapter 做真實讀頁→提案→核對 smoke；產物標清工具版本、OS 與是否實際呼叫模型。建議 `feat: add optional ACP stdio limb adapter`。其他 CLI 未實測只列候選，不標支援。
 
 ## 9. 計畫自檢與開始位置
 

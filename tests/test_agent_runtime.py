@@ -2,17 +2,45 @@
 import io
 import json
 import os
+import threading
+import tempfile
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from unittest.mock import patch
 
-from test_agent_registry import AgentRegistryTests
+import test_agent_registry as registry_fixture
 from project_assistant import agent_registry, agent_policy, agent_runtime, service, store, tools, providers, model_client, mcp_stdio
+from project_assistant import prompting
 
 
 @unittest.skipUnless(os.environ.get('OPENBENCH_TEST_DB_URI'), 'set OPENBENCH_TEST_DB_URI')
 class AgentRuntimeTests(unittest.TestCase):
-    setUp = AgentRegistryTests.setUp
-    tearDown = AgentRegistryTests.tearDown
+    setUp = registry_fixture.AgentRegistryTests.setUp
+    def tearDown(self):
+        self.conn.rollback()
+        if getattr(self,'committed',False):
+            with self.conn.cursor() as cur:
+                for table in ('assistant_attachment','assistant_proposal','assistant_message','assistant_conversation','agent_profile'):
+                    cur.execute('DELETE FROM projectops.'+table+' WHERE project_slug=%s',(self.slug,))
+                cur.execute('DELETE FROM projectops.project WHERE slug=%s',(self.slug,))
+                cur.execute('DELETE FROM projectops.member WHERE actor_id=%s',(self.actor,))
+            self.conn.commit()
+        self.conn.close()
+
+    def test_concurrent_same_role_has_one_reply(self):
+        import psycopg
+        self.conn.commit()
+        self.committed=True
+        barrier=threading.Barrier(2)
+        def send():
+            with psycopg.connect(os.environ['OPENBENCH_TEST_DB_URI']) as connection:
+                barrier.wait(timeout=5)
+                return service.send(connection,self.me,self.slug,{'text':'只執行一次','agent_key':'doc_writer'})[0]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results=list(pool.map(lambda _:send(),range(2)))
+        self.assertEqual(sorted(results),[200,409])
+        self.assertEqual(len(store.thread(self.conn,self.slug,self.actor)),2)
 
     def test_two_roles_can_queue_same_owner(self):
         for key in ('doc_writer','sheet_ops'):
@@ -52,6 +80,44 @@ class AgentRuntimeTests(unittest.TestCase):
 
 
 class TransportPolicyTests(unittest.TestCase):
+    def test_legacy_codex_engine_keeps_the_cli_transport(self):
+        from project_assistant.worker import settings_from_env
+        profile={'agent_key':'coordinator','role_kind':'primary','allowed_tools':[],'provider_config':{}}
+        ctx=type('Ctx',(),{'slug':'fixture','me':type('Me',(),{'actor_id':'actor'})()})()
+        with patch.dict(os.environ,{'PROJECT_ASSISTANT_ENGINE':'codex','OPENBENCH_PROVIDER':'','OPENBENCH_ENGINE':''}), \
+             patch.object(agent_runtime,'run_cli',return_value=agent_runtime.Outcome('ok')) as cli, \
+             patch.object(model_client,'run_turn',side_effect=AssertionError('legacy codex must not invoke Responses')):
+            agent_runtime.run_agent(profile=profile,ctx=ctx,instructions='',turn_text='fixture',timeout=1,settings=settings_from_env())
+        cli.assert_called_once()
+
+    def test_cli_committed_question_returns_awaiting_gate(self):
+        from types import SimpleNamespace
+        from project_assistant import codex_runner
+        from project_assistant.tool_host import ToolHost
+        from project_assistant.worker import settings_from_env
+        host=ToolHost(list_tools=lambda:[])
+        def waiting(*args,**kwargs):
+            self.assertIs(kwargs['cancel_event'],host.pending)
+            host.pending.set()
+            return codex_runner.CodexResult(status='error')
+        with patch.object(codex_runner,'run',side_effect=waiting):
+            result=agent_runtime.run_cli(settings_from_env(),host,'question fixture')
+        host.stop()
+        self.assertEqual(result.status,'awaiting_gate')
+
+    def test_custom_profile_prompt_and_knowledge_do_not_inherit_unrelated_business_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory)
+            (folder/'system.md').write_text('unrelated-default-role',encoding='utf-8')
+            (folder/'knowledge.md').write_text('unrelated-business-knowledge',encoding='utf-8')
+            (folder/'runtime.md').write_text('shared-canvas-safety',encoding='utf-8')
+            with patch.object(prompting,'PROMPTS',folder):
+                system,knowledge=prompting.load_agent({'system_prompt':'custom-writer','knowledge_pack':'writer-knowledge'})
+            self.assertIn('shared-canvas-safety',system)
+            self.assertIn('custom-writer',system)
+            self.assertNotIn('unrelated-default-role',system)
+            self.assertEqual(knowledge,'writer-knowledge')
+
     def test_chat_transport_exposes_and_accepts_only_selected_tools(self):
         captured = []
         def opener(request,**kwargs):

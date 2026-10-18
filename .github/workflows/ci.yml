@@ -1,0 +1,80 @@
+name: OpenBench CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12"]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: openbench
+          POSTGRES_PASSWORD: openbench-test
+          POSTGRES_DB: openbench_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbench -d openbench_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      OPENBENCH_TEST_DB_URI: postgresql://openbench:openbench-test@127.0.0.1:5432/openbench_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Build and test browser bundle
+        working-directory: ui
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Install Python runtime and build tools
+        run: python -m pip install . build
+      - name: Install media tools for real assembly verification
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Unit and PostgreSQL integration tests
+        run: python -m unittest discover -s tests -v
+      - name: Build source archive and wheel
+        run: python -m build
+      - name: Verify wheel resources
+        run: python scripts/verify_wheel.py dist/*.whl
+      - name: Verify installed wheel outside checkout
+        run: |
+          python -m venv .wheel-venv
+          .wheel-venv/bin/python -m pip install dist/*.whl
+          cd /tmp
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/openbench" --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/openbench-worker" --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "from project_docs.repository import SCHEMA_DIR,SCHEMA_FILES; from project_docs.http import STATIC_DIR; from project_assistant.prompting import load; assert all((SCHEMA_DIR/f).is_file() for f in SCHEMA_FILES); assert (STATIC_DIR/'index.html').is_file(); assert all(load()); print('Installed resources OK')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openbench-python-${{ matrix.python }}
+          path: dist/*
+
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      OPENBENCH_DB_PASSWORD: ci-compose-validation-password
+      OPENBENCH_TOKENS: '{"ci-validation-token-at-least-24-characters":"11111111-1111-4111-8111-111111111111"}'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build runtime image
+        run: docker build --tag openbench:ci .

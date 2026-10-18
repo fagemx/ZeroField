@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../api.js";
 import { guessKind, openReply } from "./text.js";
+import { openReplies, resolveAgentTarget } from './agentModel.js';
+import { useOrchestration } from './useOrchestration.js';
 
 const FAST = 1000;   // 正在回答：1 秒看一次（回答邊寫邊存，畫面跟著長出來）
 const SLOW = 30000;  // 沒在回答：30 秒看一次（負責人的回覆、狀態變化）
@@ -11,6 +13,8 @@ const MAX_BYTES = 8 * 1024 * 1024;
 export function useAssistant(slug, enabled, open, onError, onApplied, privacyMode = "full_access") {
   const [state, setState] = useState(null);
   const [sending, setSending] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState('coordinator');
+  const [proposalErrors, setProposalErrors] = useState({});
   const [scope, setScopeState] = useState(null);
   const scopeRef = useRef(null);
   const setScope = useCallback((next) => {
@@ -18,6 +22,8 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
     setScopeState(scopeRef.current);
   }, []);
   const base = `/projects/api/${slug}/assistant`;
+  const currentBase = useRef(base);
+  currentBase.current = base;
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
@@ -25,17 +31,19 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
     if (!enabled) return null;
     try {
       const data = await api.get(base);
-      if (alive.current) setState(data);
+      if (alive.current && currentBase.current === base) setState(data);
       return data;
     } catch (error) {
       if (error.status !== 403) onError(error.message);
       return null;
     }
   }, [base, enabled, onError]);
+  const orchestration = useOrchestration(slug, enabled, open, onApplied, reload);
 
   useEffect(() => { reload(); }, [reload]);
 
   const busy = Boolean(openReply(state && state.thread));
+  const busyForSelectedAgent = openReplies(state?.thread).has(selectedAgent);
   useEffect(() => {
     if (!enabled || !open) return undefined;
     // 一打開就先讀一次（關著的時候不會更新，不然要等 30 秒才看得到新的對話）；
@@ -95,16 +103,18 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
     dropFile(key);
   }, [base]);
 
-  const send = useCallback(async (text) => {
+  const send = useCallback(async (text, { agentKey } = {}) => {
     setSending(true);
     try {
       const ready = filesRef.current.filter((f) => f.status === "ready").map((f) => f.attachment.id);
       const sentScope = scopeRef.current;
-      const result = await api.post(`${base}/messages`, { text, attachments: ready, ...(sentScope ? { scope: sentScope } : {}) });
+      const target = resolveAgentTarget(text, agentKey || selectedAgent, state?.agents || []);
+      const result = await api.post(`${base}/messages`, { text, agent_key: target, attachments: ready, ...(sentScope ? { scope: sentScope } : {}) });
+      if (currentBase.current !== base) return null;
       if (scopeRef.current === sentScope) setScope(null);
       setFiles((list) => {
-        list.forEach((f) => f.local && URL.revokeObjectURL(f.local));
-        return [];
+        list.filter(f => ready.includes(f.attachment?.id)).forEach((f) => f.local && URL.revokeObjectURL(f.local));
+        return list.filter(f => !ready.includes(f.attachment?.id));
       });
       await reload();
       return result;
@@ -114,7 +124,7 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
     } finally {
       setSending(false);
     }
-  }, [base, reload, onError, setScope]);
+  }, [base, reload, onError, setScope, selectedAgent, state?.agents]);
 
   // 一段一段的對話：開新的、看以前的、接著以前的聊
   const replaceState = useCallback(async (path) => {
@@ -147,12 +157,14 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
   }, [base, onError]);
 
   const decide = useCallback(async (proposal, verb, content, options = {}) => {
+    setProposalErrors(current => ({ ...current, [proposal.id]: '' }));
     try {
       const result = await api.post(`${base}/proposals/${proposal.id}/${verb}`, verb === "apply" ? { content, ...options } : {});
       await reload();
       if (verb === "apply" && onApplied) onApplied(result.proposal, result.notes || []);
       return result;
     } catch (error) {
+      setProposalErrors(current => ({ ...current, [proposal.id]: error.message }));
       onError(error.message);
       await reload();
       setState((current) => current ? { ...current, proposals: (current.proposals || []).map((p) => p.id === proposal.id ? { ...p, error: error.message } : p) } : current);
@@ -161,8 +173,11 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
   }, [base, reload, onError, onApplied]);
 
   return {
+    ...orchestration,
     privacyMode,
     slug, state, sending, busy, reload, send,
+    selectedAgent, setSelectedAgent, busyForSelectedAgent, anyReplyBusy: busy,
+    proposalErrors,
     scope, setScope,
     apply: (proposal, content, options) => decide(proposal, "apply", content, options),
     dismiss: (proposal) => decide(proposal, "dismiss"),

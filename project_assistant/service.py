@@ -92,6 +92,9 @@ def state(conn, me, slug):
     }
     from project_assistant import agent_registry
     payload['agents'] = agent_registry.roster(conn,me,slug)
+    from project_assistant import orchestration_store as db
+    payload['active_runs']=db.many(conn,"SELECT jsonb_build_object('id',id,'objective',objective,'status',status) FROM projectops.orchestration_run WHERE project_slug=%s AND created_by=%s AND status IN ('active','awaiting_gate') ORDER BY created_at DESC LIMIT 20",(slug,me.actor_id))
+    payload['open_gates']=db.many(conn,"SELECT jsonb_build_object('id',g.id,'run_id',g.run_id,'question',g.question,'gate_kind',g.gate_kind) FROM projectops.orchestration_gate g JOIN projectops.orchestration_run r ON r.id=g.run_id WHERE r.project_slug=%s AND r.created_by=%s AND g.status='open' ORDER BY g.created_at DESC LIMIT 20",(slug,me.actor_id))
     if payload["flags"]["manager"]:  # 負責人：大家私下轉給他、還沒回覆的問題數，頂列數字和側邊欄提示用
         payload["forwards_open"] = len(store.forwards(conn, slug, status="open"))
     for proposal in payload["proposals"]:
@@ -103,12 +106,18 @@ def state(conn, me, slug):
     return 200, payload
 
 
-def send(conn, me, slug, body):
+def send(conn, me, slug, body,*,source_ref=None):
     problem = _gate(conn, me, slug)
     if problem:
         return problem
     if not isinstance(body,dict):
         return _error(400,'訊息必須是 JSON 物件')
+    if source_ref:
+        from project_assistant import orchestration_store as db
+        prior=db.one(conn,"SELECT id FROM projectops.assistant_message WHERE project_slug=%s AND owner_id=%s AND role='user' AND source_ref=%s",(slug,me.actor_id,source_ref))
+        if prior:
+            reply=db.one(conn,"SELECT id FROM projectops.assistant_message WHERE reply_to=%s AND role='assistant' ORDER BY id LIMIT 1",(prior,))
+            return 200,{'message':store.message(conn,prior),'reply':store.message(conn,reply),'notes':[]}
     raw = str(body.get("text") or "").strip()
     ids = body.get("attachments") or []
     if not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
@@ -121,7 +130,7 @@ def send(conn, me, slug, body):
         return _error(400, f"一次最多 {MAX_MESSAGE} 個字")
     from project_assistant import agent_registry
     try:
-        agent_key = agent_registry.resolve_mention(conn,slug,raw,body.get('agent_key'))
+        agent_key = agent_registry.resolve_mention(conn,slug,'' if source_ref else raw,body.get('agent_key'))
     except agent_registry.AgentError as exc:
         return _error(exc.status,str(exc))
     with conn.cursor() as cur:
@@ -143,7 +152,7 @@ def send(conn, me, slug, body):
             scope = request_scope.validate_scope(raw_scope, tab, repo.field_values(conn, slug).get(tab["key"], {}) if tab else {})
         except ValueError as exc:
             return _error(409, str(exc))
-    user_id, reply_id = store.add_user_message(conn, slug, me.actor_id, text, notes, agent_key=agent_key,
+    user_id, reply_id = store.add_user_message(conn, slug, me.actor_id, text, notes, agent_key=agent_key,source_ref=source_ref,
                                                **({"request_scope": scope} if scope else {}))
     if files:
         store.bind_attachments(conn, [f["id"] for f in files], user_id)
@@ -247,6 +256,19 @@ def _write(conn, me, slug, proposal, content):
     if proposal["action"] == "table_edit":
         return table_edits.apply(conn, me, slug, proposal["target"])
     action, target = proposal["action"], proposal["target"] or {}
+    if target.get('request_scope') or target.get('source_revisions'):
+        sources=target.get('source_revisions',{})
+        locked={key:repo.get_tab_for_update(conn,slug,key) for key in sorted(set(sources)|{target['tab_key']})}
+        tab=locked[target['tab_key']]
+        try:
+            if not tab:
+                raise ValueError('來源分頁已刪除')
+            if any(not locked[key] or locked[key]['revision']!=revision for key,revision in sources.items()):
+                raise ValueError('參考來源已更新，請重新核對')
+            if target.get('request_scope'):
+                request_scope.verify_source(target['request_scope'],{**tab,'key':target['tab_key']},repo.field_values(conn,slug).get(target['tab_key'],{}))
+        except ValueError as exc:
+            return _error(409,str(exc))
     if action == "私下轉給負責人":
         if not content:
             return _error(400, "要問負責人的話是空的")
@@ -283,6 +305,21 @@ def _summary(result: dict) -> dict:
 
 
 def _own_pending(conn, me, slug, proposal_id):
+    from project_assistant import orchestrator as cp,orchestration_store as db
+    bound=db.one(conn,'''SELECT to_jsonb(d) FROM projectops.orchestration_dispatch d
+        JOIN projectops.assistant_proposal p ON p.dispatch_id=d.id WHERE p.id=%s''',(proposal_id,))
+    if bound:
+        if bound['project_slug']!=slug:
+            return None,_error(404,'找不到這個提案')
+        cp.lock_project(conn,slug)
+        try:
+            run=cp.own_run(conn,me,slug,bound['run_id'],lock=True)
+        except cp.OrchestrationError as exc:
+            return None,_error(exc.status,str(exc))
+        if bound['superseded_by'] or bound['status'] in ('canceled','failed','timeout') or run['status']=='canceled' or cp.instant(bound['deadline_at'])<=cp.now():
+            return None,_error(409,'此提案的派發已取消、過期或被重新派發')
+        if bound['status']!='awaiting_gate' or db.one(conn,"SELECT id FROM projectops.orchestration_gate WHERE dispatch_id=%s AND gate_kind='question' AND status='open'",(bound['id'],)):
+            return None,_error(409,'代理尚未完成整組輸出，請先處理待決定問題或等候執行完成')
     # Scheduler lock order: run, proposal, then target tab.
     with conn.cursor() as cur:
         cur.execute("SELECT run_id FROM projectops.limb_task WHERE proposal_id=%s", (proposal_id,))
@@ -295,16 +332,19 @@ def _own_pending(conn, me, slug, proposal_id):
     if proposal["status"] != "pending":
         return None, _error(409, "這個提案已經處理過了")
     proposal["_flow_bound"] = bool(row)
+    proposal['_orchestration_bound']=bool(bound)
     return proposal, None
 
 
-def apply_proposal(conn, me, slug, proposal_id, body):
+def apply_proposal(conn, me, slug, proposal_id, body,*,_race_task_id=None):
     problem = _gate(conn, me, slug)
     if problem:
         return problem
     proposal, problem = _own_pending(conn, me, slug, proposal_id)
     if problem:
         return problem
+    if proposal.get('race_group_task_id') and proposal['race_group_task_id']!=_race_task_id:
+        return _error(409,'請從競速候選比對選用版本，不能單獨套用候選')
     content, notes = proposal["content"], []
     if "content" in body:
         edited = str(body.get("content") or "").strip()
@@ -315,7 +355,7 @@ def apply_proposal(conn, me, slug, proposal_id, body):
     remaining = None
     original = proposal
     if "groups" in body:
-        if proposal["action"] != "table_edit" or proposal.get("_flow_bound") or proposal.get("message_id") is None:
+        if proposal["action"] != "table_edit" or proposal.get("_flow_bound") or proposal.get('_orchestration_bound') or proposal.get("message_id") is None:
             return _error(400, "這組產出需要整組核對，不能拆分套用")
         if body.get("review_version") != proposal_review.version(proposal["target"]):
             return 409, {"error": "待核對項目已更新，請確認目前清單再套用", "proposal": proposal}
@@ -327,8 +367,12 @@ def apply_proposal(conn, me, slug, proposal_id, body):
             proposal = {**proposal, "target": target}
         except ValueError as exc:
             return _error(400, str(exc))
+    source_key=(proposal.get('target') or {}).get('tab_key')
+    source_before=repo.get_tab_for_update(conn,slug,source_key) if source_key else None
+    if source_before:
+        source_before={**source_before,'key':source_key,'values':repo.field_values(conn,slug).get(source_key,{})}
     status, result = _write(conn, me, slug, proposal, content)
-    if status == 409 and not proposal.get("_flow_bound"):
+    if status == 409 and (not proposal.get("_flow_bound") or proposal.get('_orchestration_bound')):
         # The HTTP layer rolls back rejected writes. Keep this conflict explicit
         # in the response; the existing pending proposal remains untouched.
         return status, {**result, "proposal": original}
@@ -357,6 +401,8 @@ def apply_proposal(conn, me, slug, proposal_id, body):
                                                         "display": target.get("display"), "content": content[:500]})
     from project_assistant.flow_runner import proposal_decided
     proposal_decided(conn, proposal_id, status < 400)
+    from project_assistant.orchestrator import on_proposal_decided
+    on_proposal_decided(conn,proposal_id,status<400,source_before=source_before)
     return 200, {"proposal": store.proposal(conn, proposal_id), "notes": notes}
 
 
@@ -367,9 +413,13 @@ def dismiss_proposal(conn, me, slug, proposal_id):
     proposal, problem = _own_pending(conn, me, slug, proposal_id)
     if problem:
         return problem
+    if proposal.get('race_group_task_id'):
+        return _error(409,'請從競速候選比對選用版本，或取消整批工作')
     store.decide_proposal(conn, proposal["id"], status="dismissed", by=me.actor_id)
     from project_assistant.flow_runner import proposal_decided
     proposal_decided(conn, proposal["id"], False)
+    from project_assistant.orchestrator import on_proposal_decided
+    on_proposal_decided(conn,proposal['id'],False)
     return 200, {"proposal": store.proposal(conn, proposal["id"]), "notes": []}
 
 

@@ -1,0 +1,17 @@
+{
+  "run_id": "e13da675-b2d7-41c9-b9d9-754384be1b03",
+  "task_id": "025b3a0b-a93e-478d-8da1-104818c41353",
+  "status": "canceled",
+  "proposals": [
+    {
+      "id": 837,
+      "status": "dismissed"
+    },
+    {
+      "id": 838,
+      "status": "dismissed"
+    }
+  ],
+  "row_id": "b_job3",
+  "unchanged_value": "需要整理"
+}

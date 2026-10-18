@@ -71,7 +71,7 @@ def member_flags(conn, slug: str) -> dict[str, bool]:
 
 MESSAGE_COLUMNS = """id, project_slug AS slug, owner_id, role, body, status, reply_to, attempts, lease_owner,
     error_kind, seconds, tools, notes, model, codex_version, created_at, finished_at, conversation_id, request_scope,
-    agent_key, agent_snapshot, lease_until"""
+    agent_key, agent_snapshot, lease_until, source_ref"""
 
 
 # ---------- 一段一段的對話 ----------
@@ -165,16 +165,16 @@ def conversation_messages(conn, slug: str, owner_id: str, conversation_id: int, 
     return _with_attachments(conn, rows)
 
 
-def add_user_message(conn, slug: str, owner_id: str, body: str, notes: list[str], request_scope=None, *, agent_key='coordinator') -> tuple[int, int]:
+def add_user_message(conn, slug: str, owner_id: str, body: str, notes: list[str], request_scope=None, *, agent_key='coordinator',source_ref=None) -> tuple[int, int]:
     from project_assistant import agent_registry
     profile = agent_registry.get_agent(conn,slug,agent_key)
     snapshot = {k:v for k,v in (profile or {}).items() if k not in ('created_by','created_at','updated_at')}
     conversation = current_conversation(conn, slug, owner_id)
     with conn.cursor() as cur:
         cur.execute(
-            """INSERT INTO projectops.assistant_message (project_slug, owner_id, role, body, status, notes, conversation_id, request_scope,agent_key)
-               VALUES (%s, %s, 'user', %s, 'done', %s::jsonb, %s, %s::jsonb,%s) RETURNING id""",
-            (slug, owner_id, body, json.dumps(notes or [], ensure_ascii=False), conversation, json.dumps(request_scope, ensure_ascii=False),agent_key),
+            """INSERT INTO projectops.assistant_message (project_slug, owner_id, role, body, status, notes, conversation_id, request_scope,agent_key,source_ref)
+               VALUES (%s, %s, 'user', %s, 'done', %s::jsonb, %s, %s::jsonb,%s,%s) RETURNING id""",
+            (slug, owner_id, body, json.dumps(notes or [], ensure_ascii=False), conversation, json.dumps(request_scope, ensure_ascii=False),agent_key,source_ref),
         )
         user_id = cur.fetchone()[0]
         cur.execute(
@@ -223,26 +223,36 @@ def _abandon_expired(cur) -> None:
 
 
 def claim_next(conn, worker: str, lease_seconds: int) -> dict | None:
+    from project_assistant import orchestrator as cp,orchestration_store as db,agent_registry
+    import uuid
+    candidates=db.many(conn,'''SELECT to_jsonb(m) FROM projectops.assistant_message m WHERE role='assistant'
+        AND attempts<%s AND (status='queued' OR (status='running' AND lease_until<NOW())) ORDER BY project_slug,id LIMIT 100''',(MAX_ATTEMPTS,))
+    for candidate in candidates:
+        slug=candidate['project_slug']
+        if not db.one(conn,'SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))',('openbench-orchestration:'+slug,)):
+            continue
+        profile=agent_registry.get_agent(conn,slug,candidate['agent_key'])
+        if not profile or not profile['enabled'] or profile['role_kind']=='observer':
+            db.execute(conn,"UPDATE projectops.assistant_message SET status='failed',error_kind='not_member',body='此代理已停用。',finished_at=NOW(),lease_owner=NULL,lease_until=NULL WHERE id=%s",(candidate['id'],))
+            continue
+        active=db.one(conn,"SELECT count(*) FROM projectops.assistant_message WHERE project_slug=%s AND agent_key=%s AND role='assistant' AND status='running' AND lease_until>NOW()",(slug,candidate['agent_key']))
+        active+=db.one(conn,"SELECT count(*) FROM projectops.orchestration_dispatch WHERE project_slug=%s AND agent_key=%s AND status='running' AND lease_until>NOW()",(slug,candidate['agent_key']))
+        if active>=profile['max_concurrency']:
+            continue
+        lease_owner=worker+':'+uuid.uuid4().hex[:16]
+        claimed=db.one(conn,'''WITH next AS (SELECT id FROM projectops.assistant_message
+            WHERE id=%s AND attempts<%s AND (status='queued' OR (status='running' AND lease_until<NOW())) FOR UPDATE SKIP LOCKED)
+            UPDATE projectops.assistant_message m SET status='running',attempts=m.attempts+1,lease_owner=%s,
+            lease_until=NOW()+make_interval(secs=>%s),error_kind=NULL,body=''
+            FROM next WHERE m.id=next.id RETURNING to_jsonb(m)''',(candidate['id'],MAX_ATTEMPTS,lease_owner,lease_seconds))
+        if claimed:
+            return {'id':claimed['id'],'slug':slug,'owner_id':claimed['owner_id'],'reply_to':claimed['reply_to'],
+                    'attempts':claimed['attempts'],'agent_key':claimed['agent_key'],'agent_snapshot':claimed['agent_snapshot'],
+                    'lease_owner':lease_owner}
+    # Exhausted leases cannot remain visible as permanently running answers.
     with conn.cursor() as cur:
         _abandon_expired(cur)
-        cur.execute(
-            """WITH next AS (
-                 SELECT id FROM projectops.assistant_message
-                 WHERE role = 'assistant' AND attempts < %(max)s
-                   AND (status = 'queued' OR (status = 'running' AND lease_until < NOW()))
-                 ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED)
-               UPDATE projectops.assistant_message m
-               SET status = 'running', attempts = m.attempts + 1, lease_owner = %(worker)s,
-                   lease_until = NOW() + make_interval(secs => %(lease)s), error_kind = NULL, body = ''
-               FROM next WHERE m.id = next.id
-               RETURNING m.id, m.project_slug, m.owner_id::text, m.reply_to, m.attempts,m.agent_key,m.agent_snapshot""",
-            {"max": MAX_ATTEMPTS, "worker": worker, "lease": lease_seconds},
-        )
-        row = cur.fetchone()
-        if not row:
-            return None
-        return {"id": row[0], "slug": row[1], "owner_id": row[2], "reply_to": row[3], "attempts": row[4],
-                'agent_key':row[5], 'agent_snapshot':row[6]}
+    return None
 
 
 def renew(conn, message_id: int, worker: str, lease_seconds: int) -> bool:
@@ -459,7 +469,7 @@ def _with_attachments(conn, rows: list[dict]) -> list[dict]:
 # ---------- 提案 ----------
 
 PROPOSAL_COLUMNS = """id, project_slug AS slug, owner_id, message_id, action, target, content, status, result, error,
-    created_at, decided_at, decided_by"""
+    created_at, decided_at, decided_by, agent_key, dispatch_id::text, race_group_task_id::text"""
 
 
 def revise_pending_proposal(conn, proposal_id, target, content, error=None):
@@ -471,9 +481,9 @@ def revise_pending_proposal(conn, proposal_id, target, content, error=None):
 def create_proposal(conn, slug: str, owner_id: str, message_id, action: str, target: dict, content: str) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            """INSERT INTO projectops.assistant_proposal (project_slug, owner_id, message_id, action, target, content)
-               VALUES (%s, %s, %s, %s, %s::jsonb, %s) RETURNING id""",
-            (slug, owner_id, message_id, action, json.dumps(target, ensure_ascii=False), content),
+            """INSERT INTO projectops.assistant_proposal (project_slug, owner_id, message_id, action, target, content,agent_key)
+               VALUES (%s, %s, %s, %s, %s::jsonb, %s,(SELECT agent_key FROM projectops.assistant_message WHERE id=%s)) RETURNING id""",
+            (slug, owner_id, message_id, action, json.dumps(target, ensure_ascii=False), content,message_id),
         )
         return cur.fetchone()[0]
 

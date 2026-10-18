@@ -2,6 +2,17 @@
 
 本文件詳細記錄 **OpenBench** 的系統架構、資料庫 Schema、API 路由、前端元件分工，以及「頭手分離代理 (Head-Limb Agent)」與「多型態畫布 (Multi-Surface Canvas)」的設計細節，供後續任何 AI 代理或開發者直接接手。
 
+
+## 2026-10-18 M8 接手入口
+
+四角色、每角色模型、背景編排、問題 Gate、2～3 候選比較與 ACP 已接入既有工作台。請先讀 [本輪驗證](AGENT_ORCHESTRATION_ACCEPTANCE.md) 與 [規格裁定](AGENT_ORCHESTRATION_SPEC.md#7-本輪實作裁定優先於前文示意介面)；本文件後方歷史待辦不代表目前缺漏。
+
+`agent_registry/agent_policy/agent_runtime` 管角色與共用執行；`orchestrator/orchestration_store` 管 Run/Task/Dispatch/Gate 與交易；`orchestration_service` 管私有成員 API；`orchestration_flow` 與 `orchestration_limb` 分別接既有 Flow／遠端 Worker。`acp_bridge` 只在可信 Worker 執行指定 adapter，Head 不執行使用者程式。
+
+UI 從「交給代理」、文件選字工具列或明確 @agent 留言進入；助理的「代理工作」集中看進行中、待裁決與成果。普通提案使用既有核對面板，競案單一 Gate 並排比較後原子選用。關閉板只輪詢輕量 counts，分頁游標及本地草稿不被背景刷新重設。
+
+資料庫順序到 161；執行入口 `worker.poll_once` 公平分配 chat／dispatch，共用 pool，不在模型執行期間持有 DB 交易。每槽重派有新 admission；取消即封住工具與輸出。部署 ACP、明確模型憑證及中止界線見 [WORKERS.md](WORKERS.md#acp-stdio-橋接)。
+
 ---
 
 ## 1. 為什麼做 OpenBench？（背景脈絡）

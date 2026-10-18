@@ -126,7 +126,7 @@ def _blocked_reason(item: dict) -> str:
     return ""
 
 
-def run(prompt, *, codex, model, effort, mcp_python, mcp_script, tool_url, token, timeout, workdir) -> CodexResult:
+def run(prompt, *, codex, model, effort, mcp_python, mcp_script, tool_url, token, timeout, workdir, cancel_event=None) -> CodexResult:
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     last = workdir / f"last-{uuid.uuid4().hex[:8]}.txt"
@@ -142,6 +142,14 @@ def run(prompt, *, codex, model, effort, mcp_python, mcp_script, tool_url, token
                               daemon=True)
     reader.start()
     timed_out = threading.Event()
+    monitor_stop = threading.Event()
+    def monitor_cancel():
+        while not monitor_stop.wait(.1):
+            if cancel_event is not None and cancel_event.is_set():
+                _kill_tree(proc)
+                return
+    monitor = threading.Thread(target=monitor_cancel, daemon=True)
+    monitor.start()
 
     def on_timeout():
         timed_out.set()
@@ -173,10 +181,12 @@ def run(prompt, *, codex, model, effort, mcp_python, mcp_script, tool_url, token
                 result.errors.append(str(message)[:300])
         proc.wait(timeout=30)
     finally:
+        monitor_stop.set()
         timer.cancel()
         if proc.poll() is None:
             _kill_tree(proc)
         reader.join(timeout=5)
+        monitor.join(timeout=1)
         proc.stdout.close()
         if not reader.is_alive():
             proc.stderr.close()

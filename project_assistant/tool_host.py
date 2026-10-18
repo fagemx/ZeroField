@@ -38,11 +38,14 @@ def summarize(name: str, args: dict) -> dict:
 
 
 class ToolHost:
-    def __init__(self, ctx, *, on_call=None):
+    def __init__(self, ctx=None, *, on_call=None, list_tools=None, call_tool=None):
         self.ctx = ctx
         self.on_call = on_call
         self.token = secrets.token_urlsafe(32)
         self.calls: list[dict] = []
+        self.list_tools = list_tools
+        self.call_tool = call_tool
+        self.pending = threading.Event()
         self._server = None
 
     def start(self) -> tuple[str, str]:
@@ -56,17 +59,10 @@ class ToolHost:
                 if (self.path!='/tools' or any(k.lower().startswith('cf-') for k in self.headers)
                     or not hmac.compare_digest(self.headers.get('X-PA-Token') or '',host.token)):
                     return host._reply(self,403,{'error':'權杖或工具清單路徑不正確'})
-                from project_assistant import agent_policy,agent_registry
-                conn = host.ctx.connection_factory()
                 try:
-                    profile=agent_registry.get_agent(conn,host.ctx.slug,getattr(host.ctx,'agent_key','coordinator'))
-                    specs=agent_policy.tool_specs_for(profile) if profile and profile['enabled'] else []
-                    frozen=getattr(host.ctx,'allowed_tools',None)
-                    if frozen is not None:
-                        specs=[s for s in specs if s['name'] in frozen]
-                    host._reply(self,200,{'tools':specs})
-                finally:
-                    conn.close()
+                    host._reply(self,200,{'tools':host.specs()})
+                except Exception:
+                    host._reply(self,403,{'error':'此回合的工具權限已失效'})
 
             def log_message(self, *args):
                 pass
@@ -75,6 +71,19 @@ class ToolHost:
         self._server.daemon_threads = True
         threading.Thread(target=self._server.serve_forever, daemon=True, name="pa-tool-host").start()
         return f"http://127.0.0.1:{self._server.server_address[1]}", self.token
+
+    def specs(self):
+        if self.list_tools:
+            return self.list_tools()
+        from project_assistant import agent_policy, agent_registry
+        conn = self.ctx.connection_factory()
+        try:
+            profile = agent_registry.get_agent(conn, self.ctx.slug, getattr(self.ctx, 'agent_key', 'coordinator'))
+            specs = agent_policy.tool_specs_for(profile) if profile and profile['enabled'] else []
+            frozen = getattr(self.ctx, 'allowed_tools', None)
+            return [s for s in specs if frozen is None or s['name'] in frozen]
+        finally:
+            conn.close()
 
     def stop(self) -> None:
         server, self._server = self._server, None
@@ -99,8 +108,11 @@ class ToolHost:
         if not request.path.startswith("/tool/"):
             return self._reply(request, 404, {"error": "沒有這個功能"})
         name = request.path[len("/tool/"):]
-        length = int(request.headers.get("Content-Length") or 0)
-        if length > MAX_BODY:
+        try:
+            length = int(request.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._reply(request,400,{'error':'參數長度不正確'})
+        if length < 0 or length > MAX_BODY:
             return self._reply(request, 413, {"error": "參數太長"})
         try:
             args = json.loads(request.rfile.read(length) or b"{}")
@@ -109,7 +121,16 @@ class ToolHost:
         args = args if isinstance(args, dict) else {}
         summary = summarize(name, args)
         try:
-            payload = {"text": tools.call(self.ctx, name, args)}
+            if name not in {spec['name'] for spec in self.specs()}:
+                raise tools.ToolError('POLICY_DENIED：此回合未授予此工具')
+            result = self.call_tool(name, args) if self.call_tool else tools.call(self.ctx, name, args)
+            payload = {"text": result}
+            if name in ('ask_decision_gate','trigger_flow_run'):
+                try:
+                    if json.loads(result).get('awaiting_gate') is True:
+                        self.pending.set()
+                except (ValueError, TypeError, AttributeError):
+                    pass
             summary["ok"] = True
         except tools.ToolError as exc:
             payload = {"error": str(exc)}

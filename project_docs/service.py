@@ -936,9 +936,9 @@ def create_annotation(conn, me: Identity, slug: str, body: dict):
         if not comment:
             return _error(400, "留言是空的")
         annotation_id = repo.row_annotation_id(conn, slug, tab_key, rid, me.actor_id)
-        repo.add_activity(conn, slug, tab_key, rid, kind="comment", actor_id=me.actor_id, body=comment[0],
+        comment_id=repo.add_activity(conn, slug, tab_key, rid, kind="comment", actor_id=me.actor_id, body=comment[0],
                           mentions=comment[1], annotation_id=annotation_id)
-        return 200, {"annotation": _one(conn, slug, annotation_id)}
+        return 200, {"annotation": _one(conn, slug, annotation_id),'comment_id':comment_id}
     anchor = anchoring.clean_anchor(body.get("anchor"))
     if not anchor:
         return _error(400, "選取的字不對，請重新選一次")
@@ -961,10 +961,11 @@ def create_annotation(conn, me: Identity, slug: str, body: dict):
     anchor = anchoring.anchor_at(text, start, text[start:end])
     annotation_id = repo.create_annotation(conn, slug, tab_key, kind="text", anchor=anchor, actor_id=me.actor_id,
                                            style=style, color=color, label=label)
+    comment_id=None
     if comment:
-        repo.add_activity(conn, slug, tab_key, f"ann{annotation_id}", kind="comment", actor_id=me.actor_id,
+        comment_id=repo.add_activity(conn, slug, tab_key, f"ann{annotation_id}", kind="comment", actor_id=me.actor_id,
                           body=comment[0], mentions=comment[1], annotation_id=annotation_id)
-    return 200, {"annotation": _one(conn, slug, annotation_id)}
+    return 200, {"annotation": _one(conn, slug, annotation_id),'comment_id':comment_id}
 
 
 def comment_annotation(conn, me: Identity, slug: str, annotation_id: int, body: dict):
@@ -974,9 +975,9 @@ def comment_annotation(conn, me: Identity, slug: str, annotation_id: int, body: 
     comment, problem = _comment_body(conn, body.get("body"))
     if problem:
         return problem
-    repo.add_activity(conn, slug, ann["tab_key"], _thread_anchor(ann), kind="comment", actor_id=me.actor_id,
+    comment_id=repo.add_activity(conn, slug, ann["tab_key"], _thread_anchor(ann), kind="comment", actor_id=me.actor_id,
                       body=comment[0], mentions=comment[1], annotation_id=annotation_id)
-    return 200, {"annotation": _one(conn, slug, annotation_id)}
+    return 200, {"annotation": _one(conn, slug, annotation_id),'comment_id':comment_id}
 
 
 def resolve_annotation(conn, me: Identity, slug: str, annotation_id: int, body: dict):

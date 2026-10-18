@@ -1,0 +1,58 @@
+# M8 final gate receipt
+Code/fix SHA: eab82fc7e898a8a2b9b2fa86e8bbc49100c77c1a
+Reviewed SHA: 231f45512d9b5d63d74c14a9ab9a50078beb4d23
+Base: 72670290a9c60737478f2becc89c77110948a031
+Python 3.12.14 / PostgreSQL16 / dedicated openbench_m8_test at 127.0.0.1:55583
+Branch: codex/agent-orchestration; local only; no push/merge/deploy
+Review: seven Important findings fixed in one author TDD pass, no second independent verdict.
+
+## final-fixed-backend.log
+SHA256 a21946feb68e77146eb30c4a9caed59b8d174c4226d6d8b175fa71c234a6a510
+{"task_id": "task", "error": "503"}
+{"task_id": "task", "error": "Lease was lost"}
+{"task_id": "bfaf89be-75ae-40c0-9e3f-2e4bc02b2a60", "status": "delivered"}
+{"task_id": "2dba2e13-a19f-45f6-8efc-e0b328ab2713", "status": "delivered"}
+{"task_id": "2649f487-9a59-4deb-860d-2025e71a1480", "status": "delivered"}
+{"task_id": "e1332b71-8e9d-4264-b8ed-e0a79c00bd3b", "status": "delivered"}
+{"task_id": "23975d7f-a6b1-4bcc-bdf1-5dd4a7300374", "status": "delivered"}
+{"task_id": "97a3ac86-df97-4d3a-a40a-1ae81ff70d3c", "status": "delivered"}
+{"task_id": "bfeb1e03-7f1a-4901-8e28-4d218dda86fe", "status": "delivered"}
+----------------------------------------------------------------------
+Ran 235 tests in 153.662s
+
+OK
+
+## final-fixed-ui.log
+SHA256 b078c5203ca68ffb86464f0b284d1895d4613ffe5e396c761f8b44fa3010d1f7
+  ...
+1..76
+# tests 76
+# suites 0
+# pass 76
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 915.0054
+
+## final-fixed-build.log
+SHA256 52df79f889d5d87fe431be17b5702a700f1e715f3770a0682ce73285de7ad3ac
+vite v6.4.4 building for production...
+transforming...
+✓ 300 modules transformed.
+rendering chunks...
+computing gzip size...
+../static/projects/index.html                     0.42 kB │ gzip:   0.29 kB
+../static/projects/assets/index-BTKx6zkl.css    125.34 kB │ gzip:  24.64 kB
+../static/projects/assets/index-Ck01zrcb.js   1,157.48 kB │ gzip: 373.65 kB
+✓ built in 7.46s
+
+## final-wheel-off-checkout.log
+SHA256 f6b65c63c87a7bb97da4d6561e2a1a70bb92c0181c1bf44d1150f119eeed885d
+Off-checkout installed wheel: SQL10, prompts7, ACP import, real MCP list/call passed. cwd=C:\Users\synvoke\AppData\Local\Temp
+
+## acp-real-final-config.log
+SHA256 b19d7882912798b44ce34fd751483f5243a14d67883717e88316e07a1ed3e326
+{"status": "succeeded", "output": {"text": "Warning: Model metadata for `local-fixture` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.\n\nACP local fixture completed."}, "agent_info": {"name": "@agentclientprotocol/codex-acp", "title": "Codex", "version": "2.2.2"}}
+
+Wheel SHA256 25bc98869ea8a0c01d5f5ff47d4e33428a0397b5982852e2f347bdfce3161ead

@@ -1,0 +1,148 @@
+[
+  {
+    "flow_key": "office-flow",
+    "flow_run_id": "a701745f-2e12-4324-9958-871467b99e43",
+    "steps": [
+      {
+        "dispatch_id": "78ddee39-50ba-4723-a601-88d6210ffee3",
+        "task_id": "7034ef2a-ed83-45c7-8327-498b71ee4193",
+        "agent_key": "sheet_ops",
+        "admission_no": 1,
+        "result": "awaiting_gate"
+      },
+      {
+        "dispatch_id": "99d99d9e-3a14-4736-ae60-bc46eddef225",
+        "task_id": "c6a4db43-de08-42a9-9b8a-e4da394f5f5f",
+        "agent_key": "sheet_ops",
+        "admission_no": 2,
+        "result": "awaiting_gate"
+      },
+      {
+        "proposal_id": 708,
+        "decision": "apply"
+      },
+      {
+        "proposal_id": 709,
+        "decision": "apply"
+      },
+      {
+        "dispatch_id": "890ffd94-6974-4afb-a280-89a9112a5981",
+        "task_id": "fee5df2a-8d01-4b3a-80bc-5937841416d9",
+        "agent_key": "qa_critic",
+        "admission_no": 3,
+        "result": "succeeded"
+      },
+      {
+        "dispatch_id": "186b31af-86b2-4364-882f-9fef4fe8387a",
+        "task_id": "1f553363-eda7-4a63-9dab-e9d773472052",
+        "agent_key": "doc_writer",
+        "admission_no": 4,
+        "result": "awaiting_gate"
+      },
+      {
+        "proposal_id": 710,
+        "decision": "apply"
+      }
+    ],
+    "status": "succeeded"
+  },
+  {
+    "flow_key": "free-flow",
+    "flow_run_id": "4636dbaf-138b-42db-b2e6-fa3c1044a77c",
+    "steps": [
+      {
+        "dispatch_id": "d8814bd8-d99b-48e8-9015-2d0c9246b4a9",
+        "task_id": "02fcd4d9-bf8c-4c2d-b686-2ae5954ed1a6",
+        "agent_key": "coordinator",
+        "admission_no": 5,
+        "result": "awaiting_gate"
+      },
+      {
+        "gate_id": "711f6e3e-6dca-4bd5-87de-7c21acb9cd26",
+        "decision": "0"
+      },
+      {
+        "dispatch_id": "9cb2912d-2834-4a00-b275-cbee8e35ae17",
+        "task_id": "02fcd4d9-bf8c-4c2d-b686-2ae5954ed1a6",
+        "agent_key": "coordinator",
+        "admission_no": 6,
+        "result": "succeeded"
+      },
+      {
+        "dispatch_id": "ff657876-e135-4f9c-af01-8eecc62f5c55",
+        "task_id": "dccaebce-b559-4e9a-b1be-8af5d3210a63",
+        "agent_key": "doc_writer",
+        "admission_no": 7,
+        "result": "awaiting_gate"
+      },
+      {
+        "dispatch_id": "fe1a4f7f-1793-4978-9533-80243c8fbec1",
+        "task_id": "41042254-03f1-43c0-a323-406cdbfbf6b7",
+        "agent_key": "doc_writer",
+        "admission_no": 8,
+        "result": "awaiting_gate"
+      },
+      {
+        "proposal_id": 711,
+        "decision": "apply"
+      },
+      {
+        "proposal_id": 712,
+        "decision": "apply"
+      },
+      {
+        "dispatch_id": "87e0867f-39b4-4912-92e5-49d54534baaa",
+        "task_id": "fd1f9735-7b76-4d44-b435-7746b2590cee",
+        "agent_key": "doc_writer",
+        "admission_no": 9,
+        "result": "awaiting_gate"
+      },
+      {
+        "proposal_id": 713,
+        "decision": "apply"
+      }
+    ],
+    "status": "succeeded"
+  },
+  {
+    "project_slug": "m8-journeys-3",
+    "tasks": [
+      {
+        "count": 1,
+        "status": "succeeded",
+        "node_id": "a"
+      },
+      {
+        "count": 1,
+        "status": "succeeded",
+        "node_id": "b"
+      },
+      {
+        "count": 2,
+        "status": "succeeded",
+        "node_id": "fill"
+      },
+      {
+        "count": 1,
+        "status": "succeeded",
+        "node_id": "join"
+      },
+      {
+        "count": 1,
+        "status": "succeeded",
+        "node_id": "qa"
+      },
+      {
+        "count": 1,
+        "status": "succeeded",
+        "node_id": "question"
+      },
+      {
+        "count": 1,
+        "status": "succeeded",
+        "node_id": "report"
+      }
+    ],
+    "untouched_row": "b_office3"
+  }
+]

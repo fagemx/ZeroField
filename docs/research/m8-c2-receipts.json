@@ -1,0 +1,68 @@
+[
+  {
+    "run_id": "9a868e5a-38a8-44c4-9913-e2ca95a34363",
+    "status": "canceled",
+    "task_id": "c868587c-2f0f-4a39-bf6d-452091164994",
+    "strategy": "race",
+    "agent_key": "coordinator",
+    "dispatch_id": "25a66680-539f-4487-9ee0-1119f2ae9df5",
+    "proposal_id": 522,
+    "proposal_status": "dismissed",
+    "winning_dispatch_id": "7caa8638-b166-4938-9aab-87dbfbec7276"
+  },
+  {
+    "run_id": "9a868e5a-38a8-44c4-9913-e2ca95a34363",
+    "status": "succeeded",
+    "task_id": "c868587c-2f0f-4a39-bf6d-452091164994",
+    "strategy": "race",
+    "agent_key": "sheet_ops",
+    "dispatch_id": "7caa8638-b166-4938-9aab-87dbfbec7276",
+    "proposal_id": 523,
+    "proposal_status": "applied",
+    "winning_dispatch_id": "7caa8638-b166-4938-9aab-87dbfbec7276"
+  },
+  {
+    "run_id": "fbf390ab-a3a5-4b1e-a38f-68712a96e90a",
+    "status": "timeout",
+    "task_id": "88f401bf-1250-49b3-9867-402234cdf17c",
+    "strategy": "race",
+    "agent_key": "coordinator",
+    "dispatch_id": "ad744cd9-000e-4d57-b103-29ea3e17c482",
+    "proposal_id": 524,
+    "proposal_status": "dismissed",
+    "winning_dispatch_id": null
+  },
+  {
+    "run_id": "fbf390ab-a3a5-4b1e-a38f-68712a96e90a",
+    "status": "timeout",
+    "task_id": "88f401bf-1250-49b3-9867-402234cdf17c",
+    "strategy": "race",
+    "agent_key": "sheet_ops",
+    "dispatch_id": "e3701a64-0015-483d-b76e-1c29a5cc8000",
+    "proposal_id": 525,
+    "proposal_status": "dismissed",
+    "winning_dispatch_id": null
+  },
+  {
+    "run_id": "4958a436-0f1e-4814-b4cc-6933a045708f",
+    "status": "succeeded",
+    "task_id": "944b2f5e-5974-4bb4-b822-1fdf3c32415e",
+    "strategy": "race",
+    "agent_key": "limb:6d20bdec-9128-4dfd-9d54-6dba6355a774",
+    "dispatch_id": "30ab5bc2-af35-4aec-a47f-fe81d6bb4824",
+    "proposal_id": 527,
+    "proposal_status": "applied",
+    "winning_dispatch_id": "30ab5bc2-af35-4aec-a47f-fe81d6bb4824"
+  },
+  {
+    "run_id": "4958a436-0f1e-4814-b4cc-6933a045708f",
+    "status": "canceled",
+    "task_id": "944b2f5e-5974-4bb4-b822-1fdf3c32415e",
+    "strategy": "race",
+    "agent_key": "limb:9f1e2ae2-876d-41b6-8731-811335136ac8",
+    "dispatch_id": "be29bc09-c3ee-4353-8a39-8146d3203a87",
+    "proposal_id": 526,
+    "proposal_status": "dismissed",
+    "winning_dispatch_id": "30ab5bc2-af35-4aec-a47f-fe81d6bb4824"
+  }
+]

@@ -3,6 +3,9 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { shortTime } from "../format.js";
 import { ManagerPanel } from "./ManagerPanel.jsx";
 import { TableProposalReview } from "./TableProposalReview.jsx";
+import { AgentSelector } from './AgentSelector.jsx';
+import { AgentBoard, OrchestrationCounters } from './AgentBoard.jsx';
+import { agentSuggestions, resolveAgentTarget, messagePersona } from './agentModel.js';
 import {
   appliedLabel, blocks, clip, currentFocus, documentUrl, inlineParts, isReportSource, lookedAt, progressCounts,
   sourceTarget,
@@ -199,6 +202,7 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
   const display = (proposal.target && proposal.target.display) || "";
   const copy = proposalCopy(proposal);
   const actionLabel = proposal.action === "table_edit" ? "修改表格" : proposal.action;
+  if (proposal.race_group_task_id && proposal.status === 'pending') return <div className="pcard">競速候選已準備，請到「代理工作」比較並選用版本。</div>;
   if (proposal.status === "applied") {
     return (
       <div className="pcard sent"><div className="h">✓ {appliedLabel(proposal)}</div>
@@ -241,7 +245,8 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
           <div className="bubble">
             <Attachments slug={slug} items={files} onZoom={onZoom} />
             {message.body && <Inline text={message.body} />}
-            {message.request_scope && <small className="message-scope">固定範圍：{message.request_scope.table_name} · {message.request_scope.row_ids?.length} 列 · {message.request_scope.column_ids?.length} 欄</small>}
+            {message.source_ref && <small className="message-scope">來自標註留言的交辦</small>}
+            {message.request_scope && <small className="message-scope">{message.request_scope.kind === 'doc' ? `固定段落：${message.request_scope.tab_title} · ${message.request_scope.block_ids.length} 段` : `固定範圍：${message.request_scope.table_name} · ${message.request_scope.row_ids?.length} 列 · ${message.request_scope.column_ids?.length} 欄`}</small>}
           </div>
         </div>
         {(message.notes || []).map((note) => <div key={note} className="guard">🛡 {note}</div>)}
@@ -255,14 +260,14 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
     );
   }
   if (message.status === "queued" || message.status === "running") {
-    const working = <div className="working">✦ <span>{workingLine(message)}</span><span className="dots" /></div>;
+    const working = <div className="working"><span>{messagePersona(message)} · {workingLine(message)}</span><span className="dots" /></div>;
     const live = splitSources(liveText(message)).main;
     if (!live) return working;
     const lookedLive = lookedAt(message.tools);
     return (
       <>
         <div className="msg-a writing">
-          <div className="who-a">✦ 專案助理</div>
+          <div className="who-a">{messagePersona(message)}</div>
           {lookedLive.length > 0 && <div className="looked">查了：{lookedLive.join("、")}</div>}
           <div className="bubble"><Rich text={live} /></div>
         </div>
@@ -276,7 +281,7 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
   return (
     <>
       <div className={"msg-a" + (message.status === "failed" ? " failed" : "")}>
-        <div className="who-a">✦ 專案助理</div>
+        <div className="who-a">{messagePersona(message)}</div>
         {looked.length > 0 && <div className="looked">查了：{looked.join("、")}</div>}
         <div className="bubble"><Rich text={main} /></div>
         {download && <a className="doc-dl" href={download} download>⬇ 下載 Word 檔</a>}
@@ -355,7 +360,11 @@ function named(file) {
 }
 
 function Composer({ assistant, value, onChange, inputRef }) {
-  const busy = assistant.busy || assistant.sending;
+  const busy = assistant.busyForSelectedAgent || assistant.sending;
+  const agents = assistant.state?.agents || [];
+  const suggestions = agentSuggestions(value, agents);
+  const latestValue = useRef(value);
+  latestValue.current = value;
   const picker = useRef(null);
   const [over, setOver] = useState(false);
   const files = assistant.files || [];
@@ -370,7 +379,7 @@ function Composer({ assistant, value, onChange, inputRef }) {
     const text = value.trim();
     if ((!text && !ready.length) || busy || assistant.uploading) return;
     const result = await assistant.send(text);
-    if (result) onChange("");
+    if (result && latestValue.current === value) onChange("");
   };
   const take = (list) => {
     const picked = [...(list || [])].map(named);
@@ -391,6 +400,10 @@ function Composer({ assistant, value, onChange, inputRef }) {
         setOver(false);
         take(event.dataTransfer.files);
       }}>
+      <AgentSelector agents={agents} value={assistant.selectedAgent} onChange={assistant.setSelectedAgent} disabled={assistant.sending} />
+      {suggestions.length > 0 && <div className="agent-suggestions" aria-label="代理點名建議">{suggestions.map(agent => <button key={agent.agent_key} type="button" onClick={() => {
+        assistant.setSelectedAgent(agent.agent_key); onChange(value.replace(/@[^\s@]*$/, `@${agent.agent_key} `)); inputRef.current?.focus();
+      }}>{agent.icon} {agent.display_name} <small>@{agent.agent_key}</small></button>)}</div>}
       {assistant.scope && <div className="request-scope"><button type="button" aria-label="移除固定範圍" disabled={busy} onClick={() => assistant.setScope(null)}>✕</button>
         <b>{assistant.scope.table_name || "已選資料"}</b> · {assistant.scope.row_ids.length} 列 · {assistant.scope.column_ids.length} 欄
         <small>本次只修改選定範圍；切換分頁不會改變目標。</small></div>}
@@ -414,8 +427,13 @@ function Composer({ assistant, value, onChange, inputRef }) {
         <input ref={picker} type="file" multiple hidden accept={ACCEPT_FILES}
           onChange={(event) => { take(event.target.files); event.target.value = ""; }} />
         <textarea ref={inputRef} rows={1} value={value} aria-label="跟專案助理說"
-          placeholder={assistant.busy ? "上一句還在回答…" : "描述要完成的工作，也可以指定分頁或資料範圍…"}
-          onChange={(event) => onChange(event.target.value)}
+          placeholder={assistant.busyForSelectedAgent ? "這位代理還在回答，可以選擇另一位…" : "描述工作，也可以輸入 @ 點名代理…"}
+          onChange={(event) => {
+            const text = event.target.value; onChange(text);
+            if (/@[a-zA-Z\u3400-\u9fff]/.test(text)) {
+              try { assistant.setSelectedAgent(resolveAgentTarget(text, null, agents)); } catch { /* Keep incomplete mention as draft. */ }
+            }
+          }}
           onPaste={(event) => {
             const pasted = [...(event.clipboardData ? event.clipboardData.files : [])];
             if (!pasted.length) return;
@@ -576,13 +594,15 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
   const manager = Boolean(assistant.state && assistant.state.flags && assistant.state.flags.manager);
   const forwardsOpen = (assistant.state && assistant.state.forwards_open) || 0;
   const task = taskLine(assistant.state, focus);
-  const tab = paneTab(view, history);
+  const tab = view === 'agents' ? 'agents' : paneTab(view, history);
   const pick = (key) => {
+    if (key === 'agents') { setHistory(false); onView('agents'); return; }
     if (key === "manage") {
       onView("manage");
       return;
     }
-    if (view === "manage") onView("chat");
+    if (view === "manage" || view === 'agents') onView("chat");
+    if (key === 'chat') assistant.reload();
     setHistory(key === "history");
   };
   // 10/15 負責人：上面太亂 → 標題列只留名字、ⓘ 和視窗按鈕；下面一列分頁（跟「標註」清單同一套）＋「＋ 新對話」
@@ -604,10 +624,12 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
             {t.label}{t.count > 0 && <span className="n hot">{t.count}</span>}
           </button>
         ))}
-        {view !== "manage" && <NewConversation assistant={assistant} onDone={() => setHistory(false)} />}
+        <button type="button" role="tab" aria-selected={tab === 'agents'} className={tab === 'agents' ? 'on' : undefined} onClick={() => pick('agents')}>代理工作</button>
+        {view !== "manage" && view !== 'agents' && <NewConversation assistant={assistant} onDone={() => setHistory(false)} />}
       </div>
+      <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => pick('agents')} />
       <div className={"pa-info" + (info ? " on" : "")}>{INFO(assistant.privacyMode)}</div>
-      {tab === "manage" ? (
+      {tab === 'agents' ? <AgentBoard assistant={assistant} me={me} onOpenTarget={onOpenTab} /> : tab === "manage" ? (
         <div className="kai-side"><ManagerPanel slug={slug} onError={onError} onToast={onToast} /></div>
       ) : tab === "history" ? (
         <div className="pa-chat"><HistoryView assistant={assistant} tabs={tabs} onOpenTab={onOpenTab} onClose={() => setHistory(false)} /></div>
@@ -650,6 +672,7 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
     <div className="ws" aria-label="專案助理工作區">
       <div className="ws-head">
         <h1><span className="spark">✦</span>專案助理</h1>
+        <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => onView('agents')} />
         <span className="sub">{me.name}的工作區｜陪你把專案往前推</span>
         {manager && <Seg view={view} onView={onView} />}
         <div className="pills">
@@ -661,7 +684,7 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
         </div>
         <button type="button" className="btn" onClick={onCollapse}><span className="lg">⤡ 收回側邊欄</span><span className="sm">← 回到專案頁</span></button>
       </div>
-      {view === "manage" ? (
+      {view === 'agents' ? <AgentBoard assistant={assistant} me={me} onOpenTarget={onOpenTab} /> : view === "manage" ? (
         <div className="kai-full"><ManagerPanel slug={slug} onError={onError} onToast={onToast} /></div>
       ) : (
         <>

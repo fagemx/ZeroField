@@ -164,7 +164,7 @@ function cursorBid(editor) {
 // 一個畫面：大家都在這裡看、標註；能改的地方點一下就能打字，停止打字 1.5 秒一塊一塊存。
 export function DocSurface({ slug, tab, tabs, me, members, values, annotations, locks, focusId, focusRequest, flashId, view,
   showResolved, attachId, onField, onFocus, onAnnotation, onAnnotations, onNavigate, onSaved, versionsFor, onVersionsShown,
-  onOpenPanel, onOpenHistory, onAttachDone, onError, onToast, controlRef, assistRows, onAssistRow }) {
+  onOpenPanel, onOpenHistory, onAttachDone, onError, onToast, controlRef, assistRows, onAssistRow, agents = [], onAgentRouted }) {
   const admin = me.role === "admin";
   const editorRef = useRef(null);
   const surfaceRef = useRef(null);
@@ -964,9 +964,10 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   };
 
   const createAnnotation = async (body) => {
-    await flush();
-    const result = await api.post(`/projects/api/${slug}/annotations`, { tab_key: tab.key, ...body });
+    if (!(await flush())) throw new Error('來源尚未儲存，請先處理編輯衝突');
+    const result = await api.post(`/projects/api/${slug}/annotations`, { tab_key: tab.key, ...body, source_revision: sync.current.revision });
     onAnnotation(result.annotation);
+    if (result.annotation.agent_request) onAgentRouted?.(result.annotation.agent_request);
     return result.annotation;
   };
 
@@ -1046,13 +1047,14 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     }
   });
 
-  const onNote = () => {
+  const onNote = (agentKey = null) => {
     const current = sel;
     finishSel();
     if (!current) return;
     const draft = {
       id: "d-" + newId(""), kind: "text", tab_key: tab.key, anchor: current.anchor, draft: true, style: null, color: null,
       label: null, created_by: me.actor_id, created_by_name: me.name, created_at: nowIso(), messages: [],
+      initialText: typeof agentKey === 'string' ? `@${agentKey} ` : '',
     };
     setDrafts((list) => [...list, draft]);
     onFocus(draft.id);
@@ -1102,8 +1104,10 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         if (a.draft && a.kind === "row") result = await createAnnotation({ row: a.anchor.rid, body: extra.body });
         else if (a.draft) result = await createAnnotation({ anchor: a.anchor, body: extra.body });
         else {
-          const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/comments`, { body: extra.body });
+          if (!(await flush())) throw new Error('來源尚未儲存，請先處理編輯衝突');
+          const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/comments`, { body: extra.body, source_revision: sync.current.revision });
           onAnnotation(data.annotation);
+          if (data.annotation.agent_request) onAgentRouted?.(data.annotation.agent_request);
           result = data.annotation;
         }
         return result;
@@ -1378,7 +1382,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     : `${editing ? `正在改：${editing.what}。` : ""}點旁邊空白處就會自動存${saveState.at ? `；上次儲存 ${shortTime(saveState.at)}` : ""}`;
 
   const fields = useMemo(() => ({ values: values || {}, onField }), [values, onField]);
-  const cardProps = { me, members, busy, adding, onAct: act };
+  const cardProps = { me, members, agents, busy, adding, onAct: act };
   const focusedItem = layout.items.find((it) => String(it.a.id) === String(focusId))
     || (focusId ? (() => { const a = byId(focusId); return a ? { a, want: 0, rowLabel: null } : null; })() : null);
   const orphanCount = annotations.filter((a) => a.tab_key === tab.key && a.orphaned_at && !a.resolved_at).length;
@@ -1521,7 +1525,9 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
                 title="在字下面畫一條線；同一段再按一次就取消" disabled={busy} onClick={onUnderline}><span className="u">劃線</span></button>
               {sel.mine.length > 0 && <button type="button" className="rm" title="移除你在這段畫的螢光筆和劃線" disabled={busy} onClick={onRemoveMine}>✕ 移除</button>}
               <button type="button" title="貼上：問題／要修改／已確認" onClick={() => setLabelMenu(!labelMenu)}>標註 ▾</button>
-              <button type="button" title="在旁邊寫一段話，可以 @ 人" onClick={onNote}>補充說明</button>
+              <button type="button" title="在旁邊寫一段話，可以 @ 人" onClick={() => onNote()}>補充說明</button>
+              {me.can_write && agents.some(agent => agent.agent_key === 'doc_writer' && agent.enabled) &&
+                <button type="button" title="為選取段落建立代理留言，送出後才開始處理" onClick={() => onNote('doc_writer')}>交給代理</button>}
             </>
           )}
         </div>

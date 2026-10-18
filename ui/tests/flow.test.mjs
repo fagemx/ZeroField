@@ -27,6 +27,12 @@ test("React Flow adapter preserves execution attributes and original coordinates
   assert.equal(JSON.stringify(definition), snapshot);
 });
 
+test('moving a profile-bound node preserves its agent routing', () => {
+  const definition = {nodes:[{id:'profile',agent_key:'sheet_ops',capability:'llm',x:0,y:0}],edges:[]};
+  const moved = applyCanvasPositions(definition,[{type:'position',id:'profile',position:{x:10,y:20}}]);
+  assert.equal(moved.nodes[0].agent_key,'sheet_ops');
+});
+
 test("definition undo and redo restore complete connection and configuration changes", () => {
   const a = createStep("transform", "a"), b = createStep("generate", "b", 1);
   const original = { nodes: [a, b], edges: [], custom: "preserved" };

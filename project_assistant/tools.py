@@ -35,6 +35,15 @@ class ToolContext:
     report_dir: Path
     message_id: int | None
     agent_key: str = 'coordinator'
+    lease_owner: str | None = None
+    dispatch_id: str | None = None
+    admission_no: int | None = None
+    lease_token: str | None = None
+    scope: dict | None = None
+    write_mode: str = 'proposal'
+    worker_id: str | None = None
+    run_id: str | None = None
+    deadline_at: str | None = None
 
 
 def _clip(text: str) -> str:
@@ -122,14 +131,30 @@ def _find_tab(conn, slug, page):
 
 
 def _rendered(conn, slug, tab) -> str:
-    values = todo.plain_values(conn, slug).get(tab["key"], {})
+    values = tab.get('_plain_values') if '_plain_values' in tab else todo.plain_values(conn, slug).get(tab["key"], {})
     return render_doc(tab["doc"], values)
+
+
+def _context_tab(ctx,conn,page):
+    if not getattr(ctx,'dispatch_id',None):
+        return _find_tab(conn,ctx.slug,page)
+    from project_assistant import orchestrator as cp,orchestration_store as db
+    dispatch=db.get_dispatch(conn,ctx.slug,ctx.dispatch_id)
+    task=db.get_task(conn,ctx.slug,dispatch['task_id'])
+    cached=task['input_snapshot']['tabs']
+    key=next((key for key,tab in cached.items() if page in (key,tab['title'])),None)
+    if key is None:
+        key=_find_tab(conn,ctx.slug,page)['key']
+    tab=cp.snapshot_tab(conn,ctx.slug,ctx.dispatch_id,key)
+    tab['_field_values']=tab['values']
+    tab['_plain_values']={fid:value.get('value','') if isinstance(value,dict) else value for fid,value in tab['values'].items()}
+    return tab
 
 
 def list_pages(ctx, conn, args):
     out = []
     for t in _tabs(conn, ctx.slug):
-        tab = repo.get_tab(conn, ctx.slug, t["key"])
+        tab = _context_tab(ctx,conn,t['key'])
         body = [ln for ln in _rendered(conn, ctx.slug, tab).splitlines() if ln.strip() and not ln.startswith("#")]
         prefix = "  " if t.get("parent_key") else ""
         out.append(f"{prefix}- {t['key']}：{t['title']}——{(body[0] if body else '')[:80]}")
@@ -137,13 +162,13 @@ def list_pages(ctx, conn, args):
 
 
 def read_page(ctx, conn, args):
-    tab = _find_tab(conn, ctx.slug, args.get("key"))
+    tab = _context_tab(ctx,conn,args.get('key'))
     if tab.get("surface_type") == "sheet" or "offset" in args:
         try:
             offset, limit = max(0, int(args.get("offset", 0))), max(1, min(30, int(args.get("limit", 15))))
         except (ValueError, TypeError):
             raise ToolError("offset/limit 必須為整數") from None
-        values = todo.plain_values(conn, ctx.slug).get(tab["key"], {})
+        values = tab.get('_plain_values') if '_plain_values' in tab else todo.plain_values(conn, ctx.slug).get(tab["key"], {})
         items = []
         for table in tab["doc"].get("content", []):
             if table.get("type") == "table":
@@ -178,7 +203,7 @@ def search_pages(ctx, conn, args):
         raise ToolError("query 不能是空的")
     hits = []
     for t in _tabs(conn, ctx.slug):
-        tab = repo.get_tab(conn, ctx.slug, t["key"])
+        tab = _context_tab(ctx,conn,t['key'])
         heading = t["title"]
         for line in _rendered(conn, ctx.slug, tab).splitlines():
             if line.startswith("#"):
@@ -463,8 +488,9 @@ def _display(action, target):
 
 
 def propose(ctx, conn, args):
-    if _request_scope(ctx, conn):
-        raise ToolError("這次需求有固定的表格範圍，請使用 propose_table_edit 核對並修改選取列／欄")
+    scope=_request_scope(ctx,conn)
+    if scope and args.get('action') not in ('在段落加標註','寫進那一題的討論','留言問負責人'):
+        raise ToolError('這次需求有固定範圍，請使用結構化修改或對選取資料提出標註／討論')
     action = args.get("action")
     if action not in PROPOSE_ACTIONS:
         raise ToolError("action 只能是：" + "、".join(PROPOSE_ACTIONS))
@@ -474,7 +500,7 @@ def propose(ctx, conn, args):
     target: dict = {}
     tab = None
     if action != "私下轉給負責人":
-        tab = _find_tab(conn, ctx.slug, args.get("page"))
+        tab = _context_tab(ctx,conn,args.get('page'))
         target.update({"tab_key": tab["key"], "tab_title": tab["title"]})
     if action in ("寫進那一題的討論", "改狀態", "填交接追蹤") or (action == "留言問負責人" and args.get("row")):
         bid, label, _, _ = _find_row(tab, args.get("row"))
@@ -506,7 +532,20 @@ def propose(ctx, conn, args):
     elif not content:
         raise ToolError("content 是要問負責人的話")
     target["display"] = _display(action, target)
+    if scope:
+        if tab['key']!=scope['target_tab']:
+            raise ToolError('POLICY_DENIED：標註超出固定分頁')
+        if scope.get('kind')=='doc':
+            selected=[block for block in tab['doc'].get('content',[]) if block.get('attrs',{}).get('bid') in scope['block_ids']]
+            if target.get('rid') or not target.get('quote') or target['quote'] not in doc_text({'type':'doc','content':selected}):
+                raise ToolError('POLICY_DENIED：標註超出選取段落')
+        elif target.get('rid') not in scope['row_ids']:
+            raise ToolError('POLICY_DENIED：請對選取列提出討論')
+        target['request_scope']=scope
     proposal_id = store.create_proposal(conn, ctx.slug, ctx.me.actor_id, ctx.message_id, action, target, content)
+    if getattr(ctx,'dispatch_id',None):
+        from project_assistant.orchestrator import attach_proposal
+        attach_proposal(conn,ctx,proposal_id)
     return (f"已建立提案 #{proposal_id}：{action} → {target['display']}。"
             "畫面上會出現確認卡，等使用者按確認才會生效。")
 
@@ -523,6 +562,11 @@ def offer_document(ctx, conn, args):
 
 
 def _request_scope(ctx, conn):
+    if getattr(ctx,'dispatch_id',None):
+        from project_assistant import orchestrator as cp,orchestration_store as db
+        return cp.effective_scope(conn,db.get_dispatch(conn,ctx.slug,ctx.dispatch_id))
+    if getattr(ctx,'scope',None):
+        return ctx.scope
     if not getattr(ctx, "message_id", None): return None
     reply = store.message(conn, ctx.message_id)
     question = store.message(conn, reply["reply_to"]) if reply and reply.get("reply_to") else reply
@@ -530,8 +574,8 @@ def _request_scope(ctx, conn):
 
 
 def propose_table_edit(ctx, conn, args):
-    tab = _find_tab(conn, ctx.slug, args.get("tab_key"))
-    values = repo.field_values(conn, ctx.slug).get(tab["key"], {})
+    tab = _context_tab(ctx,conn,args.get('tab_key'))
+    values = tab.get('_field_values') if '_field_values' in tab else repo.field_values(conn, ctx.slug).get(tab["key"], {})
     try:
         edits = privacy.sanitize(args.get("row_edits", []), privacy.mode(conn, ctx.slug))
         rows = privacy.sanitize(args.get("new_rows", []), privacy.mode(conn, ctx.slug))
@@ -542,9 +586,12 @@ def propose_table_edit(ctx, conn, args):
         raise ToolError(str(exc)) from exc
     target = {"tab_key": tab["key"], "tab_title": tab["title"], "display": tab["title"], "ops": ops, "field_edits": fields,
               "source_revision": tab["revision"], **({"expected_revision": tab["revision"]} if rows else {})}
-    target["review"] = proposal_review.describe(target, tab, partial_allowed=True)
+    target["review"] = proposal_review.describe(target, tab, partial_allowed=not bool(getattr(ctx,'dispatch_id',None)))
     if scope: target["request_scope"] = scope
     proposal_id = store.create_proposal(conn, ctx.slug, ctx.me.actor_id, ctx.message_id, "table_edit", target, preview)
+    if getattr(ctx,'dispatch_id',None):
+        from project_assistant.orchestrator import attach_proposal
+        attach_proposal(conn,ctx,proposal_id)
     return f"已建立表格修改提案 #{proposal_id}（{len(ops)} 列）。等使用者確認才會寫入。\n{preview}"
 
 
@@ -554,6 +601,8 @@ HANDLERS = {
     "report_cell": report_cell, "report_find": report_find, "propose": propose,
     "offer_document": offer_document, "propose_table_edit": propose_table_edit,
 }
+from project_assistant import delegation_tools
+HANDLERS.update(delegation_tools.HANDLERS)
 
 
 def call(ctx: ToolContext, name: str, args) -> str:
@@ -563,16 +612,53 @@ def call(ctx: ToolContext, name: str, args) -> str:
     conn = ctx.connection_factory()
     try:
         from project_assistant.agent_policy import authorize_tool
+        from project_assistant import orchestrator as cp, orchestration_store as db
+        from project_assistant.tool_specs import MUTATING_TOOLS,DELEGATION_TOOLS
+        if name in MUTATING_TOOLS or getattr(ctx,'dispatch_id',None):
+            cp.lock_project(conn,ctx.slug)
         authorize_tool(ctx, conn, name, args)
+        journal_owner=None
+        journal={}
+        cache_key=cp.digest({'tool':name,'args':args})
+        if getattr(ctx,'dispatch_id',None):
+            dispatch=db.get_dispatch(conn,ctx.slug,ctx.dispatch_id)
+            continuation=dispatch['continuation'] or {}
+            journal=continuation.get('journal',{})
+            journal_owner=('dispatch',ctx.dispatch_id,continuation)
+        elif ctx.message_id and name in MUTATING_TOOLS:
+            journal=db.one(conn,'SELECT tool_journal FROM projectops.assistant_message WHERE id=%s FOR UPDATE',(ctx.message_id,)) or {}
+            journal_owner=('message',ctx.message_id,None)
+        if name in MUTATING_TOOLS and cache_key in journal:
+            conn.rollback()
+            out=journal[cache_key]['result']
+            return delegation_tools.wait_for_task(ctx,out) if name=='spawn_agent' and args.get('wait') is True else out
         out = HANDLERS[name](ctx, conn, args)
-        out = privacy.text(conn, ctx.slug, out)[0]
-        if name in ("propose", "propose_table_edit"):
+        if name not in DELEGATION_TOOLS:
+            out = privacy.text(conn, ctx.slug, out)[0]
+        if name in MUTATING_TOOLS and journal_owner:
+            journal[cache_key]={'tool':name,'result':out}
+            if name in ('ask_decision_gate','trigger_flow_run'):
+                journal[cache_key]['gate_id']=json.loads(out).get('gate_id')
+            kind,identifier,continuation=journal_owner
+            if kind=='dispatch':
+                continuation={**continuation,'journal':journal}
+                db.execute(conn,'UPDATE projectops.orchestration_dispatch SET continuation=%s::jsonb WHERE id=%s',
+                           (json.dumps(continuation,ensure_ascii=False),identifier))
+            else:
+                db.execute(conn,'UPDATE projectops.assistant_message SET tool_journal=%s::jsonb WHERE id=%s',
+                           (json.dumps(journal,ensure_ascii=False),identifier))
+        if name in MUTATING_TOOLS or getattr(ctx,'dispatch_id',None):
             conn.commit()
         else:
             conn.rollback()
-        return _clip(out)
+    except ValueError as exc:
+        conn.rollback()
+        raise ToolError(getattr(exc,'code','INVALID_REQUEST')+'：'+str(exc)) from exc
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
+    if name=='spawn_agent' and args.get('wait') is True:
+        return delegation_tools.wait_for_task(ctx,out)
+    return out if name in DELEGATION_TOOLS else _clip(out)

@@ -12,12 +12,18 @@ def verify(path):
             "server.py", "openbench_data/__init__.py", "project_assistant/limb_worker.py",
             "openbench_data/static/projects/index.html",
             "project_assistant/prompts/system.md", "project_assistant/prompts/knowledge.md",
+            "project_assistant/prompts/runtime.md",
         }
         expected.update(f"openbench_data/db/{name}" for name in (
             "149_project_docs_schema.sql", "151_project_docs_annotations.sql", "153_project_docs_audit.sql",
-            "154_project_assistant.sql", "156_project_assistant_conversations.sql", "157_execution.sql", "158_agent_profiles.sql"))
+            "154_project_assistant.sql", "156_project_assistant_conversations.sql", "157_execution.sql", "158_agent_profiles.sql",
+            "159_agent_orchestration.sql", "160_agent_races.sql", "161_agent_comment_routes.sql"))
         expected.update('project_assistant/prompts/' + key + '.md' for key in
                         ('coordinator','doc_writer','sheet_ops','qa_critic'))
+        expected.update('project_assistant/' + name + '.py' for name in
+                        ('agent_registry','agent_policy','agent_runtime','orchestrator','orchestration_store',
+                         'orchestration_service','orchestration_flow','orchestration_limb','comment_routing',
+                         'acp_bridge','mcp_stdio','tool_host'))
         missing = expected - names
         if missing:
             raise SystemExit("Wheel is missing resources: " + ", ".join(sorted(missing)))

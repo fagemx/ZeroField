@@ -241,3 +241,35 @@ changes, field-value conflicts and active locks still reject stale proposals.
 The document proposal service calls
 `flow_runner.proposal_decided(conn, proposal_id, applied)` in its apply/dismiss
 transaction to release or fail dependent nodes atomically.
+# M8 專家執行補充
+
+競速：建立 run 時傳 `strategy:"race"`、`race_agents:[agent_key1,agent_key2]`（2～3 個不同且具同類輸出權限的代理），以及 scope／target。候選使用同一任務快照，各槽有自己的有效 admission。看板回覆單一 race_select Gate、候選提案與代理進度；`POST .../gates/<id>/resolve` 傳 `{client_request_id,resolution:{proposal_id}}` 選用。勝出套用、落選作廢、取消未完成候選與解鎖下游在同一交易；來源衝突或他人編輯鎖會整筆回滾。舊 assistant apply/dismiss 入口不能單獨處理競速候選。
+
+成員操作：
+
+- `GET /projects/api/<slug>/agents`；管理者以 `POST .../agents` 儲存角色，`POST .../agents/<agent_key>/toggle` 啟用／停用。代理代號支援底線。
+- `POST .../orchestration/runs`：`{client_request_id,objective,agent_key?,label_selector?,scope?,target?,strategy?,write_mode?,limits?,conversation_id?,deadline_at?}`。同請求同內容返回原批次，不同內容回 409。
+- `GET .../orchestration/runs/<id>`：本人批次、任務、派發、閘門與分頁訊息。管理者的取消權不等於讀取他人私聊權。
+- `GET .../orchestration/board?limit=50&cursor=...`：四組資料、counts 及 cursor；每組以穩定鍵續取，limit 上限 200。`counts_only=true` 只計數，不載入提案正文或 Prompt。
+- `POST .../orchestration/gates/<id>/resolve`：`{client_request_id,resolution}`；問題答案為選項 id，提案核對為 `{proposal_id,decision:"apply"|"dismiss"}`。同請求重送去重，未知決定拒絕。
+- `POST .../orchestration/dispatches/<id>/cancel`：`{admission_no,reason?}`；`POST .../orchestration/runs/<id>/cancel` 取消整批未完成工作，不復原已確認內容。
+- `POST .../orchestration/tasks/<id>/retry`：`{client_request_id,reason?}`。只重試失敗／取消的槽；整批取消後重新交辦，Flow 步驟從原流程紀錄重試。
+
+所有變更沿用成員身分、唯讀限制、Origin 與 X-Requested-With 檢查。派發狀態與 opaque handle 不能作為 Worker 憑證使用；租約秘密僅在領取回覆中交給當次 Worker。
+
+`POST /projects/api/limbs/orchestration/claim` 使用既有 Limb Bearer 認證。回覆 `{task, lease_seconds:120}`；task 包含 `id`（本次 dispatch UUID）、`orchestration_task_id`、`dispatch_handle`、`lease_token`、`project_slug`、`agent_key`、`capability`、`deadline_at` 及固定的 `input`。不回傳 provider 金鑰或資料庫租約 hash。
+
+同命名空間的 `renew / complete / fail` 接受 `{task_id, dispatch_handle, lease_token}`，其中 task_id 必須對應本次領取的 id。complete 另帶 `output` 物件，fail 另帶 `error/retryable`。有畫布輸出的工作先建立 ProposalCard，狀態為 awaiting_gate；不接受模型自行指定 direct 寫回。相同完成內容的重送去重，不同結果回 409。
+
+媒體以 `POST /projects/api/limbs/orchestration/upload-cell-asset?task_id=...&dispatch_handle=...&lease_token=...` 上傳 raw body，Content-Type 為真實媒體格式，大小沿用 64 MiB 上限；必須在有效 admission／lease／來源版本下才能存入資產。返回 asset_url，再由 complete 產生待核對提案。
+
+原 `/projects/api/limbs/{claim,renew,complete,fail,upload-cell-asset}` 契約保留；新 Worker 需明確設定 orchestration_enabled，舊 Worker 不會領走 profile 節點。
+
+
+### ACP 與受控遠端工具
+
+`POST /projects/api/limbs/orchestration/tool_list` 傳同一 lease envelope，回目前與派發快照交集工具。`POST .../tool` 再帶 `{name,arguments}`；只用 Head 推導的使用者／profile／scope，回 `{text}`。每次呼叫重查 admission 與權限，mutating tool 的交易及去重日誌沿用內建 runtime。Head token 不傳給 ACP child。
+
+complete 可帶 `outcome:"awaiting_gate"`，只接受同派發已提交且開啟的問題；保存一次 worker_done，重送返回相同狀態。回答後舊 lease 不可續用，下一次領取得到新 admission 與 continuation。其他任意 outcome 不接受。
+
+人類標註 create/reply POST 中的明確 `@agent_key` 沿既有 chat 路由，存 source_ref；不能由請求自訂 source_ref 冒充來源，也不在讀取、掃描或模型寫入標註時自動派發。

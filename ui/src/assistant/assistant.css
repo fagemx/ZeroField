@@ -361,3 +361,17 @@ body.pa-resizing { cursor: col-resize; user-select: none; }
 /* 負責人：私下問題等他回覆的膠囊（按了到「管理」） */
 button.pill { border: 0; cursor: pointer; font-family: inherit; }
 button.pill:hover { background: var(--pa-accent-bg); color: var(--pa-accent); }
+/* Personas stay next to the composer; settings expand only on demand. */
+.agent-selector{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;color:#74726b}
+.agent-selector select{min-width:0;max-width:100%;flex:1;padding:6px;border:1px solid #dedbd5;border-radius:5px;background:#fff;color:#34332f}
+.agent-suggestions{display:flex;flex-direction:column;max-height:150px;overflow:auto;margin-bottom:8px;border:1px solid #dedbd5;border-radius:5px}
+.agent-suggestions button{padding:8px;text-align:left;border:0;border-bottom:1px solid #eee;background:#fff;cursor:pointer}
+.agent-suggestions small{color:#74726b}
+.agent-settings{margin:16px 0;border-block:1px solid #dedbd5;padding-block:12px}
+.workspace-settings{width:600px;max-height:calc(100vh - 48px);overflow:auto;box-sizing:border-box}
+.agent-roster-edit{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.agent-settings label{display:block;margin-block:8px}
+.agent-settings input:not([type=checkbox]),.agent-settings select,.agent-settings textarea{display:block;width:100%;box-sizing:border-box;padding:8px;border:1px solid #dedbd5;border-radius:4px;font:inherit}
+.agent-settings textarea{resize:vertical}
+.agent-tool-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:4px;font-size:12px}
+.agent-tool-options label{display:flex;gap:5px;align-items:center;overflow-wrap:anywhere}

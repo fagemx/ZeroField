@@ -15,6 +15,11 @@ def load() -> tuple[str, str]:
             (PROMPTS / "knowledge.md").read_text(encoding="utf-8"))
 
 
+def load_agent(profile) -> tuple[str,str]:
+    baseline=(PROMPTS/'runtime.md').read_text(encoding='utf-8')
+    return baseline+'\n\n'+profile.get('system_prompt',''),profile.get('knowledge_pack','')
+
+
 KIND_LABEL = {"image": "圖片，是否提供依專案隱私設定", "sheet": "Excel",
               "doc": "文件（Word／PDF）", "text": "文字檔"}
 

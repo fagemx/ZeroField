@@ -184,11 +184,15 @@ def apply(conn, me, slug, target):
     from project_docs import service
     key = target["tab_key"]
     versions = target.get("source_revisions")
-    if versions is not None:
+    source_scopes=target.get('source_scopes',[])
+    if not isinstance(source_scopes,list) or len(source_scopes)>100 or any(not isinstance(s,dict) or not isinstance(s.get('target_tab'),str) for s in source_scopes):
+        return 400,{'error':'來源範圍格式不正確'}
+    if versions is not None or source_scopes:
+        versions={} if versions is None else versions
         if not isinstance(versions, dict) or len(versions) > 100 or any(not isinstance(k, str) or type(v) is not int or v < 0 for k, v in versions.items()):
             return 400, {"error": "試跑來源版本資料無效"}
         # Consistent key order prevents reciprocal source/target lock deadlocks.
-        locked = {source_key: repo.get_tab_for_update(conn, slug, source_key) for source_key in sorted(set(versions) | {key})}
+        locked = {source_key: repo.get_tab_for_update(conn, slug, source_key) for source_key in sorted(set(versions) | {s['target_tab'] for s in source_scopes} | {key})}
         if any(not locked[source_key] or locked[source_key]["revision"] != expected for source_key, expected in versions.items()):
             return 409, {"error": "試跑來源已變更或刪除，請重新核對來源並試跑"}
         tab = locked[key]
@@ -229,6 +233,16 @@ def apply(conn, me, slug, target):
     if checked.conflicts:
         return 409, {"error": "資料已變更或正在編輯，請重新產生提案", "conflicts": checked.conflicts}
     values = repo.field_values(conn, slug).get(key, {})
+    if source_scopes:
+        from project_assistant.request_scope import verify_source
+        all_values=repo.field_values(conn,slug)
+        try:
+            for scope in source_scopes:
+                if not locked[scope['target_tab']]:
+                    raise ValueError('來源分頁已刪除')
+                verify_source(scope,{**locked[scope['target_tab']],'key':scope['target_tab']},all_values.get(scope['target_tab'],{}))
+        except ValueError as exc:
+            return 409,{'error':str(exc)}
     if target.get("request_scope"):
         from project_assistant.request_scope import verify_source
         try:

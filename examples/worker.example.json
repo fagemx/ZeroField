@@ -1,6 +1,7 @@
 {
   "head_url": "http://127.0.0.1:3020",
   "token_env": "OPENBENCH_LIMB_TOKEN",
+  "orchestration_enabled": false,
   "capabilities": {
     "llm": {
       "adapter": "openai_compat",

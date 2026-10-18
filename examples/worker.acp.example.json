@@ -1,0 +1,16 @@
+{
+  "head_url": "http://127.0.0.1:3020",
+  "token_env": "OPENBENCH_LIMB_TOKEN",
+  "orchestration_enabled": true,
+  "capabilities": {
+    "llm": {
+      "adapter": "acp_stdio",
+      "model": "CONFIGURE_YOUR_MODEL",
+      "command": ["node", "/absolute/path/node_modules/@agentclientprotocol/codex-acp/dist/index.js"],
+      "api_key_env": "OPENBENCH_ACP_PROVIDER_KEY",
+      "env": {
+        "CODEX_CONFIG": "{\"model\":\"CONFIGURE_YOUR_MODEL\"}"
+      }
+    }
+  }
+}

@@ -28,7 +28,8 @@ def handle(handler, parsed, method):
         return False
     from project_docs import http
     action = parsed.path.rsplit("/", 1)[-1] if limb_path else None
-    worker_action = limb_path and action in WORKER_ACTIONS
+    orchestration_path=bool(re.fullmatch(r'/projects/api/limbs/orchestration/(claim|renew|complete|fail|upload-cell-asset|tool_list|tool)',parsed.path))
+    worker_action = parsed.path in {'/projects/api/limbs/'+name for name in WORKER_ACTIONS} or orchestration_path
     me, body, raw = None, {}, b""
     if method not in ("GET", "POST") or (worker_action and method != "POST"):
         handler.send_json(405, {"error": "不支援這個操作"})
@@ -72,7 +73,15 @@ def handle(handler, parsed, method):
         if worker_action:
             auth = handler.headers.get("Authorization", "")
             worker = limbs.authenticate(conn, auth[7:] if auth.startswith("Bearer ") else "")
-            if action == "claim":
+            if orchestration_path:
+                from project_assistant import orchestration_limb
+                if action=='upload-cell-asset':
+                    payload=orchestration_limb.upload(conn,worker,{k:(query.get(k) or [None])[0] for k in ('task_id','dispatch_handle','lease_token')},raw,handler.headers.get('Content-Type',''))
+                elif action=='tool':
+                    payload=orchestration_limb.tool(conn,worker,body,http.open_connection)
+                else:
+                    payload=getattr(orchestration_limb,action)(conn,worker,body) if action!='claim' else orchestration_limb.claim(conn,worker)
+            elif action == "claim":
                 payload = flows.claim(conn, worker)
             elif action == "upload-cell-asset":
                 from project_docs import media
@@ -126,7 +135,10 @@ def handle(handler, parsed, method):
         if conn:
             conn.rollback()
         from project_docs import media
-        if isinstance(exc, media.MediaError):
+        from project_assistant.agent_registry import AgentError
+        if isinstance(exc,AgentError):
+            handler.send_json(exc.status,{'error':str(exc),'code':exc.code})
+        elif isinstance(exc, media.MediaError):
             handler.send_json(exc.status, {"error": str(exc)})
         elif isinstance(exc, (ValueError, TypeError, KeyError)) or type(exc).__name__ in ("InvalidTextRepresentation",):
             handler.send_json(400, {"error": "請求內容無效：" + str(exc)[:200]})

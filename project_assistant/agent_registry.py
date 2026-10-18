@@ -26,16 +26,16 @@ class AgentError(ValueError):
         self.status, self.code = status, code
 
 
-def default_tools(key):
+def default_tools(key,orchestration=True):
     reads = ['list_pages', 'read_page', 'search_pages']
     reports = sorted(n for n in tool_specs.TOOL_NAMES if n.startswith('report_'))
     if key == 'coordinator':
-        return sorted(tool_specs.TOOL_NAMES)
+        return sorted(tool_specs.TOOL_NAMES if orchestration else tool_specs.TOOL_NAMES-tool_specs.DELEGATION_TOOLS)
     if key == 'doc_writer':
-        return reads + ['propose', 'offer_document']
+        return reads + ['propose', 'offer_document'] + (['ask_decision_gate'] if orchestration else [])
     if key == 'sheet_ops':
-        return reads + reports + ['propose_table_edit']
-    return reads + reports + ['propose']
+        return reads + reports + ['propose_table_edit'] + (['ask_decision_gate'] if orchestration else [])
+    return reads + reports + ['propose'] + (['ask_decision_gate'] if orchestration else [])
 
 
 def ensure_default_agents(conn, slug):
@@ -47,6 +47,9 @@ def ensure_default_agents(conn, slug):
                 VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb) ON CONFLICT DO NOTHING''',
                 (slug, key, name, icon, role, prompt, json.dumps(['llm','orchestrate'] if role=='primary' else ['llm']),
                  json.dumps({'domain': domain}), json.dumps(default_tools(key))))
+            cur.execute('''UPDATE projectops.agent_profile SET allowed_tools=%s::jsonb,updated_at=NOW()
+                WHERE project_slug=%s AND agent_key=%s AND allowed_tools=%s::jsonb''',
+                (json.dumps(default_tools(key)),slug,key,json.dumps(default_tools(key,False))))
 
 
 def get_agent(conn, slug, key):
@@ -165,8 +168,15 @@ def roster(conn, me, slug):
         raise AgentError(404, '找不到這個專案')
     rows = list_agents(conn,slug)
     for row in rows:
-        row['status'] = 'online' if row['enabled'] else 'offline'
-        row['active_dispatches'] = 0
+        from project_assistant import orchestration_store as db
+        from project_assistant.orchestration_flow import profile_connected
+        row['active_dispatches']=db.one(conn,"SELECT count(*) FROM projectops.orchestration_dispatch WHERE project_slug=%s AND agent_key=%s AND status='running'",(slug,row['agent_key']))
+        row['active_dispatches']+=db.one(conn,"SELECT count(*) FROM projectops.assistant_message WHERE project_slug=%s AND agent_key=%s AND role='assistant' AND status='running'",(slug,row['agent_key']))
+        connected=profile_connected(conn,slug,row['agent_key'])
+        row['status']='busy' if connected and row['active_dispatches']>=row['max_concurrency'] else 'online' if connected else 'offline'
+        from project_assistant.agent_policy import can_propose_output
+        row['can_propose_table']=can_propose_output(row,{'kind':'table'})
+        row['can_propose_document']=can_propose_output(row,{'kind':'doc'})
         if not me.can_edit:
             for field in ('system_prompt','knowledge_pack','provider_config','created_by'):
                 row.pop(field,None)
@@ -177,4 +187,6 @@ def roster(conn, me, slug):
                      'runtime_kind':'remote_limb','capabilities':limb['capabilities'],'enabled':limb['enabled'],
                      'labels':{},'status':'online' if limb['id'] in connected else 'offline','active_dispatches':0,
                      'bound_limb_id':limb['id'],'max_concurrency':1})
+        rows[-1]['can_propose_table']=True
+        rows[-1]['can_propose_document']=True
     return rows

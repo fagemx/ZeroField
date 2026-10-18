@@ -69,4 +69,25 @@ TOOLS = [
                           "status": {"type": "string", "enum": list(STATUSES)}, "content": _S}, ["action"]),
      "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}},
 ]
+TOOLS += [
+    {'name':'list_agents','description':'列出此專案可用代理、能力、標籤與負載。',
+     'inputSchema':_obj({'capability':_S,'domain':_S}),'annotations':_RO},
+    {'name':'spawn_agent','description':'委派可追蹤的背景工作。只能縮小固定範圍；預設產出待核對提案。wait 最多等 5 秒，遇到人工決策或容量不足即回傳工作編號。',
+     'inputSchema':_obj({'objective':_S,'target_agent':_S,'label_selector':{'type':'object','additionalProperties':_S},
+         'scope':{'type':'object'},'target':{'type':'object'},'depends_on':{'type':'array','items':_S},
+         'strategy':{'type':'string','enum':['single','race','fanout_rows']},'race_agents':{'type':'array','items':_S},
+         'write_mode':{'type':'string','enum':['proposal','analysis_only']},'wait':{'type':'boolean'}},['objective'])},
+    {'name':'check_delegation','description':'查詢自己交辦的工作進度、摘要、待核對提案和問題。',
+     'inputSchema':_obj({'run_id':_S,'dispatch_handle':_S}),'annotations':_RO},
+    {'name':'cancel_delegation','description':'以精確派發憑證取消工作，作廢未核對的提案。',
+     'inputSchema':_obj({'dispatch_handle':_S,'reason':_S},['dispatch_handle'])},
+    {'name':'ask_decision_gate','description':'建立需要使用者決定的問題，提供 2～5 個明確選項。保存工作後釋放執行名額；回答後由系統續跑。',
+     'inputSchema':_obj({'question':_S,'options':{'type':'array','items':_S,'minItems':2,'maxItems':5},
+         'context_tab':_S,'blocking_task_ids':{'type':'array','items':_S}},['question','options'])},
+    {'name':'trigger_flow_run','description':'核對來源與權限後啟動已儲存工作流。單步使用 execution_mode=single_step 及 node_id；批次可用 start_node_id。',
+     'inputSchema':_obj({'flow_tab_key':_S,'execution_mode':{'type':'string','enum':['workflow','single_step']},
+         'node_id':_S,'start_node_id':_S,'sample_row_id':_S,'row_ids':{'type':'array','items':_S},'target_tab':_S},['flow_tab_key'])},
+]
 TOOL_NAMES = {tool["name"] for tool in TOOLS}
+DELEGATION_TOOLS={'list_agents','spawn_agent','check_delegation','cancel_delegation','ask_decision_gate','trigger_flow_run'}
+MUTATING_TOOLS={'propose','propose_table_edit','spawn_agent','cancel_delegation','ask_decision_gate','trigger_flow_run'}
