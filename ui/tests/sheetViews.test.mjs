@@ -35,7 +35,8 @@ test('gallery never renders a video as an image and can omit covers', () => {
   const model = sheetViewModel(parsed, parsed.rows, {});
   assert.equal(model.cards[0].cover.url, 'https://example.org/a.png');
   assert.equal(model.cards[1].cover, null);
-  assert.equal(model.cards[2].cover, null);
+  assert.equal(model.cards[2].cover.kind, 'video');
+  assert.equal(model.cards[2].cover.url, 'https://example.org/c.mp4');
   assert.equal(sheetViewModel(parsed, parsed.rows, {coverColumn: -1}).cards[0].cover, null);
   const plain = {...parsed, headers: ['工作'], table: {attrs: {}}, rows: [{rid: 'x', cells: [cell('查資料')]}]};
   const textOnly = sheetViewModel(plain, plain.rows, {});

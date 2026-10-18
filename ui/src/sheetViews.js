@@ -2,6 +2,8 @@ import { t as uiText } from './i18n/index.js';
 import { evaluate, mediaOf, tableEditPayload } from './sheetModel.js';
 import { STATUSES, LEGACY_STATUSES, statusLabel, normalizeStatus } from './format.js';
 
+import { assetReferences, mediaStages } from './studioModel.js';
+
 const MODES = ['grid', 'gallery', 'kanban'];
 const COMMON_STATUSES = STATUSES;
 
@@ -10,7 +12,7 @@ function viewColumns(parsed) {
   const columns = parsed.headers.map((label, index) => ({label, index}));
   return {
     statusColumns: columns.filter(({index}) => types[index] === 'status' || parsed.rows.some(row => row.cells[index]?.kind === 'status')),
-    coverColumns: columns.filter(({index}) => types[index] === 'image' || parsed.rows.some(row => mediaOf(row.cells[index]?.value, types[index])?.kind === 'image')),
+    coverColumns: columns.filter(({index}) => ['image','video'].includes(types[index]) || parsed.rows.some(row => ['image','video'].includes(mediaOf(row.cells[index]?.value, types[index])?.kind))),
   };
 }
 
@@ -21,17 +23,19 @@ export function statusOptions(parsed, column, row) {
   return row?.cells[column]?.kind === 'status' ? options.filter(value => STATUSES.includes(value) || value in LEGACY_STATUSES) : options;
 }
 
-export function sheetViewModel(parsed, visibleRows, preferences = {}) {
+export function sheetViewModel(parsed, visibleRows, preferences = {}, assetLookup = {}) {
   const {statusColumns, coverColumns} = viewColumns(parsed);
   const groupColumn = statusColumns.some(c => c.index === preferences.groupColumn) ? preferences.groupColumn : statusColumns[0]?.index ?? -1;
   const coverColumn = preferences.coverColumn === -1 ? -1 : coverColumns.some(c => c.index === preferences.coverColumn) ? preferences.coverColumn : coverColumns[0]?.index ?? -1;
   const indexById = new Map(parsed.rows.map((row, index) => [row.rid, index]));
   const cards = visibleRows.filter(row => indexById.has(row.rid)).map(row => {
     const index = indexById.get(row.rid);
-    const media = coverColumn < 0 ? null : mediaOf(row.cells[coverColumn]?.value, 'image');
+    const media = coverColumn < 0 ? null : mediaOf(row.cells[coverColumn]?.value, parsed.table.attrs.column_types?.[coverColumn]);
     return {
       row, index, title: String(row.cells[0]?.value || uiText("sheetViews.row", {v0: (index + 1)})),
-      cover: media?.kind === 'image' ? {...media, column: coverColumn, value: row.cells[coverColumn].value} : null,
+      mediaChain: mediaStages(parsed, row), assetRefs: assetReferences(row),
+      assets: assetReferences(row).map(id => ({id, ...assetLookup[id]})),
+      cover: ['image','video','asset'].includes(media?.kind) ? {...media, column: coverColumn, value: row.cells[coverColumn].value} : null,
       summary: row.cells.flatMap((cell, c) => c === 0 || c === coverColumn || statusColumns.some(s => s.index === c) || mediaOf(cell.value, parsed.table.attrs.column_types?.[c]) || !String(cell.value ?? '').trim() ? [] : [{
         label: parsed.headers[c], value: evaluate(cell.value, parsed.rows, new Set(), parsed.table.attrs.worksheet_name ? parsed.table.attrs.source_header_row || 1 : 0),
       }]).slice(0, 3),

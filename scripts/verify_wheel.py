@@ -9,7 +9,7 @@ def verify(path):
     with zipfile.ZipFile(path) as wheel:
         names = set(wheel.namelist())
         expected = {
-            "server.py", "openbench_data/__init__.py", "project_assistant/limb_worker.py",
+            "server.py", "run_studio.py", "openbench_data/__init__.py", "project_assistant/limb_worker.py",
             "openbench_data/static/projects/index.html",
             "project_assistant/prompts/system.md", "project_assistant/prompts/knowledge.md",
             "project_assistant/prompts/runtime.md",
@@ -24,6 +24,11 @@ def verify(path):
                         ('agent_registry','agent_policy','agent_runtime','orchestrator','orchestration_store',
                          'orchestration_service','orchestration_flow','orchestration_limb','comment_routing',
                          'acp_bridge','mcp_stdio','tool_host'))
+        expected.update("openbench_data/workflows/" + name + ".json" for name in
+                        ("flux3_klein_soul_cast", "ltx25_cinema_shot", "ltx25_openjutsu_v2v"))
+        expected.update("openbench_data/samples/" + name for name in
+                        ("cast_kael.png", "set_observatory.png", "keyframe_s01.png", "keyframe_s02.png",
+                         "shot_s01.mp4", "shot_s02.mp4", "openjutsu_source.mp4", "openjutsu_remastered.mp4", "openjutsu_split.mp4", "first_frame_vfx01.png", "motion_structure_vfx01.mp4", "anchor_keyframe_vfx01.png"))
         missing = expected - names
         if missing:
             raise SystemExit("Wheel is missing resources: " + ", ".join(sorted(missing)))
@@ -39,7 +44,9 @@ def verify(path):
             raise SystemExit("Wheel has no openbench console entry point")
         if "openbench-worker = project_assistant.limb_worker:main" not in wheel.read(entries[0]).decode():
             raise SystemExit("Wheel has no openbench-worker console entry point")
-        print(f"Verified {Path(path).name}: SQL, prompts, frontend references and both CLI entry points")
+        if "zerofield-studio = run_studio:main" not in wheel.read(entries[0]).decode():
+            raise SystemExit("Wheel has no zerofield-studio console entry point")
+        print(f"Verified {Path(path).name}: SQL, prompts, workflows, samples, frontend and CLI entry points")
 
 
 if __name__ == "__main__":

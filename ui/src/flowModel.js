@@ -1,4 +1,5 @@
 import { t as uiText } from './i18n/index.js';
+import { agentLabel } from './format.js';
 import { tablesOf } from "./sheetModel.js";
 
 export const CAPABILITIES = { get llm() { return uiText("flowModel.textReasoning"); }, get image_gen() { return uiText("flowModel.imageGeneration"); }, get video_gen() { return uiText("flowModel.videoGeneration"); }, get media_assemble() { return uiText("flowModel.audioAssembly"); } };
@@ -32,11 +33,14 @@ export function redoDefinition(history) {
   return { past: [...history.past, history.present], present: history.future[0], future: history.future.slice(1) };
 }
 
-export function flowToCanvas(definition, selectedIds = [], tabs = [], tasks = []) {
+export function flowToCanvas(definition, selectedIds = [], tabs = [], tasks = [], agents = [], workers = []) {
   const name = (key) => tabs.find((t) => t.key === key)?.title || key;
   return {
     nodes: definition.nodes.map((node) => ({ id: node.id, type: "workStep", position: { x: node.x ?? 0, y: node.y ?? 0 },
-      selected: selectedIds.includes(node.id), data: { title: node.title, scope: node.scope || "legacy",
+      selected: selectedIds.includes(node.id), data: { title: node.title,
+        executorLabel: node.agent_key ? (agents.find(agent => agent.agent_key === node.agent_key) ? agentLabel(agents.find(agent => agent.agent_key === node.agent_key)) : node.agent_key) : node.limb_id ? (workers.find(worker => worker.id === node.limb_id)?.name || uiText('studio.worker')) : CAPABILITIES[node.capability],
+        latestMediaUrl: tasks.filter(task => task.node_id === node.id && task.status === 'succeeded' && task.output?.asset_url).sort((a,b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))[0]?.output.asset_url,
+        scope: node.scope || "legacy",
         source: name(node.row_source?.tab_key || node.input_tabs?.[0]) || uiText("flowModel.noSourceSelected"),
         target: name(node.target?.tab_key) || uiText("flowModel.keepResult"), status: summarizeTasks(tasks.filter((t) => t.node_id === node.id)).status },
       ariaLabel: `${node.title}；${name(node.row_source?.tab_key || node.input_tabs?.[0]) || uiText("flowModel.noSourceSelected")} → ${name(node.target?.tab_key) || uiText("flowModel.keepResult")}` })),

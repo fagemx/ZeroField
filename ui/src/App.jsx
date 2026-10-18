@@ -311,8 +311,12 @@ function ProjectPage({ slug }) {
       window.history.pushState(null, "", tabHash(a.tab_key));
       setTabKey(a.tab_key);
     }
+    if(a.kind==='row'&&a.anchor?.rid&&data?.tabs.find(item=>item.key===a.tab_key)?.surface_type==='sheet'){
+      setSheetFocus({tabKey:a.tab_key,tableId:a.anchor.table_id,rowId:a.anchor.rid,colIndex:0,openRow:true,nonce:Date.now()});
+      return;
+    }
     focusAnnotation(a.id, { scroll: true, flash: true });
-  }, [tabKey, focusAnnotation, showToast]);
+  }, [tabKey, focusAnnotation, showToast, data?.tabs]);
 
   const reattach = useCallback(async (a) => {
     setPanel(false);
@@ -570,7 +574,6 @@ function ProjectPage({ slug }) {
               agents={assistant.state?.agents || []}
               onAgentRouted={onAgentRouted}
               assistantOpen={paMode !== "off" || panel || historyOpen}
-              onPanelChange={onSurfacePanel}
               onSwitchDocMode={async () => { if (await flushSurface()) setDocModeTabs((prev) => ({ ...(prev || {}), [tab.key]: true })); }}
               onToast={showToast}
               onError={onError}

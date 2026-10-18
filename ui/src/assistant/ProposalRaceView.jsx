@@ -5,6 +5,7 @@ import { Dialog } from '../Dialog.jsx';
 import { proposalChanges, raceSelectionPayload } from './orchestrationModel.js';
 import './orchestration.css';
 import { mediaOf } from '../sheetModel.js';
+import { MediaCell } from '../MediaCell.jsx';
 
 const labels = { get queued() { return uiText("proposalRaceView.queued"); }, get running() { return uiText("proposalRaceView.running"); }, get awaiting_gate() { return uiText("proposalRaceView.readyForReview"); }, get failed() { return uiText("proposalRaceView.failed"); }, get timeout() { return uiText("proposalRaceView.timedOut"); }, get canceled() { return uiText("proposalRaceView.canceled"); } };
 
@@ -12,6 +13,8 @@ function DiffValue({ value }) {
   const locale = useLocale();
   const media = mediaOf(value);
   if (media?.kind === 'image') return <img className="race-image" src={media.url} alt={uiText("proposalRaceView.candidateImage")} />;
+  if (media?.kind === 'video') return <video className="race-video" src={media.url} controls muted loop playsInline preload="metadata" />;
+  if (media?.kind === 'asset') return <MediaCell value={value} />;
   if (media) return <p><a href={media.url} download>{media.kind === 'video' ? uiText("proposalRaceView.downloadVideoAttachment") : uiText("proposalRaceView.downloadAudioAttachment")}</a></p>;
   return <p>{value || uiText("proposalRaceView.empty")}</p>;
 }

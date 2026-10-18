@@ -4,7 +4,7 @@ import { MediaCell } from './MediaCell.jsx';
 import { statusOptions } from './sheetViews.js';
 import { statusClass, statusLabel } from './format.js';
 
-export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, onStatus, writable, busy, parsed}) {
+export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, onStatus, writable, busy, parsed, onUpload, onRunStep}) {
   const locale = useLocale();
   const card = (item) => {
     const {row, index, title, cover, summary} = item;
@@ -12,13 +12,18 @@ export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, 
     const value = String(row.cells[column]?.value ?? '');
     const options = column < 0 ? [] : statusOptions(parsed, column, row);
     return <article role="listitem" key={row.rid} className={`sheet-card${selected.has(row.rid) ? ' is-selected' : ''}`}>
-      {model.coverColumn >= 0 && (cover ? <div className="sheet-card-cover"><MediaCell compact value={cover.value} type="image" label={uiText("sheetCards.message", {v0: (title), v1: (parsed.headers[cover.column])})} onLightbox={media => onPreview({...media, r: index, c: cover.column})} /></div>
-        : <div className="sheet-card-cover empty-cover"><span>{uiText("sheetCards.noImage")}</span></div>)}
+      {item.mediaChain?.length > 1 ? <div className="sheet-card-chain">{item.assets?.length>0&&<div className="sheet-chain-part"><div className="sheet-chain-stage sheet-chain-assets">{item.assets.map(asset=><div key={asset.id}>{asset.value?<MediaCell compact value={asset.value} type={asset.type} label={'@'+asset.id} onLightbox={media=>onPreview({...media,label:'@'+asset.id})}/>:<div className="sheet-chain-empty">@{asset.id}</div>}<small>@{asset.id}</small></div>)}</div><span className="sheet-chain-arrow" aria-hidden="true">→</span></div>}{item.mediaChain.map((stage, at) => <div className="sheet-chain-part" key={stage.column}>
+        {at > 0 && <span className="sheet-chain-arrow" aria-hidden="true">→</span>}<div className="sheet-chain-stage">
+          {stage.media ? <MediaCell compact value={stage.value} type={stage.type} label={title + ' · ' + stage.label} onLightbox={media => onPreview({...media, r:index, c:stage.column})} /> : <div className="sheet-chain-empty">{uiText('studio.emptyStage')}</div>}
+          <small>{stage.label}</small>{writable && <div className="sheet-stage-actions"><button disabled={busy} onClick={() => onUpload?.(index,stage.column)}>{uiText('sheetWorkspace.upload')}</button><button disabled={busy} onClick={() => onRunStep?.(row.rid,stage)}>{uiText('studio.runStage')}</button></div>}
+        </div></div>)}</div> : model.coverColumn >= 0 && (cover ? <div className="sheet-card-cover"><MediaCell compact value={cover.value} type={cover.kind || parsed.table.attrs.column_types?.[cover.column]} label={uiText("sheetCards.message", {v0: (title), v1: (parsed.headers[cover.column])})} onLightbox={media => onPreview({...media, r: index, c: cover.column})} /></div>
+        : <div className="sheet-card-cover empty-cover"><span>{uiText('studio.emptyStage')}</span></div>)}
       <div className="sheet-card-body"><div className="sheet-card-heading">
         <input type="checkbox" aria-label={uiText("sheetCards.select", {v0: (title)})} checked={selected.has(row.rid)} onChange={event => onSelect(row.rid, event.target.checked)} />
         <button className="sheet-card-title" onClick={() => onOpen(row.rid)} title={uiText("sheetCards.viewRowDetailsDiscussionAndHistory")}>{title}</button>
         <span className="sheet-card-index">{index + 1}</span>
       </div>
+        <div className="card-asset-chips">{item.assets?.map(asset => <span key={asset.id} className="card-asset-chip">{item.mediaChain?.length<=1&&asset.value && <MediaCell compact value={asset.value} type={asset.type} label={'@' + asset.id} onLightbox={media => onPreview({...media, label:'@' + asset.id})} />}<small>@{asset.id}</small></span>)}</div>
         <dl className="sheet-card-summary">{summary.map((field, i) => <div key={i}><dt>{field.label}</dt><dd title={String(field.value)}>{field.value}</dd></div>)}</dl>
         <div className="sheet-card-actions">{column >= 0 && <select aria-label={uiText("sheetCards.message", {v0: (parsed.headers[column]), v1: (title)})} value={value} disabled={!writable || busy} onChange={event => onStatus(row.rid, column, event.target.value)}>
           <option value="" disabled={row.cells[column]?.kind === 'status'}>{uiText("sheetCards.notConfigured")}</option>

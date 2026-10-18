@@ -1,3 +1,4 @@
+import { MediaCell } from './MediaCell.jsx';
 import { agentLabel } from './format.js';
 import { useLocale } from './i18n/react.jsx';
 import { t as uiText } from './i18n/index.js';
@@ -88,7 +89,7 @@ function TaskResult({ task }) {
   const locale = useLocale();
   return <div className="flow-task-result"><Status status={task.status} />{task.error && <p role="alert">{task.error}</p>}
     {typeof task.output?.text === "string" && <p className="flow-output-text">{task.output.text}</p>}
-    {task.output?.asset_url && /^\/projects\/api\/[^/]+\/assets\/pa_[a-f0-9]{32}$/.test(task.output.asset_url) && <a href={task.output.asset_url} target="_blank" rel="noreferrer">{uiText("flowPanels.downloadOutput")}</a>}
+    {task.output?.asset_url && /^\/projects\/api\/[^/]+\/assets\/pa_[a-f0-9]{32}$/.test(task.output.asset_url) && <><MediaCell compact value={task.output.asset_url} label={task.id} /><a href={task.output.asset_url} target="_blank" rel="noreferrer">{uiText("flowPanels.downloadOutput")}</a></>}
     {task.output && <details><summary>{uiText("flowPanels.fullOutputData")}</summary><pre>{JSON.stringify(task.output, null, 2)}</pre></details>}
   </div>;
 }

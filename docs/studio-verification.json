@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-18",
+  "scope": "SPEC_01–04 including reference-pack preparation and arbitrary external JSON input bindings",
+  "backend": {
+    "full_collected": 269,
+    "passed_in_full_run": 268,
+    "failures_in_full_run": 1,
+    "errors": 0,
+    "skipped": 0,
+    "timing_retry": {
+      "test": "test_wait_with_full_pool_returns_handle",
+      "passed": true,
+      "note": "One-second wall-time assertion exceeded under parallel load; unchanged test passed alone."
+    },
+    "delta": {
+      "launcher_database_tests": 8,
+      "passed": true,
+      "reference_preparation_and_binding": "Focused delta tests passed, including actual FFmpeg outputs for all three filters; no repeated full suite."
+    }
+  },
+  "frontend": {
+    "full_tests_passed": 98,
+    "reference_pack_delta_tests_passed": 2,
+    "build": "passed",
+    "advisory": "Existing Vite large-chunk advisory"
+  },
+  "packaging": {
+    "wheel": "C:\\ai_project\\ZeroField\\dist\\openbench-0.2.0-py3-none-any.whl",
+    "sha256": "18d75f92b37daf37f02c16a2bc947e9582a31a0d56c448d3b900beb961b4648b",
+    "resources_match_checkout": true,
+    "offline_no_isolation": true
+  },
+  "browser": [
+    "Reference-pack columns loaded with playable 3-second clips and image previews",
+    "Gallery orders source, first frame, motion structure, anchor, output and split-screen",
+    "Micro review and Studio Assistant remain open together"
+  ],
+  "limitations": [
+    "No live GPU/Comfy inference was run",
+    "Official SDK executes workflows; model-only Comfy Router is rejected with an actionable error",
+    "Default V2V exposes the motion-guide slot but requires an external compatible graph for motion-guide conditioning",
+    "Anchor generation requires an externally authored image-edit graph; bundled media are procedural CC0 fixtures"
+  ],
+  "cleanup": {
+    "temporary_browser_tab_closed": true,
+    "test_database_stopped": true,
+    "preview_database_stopped": true
+  }
+}

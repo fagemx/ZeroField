@@ -19,6 +19,14 @@ class BuildRuntimeResources(build_py):
         (target / "db").mkdir(parents=True, exist_ok=True)
         for source in sql.glob("*.sql"):
             shutil.copy2(source, target / "db" / source.name)
+        (target / "workflows").mkdir(parents=True, exist_ok=True)
+        for source in (root / "workflows").glob("*"):
+            if source.is_file() and source.suffix in (".json", ".md"):
+                shutil.copy2(source, target / "workflows" / source.name)
+        (target / "samples").mkdir(parents=True, exist_ok=True)
+        for source in (root / "samples").glob("*"):
+            if source.is_file() and source.suffix in (".png", ".mp4", ".md", ".py"):
+                shutil.copy2(source, target / "samples" / source.name)
         # Only current source assets belong in a new wheel, even after a rebuild.
         packaged_frontend = target / "static" / "projects"
         if packaged_frontend.exists():

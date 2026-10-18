@@ -482,19 +482,32 @@ def _api(handler, parsed, method: str) -> None:
                                         disposition=_attachment(args[0], payload["filename"]))
             return
         if name == "asset_meta":
-            found = repo.get_asset(conn, args[0], args[1])
+            found = repo.get_asset_meta(conn, args[0], args[1])
             conn.rollback()
-            handler.send_json(200 if found else 404, {"content_type": found[0], "bytes": len(found[1])} if found else {"error": "Media not found."})
+            handler.send_json(200 if found else 404, {"content_type": found[0], "bytes": found[1]} if found else {"error": "Media not found."})
             return
         if name == "asset":
+            etag = f'"{args[1]}"'
+            validators = [value.strip().removeprefix("W/") for value in
+                          (handler.headers.get("If-None-Match") or "").split(",")]
+            if etag in validators or "*" in validators:
+                found = repo.get_asset_meta(conn, args[0], args[1])
+                conn.rollback()
+                if not found:
+                    handler.send_json(404, {"error": "Media not found."})
+                    return
+                handler.send_response(304)
+                handler.send_header("ETag", etag)
+                handler.send_header("Cache-Control", "private, max-age=31536000, immutable")
+                handler.end_headers()
+                return
             found = repo.get_asset(conn, args[0], args[1])
             conn.rollback()
             if not found:
-                handler.send_json(404, {"error": "Image not found."})
+                handler.send_json(404, {"error": "Media not found."})
                 return
             handler.send_skillops_bytes(200, found[0], found[1],
-                                        cache_control="private, max-age=31536000, immutable",
-                                        etag=f'"{args[1]}"')
+                                        cache_control="private, max-age=31536000, immutable", etag=etag)
             return
         if name == "assistant_attachment":
             status, payload = assistant_service.attachment_file(conn, me, args[0], int(args[1]), args[2])

@@ -15,3 +15,5 @@
 .race-image{display:block;width:100%;max-height:220px;object-fit:contain;margin:6px 0;background:#f5f5f1}
 .agent-request-fields{border:0;padding:0;margin:0}.agent-race-choice{display:flex;align-items:center;gap:8px;font-size:13px;margin:8px 0}
 .board-comment-review textarea{width:100%;box-sizing:border-box;resize:vertical;border:1px solid #d8ded5;padding:8px;font:inherit;line-height:1.5}.board-comment-review blockquote{margin:8px 0;padding-left:10px;border-left:2px solid #b8c6b5;color:#6c766b}
+
+.race-video { display: block; width: 100%; max-height: 320px; background: #0d0f12; }.race-differences .media-video-player { max-height: 320px; }

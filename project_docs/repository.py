@@ -742,6 +742,17 @@ def get_asset(connection, slug: str, asset_id: str) -> tuple[str, bytes] | None:
     return (row[0], bytes(row[1])) if row else None
 
 
+def get_asset_meta(connection, slug: str, asset_id: str) -> tuple[str, int] | None:
+    """Read MIME type and size without loading the media bytea."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT content_type, byte_size FROM projectops.asset WHERE project_slug = %s AND asset_id = %s",
+            (slug, asset_id),
+        )
+        row = cursor.fetchone()
+    return (row[0], int(row[1])) if row else None
+
+
 # ---------- 名單 ----------
 
 def upsert_member(connection, actor_id: str, display_name: str, role: str = "member",

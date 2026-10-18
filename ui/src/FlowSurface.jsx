@@ -9,11 +9,13 @@ import { newId, tablesOf } from "./sheetModel.js";
 import { SCOPE_LABELS, STEP_KINDS, TASK_LABELS, applyCanvasPositions, connectNodes, createStep, flowToCanvas, pushDefinition, readSelection, redrawStart, redoDefinition, seedDefinition, summarizeTasks, undoDefinition } from "./flowModel.js";
 import { FlowInspector, FlowPreflight, FlowResults, Status } from "./FlowPanels.jsx";
 
+import { MediaCell } from './MediaCell.jsx';
+
 function WorkStep({ data, selected, isConnectable }) {
   const locale = useLocale();
   return <article className={`flow-step-card ${selected ? "is-selected" : ""}`}>
     <Handle type="target" position={Position.Left} isConnectable={isConnectable} aria-label={uiText("flowSurface.inputConnections", {v0: (data.title)})} />
-    <strong>{data.title}</strong><span className="flow-step-route">{data.source} → {data.target}</span>
+    <strong>{data.title}</strong><small className="flow-executor-badge">{data.executorLabel}</small>{data.latestMediaUrl && <div className="flow-node-media nodrag nowheel"><MediaCell compact value={data.latestMediaUrl} label={data.title} /></div>}<span className="flow-step-route">{data.source} → {data.target}</span>
     <div><small>{SCOPE_LABELS[data.scope]}</small><Status status={data.status} /></div>
     <Handle type="source" position={Position.Right} isConnectable={isConnectable} aria-label={uiText("flowSurface.outputConnections", {v0: (data.title)})} />
   </article>;
@@ -71,7 +73,7 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
     return rows;
   }, [sourceTables, selected?.row_source]);
   const tasks = detail?.tasks || [];
-  const canvas = useMemo(() => { if (!definition) return { nodes: [], edges: [] }; const result = flowToCanvas(definition, selectedIds, tabs, tasks); return { ...result, edges: result.edges.map((edge) => ({ ...edge, selected: selectedEdgeIds.includes(edge.id) })) }; }, [definition, selectedIds, selectedEdgeIds, tabs, detail, locale]);
+  const canvas = useMemo(() => { if (!definition) return { nodes: [], edges: [] }; const result = flowToCanvas(definition, selectedIds, tabs, tasks, agents, workers); return { ...result, edges: result.edges.map((edge) => ({ ...edge, selected: selectedEdgeIds.includes(edge.id) })) }; }, [definition, selectedIds, selectedEdgeIds, tabs, detail, agents, workers, locale]);
   const canControl = writable && detail && (detail.run.created_by === me?.actor_id || me?.is_admin || me?.role === "admin");
   const report = (problem) => { const message = problem.message || String(problem); setError(message); onError?.(message); };
   const work = async (fn) => { setBusy(true); setError(""); try { return await fn(); } catch (problem) { report(problem); } finally { setBusy(false); } };

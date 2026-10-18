@@ -2,13 +2,18 @@
 
 An open-source production workspace for planning films with a crew of AI agents. Organize a director brief, cast references, shot slates, and editable pipelines in one place.
 
-Built for the ComfyUI [Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield). The target is an open-weights filmmaking and V2V studio; this checkout currently delivers the **bilingual production-planning baseline**.
+Built for the ComfyUI [Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield). The target is an open-weights filmmaking and V2V studio; this checkout delivers a **bilingual production workspace with inline video review and configurable Comfy workflows**.
 
 ## Available now
 
 - English / Traditional Chinese studio navigation, crew settings, annotations, asset review, and agent controls. English is the first-run default.
 - A `ZeroField Studio` template with five editable pages: **Director Brief**, **Soul Cast**, **Cinema Studio**, **OpenJutsu Lab**, and **Comfy Pipeline**.
-- An original planning example, **The Last Signal**, with empty media cells and Queued production tasks.
+- **The Last Signal** showcase, seeded by the launcher with original procedural PNG/MP4 playback fixtures, review statuses and a director annotation. Raw project templates retain empty media cells.
+- Inline video controls and hover previews, cached metadata, candidate video comparison, and visual input/output chains with resolved `@Asset` references.
+- Single-shot comparison, keyboard shot stepping and optical/motion/mode presets alongside Studio Assistant; selected shots and individual stages run in the current sheet.
+- Standard reference packs: source video, extracted PNG frame, continuous motion guide, anchor keyframe, multiple `@Asset` images, prompt and seed.
+- FFmpeg first-frame extraction, edge/luminance/frame-difference motion guides, and split-screen output with audio and faststart.
+- Arbitrary external ComfyUI JSON slot binding through `input_bindings`, including dot paths and optional media; local ComfyUI or official Comfy SDK execution with separate Cinema and V2V worker routing.
 - Documents, typed tables, gallery and board views, source-file import/export, revisions, and scoped editing proposals.
 - The inherited M8 agent system: configurable roles and tools, persistent tasks and dispatches, decision gates, candidate comparison, batch row assignments, and the ACP stdio bridge.
 - English statuses with compatibility for existing Chinese status values and legacy tool actions.
@@ -21,17 +26,11 @@ Use **English / 繁體中文** in the top bar to switch the interface. The same 
 
 Translations live in `ui/src/i18n/locales/en.json` and `zh-TW.json`. Add semantic keys to both dictionaries, including matching interpolation parameters. Use fixed IDs and `normalizeStatus()` for application logic; use `statusLabel()` only for display. Legacy Chinese status values and tool action keys remain valid. API errors retain their original `error` and policy `code`, with additive `message_key` / `message_params` for localized presentation; unknown errors retain a readable fallback.
 
-## Next development phase
+## Generation setup and limits
 
-The following ZeroField features are planned and are **not included as completed capabilities**:
+The bundled [FLUX 3 Klein and LTX 2.5 workflows](workflows/README.md) use open-weights model graphs and documented node dependencies. Install the listed weights/custom nodes in your Comfy deployment before generating. The official Comfy SDK is the Comfy Developer Platform route; Comfy Router's model API cannot execute arbitrary workflow graphs, so Router-only workflow configuration produces an actionable error.
 
-- Inline video players, video-take comparison, and the video-specific upload/playback performance work.
-- Optical and camera-motion pickers connected to generation parameters.
-- Validated FLUX / LTX image, cinema, and V2V workflow JSON files.
-- OpenJutsu source-video transfer and split-screen video output.
-- A `run_studio.py` launcher and actual generated sample renders.
-
-The editable pipeline describes those production stages; it does not install or configure their workers. The existing generic ComfyUI and FFmpeg adapters are inherited infrastructure. The `workflows/` and `samples/` directories currently contain documentation, not validated generation workflows or finished media.
+GPU generation and model quality have not been exercised in this environment. OpenJutsu currently provides source-guided V2V restyling with a reference image; SAM2 segmentation, depth conditioning and precise object replacement need separate validated workflows. The bundled [showcase media](samples/README.md) are original CC0 procedural playback fixtures, not model renders or proof of motion/object transfer. `luma_depth` is a luminance structure proxy, not learned depth estimation. The sample V2V graph exposes a motion-guide upload slot; using that guide as model conditioning requires an externally authored compatible control graph.
 
 ## Run locally
 
@@ -43,12 +42,48 @@ python -m venv .venv
 python -m pip install -e ".[embedded]"
 npm ci --prefix ui
 npm run build --prefix ui
-python server.py --embedded-db --port 3020 --no-worker
+python run_studio.py --port 3020 --no-worker
 ```
 
-Open [http://127.0.0.1:3020/projects/](http://127.0.0.1:3020/projects/). A fresh development database receives the English planning example and demo crew accounts. Existing productions are preserved. Development mode binds to the local machine and includes a crew identity switcher.
+Open [http://127.0.0.1:3020/projects/](http://127.0.0.1:3020/projects/). The launcher seeds the default development showcase and crew, registers separate workers, and fills only empty showcase media cells once. Subsequent launches preserve edits and custom pipeline definitions. Existing productions are preserved. Development mode binds to the local machine and includes a crew identity switcher.
+
+For local generation, install the models/nodes listed in [workflow setup](workflows/README.md), then run:
+
+```powershell
+python run_studio.py --port 3020 --comfy-url http://127.0.0.1:8188
+```
+
+For the Comfy Developer Platform, install `.[comfy]`, set `COMFY_API_KEY`, and select `--platform comfy_sdk`. Use `--comfy-url` / `COMFY_BASE_URL` for a workflow-capable deployment; the SDK defaults to Comfy Cloud. Generation outputs are proposals for director review. The launcher uses `OPENBENCH_DB_URI` or `DATABASE_URL` when supplied, otherwise it starts the embedded development database. `OPENBENCH_PG_BIN` selects an installed PostgreSQL bin directory. Non-development authentication never seeds demo accounts or registers demo workers.
 
 `--no-worker` lets you explore the workspace without starting model calls. To use agents, configure an appropriate model and restart without that flag. Existing `OPENBENCH_*` environment variables and CLI entry points are retained for compatibility. Configure a local open-weights, OpenAI-compatible endpoint with `OPENBENCH_PROVIDER=openai_compat`, `OPENBENCH_API_BASE`, and `OPENBENCH_MODEL`; see [worker setup](docs/WORKERS.md) for the supported settings and ACP configuration. For contest workflows, use open-weights models and open-source nodes.
+
+## External workflows and reference preparation
+
+The seeded OpenJutsu slate includes independently replaceable **Source Driving Video**, **First Frame**, **Motion Structure**, **Anchor Keyframe**, **Remastered Video** and **Split-Screen MP4** cells. The preparation stages use the original source video. Each result is reviewed before downstream generation proceeds.
+
+Use a trusted JSON file with `--worker-config path/to/studio-workers.json` to override stage adapters (`image`, `cinema`, `v2v`, `extract`, `structure`, `split`, `assemble`) or provide an `anchor` image-edit adapter. Workflow paths resolve relative to that file. For example, an externally authored image-edit graph can bind its own pose/reference slots:
+
+```json
+{
+  "anchor": {
+    "image_gen": {
+      "adapter": "comfyui",
+      "platform": "local",
+      "base_url": "http://127.0.0.1:8188",
+      "workflow": "./my-image-edit-api.json",
+      "output_node": "save",
+      "input_bindings": {
+        "first_frame": {"node": "pose", "input": "image", "upload": "image"},
+        "asset_images.0": {"node": "identity", "input": "image", "upload": "image"},
+        "compiled_prompt": {"node": "prompt", "input": "text"},
+        "seed": {"node": "sampler", "input": "seed"}
+      }
+    }
+  }
+}
+```
+
+Node names in this example belong to the external graph and must match its actual API JSON. ZeroField uploads and binds slots; the graph defines how references condition the model. The text-only cast generator is not used as a substitute for an image-edit anchor workflow. If you customize the saved pipeline, add/bind the matching stage through Pipeline Settings.
 
 ## Develop and verify
 
