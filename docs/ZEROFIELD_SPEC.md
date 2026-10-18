@@ -1,82 +1,242 @@
-# ZeroField Studio 參賽開發規格書 (`ZEROFIELD_SPEC.md`)
+# ZeroField Studio — Product & Implementation Specification (`ZEROFIELD_SPEC.md`)
 
-**專案位置**：`C:\ai_project\ZeroField`  
-**目標賽事**：ComfyUI「Open Source Higgsfield Challenge」（截止：2026-10-30 09:00 PT / 台北時間 2026-10-31 00:00）  
-**品牌口號**：*“No paywalls. No closed APIs. Just pure open-weights cinema & V2V illusion.”*
+**Repository**: `C:\ai_project\ZeroField`  
+**Target Competition**: ComfyUI [Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield) (Deadline: **2026-10-30 09:00 PT** / **2026-10-31 00:00 Taipei**)  
+**Current Repo Checkpoint**: Commit `9187954` (*English / Traditional Chinese interface* + *OpenBench M8-A–D / ACP / E1*). English remains the first-run default. Backend **245** and frontend **83** tests, the frontend build, and wheel resource verification passed; see [the bilingual baseline receipt](./bilingual-baseline.json). The video and production features below remain implementation targets.
 
----
-
-## 1. 競賽定位與「四獎同搶」策略（Prize Stacking Strategy）
-
-### 1.1 同時鎖定的四大獎項
-| 目標獎項 | 獎金／獎品 | `ZeroField` 的達標設計 |
-| :--- | :--- | :--- |
-| **1. Best Overall（總冠軍）** | **\$10,000 現金** | 同時重建官方點名的兩大產品（`Cinema Studio` 光學多鏡頭工作台 + `Genjutsu / OpenJutsu` 影片動作轉移與換物），具備完整 UI、多鏡頭表格、ComfyUI DAG 畫布與 FFmpeg 自動成片。 |
-| **2. Open Weights Only（純開源權重獎）** | **GeForce RTX 5090** | 100% 採用開放權重模型：**`FLUX 3 Image Klein (5.6B)`**（角色定妝與首尾幀）+ **`LTX-2.5`**（音畫同步鏡頭生成與 V2V 動作轉移），**零閉源 Partner Nodes**。 |
-| **3. Most Innovative / Most Viral** | **GeForce RTX 5090** | **創新點**：多代理拆鏡 + Multi-Take 並排盲測 + DAG 工作流編排；**傳播點**：OpenJutsu 支援「一鍵輸出原片 vs. 改造後並排對比 MP4（Viral Split-Screen）」。 |
-| **4. VFX Workflow Built with LTX（加碼獎）** | **\$2,000 現金** | 以 **`LTX-2.5`** 為核心影片與 VFX 引擎（涵蓋 I2V 電影運鏡 + V2V Motion Transfer / Object Swap）。 |
+**Interface localization**: Add every new product UI message to both `ui/src/i18n/locales/en.json` and `zh-TW.json`. Use fixed wire values and `normalizeStatus()` for logic, and translated labels only for display. Preserve existing project content and custom agent names when switching languages.
 
 ---
 
-## 2. 具體施工清單（4 大核心 Tasks）
+## 1. Core Philosophy & Product Strategy
 
-### Task 1：升級 [`project_assistant/limb_worker.py`](file:///C:/ai_project/ZeroField/project_assistant/limb_worker.py)
+### 1.1 Human Directs, Multi-Tool Agents Execute
+Modern visual creators do not restrict themselves to a single tool or a single model. A real production combines **LLM planning agents, CLI coding/automation agents (`ACP stdio`), Comfy SDK / Comfy Router workflows (`FLUX`, `LTX-2.5`, control pipelines), and external media bridges (`bridge`)**.
+- **Higgsfield's Bottleneck**: Even with 60+ tools, a creator making a short drama on Higgsfield must manually click 500+ times (`References 0/50`, `Film setup`, `Camera`, `Color palette`, `Lighting`) and dig through 600+ loose files in flat folders.
+- **ZeroField's Solution**: Wrap complex multi-tool workflows behind a structured, collaborative studio workspace where **AI agents and workers do the heavy lifting, and the human producer/director manages, inspects, annotates, and approves**.
 
-1. **`comfyui()` 支援上傳影片資產（`video_node`）與多參考圖（`reference_image_node`）**：
-   - 當 `config.get("video_node")` 設定時，從 `_media_urls(task["input"])` 尋找 `mime.startswith("video/")` 的原片資產。
-   - 透過 `POST {base}/upload/image` 將 `.mp4` 上傳至 ComfyUI `input/` 目錄，並將回傳的檔名寫入 `workflow[str(config["video_node"])]["inputs"][config.get("video_input", "video")]`（支援 `VHS_LoadVideo` / `LoadVideo`）。
-2. **`comfyui()` 支援結構化欄位映射（`param_bindings`）与光學預設編譯**：
-   - 讀取分鏡表中的 `Optical Rig`（如 `ARRI Alexa 65 + 35mm Anamorphic f/1.4`）與 `Camera Motion`（如 `Slow Dolly Push-In`），自動展開為標準光學英文 Prompt Tokens 並注入 `prompt_node` 與對應的 `LTX-2.5` 節點參數。
-3. **`ffmpeg()` 新增 `layout: "side_by_side"`（Viral Split-Screen 對比合成）**：
-   - 針對 `openjutsu-lab` 每一列同時擁有「原片（Source Driving Video）」與「LTX-2.5 改造後影片（Remastered Video）」的紀錄，使用 FFmpeg `hstack` 濾鏡合成 `1280x720` 的左右同步對比 MP4，寫回表格第 6 欄 `Viral Split-Screen MP4`。
+### 1.2 The Core UX Architecture: Seamless **Macro ↔ Meso ↔ Micro** Switching
+The heart of ZeroField's user experience is frictionless navigation across three operational scales—always preserving the active shot/row and asset context:
 
----
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 1. MACRO (巨觀 —的全片統籌與批量交辦)                                          │
+│    • Director Brief + Asset Hub (Soul Cast) + Multi-Shot Slate               │
+│    • Table / Gallery / Board views + M8 Agent Board (Needs You / Running)    │
+│    • Batch-select rows ➔ Assign to Agents or Send to Pipeline                │
+└───────────────┬──────────────────────────────────────────────┬───────────────┘
+                │ Open Shot(s) in Pipeline                     │ Click Shot Media /
+                │ (preserves active row_id & step)             │ Click Annotation
+                ▼                                              ▼
+┌───────────────────────────────────────┐      ┌───────────────────────────────┐
+│ 2. MESO (中觀 — 帶畫面的簡化節點畫布)   │ ◄──► │ 3. MICRO (微觀 — 單鏡對照審片) │
+│    • Simplified Visual FlowSurface    │Jump  │    • SheetReview & RaceView   │
+│    • Top Shot Switcher (All / S01..)  │with  │    • Side-by-Side (Keyframe / │
+│    • Nodes display live thumbnail /   │Row & │      Source Video vs. Output) │
+│      inline <video> + Executor badge  │Node  │    • ← / → keyboard shot step │
+│      (Agent / ACP CLI / Comfy / Bridge)│     │    • Row Annotation ➔ Agent   │
+└───────────────────────────────────────┘      └───────────────────────────────┘
+```
 
-### Task 2：打造 `zerofield_studio` 旗艦英文展示範本（[`project_docs/templates.py`](file:///C:/ai_project/ZeroField/project_docs/templates.py) & [`project_docs/service.py`](file:///C:/ai_project/ZeroField/project_docs/service.py)）
+### 1.3 Official Competition Rules & Prize Strategy
+Per the verified [official rules](https://comfy.org/open-source-higgsfield) and [`docs/HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md`](./HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md):
+1. **Mandatory Platform Requirement**: Entries **must build on the Comfy Developer Platform (`Comfy Router` and/or `Comfy SDK`)**, while keeping compatibility with local ComfyUI and vendor-neutral bridges.
+2. **Prize Stacking Reality**: Each submission can win **1 Main Category Prize** (`Best Overall $10,000`, `Most Innovative RTX 5090`, `Most Viral RTX 5090`, or `Open Weights Only RTX 5090`) **+ 1 Model Provider Bonus Prize** (`LTX $2,000 Cash`, `FLUX 3 Credits`, or `MiniMax H3 Credits`).
+3. **Default Open-Weights Workflows + Multi-Tool Extensibility**:
+   - Shipped `workflows/*.json` use **100% Open Weights** (`LTX-2.5` core video model + `FLUX` asset/keyframe model + `SAM2 / Depth` controls), qualifying for **Best Overall**, **Open Weights Only**, and the **LTX $2,000 Bonus**.
+   - The orchestration engine remains open to any registered tool (`M8 Specialist Agents`, `ACP CLI Agents`, `Comfy Router / SDK`, `Media Bridge`).
 
-將預設啟動建立的展示專案改為英文／雙語的 **`ZeroField: Cinema Studio & OpenJutsu Showcase`**，包含 5 個核心分頁：
-
-1. **`director-brief` (`doc`) — Director's Panel & Scene Script**
-   - 定義全片類型（Genre: Cyberpunk Noir）、光學套件（Optical Package: ARRI Alexa 65 + 35mm Master Anamorphic）、剪輯節奏（Montage Pacing）與分場劇本。
-2. **`soul-cast` (`sheet`) — Soul Cast & Asset Lookbook (FLUX 3 Klein)**
-   - 欄位：`Asset ID` | `Character / Set` | `Locked Optical & Appearance Prompt (Seed)` | `FLUX 3 Turnaround` | `Voice / Audio Profile` | `Status` | `Notes`
-   - `COLUMN_TYPES["soul-cast"] = ["text", "text", "text", "image", "text", "status", "text"]`
-3. **`cinema-studio` (`sheet`) — Cinema Studio Multi-Shot Slate (LTX-2.5 I2V)**
-   - 欄位：`Shot` | `Optical Rig (Camera & Lens)` | `Camera Motion` | `Action & Audio Prompt` | `Keyframe (FLUX 3 Klein)` | `LTX-2.5 Cinema Shot` | `Status` | `Director Take Notes`
-   - `COLUMN_TYPES["cinema-studio"] = ["text", "text", "text", "text", "image", "video", "status", "text"]`
-4. **`openjutsu-lab` (`sheet`) — OpenJutsu V2V Matrix (LTX-2.5 Motion Transfer & Swap)**
-   - 欄位：`Clip ID` | `Jutsu Mode` | `Source Driving Video` | `Target Cast / Swap Prompt` | `LTX-2.5 Remastered Video` | `Viral Split-Screen MP4` | `Status` | `Notes`
-   - `COLUMN_TYPES["openjutsu-lab"] = ["text", "text", "video", "text", "video", "video", "status", "text"]`
-5. **`comfy-pipeline` (`flow`) — Comfy Developer Platform DAG**
-   - 節點 1：`1. Optical Script Compiler (LLM)`
-   - 節點 2：`2. Soul Cast & Keyframes (FLUX 3 Klein)`
-   - 節點 3：`3. Cinema Studio Multi-Shot (LTX-2.5 I2V)`
-   - 節點 4：`4. OpenJutsu V2V Remaster (LTX-2.5 V2V)`
-   - 節點 5：`5. Director's Cut & Viral Grid (FFmpeg)`
-
----
-
-### Task 3：前端 `ui/src/` 影視工作室體驗與播放效能升級
-
-1. **高效能內嵌 `<video>` 播放器、快取與 Multi-Take 版本切換**：
-   - **前端 `/meta` 快取**：在 [`ui/src/MediaCell.jsx`](file:///C:/ai_project/ZeroField/ui/src/MediaCell.jsx) 建立模組級 `const META_CACHE = new Map()`，避免表格滾動或切分頁時重複請求 `/meta`。
-   - **按需解碼（Hover-to-Play）防解碼器崩潰**：當儲存格為 `video` 時，渲染 `<video preload="metadata" muted loop playsInline>`，預設靜止顯示首幀，**滑鼠懸停（`onMouseEnter`）才呼叫 `.play()`、移開（`onMouseLeave`）即 `.pause()`**，避免單頁超過 Chromium 硬體解碼器上限；在 `SheetReview` 審核抽屜與 Lightbox 中則支援完整音訊控制與 Multi-Take（Take 1 / Take 2 / Take 3）並排同步預覽。
-   - **後端零拷貝 `/meta` 與 HTTP Range 串流**：
-     - 在 [`project_docs/repository.py`](file:///C:/ai_project/ZeroField/project_docs/repository.py) 新增 `get_asset_meta(conn, slug, asset_id)`（只查 `content_type, byte_size`，不撈 `data` bytea）。
-     - 在 [`project_docs/http.py`](file:///C:/ai_project/ZeroField/project_docs/http.py) 的 `asset` 路由支援 `If-None-Match` (`304`)、`.cache/assets/{asset_id}` 本地磁碟快取與 `Range: bytes=start-end` (`206 Partial Content`) 串流。
-2. **Director's Optical & Motion Quick Picker**：
-   - 點擊 `cinema-studio` 的 `Optical Rig` 或 `Camera Motion` 欄位（或 `openjutsu-lab` 的 `Jutsu Mode` 欄位）時，提供快速預設膠囊選單：
-     - **Optical Rigs**：`ARRI Alexa 65 · 35mm Anamorphic f/1.4`、`RED V-Raptor · 85mm Prime f/1.8`、`IMAX 70mm · 24mm Wide`、`16mm Bolex Vintage Film`
-     - **Camera Motions**：`Slow Dolly Push-In`、`Handheld Urgency`、`Crane Rise High-Angle`、`Orbit 180°`、`Static Tripod`、`Whip Pan`
-     - **Jutsu Modes**：`Motion Transfer (Full Scene & Character)`、`Object / Product Swap (Masked)`、`Re-Shoot Camera Angle`
+### 1.4 Explicit Non-Goals (Do Not Build Now)
+- **NO Canvas Mask Painting (`Inpaint Brush`) or Video Frame Extraction (`Extend`) in this phase**: Focus 100% on making **Macro ↔ Meso ↔ Micro** switching, media-bearing flow nodes, inline video playback, and `@Asset` auto-binding rock-solid first.
+- **NO Timeline Video Editor (NLE)**: Audio passthrough is handled directly inside the Comfy workflow (`LoadVideo.audio -> VideoCombine.audio`).
+- **NO 60 Standalone Mini-App Pages**: Keep all workflows unified inside the `Brief ➔ Asset Hub ➔ Slate / Matrix ➔ Visual Pipeline Canvas` workspace.
 
 ---
 
-### Task 4：一鍵啟動腳本 `run_studio.py` 與開源 Workflows (`workflows/`)
+## 2. Current Codebase Baseline (Already Completed in `ce80b94`)
 
-1. 建立 `run_studio.py`：
-   - 一行指令 `python run_studio.py --port 3020 --comfy-url http://127.0.0.1:8188` 自動啟動嵌入式資料庫（或連至現有 DB）、自動註冊內建 ComfyUI + FFmpeg Worker 並在背景執行緒領取任務，免去評審手動複製 Token 的步驟。
-2. 在 `workflows/` 放入 3 個純開源權重的 ComfyUI API 格式工作流：
-   - `workflows/flux3_klein_soul_cast.json`
-   - `workflows/ltx25_cinema_shot.json`
-   - `workflows/ltx25_openjutsu_v2v.json`
+Do not duplicate or break the following completed foundations:
+- **English Studio Baseline & M8 Multi-Agent Engine (`ce80b94`)**:
+  - 241 backend tests (`python -m unittest discover -s tests -v`) and 78 frontend tests (`npm test --prefix ui`) pass.
+  - `project_docs/doc_schema.py` includes English statuses (`Queued`, `In Progress`, `Rendering Image`, `Rendering Video`, `Pending Review`, `Retake`, `Blocked`, `Approved`) alongside legacy Chinese statuses.
+  - `project_docs/templates.py` defines the 5-page `zerofield_studio` template (`director-brief`, `soul-cast`, `cinema-studio`, `openjutsu-lab`, `comfy-pipeline`).
+- **Media Upload Validation & HTTP Range Streaming**:
+  - `project_docs/media.py:validate()` and `project_docs/service.py:upload_asset()` **already support `video/mp4`, `video/webm`, and `audio/*` up to 64 MB** (`MAX_BYTES = 67108864`).
+  - `server.py:send_skillops_bytes()` **already implements HTTP `Range: bytes=start-end` (`206 Partial Content`, `416`, `Accept-Ranges: bytes`, `Content-Range`)** for `video/*` and `audio/*`.
+
+---
+
+## 3. Implementation Tasks (For the Executing Agent)
+
+Execute the following 4 tasks in order. Preserve all existing tests (`tests/test_zerofield_baseline.py`, etc.), and run `npm run build --prefix ui` after any frontend change.
+
+---
+
+### Task 1: Inline Video Playback, Zero-Blob `/meta` & Gallery/Board Video Covers
+
+#### 1.1 Backend: Zero-Blob `/meta` & `304 Not Modified` Short-Circuit
+- **File**: `project_docs/repository.py`
+  - Below `get_asset()` (around line 740), add `get_asset_meta(connection, slug: str, asset_id: str) -> tuple[str, int] | None`:
+    ```python
+    def get_asset_meta(connection, slug: str, asset_id: str) -> tuple[str, int] | None:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT content_type, byte_size FROM projectops.asset WHERE project_slug = %s AND asset_id = %s",
+                (slug, asset_id),
+            )
+            row = cursor.fetchone()
+        return (row[0], int(row[1])) if row else None
+    ```
+- **File**: `project_docs/http.py`
+  - In `_api()` where `name == "asset_meta"` (around line 495):
+    - Replace `repo.get_asset(conn, args[0], args[1])` with `repo.get_asset_meta(conn, args[0], args[1])` and return `{"content_type": found[0], "bytes": found[1]}` (0-byte blob read).
+  - In `_api()` where `name == "asset"` (around line 500):
+    - If `handler.headers.get("If-None-Match")` matches or contains `f'"{args[1]}"'`, verify existence with `repo.get_asset_meta(conn, args[0], args[1])`, rollback, and return `304 Not Modified` with `ETag: f'"{args[1]}"'` without reading `data` from PostgreSQL.
+    - Change the 404 error message from `"Image not found."` to `"Media not found."`.
+
+#### 1.2 Frontend: Inline `<video>` in `MediaCell.jsx` with Hover-to-Play & `META_CACHE`
+- **File**: `ui/src/MediaCell.jsx`
+  - Add a module-level cache `const META_CACHE = new Map();` (export `clearMediaMetaCache()` for tests) so each `${media.url}/meta` is fetched at most once per session.
+  - When `kind === "video"`:
+    - **In `compact` mode (table cells, gallery cards, and flow node cards)**:
+      - Render `<video className="media-video-thumb" src={media.url} muted loop playsInline preload="metadata" onLoadedMetadata={metadata} onMouseEnter={e => e.currentTarget.play?.().catch(() => {})} onMouseLeave={e => { e.currentTarget.pause?.(); }} onError={() => setError("Could not play video")} />`.
+      - Clicking the compact wrapper triggers `onLightbox?.({ ...media, kind, label, value })`.
+    - **In full mode (review drawer / lightbox / detail view)**:
+      - Render `<video className="media-video-player" src={media.url} controls muted loop playsInline preload="metadata" onLoadedMetadata={metadata} onError={() => setError("Could not play video")} />`.
+    - **Regenerate / Re-shoot button**:
+      - Enable `onRegenerate` when `(kind === "image" || kind === "video") && onRegenerate`.
+
+#### 1.3 Frontend: Enable Video Covers in `Gallery` & `Board` Views (`sheetViews.js` & `SheetCards.jsx`)
+- **File**: `ui/src/sheetViews.js`
+  - In `viewColumns(parsed)`: include both `'image'` and `'video'` columns in `coverColumns`:
+    ```js
+    coverColumns: columns.filter(({index}) => ['image', 'video'].includes(types[index]) || parsed.rows.some(row => ['image', 'video'].includes(mediaOf(row.cells[index]?.value, types[index])?.kind))),
+    ```
+  - In `sheetViewModel(parsed, visibleRows, preferences)`:
+    - Resolve `const colType = parsed.table.attrs.column_types?.[coverColumn] || 'image'; const media = coverColumn < 0 ? null : mediaOf(row.cells[coverColumn]?.value, colType);`
+    - Allow `['image', 'video'].includes(media?.kind)` in `cover`:
+      `cover: ['image', 'video'].includes(media?.kind) ? {...media, column: coverColumn, value: row.cells[coverColumn].value} : null`
+- **File**: `ui/src/SheetCards.jsx`
+  - In `card()` (line 13): pass `type={cover.kind || "image"}` instead of hardcoded `type="image"` to `<MediaCell compact ... />`.
+
+---
+
+### Task 2: Seamless **Macro ↔ Meso ↔ Micro** Switching & Media-Bearing Flow Canvas
+
+This task fixes the navigation discontinuities between the project overview/tables (**Macro**), the simplified visual pipeline canvas (**Meso**), and the single-shot review & candidate comparison drawers (**Micro**).
+
+#### 2.1 Macro ➔ Micro / Macro: Fix Row Annotation Jump (`ui/src/App.jsx` & `ui/src/SheetWorkspace.jsx`)
+- **Problem**: In `ui/src/App.jsx:pick(a)` (line 302), clicking a row annotation (`a.kind === "row"`, `a.anchor?.rid`) in the top `Annotations` panel only calls `focusAnnotation(a.id)` (which only works on `DocSurface`), doing nothing when the target tab is a `sheet`!
+- **Fix**:
+  - In `ui/src/App.jsx:pick(a)`: when the target tab has `surface_type === "sheet"` and `a.kind === "row"` with `a.anchor?.rid`, call `setSheetFocus({ tabKey: a.tab_key, rowId: a.anchor.rid, colIndex: 0, openRow: true, nonce: Date.now() })` after navigating to `a.tab_key`.
+  - In `ui/src/SheetWorkspace.jsx` (`focusRow` effect around line 44): if `focusRow.openRow` is true, automatically call `setRowOpen(focusRow.rowId); setPanel('row');` so the row's details and annotation thread open immediately.
+
+#### 2.2 Macro / Micro ➔ Meso: Direct Shot-to-Canvas Navigation (`SheetWorkspace.jsx`, `SheetCards.jsx`, `FlowSurface.jsx`)
+- **In `ui/src/SheetWorkspace.jsx` & `ui/src/SheetCards.jsx`**:
+  - Add a clean `"Open in Pipeline"` action on single rows (in the row detail side panel and in `SheetReview`) that calls `toFlow([row.rid], { sample_row_id: row.rid, capability: ..., col_index: ... })`.
+  - In `SheetReview` (around line 270 of `SheetWorkspace.jsx`): fix the regeneration pipeline button so it passes `capability: (types[preview.c] === 'video' || preview.kind === 'video') ? 'video_gen' : 'image_gen'` and `sample_row_id: previewRow.rid` instead of hardcoding `capability: "image_gen"`.
+  - In the grid cell renderer (around line 246 of `SheetWorkspace.jsx`): when a media cell (`['image', 'video', 'audio'].includes(types[c])`) is empty (`!media`) and `writable`, render an inline `+ Upload` button calling `pickUpload(r, c)`.
+- **In `ui/src/FlowSurface.jsx`**:
+  - When `FlowSurface` mounts with a `selection` from `sessionStorage` (`readSelection(window.sessionStorage, slug)`):
+    - If `selection.sample_row_id` or `selection.row_ids?.length === 1`, automatically set `sampleRow` to `selection.sample_row_id || selection.row_ids[0]`.
+    - If ` redrawStart(definition, selection)` resolves a matching step node ID, automatically select and focus that node (`setSelectedIds([matchedNodeId])`) so the user lands directly on the exact step and shot they clicked from Macro/Micro!
+
+#### 2.3 Meso (中觀): Upgrade `FlowSurface.jsx` & `FlowPanels.jsx` into a Media-Bearing Simplified Studio Canvas
+- **Top Active Shot / Sample Switcher (`ui/src/FlowSurface.jsx`)**:
+  - In `.flow-canvas-tools` (the top bar of `FlowSurface`), add an **Active Shot / Row Switcher** dropdown (`All Rows (Batch)` vs. individual rows from the primary sheet such as `1 · S01`, `2 · S02`, `3 · S03`) bound to `sampleRow`.
+  - Users should not have to dig into the right-hand inspector just to switch which shot (`S01` vs `S02`) they are previewing on the canvas.
+- **Media-Bearing Node Cards (`WorkStep` in `ui/src/FlowSurface.jsx` & `flowToCanvas` in `ui/src/flowModel.js`)**:
+  - Upgrade `flowToCanvas` and `WorkStep` so each node card on the canvas displays:
+    1. **Executor / Tool Badge**: Clearly show whether the step is driven by a **Crew Agent** (`🤖 Cinematographer`), an **ACP CLI** (`⌨️ ACP`), a **Comfy Workflow** (`🎨 Comfy`), or a **Media Bridge** (`🔌 Bridge`).
+    2. **Live Media Preview inside the Node Card**:
+       - When a `sampleRow` is active (or when the latest task run has an `output.asset_url` or target cell media value for that row/step), render a compact `<MediaCell compact value={nodeMediaUrl} />` **directly inside the `WorkStep` node card on the canvas**!
+       - Clicking the media preview inside the node opens a quick lightbox/preview or jumps to the shot (`onOpenSource`), enabling instant **Meso ➔ Micro** and **Meso ➔ Macro** transitions.
+- **Inline Media in `FlowPanels.jsx` (`TaskResult`)**:
+  - In `ui/src/FlowPanels.jsx` (`TaskResult`, around line 93): when `task.output?.asset_url` is present, render `<MediaCell compact value={task.output.asset_url} />` alongside the link so run results show playable video/image thumbnails directly in the flow panel.
+
+#### 2.4 Micro (微觀): Side-by-Side Context in `SheetReview` & Video Playback in `ProposalRaceView`
+- **File**: `ui/src/SheetWorkspace.jsx` (`SheetReview`, around line 269)
+  - **Keyboard Shot Stepping (`←` / `→`)**: While `preview` (`SheetReview`) is open and focus is not inside an `<input>` or `<textarea>`, pressing `ArrowLeft` / `ArrowRight` calls `stepPreview(-1)` / `stepPreview(1)` so the director can rapidly review shots `S01 ➔ S02 ➔ S03` in sequence.
+  - **Same-Row Companion Media Bar (Input vs. Output Comparison)**:
+    - When reviewing a row in `SheetReview` that has multiple media columns (e.g., `Cinema Studio` has `Keyframe` + `Cinema Shot`, and `OpenJutsu Lab` has `Source Driving Video` + `Remastered Video` + `Split-Screen MP4`), display a **Row Media Switcher / Side-by-Side Compare strip** inside `SheetReview` so the director can view `Source Driving Video` and `Remastered Video` (or `Keyframe` and `Cinema Shot`) side-by-side without closing the review drawer!
+- **File**: `ui/src/assistant/ProposalRaceView.jsx`
+  - In `DiffValue({ value })`: when `media?.kind === 'video'`, render `<video className="race-video" src={media.url} controls muted loop playsInline preload="metadata" />` instead of a download link; when `media?.kind === 'asset'`, render `<MediaCell value={value} />` so M8 multi-agent / multi-take races play candidate videos side-by-side.
+
+---
+
+### Task 3: `@Asset` Auto-Binding, Cinema Studio 4.0 Compiler & Comfy Developer Platform
+
+#### 3.1 `@Asset` Auto-Binding & Structured Prompt Compiler (`project_assistant/limb_worker.py`)
+Eliminate the need for humans to manually select references for every shot:
+- Add `resolve_studio_context(task: dict) -> dict` in `project_assistant/limb_worker.py`:
+  - Reads the active row from `task.get("input", {}).get("structured_rows", [])`.
+  - Scans the active row's cells for `@?([A-Z]+-\d+)` asset references (e.g., `@CAST-01`, `CAST-01`, `@SET-01`, `@LOC-01`, `@PROP-01`).
+  - Matches those IDs against the `soul-cast` / `assets` table in `task["input"]["tabs"]`, extracting each matched asset's **Reference Image URL** (`/projects/api/.../assets/pa_...`), **Locked Appearance Prompt**, and **Seed** (`seed[:\s]+(\d+)`).
+  - Compiles ordered **Optical Rig / Setup** + **Ordered Camera Motion** + **Resolved `@Asset` Appearance Prompts** + **Shot Action & Audio Prompt** into `compiled_prompt`, and returns:
+    ```python
+    {
+        "compiled_prompt": "...",
+        "seed": 48291,
+        "primary_image_url": "...",       # shot Keyframe URL if present, else primary @CAST/@SET Reference Image URL
+        "reference_image_urls": ["..."],  # all resolved @Asset reference image URLs in mention order
+        "source_video_url": "...",        # Source Driving Video URL from openjutsu-lab row
+        "jutsu_mode": "Motion Transfer",  # or "Object Swap"
+    }
+    ```
+
+#### 3.2 Quick Preset Chips in Table Edit Strip (`ui/src/SheetWorkspace.jsx`)
+- When editing a text cell (`editing`) in `cinema-studio` or `openjutsu-lab`, display clickable preset chips inside `.sheet-edit-strip` based on the column header so humans can adjust parameters with one click (while agents can batch-edit them across rows):
+  - **`Optical Rig` column**: `ARRI Alexa 65 / 35mm Anamorphic f/1.4`, `RED V-Raptor / 85mm Prime f/1.8`, `35mm Film / Vintage Anamorphic`, `16mm Bolex Vintage Film`, `DV Camcorder / Clean Sharp`
+  - **`Camera Motion` column**: `Slow Dolly Push-In`, `Tracking Shot`, `Static Tripod`, `Handheld Urgency`, `Crane Rise High-Angle`, `Drone Orbit 180°`, `Rack Focus`, `Whip Pan`, `POV`
+  - **`Jutsu Mode` column**: `Motion Transfer`, `Object Swap`
+  - **Prompt / Reference columns**: Quick `@Asset` chips (`@CAST-01`, `@SET-01`, etc.) dynamically read from the `soul-cast` tab.
+
+#### 3.3 Comfy Developer Platform (`Comfy Router` / `Comfy SDK` + Local ComfyUI) & Workflows
+- **File**: `project_assistant/limb_worker.py`
+  - Upgrade `comfyui(task, config, head)` (and add `ComfyPlatformClient`) to support:
+    1. **Comfy Developer Platform (`platform: "comfy_router" | "comfy_sdk" | "local"`)**: Supports `COMFY_ROUTER_URL` / `COMFY_API_KEY` or `config.get("router_url")` Bearer/API-key headers in addition to local ComfyUI servers.
+    2. **`resolve_studio_context(task)` Integration**:
+       - Injects `ctx["compiled_prompt"]` into `prompt_node` and `ctx["seed"]` into `seed_node`.
+       - Uploads `ctx["primary_image_url"]` to `image_node` and any `ctx["reference_image_urls"]` to `reference_image_node`.
+       - **`video_node` Support**: When `config.get("video_node")` is set, uploads `ctx["source_video_url"]` (`video/mp4` or `video/webm`) to `/upload/image` and binds the returned filename to `workflow[str(config["video_node"])]["inputs"][config.get("video_input", "video")]`.
+       - **`param_bindings` Support**: Maps configured node/input pairs from `config.get("param_bindings")`.
+  - In `ffmpeg()`: add `layout: "side_by_side"` (`hstack` with `-movflags +faststart`) when combining two row videos (`Source Driving Video` + `Remastered Video`), preserving existing concat behavior.
+- **Files**: `workflows/`
+  - Add 3 clean, open-weights ComfyUI API JSON files:
+    1. `workflows/flux3_klein_soul_cast.json`
+    2. `workflows/ltx25_cinema_shot.json`
+    3. `workflows/ltx25_openjutsu_v2v.json`
+
+---
+
+### Task 4: Pre-Loaded Showcase Assets (`samples/`) & `run_studio.py` Launcher
+
+1. **Preserve `tests/test_zerofield_baseline.py` Compatibility**:
+   - Keep `templates.tab_specs("zerofield_studio", ...)` returning empty media cells with `Queued` status on raw calls so `test_studio_template_has_five_english_tabs_and_empty_media_cells` passes without modification.
+2. **Create `run_studio.py` & Demo Seeder**:
+   - `python run_studio.py --port 3020 --comfy-url http://127.0.0.1:8188` starts the server (with embedded DB when needed), auto-registers built-in workers (`image_gen`, `video_gen`, `media_assemble`), seeds sample media (`samples/`) into the default showcase project if present, and runs the limb worker polling loop in a background thread.
+
+---
+
+## 4. Verification & Acceptance Gates
+
+The executing agent MUST run and pass all of the following before completion:
+
+```powershell
+python -m unittest discover -s tests -v
+npm test --prefix ui
+npm run build --prefix ui
+python -m build --wheel
+```
+
+Required new unit tests:
+1. **Backend (`tests/`)**:
+   - `repo.get_asset_meta()` zero-blob query & `http.py` `304 Not Modified` ETag response.
+   - `limb_worker.resolve_studio_context()` (`@CAST-01` / `@SET-01` cross-tab resolution + ordered camera/rig prompt compilation).
+   - `limb_worker.comfyui()` `video_node`, `reference_image_node`, `param_bindings`, and Comfy Router / SDK headers.
+   - `limb_worker.ffmpeg()` `layout="side_by_side"` output with `+faststart`.
+2. **Frontend (`ui/tests/`)**:
+   - `sheetViews.js` includes `video` columns in `coverColumns` for `Gallery` and `Board` views.
+   - `flowModel.js` / `FlowSurface` attaches media previews and executor badges to step nodes.
+   - `MediaCell.jsx` caches `/meta` and renders `<video>` for `kind === "video"`.
+   - `ProposalRaceView.jsx` renders `<video>` for candidate video takes.
