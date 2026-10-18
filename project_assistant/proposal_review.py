@@ -59,7 +59,7 @@ def describe(target, tab, *, partial_allowed=False):
 def select_target(target, selected):
     ops = target.get("ops", [])
     if not _independent(target) or not isinstance(selected, list) or not selected or any(type(i) is not int or i < 0 or i >= len(ops) for i in selected) or len(set(selected)) != len(selected):
-        raise ValueError("這組修改有相依關係或選取無效，請整組核對")
+        raise ValueError("These changes are dependent or the selection is invalid. Review the whole group.")
     result = copy.deepcopy(target)
     result["ops"] = [op for i, op in enumerate(ops) if i in selected]
     fids = set().union(*(_fids(op["node"]["content"][c]) for op in result["ops"] for c in op["edited_cols"]))

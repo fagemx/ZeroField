@@ -35,25 +35,25 @@ const NARROW = "(max-width: 860px)";
 
 function blockItems(pickImage) {
   return [
-    { key: "text", label: "內文", icon: "¶", words: "text paragraph 內文 段落", run: (e) => e.chain().focus().setParagraph().run() },
-    { key: "h1", label: "標題 1", icon: "H1", words: "heading h1 標題 大標", run: (e) => e.chain().focus().setNode("heading", { level: 1 }).run() },
-    { key: "h2", label: "標題 2", icon: "H2", words: "heading h2 標題", run: (e) => e.chain().focus().setNode("heading", { level: 2 }).run() },
-    { key: "h3", label: "標題 3", icon: "H3", words: "heading h3 標題 小標", run: (e) => e.chain().focus().setNode("heading", { level: 3 }).run() },
-    { key: "bullet", label: "項目清單", icon: "•", words: "bullet list 清單 項目", run: (e) => e.chain().focus().toggleBulletList().run() },
-    { key: "numbered", label: "編號清單", icon: "1.", words: "numbered ordered 編號 清單", run: (e) => e.chain().focus().toggleOrderedList().run() },
-    { key: "check", label: "勾選清單", icon: "☑", words: "check todo task 勾選 待辦", run: (e) => e.chain().focus().toggleTaskList().run() },
-    { key: "quote", label: "引言", icon: "❝", words: "quote 引言 引用", run: (e) => e.chain().focus().toggleBlockquote().run() },
-    { key: "divider", label: "分隔線", icon: "—", words: "divider hr 分隔線", run: (e) => e.chain().focus().setHorizontalRule().run() },
-    { key: "table", label: "表格", icon: "▦", words: "table 表格", run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
-    { key: "image", label: "圖片", icon: "🖼", words: "image 圖片 照片", run: () => pickImage() },
-    { key: "status", label: "狀態", icon: "●", words: "status 狀態 進度",
-      run: (e) => e.chain().focus().insertContent([{ type: "status", attrs: { label: "未開始" } }, { type: "text", text: " " }]).run() },
-    { key: "fill", label: "大家可填的格子", icon: "✎", words: "fill 可填 填寫 格子", run: (e) => e.chain().focus().insertContent({ type: "fill", attrs: { label: "" } }).run() },
+    { key: "text", label: "Body Text", icon: "¶", words: "text paragraph body", run: (e) => e.chain().focus().setParagraph().run() },
+    { key: "h1", label: "Heading 1", icon: "H1", words: "heading h1 title", run: (e) => e.chain().focus().setNode("heading", { level: 1 }).run() },
+    { key: "h2", label: "Heading 2", icon: "H2", words: "heading h2", run: (e) => e.chain().focus().setNode("heading", { level: 2 }).run() },
+    { key: "h3", label: "Heading 3", icon: "H3", words: "heading h3 subtitle", run: (e) => e.chain().focus().setNode("heading", { level: 3 }).run() },
+    { key: "bullet", label: "Bullet List", icon: "•", words: "bullet list", run: (e) => e.chain().focus().toggleBulletList().run() },
+    { key: "numbered", label: "Numbered List", icon: "1.", words: "numbered ordered list", run: (e) => e.chain().focus().toggleOrderedList().run() },
+    { key: "check", label: "Checklist", icon: "☑", words: "check todo task", run: (e) => e.chain().focus().toggleTaskList().run() },
+    { key: "quote", label: "Quote", icon: "❝", words: "quote citation", run: (e) => e.chain().focus().toggleBlockquote().run() },
+    { key: "divider", label: "Divider", icon: "—", words: "divider hr", run: (e) => e.chain().focus().setHorizontalRule().run() },
+    { key: "table", label: "Table", icon: "▦", words: "table", run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+    { key: "image", label: "Image", icon: "🖼", words: "image photo", run: () => pickImage() },
+    { key: "status", label: "Status", icon: "●", words: "status progress",
+      run: (e) => e.chain().focus().insertContent([{ type: "status", attrs: { label: "Queued" } }, { type: "text", text: " " }]).run() },
+    { key: "fill", label: "Shared Field", icon: "✎", words: "fill editable field", run: (e) => e.chain().focus().insertContent({ type: "fill", attrs: { label: "" } }).run() },
   ];
 }
 
 // 「＋」新增的區塊
-const NEW_BLOCKS = [["p", "¶", "段落"], ["h2", "H", "小標題"], ["ul", "•", "項目清單"], ["task", "☑", "勾選清單"], ["quote", "❝", "引言"], ["table", "▦", "表格"]];
+const NEW_BLOCKS = [["p", "¶", "Paragraph"], ["h2", "H", "Subheading"], ["ul", "•", "Bullet List"], ["task", "☑", "Checklist"], ["quote", "❝", "Quote"], ["table", "▦", "Table"]];
 
 // 標註欄要文件區夠寬才放得下寬版（300px 卡片）。原本只看視窗寬度（1600 以下收成窄邊），
 // 但右邊的專案助理側邊欄也會吃掉寬度（還可以拖拉調寬）：改看文件區實際的寬度。
@@ -223,7 +223,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         blockedAt.current = Date.now();
         const id = unit.node.attrs.bid;
         const who = lockMap.get(id) || (unit.table && lockMap.get(unit.table.attrs.bid));
-        latest.current.onToast(`${who || "別人"} 正在編輯這一段，等他改完就能改`);
+        latest.current.onToast(`${who || "Another crew member"}  is editing this passage. Wait until they finish.`);
       },
     };
     ownerRef.current = admin ? null : me.actor_id;
@@ -355,10 +355,10 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         applyServer(result.doc, result.revision, result.saved_at, { clean: sentClean, sent: sentBids, force });
         if (result.conflicts && result.conflicts.length) {
           const first = result.conflicts[0];
-          const name = first.owner_name || "別人";
-          latest.current.onToast(first.reason === "locked" ? `${name} 正在編輯這一段，你的修改沒有存進去，已換回他那邊的內容`
-            : first.reason === "changed" ? "這一段剛剛被別人改過，已換成最新的內容，請再改一次"
-              : "有一段沒有權限修改，已換回原本的內容");
+          const name = first.owner_name || "Another crew member";
+          latest.current.onToast(first.reason === "locked" ? `${name}  is editing this passage. Your changes were not saved; the latest content has been restored.`
+            : first.reason === "changed" ? "This passage changed elsewhere. The latest content is shown; try your edit again."
+              : "A passage could not be edited with your permissions. Its original content was restored.");
         }
         setSaveState({ kind: "saved", at: result.saved_at });
         latest.current.onSaved({ revision: result.revision, saved_at: result.saved_at, doc: result.doc });
@@ -407,7 +407,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         applyServer(sync.current.server, sync.current.revision, sync.current.savedAt, { force: new Set([table ? bidOf(table) : unit]) });
         ctxRef.current.locks.set(unit, result.by_name);
         editor.view.dispatch(editor.state.tr.setMeta(permissionKey, true));
-        latest.current.onToast(`${result.by_name} 正在編輯這一段，等他改完就能改`);
+        latest.current.onToast(`${result.by_name}  is editing this passage. Wait until they finish.`);
       });
     }
   };
@@ -490,9 +490,9 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       setEditing((state) => (state && !dirty.current && !inflight.current ? null : state));
       return;
     }
-    const what = unit.kind === "row" ? `表格的一列（${clip(rowLabel(unit.node.toJSON()), 12) || "新的一列"}）`
-      : ({ heading: "標題", paragraph: "這一段", bulletList: "這個清單", orderedList: "這個清單", taskList: "這個勾選清單",
-        blockquote: "這段引言", table: "這個表格" })[unit.node.type.name] || "這一塊";
+    const what = unit.kind === "row" ? `Table row (${clip(rowLabel(unit.node.toJSON()), 12) || "New Row"})`
+      : ({ heading: "Title", paragraph: "this passage", bulletList: "this list", orderedList: "this list", taskList: "this checklist",
+        blockquote: "this quote", table: "this table" })[unit.node.type.name] || "this block";
     setEditing({ what });
   };
 
@@ -560,7 +560,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     ],
     content: tab.doc,
     editorProps: {
-      attributes: { class: "doc doc-surface-editor", "aria-label": "內文" },
+      attributes: { class: "doc doc-surface-editor", "aria-label": "Body Text" },
       handleKeyDown: (_view, event) => {
         const state = slashRef.current;
         if (!state || !state.list.length) return false;
@@ -594,7 +594,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           const busyUnit = units.find((unit) => !unitEditable(unit, ctx) && unitEditable(unit, free));
           if (busyUnit) {
             const who = ctx.locks.get(busyUnit.node.attrs.bid) || (busyUnit.table && ctx.locks.get(busyUnit.table.attrs.bid));
-            if (who) latest.current.onToast(`${who} 正在編輯這一段，等他改完就能改`);
+            if (who) latest.current.onToast(`${who}  is editing this passage. Wait until they finish.`);
           }
         }
         const a = annotationAt(view.state, pos);
@@ -744,7 +744,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       anchor: a.anchor,
       cls: markClass(a, String(focusId) === String(a.id)) + (String(flashId) === String(a.id) ? " pd-flash" : ""),
       title: hasCard(a, adding) ? undefined
-        : `${a.created_by_name} 的${a.style === "ul" ? "劃線" : "螢光筆"} · ${shortTime(a.created_at)}`,
+        : `${a.created_by_name} ’s${a.style === "ul" ? "Underline" : "Highlight"} · ${shortTime(a.created_at)}`,
     }));
     instance.view.dispatch(instance.state.tr.setMeta(annotationKey, { items: list }).setMeta("addToHistory", false));
   }, [tabAnns, markVisible, focusId, flashId, adding, ready]);
@@ -776,7 +776,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       const wrapRect = wrap && wrap.getBoundingClientRect ? wrap.getBoundingClientRect() : null;
       let rowPos = offset + 1;
       node.forEach((row) => {
-        rows.set(row.attrs.bid, { pos: rowPos, node: row });
+       rows.set(row.attrs.bid, { pos: rowPos, node: row });
         if (!isHeaderRowNode(row) && rowHasField(row)) {
           const dom = pm.nodeDOM(rowPos);
           if (dom && dom.getBoundingClientRect && wrapRect) {
@@ -899,7 +899,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     if (to < from) [from, to] = [to, from];
     const picked = selectionAnchor(instance.state.doc, from, to);
     if (!picked) { setSel(null); return; }
-    if (picked.tooLong) { latest.current.onToast("一次最多標 300 個字，請選短一點"); setSel(null); return; }
+    if (picked.tooLong) { latest.current.onToast("Select up to 300 characters for an annotation."); setSel(null); return; }
     const units = unitsInRange(instance.state.doc, from, to);
     const editable = !attachId && units.length > 0 && units.every((unit) => unitEditable(unit, ctxRef.current));
     const rect = range.getBoundingClientRect();
@@ -960,11 +960,11 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   const tipOnce = () => {
     if (firstTip.current) return;
     firstTip.current = true;
-    onToast("螢光筆和劃線大家都看得到，但不會通知任何人。同一段再按一次同顏色就取消");
+    onToast("Highlights and underlines are visible to everyone without sending notifications. Choose the same color again to remove it.");
   };
 
   const createAnnotation = async (body) => {
-    if (!(await flush())) throw new Error('來源尚未儲存，請先處理編輯衝突');
+    if (!(await flush())) throw new Error("Save the source and resolve editing conflicts first.");
     const result = await api.post(`/projects/api/${slug}/annotations`, { tab_key: tab.key, ...body, source_revision: sync.current.revision });
     onAnnotation(result.annotation);
     if (result.annotation.agent_request) onAgentRouted?.(result.annotation.agent_request);
@@ -993,13 +993,13 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
         onAnnotation({ deleted: a.id });
       }
-      onToast("已取消螢光筆");
+      onToast("Highlight removed");
     } else if (hls.length) {
       for (const a of hls) {
         const result = await api.post(`/projects/api/${slug}/annotations/${a.id}/style`, { style: "hl", color });
         onAnnotation(result.annotation);
       }
-      onToast(`已換成${COLORS[color][0]}色`);
+      onToast(`Changed to${COLORS[color][0]} color`);
     } else {
       await createAnnotation({ anchor: current.anchor, style: "hl", color });
       tipOnce();
@@ -1016,7 +1016,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
         onAnnotation({ deleted: a.id });
       }
-      onToast("已取消劃線");
+      onToast("Underline removed");
     } else {
       await createAnnotation({ anchor: current.anchor, style: "ul" });
       tipOnce();
@@ -1031,7 +1031,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
       onAnnotation({ deleted: a.id });
     }
-    onToast(`已移除 ${current.mine.length} 個螢光筆／劃線`);
+    onToast(`Removed ${current.mine.length}  highlights / underlines`);
   });
 
   const onLabel = (label) => run(async () => {
@@ -1040,7 +1040,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     if (!current) return;
     const created = await createAnnotation({ anchor: current.anchor, label });
     if (label === "ok") {
-      onToast(`已記下：${me.name} 確認了這段`);
+      onToast(`Recorded:${me.name}  approved this passage`);
     } else {
       setAdding((set) => new Set(set).add(created.id));
       onFocus(created.id);
@@ -1068,7 +1068,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     const result = await api.post(`/projects/api/${slug}/annotations/${attachId}/reattach`, { anchor: current.anchor });
     onAnnotation(result.annotation);
     onAttachDone();
-    onToast("已放到新的位置");
+    onToast("Reattached");
     onFocus(result.annotation.id, { flash: true });
   });
 
@@ -1104,7 +1104,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
         if (a.draft && a.kind === "row") result = await createAnnotation({ row: a.anchor.rid, body: extra.body });
         else if (a.draft) result = await createAnnotation({ anchor: a.anchor, body: extra.body });
         else {
-          if (!(await flush())) throw new Error('來源尚未儲存，請先處理編輯衝突');
+          if (!(await flush())) throw new Error("Save the source and resolve editing conflicts first.");
           const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/comments`, { body: extra.body, source_revision: sync.current.revision });
           onAnnotation(data.annotation);
           if (data.annotation.agent_request) onAgentRouted?.(data.annotation.agent_request);
@@ -1116,7 +1116,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       if (a.draft) { setDrafts((list) => list.filter((d) => d.id !== a.id)); onFocus(sent.id); }
       const mentioned = [...new Set((extra.body.match(/@\{([0-9a-f-]{36})\}/g) || []).map((token) => token.slice(2, -1)))]
         .filter((id) => id !== me.actor_id).map((id) => memberNames.get(id)).filter(Boolean);
-      onToast(mentioned.length ? `已送出。${mentioned.join("、")} 的「待我處理」會出現這一則` : "已送出");
+      onToast(mentioned.length ? `Sent.${mentioned.join("、")}  will see this in Needs You` : "Sent");
       return true;
     }
     if (action === "cancel") { setDrafts((list) => list.filter((d) => d.id !== a.id)); onFocus(null); return true; }
@@ -1125,26 +1125,26 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       if (action === "resolve" || action === "reopen") {
         const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/resolve`, { resolved: action === "resolve" });
         onAnnotation(data.annotation);
-        if (action === "resolve") { onFocus(null); onToast("已解決。到右上「標註 → 全部」可以再打開"); }
+        if (action === "resolve") { onFocus(null); onToast("Resolved. Reopen it from Annotations → All."); }
         return true;
       }
       if (action === "reconfirm") {
         const data = await api.post(`/projects/api/${slug}/annotations/${a.id}/reconfirm`, {});
         onAnnotation(data.annotation);
-        onToast(`已記下：${me.name} 重新確認了這段`);
+        onToast(`Recorded:${me.name}  approved this passage again`);
         return true;
       }
       if (action === "remove") {
         const others = comments(a).some((m) => m.actor.actor_id !== me.actor_id);
-        if (others && !window.confirm("這則標註有別人的留言，刪除後留言也會一起不見。確定要刪？")) return false;
+        if (others && !window.confirm("Delete this annotation and its crew replies?")) return false;
         await api.post(`/projects/api/${slug}/annotations/${a.id}/delete`, {});
         onAnnotation({ deleted: a.id });
         onFocus(null);
-        onToast(a.label === "ok" && !comments(a).length ? "已取消確認" : "已刪除");
+        onToast(a.label === "ok" && !comments(a).length ? "Approval removed" : "Deleted");
         return true;
       }
       if (action === "del-comment") {
-        if (!window.confirm("刪除這則留言？")) return false;
+        if (!window.confirm("Delete this comment?")) return false;
         await api.post(`/projects/api/${slug}/comments/${extra.comment}/delete`, {});
         onAnnotation({ ...a, messages: (a.messages || []).filter((m) => String(m.id) !== String(extra.comment)) });
         return true;
@@ -1224,7 +1224,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
     else if (type === "task") node = n.taskList.create(attrs, n.taskItem.create({ checked: false }, para()));
     else if (type === "quote") node = n.blockquote.create(attrs, para());
     else {
-      const head = n.tableRow.create(ownerAttrs(), [1, 2, 3].map((i) => n.tableHeader.create(null, para(`欄位 ${i}`))));
+      const head = n.tableRow.create(ownerAttrs(), [1, 2, 3].map((i) => n.tableHeader.create(null, para(`Column ${i}`))));
       const body = n.tableRow.create(ownerAttrs(), [1, 2, 3].map(() => n.tableCell.create(null, para())));
       node = n.table.create(attrs, [head, body]);
     }
@@ -1257,7 +1257,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       if (like) like.descendants((child) => { if (!inner && (child.type.name === "status" || child.type.name === "fill")) inner = child; });
       const title = header && i < header.childCount ? header.child(i).textContent : "";
       let content = null;
-      if ((inner && inner.type.name === "status") || /狀態/.test(title)) content = n.status.create({ label: "未開始" });
+      if ((inner && inner.type.name === "status") || /狀態/.test(title)) content = n.status.create({ label: "Queued" });
       else if (inner && inner.type.name === "fill") content = n.fill.create({ label: inner.attrs.label || "" });
       cells.push(n.tableCell.create(null, n.paragraph.create(null, content)));
     }
@@ -1300,14 +1300,14 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   }, [markPop, insMenu]);
 
   async function uploadImage(file) {
-    if (!IMAGE_TYPES.includes(file.type)) { latest.current.onError("只收 PNG、JPEG、GIF、WebP 圖片"); return; }
-    if (file.size > 8 * 1024 * 1024) { latest.current.onError("圖片最大 8 MB"); return; }
+    if (!IMAGE_TYPES.includes(file.type)) { latest.current.onError("Choose a PNG, JPEG, GIF, or WebP image."); return; }
+    if (file.size > 8 * 1024 * 1024) { latest.current.onError("Images must be 8 MB or smaller."); return; }
     try {
-      latest.current.onToast("圖片上傳中…");
+      latest.current.onToast("Uploading image…");
       const result = await api.upload(`/projects/api/${slug}/assets`, file);
       const caption = file.name.replace(/\.[^.]+$/, "");
       editorRef.current.chain().focus().insertContent({ type: "image", attrs: { src: result.src, alt: caption, title: caption } }).run();
-      latest.current.onToast("圖片已加入");
+      latest.current.onToast("Image added");
     } catch (error) {
       latest.current.onError(error.message);
     }
@@ -1324,7 +1324,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       setSaveState({ kind: "saved", at: result.saved_at });
       onSaved({ revision: result.revision, saved_at: result.saved_at, doc: result.doc, title: result.title });
       if (result.annotations) onAnnotations(result.annotations);
-      onToast(`已換回第 ${revision} 筆的內容；換回前的內容也留在「找回以前的內容」裡`);
+      onToast(`Restored revision ${revision} . The previous content remains available in Version History.`);
     } catch (error) {
       onError(error.message);
     }
@@ -1341,20 +1341,20 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
 
   const menus = editor ? {
     table: ownTable ? [
-      { key: "ins", label: "插入表格（第一列是表頭）", run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+      { key: "ins", label: "Insert table with a header row", run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
       "sep",
-      { key: "rb", label: "上面加一列", disabled: !editor.can().addRowBefore(), run: () => editor.chain().focus().addRowBefore().run() },
-      { key: "ra", label: "下面加一列", disabled: !editor.can().addRowAfter(), run: () => editor.chain().focus().addRowAfter().run() },
-      { key: "cb", label: "左邊加一欄", disabled: !editor.can().addColumnBefore(), run: () => editor.chain().focus().addColumnBefore().run() },
-      { key: "ca", label: "右邊加一欄", disabled: !editor.can().addColumnAfter(), run: () => editor.chain().focus().addColumnAfter().run() },
+      { key: "rb", label: "Insert Row Above", disabled: !editor.can().addRowBefore(), run: () => editor.chain().focus().addRowBefore().run() },
+      { key: "ra", label: "Insert Row Below", disabled: !editor.can().addRowAfter(), run: () => editor.chain().focus().addRowAfter().run() },
+      { key: "cb", label: "Insert Column Left", disabled: !editor.can().addColumnBefore(), run: () => editor.chain().focus().addColumnBefore().run() },
+      { key: "ca", label: "Insert Column Right", disabled: !editor.can().addColumnAfter(), run: () => editor.chain().focus().addColumnAfter().run() },
       "sep",
-      { key: "dr", label: "刪除這一列", disabled: !editor.can().deleteRow(), run: () => editor.chain().focus().deleteRow().run() },
-      { key: "dc", label: "刪除這一欄", disabled: !editor.can().deleteColumn(), run: () => editor.chain().focus().deleteColumn().run() },
-      { key: "dt", label: "刪除整個表格", danger: true, disabled: !editor.can().deleteTable(), run: () => editor.chain().focus().deleteTable().run() },
+      { key: "dr", label: "Delete Row", disabled: !editor.can().deleteRow(), run: () => editor.chain().focus().deleteRow().run() },
+      { key: "dc", label: "Delete Column", disabled: !editor.can().deleteColumn(), run: () => editor.chain().focus().deleteColumn().run() },
+      { key: "dt", label: "Delete Table", danger: true, disabled: !editor.can().deleteTable(), run: () => editor.chain().focus().deleteTable().run() },
     ] : [
-      { key: "ins", label: "插入表格（第一列是表頭）", run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+      { key: "ins", label: "Insert table with a header row", run: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
       ...(cursorTable && canAddRow(cursorTable, ctxRef.current)
-        ? [{ key: "add", label: "在這個表格最後新增一列", run: () => addRow(cursorTable.attrs.bid) }] : []),
+        ? [{ key: "add", label: "Append a row to this table", run: () => addRow(cursorTable.attrs.bid) }] : []),
     ],
     plus: items.map((item) => ({ ...item, run: () => item.run(editor) })),
   } : {};
@@ -1373,13 +1373,13 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   };
 
   const stateText = {
-    saved: "已儲存",
-    dirty: "編輯中",
-    saving: "儲存中…",
-    error: "沒存進去，5 秒後重試",
+    saved: "Saved",
+    dirty: "Editing",
+    saving: "Saving…",
+    error: "Not saved. Retrying in 5 seconds.",
   }[saveState.kind];
   const stateTip = saveState.kind === "error" ? saveState.message
-    : `${editing ? `正在改：${editing.what}。` : ""}點旁邊空白處就會自動存${saveState.at ? `；上次儲存 ${shortTime(saveState.at)}` : ""}`;
+    : `${editing ? `Editing:${editing.what}。` : ""}Click outside to save automatically${saveState.at ? `; last saved ${shortTime(saveState.at)}` : ""}`;
 
   const fields = useMemo(() => ({ values: values || {}, onField }), [values, onField]);
   const cardProps = { me, members, agents, busy, adding, onAct: act };
@@ -1391,30 +1391,30 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
   return (
     <div className="surface-wrap" ref={wrapRef}>
       <div className="edit-slot">
-      <div className={"toolbar" + (showToolbar ? " on" : "")} ref={toolbarRef} role="toolbar" aria-label="編輯工具"
+      <div className={"toolbar" + (showToolbar ? " on" : "")} ref={toolbarRef} role="toolbar" aria-label={"Editing Tools"}
         onMouseDown={(event) => { if (event.target === event.currentTarget) event.preventDefault(); }}>
-        <button type="button" className="tb" title="復原（Ctrl+Z）" aria-label="復原" disabled={!history.undo}
+        <button type="button" className="tb" title={"Undo (Ctrl+Z)"} aria-label={"Undo"} disabled={!history.undo}
           onMouseDown={(event) => { event.preventDefault(); editor && editor.chain().focus().undo().run(); }}>↶</button>
-        <button type="button" className="tb" title="重做（Ctrl+Y）" aria-label="重做" disabled={!history.redo}
+        <button type="button" className="tb" title={"Redo (Ctrl+Y)"} aria-label={"Redo"} disabled={!history.redo}
           onMouseDown={(event) => { event.preventDefault(); editor && editor.chain().focus().redo().run(); }}>↷</button>
-        <button type="button" className={"tb" + (wide ? " on" : "")} title="頁面寬度" aria-label="頁面寬度"
+        <button type="button" className={"tb" + (wide ? " on" : "")} title={"Page Width"} aria-label={"Page Width"}
           onMouseDown={(event) => { event.preventDefault(); setWide(!wide); }}>↔</button>
         <span className="vsep" />
-        {toolButton("table", "▦ ▾", { title: "表格" })}
-        <button type="button" className="tb" title="插入圖片" aria-label="插入圖片" onMouseDown={(event) => { event.preventDefault(); pickImage(); }}>🖼</button>
-        <button type="button" className="tb" title="勾選清單" aria-label="勾選清單"
+        {toolButton("table", "▦ ▾", { title: "Table" })}
+        <button type="button" className="tb" title={"Insert Image"} aria-label={"Insert Image"} onMouseDown={(event) => { event.preventDefault(); pickImage(); }}>🖼</button>
+        <button type="button" className="tb" title={"Checklist"} aria-label={"Checklist"}
           onMouseDown={(event) => { event.preventDefault(); editor && editor.chain().focus().toggleTaskList().run(); }}>☑</button>
-        {toolButton("plus", "＋ ▾", { title: "插入", hint: "在文件裡輸入 / 也可以叫出這個選單" })}
+        {toolButton("plus", "＋ ▾", { title: "Insert", hint: "Type / in the document to open this menu" })}
         <span className="spacer" />
         <span className={"save-state " + saveState.kind} role="status" title={stateTip}>{stateText}</span>
-        <button type="button" className="tb" title="改完了（點旁邊空白處也會自動存）"
-          onMouseDown={(event) => { event.preventDefault(); if (editor) editor.commands.blur(); setEditing(null); flush().then(() => releaseIdle()); }}>完成</button>
+        <button type="button" className="tb" title={"Done Editing (click outside to save)"}
+          onMouseDown={(event) => { event.preventDefault(); if (editor) editor.commands.blur(); setEditing(null); flush().then(() => releaseIdle()); }}>Complete</button>
         <input ref={fileInput} type="file" accept={IMAGE_TYPES.join(",")} hidden
           onChange={(event) => { const file = event.target.files[0]; event.target.value = ""; if (file) uploadImage(file); }} />
       </div>
       {!showToolbar && (
-        <div className="meta-line">最後更新 {shortTime(tab.updated_at)}{tab.updated_by_name ? `・${tab.updated_by_name}` : ""}
-          {onOpenHistory && <button type="button" className="hist-link" onClick={onOpenHistory}>修改紀錄</button>}
+        <div className="meta-line">Last updated {shortTime(tab.updated_at)}{tab.updated_by_name ? `・${tab.updated_by_name}` : ""}
+          {onOpenHistory && <button type="button" className="hist-link" onClick={onOpenHistory}>Change History</button>}
         </div>
       )}
       </div>
@@ -1432,7 +1432,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
             editorRef.current.chain().focus("end").run();
           }}>
           {gutter && mode !== "sheet" && (
-            <button type="button" className="gutter on" style={{ top: gutter.top }} title="在這一塊下面新增內容"
+            <button type="button" className="gutter on" style={{ top: gutter.top }} title={"Add content below this block"}
               onMouseEnter={() => clearTimeout(gutterHide.current)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={(event) => {
@@ -1446,17 +1446,17 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
             <EditorContent editor={editor} />
           </FieldsContext.Provider>
           {tableBar && editor && (
-            <div className="table-bar" role="toolbar" aria-label="表格" style={{ top: tableBar.top, left: tableBar.left }}>
+            <div className="table-bar" role="toolbar" aria-label={"Table"} style={{ top: tableBar.top, left: tableBar.left }}>
               {[
-                ["＋ 上方加一列", () => editor.chain().focus().addRowBefore().run()],
-                ["＋ 下方加一列", () => editor.chain().focus().addRowAfter().run()],
-                ["＋ 左邊加一欄", () => editor.chain().focus().addColumnBefore().run()],
-                ["＋ 右邊加一欄", () => editor.chain().focus().addColumnAfter().run()],
+                ["＋ Row Above", () => editor.chain().focus().addRowBefore().run()],
+                ["＋ Row Below", () => editor.chain().focus().addRowAfter().run()],
+                ["＋ Column Left", () => editor.chain().focus().addColumnBefore().run()],
+                ["＋ Column Right", () => editor.chain().focus().addColumnAfter().run()],
                 "sep",
-                ["刪除這一列", () => editor.chain().focus().deleteRow().run()],
-                ["刪除這一欄", () => editor.chain().focus().deleteColumn().run()],
+                ["Delete Row", () => editor.chain().focus().deleteRow().run()],
+                ["Delete Column", () => editor.chain().focus().deleteColumn().run()],
                 "sep",
-                ["刪除表格", () => editor.chain().focus().deleteTable().run(), "danger"],
+                ["Delete Table", () => editor.chain().focus().deleteTable().run(), "danger"],
               ].map((item, index) => (item === "sep" ? <span key={index} className="vsep" /> : (
                 <button type="button" key={item[0]} className={item[2] || undefined}
                   onMouseDown={(event) => { event.preventDefault(); item[1](); }}>{item[0]}</button>
@@ -1470,13 +1470,13 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
             {layout.rows.map((row) => (
               <button type="button" key={"row" + row.rid} className={"rowbtn" + (row.has ? " has" : "")}
                 style={row.left === null ? { top: row.top } : { top: row.top, left: row.left, right: "auto" }}
-                title="這一列的對話與狀態紀錄" aria-label="這一列的對話與狀態紀錄" onClick={() => openRowTalk(row.rid)}>
+                title={"Row discussion and status history"} aria-label={"Row discussion and status history"} onClick={() => openRowTalk(row.rid)}>
                 💬{row.count ? ` ${row.count}` : ""}
               </button>
             ))}
             {layout.adds.map((add) => (
               <button type="button" key={"add" + add.table} className="addrow" style={{ top: add.top, left: add.left }}
-                onMouseDown={(event) => event.preventDefault()} onClick={() => addRow(add.table)}>＋ 新增一列</button>
+                onMouseDown={(event) => event.preventDefault()} onClick={() => addRow(add.table)}>＋ Add Row</button>
             ))}
           </div>
         </div>
@@ -1492,7 +1492,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       )}
 
       {sel && (
-        <div className="seltb on" role="toolbar" aria-label="標註工具" ref={seltbRef}
+        <div className="seltb on" role="toolbar" aria-label={"Annotation Tools"} ref={seltbRef}
           style={mode === "sheet" ? undefined : {
             left: Math.max(8, sel.rect.left),
             top: Math.min(window.innerHeight - 56, Math.max(58, sel.rect.top - 48)),
@@ -1500,34 +1500,34 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           onMouseDown={(event) => event.preventDefault()}>
           {attachId ? (
             <>
-              <button type="button" onClick={onAttach}>放在這裡</button>
-              <button type="button" onClick={() => { finishSel(); onAttachDone(); }}>取消</button>
+              <button type="button" onClick={onAttach}>Attach Here</button>
+              <button type="button" onClick={() => { finishSel(); onAttachDone(); }}>Cancel</button>
             </>
           ) : (
             <>
               {sel.editable && (
                 <span className="fmt">
-                  <button type="button" title="粗體" onClick={() => applyFormat("bold")}>B</button>
-                  <button type="button" title="斜體" onClick={() => applyFormat("italic")}><i>I</i></button>
-                  <button type="button" title="刪除線" onClick={() => applyFormat("strike")}><s>S</s></button>
-                  <button type="button" title="連結" onClick={() => applyFormat("link")}>🔗</button>
+                  <button type="button" title={"Bold"} onClick={() => applyFormat("bold")}>B</button>
+                  <button type="button" title={"Italic"} onClick={() => applyFormat("italic")}><i>I</i></button>
+                  <button type="button" title={"Strikethrough"} onClick={() => applyFormat("strike")}><s>S</s></button>
+                  <button type="button" title={"Link"} onClick={() => applyFormat("link")}>🔗</button>
                 </span>
               )}
-              <span className="grp"><span>螢光筆</span>
+              <span className="grp"><span>Highlight</span>
                 {Object.entries(COLORS).map(([key, [name, color]]) => (
                   <button type="button" key={key} className={"dot" + (sel.mine.some((a) => a.style === "hl" && a.color === key) ? " on" : "")}
-                    title={`${name}色螢光筆（同一段再按一次就取消）`} disabled={busy} onClick={() => onHighlight(key)}>
+                    title={`${name} highlight (choose again to remove)`} disabled={busy} onClick={() => onHighlight(key)}>
                     <i style={{ background: color }} />
                   </button>
                 ))}
               </span>
               <button type="button" className={sel.mine.some((a) => a.style === "ul") ? "on" : undefined}
-                title="在字下面畫一條線；同一段再按一次就取消" disabled={busy} onClick={onUnderline}><span className="u">劃線</span></button>
-              {sel.mine.length > 0 && <button type="button" className="rm" title="移除你在這段畫的螢光筆和劃線" disabled={busy} onClick={onRemoveMine}>✕ 移除</button>}
-              <button type="button" title="貼上：問題／要修改／已確認" onClick={() => setLabelMenu(!labelMenu)}>標註 ▾</button>
-              <button type="button" title="在旁邊寫一段話，可以 @ 人" onClick={() => onNote()}>補充說明</button>
+                title={"Underline this text; choose again to remove"} disabled={busy} onClick={onUnderline}><span className="u">Underline</span></button>
+              {sel.mine.length > 0 && <button type="button" className="rm" title={"Remove your highlights and underlines from this passage"} disabled={busy} onClick={onRemoveMine}>✕ Remove</button>}
+              <button type="button" title={"Mark as Question, Revise, or Approved"} onClick={() => setLabelMenu(!labelMenu)}>Annotate ▾</button>
+              <button type="button" title={"Add a note and @mention crew members"} onClick={() => onNote()}>Add Note</button>
               {me.can_write && agents.some(agent => agent.agent_key === 'doc_writer' && agent.enabled) &&
-                <button type="button" title="為選取段落建立代理留言，送出後才開始處理" onClick={() => onNote('doc_writer')}>交給代理</button>}
+                <button type="button" title={"Create an agent task for the selected passage; processing starts after submission"} onClick={() => onNote('doc_writer')}>Assign to Agent</button>}
             </>
           )}
         </div>
@@ -1545,10 +1545,10 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       {markPop && (
         <div className="markpop on" style={{ top: markPop.top, left: markPop.left }}>
           <Avatar id={markPop.a.created_by} name={markPop.a.created_by_name} size={18} />
-          <span><b>{markPop.a.created_by_name}</b> 的{markPop.a.style === "ul" ? "劃線" : "螢光筆"} · {shortTime(markPop.a.created_at)}</span>
-          <button type="button" className="linkish" onClick={() => { const a = markPop.a; setMarkPop(null); setAdding((set) => new Set(set).add(a.id)); onFocus(a.id); }}>加說明</button>
+          <span><b>{markPop.a.created_by_name}</b> ’s{markPop.a.style === "ul" ? "Underline" : "Highlight"} · {shortTime(markPop.a.created_at)}</span>
+          <button type="button" className="linkish" onClick={() => { const a = markPop.a; setMarkPop(null); setAdding((set) => new Set(set).add(a.id)); onFocus(a.id); }}>Add note</button>
           {(admin || markPop.a.created_by === me.actor_id) && (
-            <button type="button" className="linkish danger" onClick={() => { const a = markPop.a; setMarkPop(null); act(a, "remove"); }}>移除</button>
+            <button type="button" className="linkish danger" onClick={() => { const a = markPop.a; setMarkPop(null); act(a, "remove"); }}>Remove</button>
           )}
         </div>
       )}
@@ -1557,7 +1557,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           {NEW_BLOCKS.map(([key, icon, label]) => (
             <button type="button" key={key} onClick={() => insertBlock(insMenu.index, key)}><span className="mi">{icon}</span>{label}</button>
           ))}
-          <div className="note">加在「{insMenu.label || "這一塊"}」下面{admin ? "" : `，會標上是 ${me.name} 新增的`}。</div>
+          <div className="note">Add below “{insMenu.label || "this block"}”{admin ? "" : `, attributed to ${me.name} `}。</div>
         </div>
       )}
 
@@ -1574,19 +1574,19 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
       )}
 
       {linkPop && editor && (
-        <div className="link-pop" style={{ top: linkPop.top, left: linkPop.left }} role="dialog" aria-label="連結">
+        <div className="link-pop" style={{ top: linkPop.top, left: linkPop.left }} role="dialog" aria-label={"Link"}>
           <button type="button" className="go" onMouseDown={(event) => { event.preventDefault(); setLinkPop(null); openLink(linkPop.href); }}>
             {internalTab(linkPop.href)
-              ? `前往「${(tabs.find((t) => t.key === internalTab(linkPop.href)) || {}).title || linkPop.href}」`
-              : <>開啟 <span className="url">{linkPop.href}</span> ↗</>}
+              ? `Go to “${(tabs.find((t) => t.key === internalTab(linkPop.href)) || {}).title || linkPop.href}”`
+              : <>Open <span className="url">{linkPop.href}</span> ↗</>}
           </button>
           <span className="vsep" />
-          <button type="button" onMouseDown={(event) => { event.preventDefault(); setDialog({ kind: "link" }); }}>編輯</button>
+          <button type="button" onMouseDown={(event) => { event.preventDefault(); setDialog({ kind: "link" }); }}>Edit</button>
           <button type="button" onMouseDown={(event) => {
             event.preventDefault();
             editor.chain().focus().extendMarkRange("link").unsetLink().run();
             setLinkPop(null);
-          }}>移除連結</button>
+          }}>Remove Link</button>
         </div>
       )}
 
@@ -1595,20 +1595,20 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           onPick={(revision) => setDialog({ kind: "restore", revision })} />
       )}
       {dialog && dialog.kind === "restore" && (
-        <Dialog title={`換回第 ${dialog.revision} 筆的內容？`} confirmLabel="換回"
-          message="現在的內容不會不見，會留在「找回以前的內容」裡。標註會照新的內文重新找位置。" onCancel={() => setDialog(null)}
+        <Dialog title={`Restore revision ${dialog.revision} ?`} confirmLabel={"Restore"}
+          message={"The current content stays in Version History. Annotations will be reattached to the restored text."} onCancel={() => setDialog(null)}
           onConfirm={() => restore(dialog.revision)} />
       )}
       {dialog && dialog.kind === "link" && editor && (
-        <Dialog title="連結" input={{ value: editor.getAttributes("link").href || "", placeholder: "https://…（或在下面選一個分頁）" }}
-          inputLabel="網址" confirmLabel="套用"
-          select={{ label: "或連到分頁", value: "", options: [{ value: "", label: "（不選）" }, ...tabs.map((t) => ({ value: "#" + t.key, label: t.title }))] }}
+        <Dialog title={"Link"} input={{ value: editor.getAttributes("link").href || "", placeholder: "https://… (or select a page below)" }}
+          inputLabel={"URL"} confirmLabel={"Apply"}
+          select={{ label: "Or Link to a Page", value: "", options: [{ value: "", label: "(none)" }, ...tabs.map((t) => ({ value: "#" + t.key, label: t.title }))] }}
           onCancel={() => setDialog(null)}
           onConfirm={({ text, choice }) => {
             setDialog(null);
             const href = choice || text;
             if (!href) { editor.chain().focus().extendMarkRange("link").unsetLink().run(); return; }
-            if (!LINK_OK.test(href)) { onError("連結要以 https:// 開頭，或選一個分頁"); return; }
+            if (!LINK_OK.test(href)) { onError("Enter an https:// link or select a page."); return; }
             const chain = editor.chain().focus().extendMarkRange("link");
             if (editor.state.selection.empty) {
               const label = choice ? (tabs.find((t) => "#" + t.key === choice) || {}).title : href;
@@ -1640,14 +1640,14 @@ function VersionsDialog({ slug, tabKey, flush, onClose, onPick, onError }) {
     return () => { alive = false; };
   }, [slug, tabKey, flush, onClose, onError]);
   return (
-    <Dialog title="找回以前的內容" confirmLabel="關閉" onCancel={onClose} onConfirm={onClose}
-      message="剛剛改的請用工具列的 ↶ 復原（Ctrl+Z）。這裡是重新整理或關掉頁面之後，要找回更早內容時用的；只有內文有改才會多一筆，停了 10 分鐘以上再改算新的一筆。">
-      {!revisions && <p className="modal-msg">載入中…</p>}
+    <Dialog title={"Version History"} confirmLabel={"Close"} onCancel={onClose} onConfirm={onClose}
+      message={"Use Undo (Ctrl+Z) for recent edits. Version History restores earlier content after a refresh or a new session. Editing after a 10-minute pause starts a new revision."}>
+      {!revisions && <p className="modal-msg">Loading…</p>}
       {revisions && revisions.map((rev, index) => (
         <div key={rev.revision} className="deleted-row">
-          <span>{shortTime(rev.saved_at)}・{rev.saved_by_name || "—"}{rev.restored ? "（還原）" : ""}
-            <small>第 {rev.revision} 筆{index === 0 ? "・目前的內容" : ""}</small></span>
-          {index > 0 && <button type="button" className="ghost" onClick={() => onPick(rev.revision)}>換回這一筆</button>}
+          <span>{shortTime(rev.saved_at)}・{rev.saved_by_name || "—"}{rev.restored ? "(restored)" : ""}
+            <small>Revision {rev.revision}  items{index === 0 ? "· current content" : ""}</small></span>
+          {index > 0 && <button type="button" className="ghost" onClick={() => onPick(rev.revision)}>Restore This Revision</button>}
         </div>
       ))}
     </Dialog>

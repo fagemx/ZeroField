@@ -32,13 +32,13 @@ def handle(handler, parsed, method):
     worker_action = parsed.path in {'/projects/api/limbs/'+name for name in WORKER_ACTIONS} or orchestration_path
     me, body, raw = None, {}, b""
     if method not in ("GET", "POST") or (worker_action and method != "POST"):
-        handler.send_json(405, {"error": "不支援這個操作"})
+        handler.send_json(405, {"error": "Unsupported operation."})
         return True
     if not worker_action:
         identity, problem = handler.project_docs_identity()
         me = service.identity_from(identity) if not problem else None
         if not me:
-            handler.send_json(401, {"error": "需要有效成員登入"})
+            handler.send_json(401, {"error": "Sign in with an active crew account."})
             return True
     if method == "POST":
         if not worker_action:
@@ -53,12 +53,12 @@ def handle(handler, parsed, method):
             except ValueError:
                 size = -1
             if size <= 0 or size > media.MAX_BYTES:
-                handler.send_json(413 if size > 0 else 400, {"error": "媒體檔案大小無效或超過上限"})
+                handler.send_json(413 if size > 0 else 400, {"error": "The media size is invalid or exceeds the limit."})
                 return True
             raw = handler.rfile.read(size)
             handler._body_consumed = True
             if len(raw) != size:
-                handler.send_json(400, {"error": "檔案未完整送達"})
+                handler.send_json(400, {"error": "The file upload is incomplete."})
                 return True
         else:
             body, error = http._json_body(handler)
@@ -97,11 +97,11 @@ def handle(handler, parsed, method):
                 payload = {"renew": flows.renew, "complete": flows.complete, "fail": flows.fail}[action](conn, worker, body)
         elif preflight:
             if method != "POST":
-                raise limbs.ExecutionError(405, "不支援這個操作")
+                raise limbs.ExecutionError(405, "Unsupported operation.")
             payload = flows.preflight(conn, me, *preflight.groups(), body)
         elif tasks:
             if method != "GET":
-                raise limbs.ExecutionError(405, "不支援這個操作")
+                raise limbs.ExecutionError(405, "Unsupported operation.")
             payload = flows.recent_tasks(conn, tasks[1], (query.get("target_tab") or [None])[0])
         elif limb_path:
             if method == "GET" and parsed.path == "/projects/api/limbs":
@@ -111,7 +111,7 @@ def handle(handler, parsed, method):
             elif method == "POST" and action == "revoke":
                 payload = limbs.revoke(conn, me, body.get("limb_id"))
             else:
-                raise limbs.ExecutionError(404, "找不到手腳 API")
+                raise limbs.ExecutionError(404, "Worker API endpoint not found.")
         else:
             slug, key, identifier, control = flow.groups()
             if identifier:
@@ -120,7 +120,7 @@ def handle(handler, parsed, method):
                 elif method == "GET" and not control:
                     payload = flows.detail(conn, slug, key, identifier)
                 else:
-                    raise limbs.ExecutionError(405, "不支援這個操作")
+                    raise limbs.ExecutionError(405, "Unsupported operation.")
             elif parsed.path.endswith("/runs"):
                 payload = flows.list_runs(conn, slug, key) if method == "GET" else flows.start(conn, me, slug, key, body)
             else:
@@ -141,10 +141,10 @@ def handle(handler, parsed, method):
         elif isinstance(exc, media.MediaError):
             handler.send_json(exc.status, {"error": str(exc)})
         elif isinstance(exc, (ValueError, TypeError, KeyError)) or type(exc).__name__ in ("InvalidTextRepresentation",):
-            handler.send_json(400, {"error": "請求內容無效：" + str(exc)[:200]})
+            handler.send_json(400, {"error": "Invalid request:" + str(exc)[:200]})
         else:
             print(f"execution API: {type(exc).__name__}: {exc}", flush=True)
-            handler.send_json(503 if conn is None else 500, {"error": "執行服務暫時無法使用"})
+            handler.send_json(503 if conn is None else 500, {"error": "The worker service is temporarily unavailable."})
     finally:
         if conn:
             conn.close()
@@ -158,12 +158,12 @@ def _worker_asset(handler, slug, asset_id, token):
     try:
         worker = limbs.authenticate(conn, token)
         if slug not in worker["allowed_projects"]:
-            raise limbs.ExecutionError(403, "Worker 無權存取此專案")
+            raise limbs.ExecutionError(403, "This worker cannot access the production.")
         if privacy.mode(conn, slug) == "mask_numbers":
-            raise limbs.ExecutionError(403, "數值遮罩模式不提供原始媒體給遠端手腳")
+            raise limbs.ExecutionError(403, "Original media is not shared with remote workers in numeric masking mode.")
         found = repo.get_asset(conn, slug, asset_id)
         if not found:
-            raise limbs.ExecutionError(404, "找不到媒體")
+            raise limbs.ExecutionError(404, "Media not found.")
         conn.commit()
         handler.send_skillops_bytes(200, found[0], found[1], cache_control="private, no-store")
     except limbs.ExecutionError as exc:

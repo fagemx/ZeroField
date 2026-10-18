@@ -30,7 +30,7 @@ test("pasting across plain and field cells retains row identity and pads appende
     table_id: "table-a", row_edits: [{ row_id: "shot-a", cells: { 0: "New prompt", 1: "進行中" } }], new_rows: [["Appended", ""]],
   });
   assert.equal(JSON.stringify(doc), before, "paste preparation never mutates source fields or rows");
-  assert.throws(() => tableEditPayload(parsed, 0, 1, [["a", "b"]]), /超出欄數/);
+  assert.throws(() => tableEditPayload(parsed, 0, 1, [["a", "b"]]), /column count/);
 });
 
 test("selected-sheet CSV exports current field values and escapes delimiters", () => {

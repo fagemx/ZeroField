@@ -32,7 +32,7 @@ def check_lease(task, limb_id, token, now=None):
     if (task.get("status") != "running" or str(task.get("limb_id")) != str(limb_id)
             or not token or not hmac.compare_digest(task.get("lease_hash") or "", token_hash(token))
             or not until or until <= now):
-        raise ExecutionError(409, "任務租約已過期、已取消，或不屬於這個 Worker；請重新領取任務")
+        raise ExecutionError(409, "The task lease expired, was canceled, or belongs to another worker. Claim the task again.")
 
 
 def _worker(row):
@@ -42,14 +42,14 @@ def _worker(row):
 
 def register(conn, me, body):
     if me.role != "admin":
-        raise ExecutionError(403, "只有管理者可註冊遠端手腳")
+        raise ExecutionError(403, "Only the showrunner can register remote workers.")
     name = str(body.get("name") or "").strip()
     caps = body.get("capabilities")
     projects = body.get("allowed_projects") or ([body["project_slug"]] if body.get("project_slug") else [])
     if not name or len(name) > 120 or not isinstance(caps, list) or not caps or any(c not in CAPABILITIES for c in caps):
-        raise ExecutionError(400, "請提供名稱與 llm / image_gen / video_gen / media_assemble 能力")
+        raise ExecutionError(400, "Provide a name and an llm / image_gen / video_gen / media_assemble capability.")
     if not isinstance(projects, list) or not projects or len(projects) > 100 or any(not isinstance(p, str) or not repo.get_project(conn, p) for p in projects):
-        raise ExecutionError(400, "請提供存在的 project_slug 或 allowed_projects")
+        raise ExecutionError(400, "Provide an existing project_slug or allowed_projects.")
     identifier, token = str(uuid.uuid4()), secrets.token_urlsafe(32)
     with conn.cursor() as cur:
         cur.execute("""INSERT INTO projectops.agent_limb(id,name,capabilities,allowed_projects,token_hash,created_by)
@@ -62,14 +62,14 @@ def register(conn, me, body):
 
 def authenticate(conn, token):
     if not token:
-        raise ExecutionError(401, "需要 Worker Bearer token")
+        raise ExecutionError(401, "A worker Bearer token is required.")
     with conn.cursor() as cur:
         cur.execute("""UPDATE projectops.agent_limb SET last_seen_at=NOW()
                        WHERE token_hash=%s AND enabled
                        RETURNING id,name,capabilities,allowed_projects,enabled,last_seen_at""", (token_hash(token),))
         row = cur.fetchone()
     if not row:
-        raise ExecutionError(401, "Worker token 無效或已停用")
+        raise ExecutionError(401, "The worker token is invalid or disabled.")
     return _worker(row)
 
 
@@ -95,9 +95,9 @@ def connected_workers(conn, slug):
 
 def revoke(conn, me, identifier):
     if me.role != "admin":
-        raise ExecutionError(403, "只有管理者可停用手腳")
+        raise ExecutionError(403, "Only the showrunner can disable workers.")
     with conn.cursor() as cur:
         cur.execute("UPDATE projectops.agent_limb SET enabled=FALSE WHERE id=%s", (identifier,))
         if not cur.rowcount:
-            raise ExecutionError(404, "找不到手腳")
+            raise ExecutionError(404, "Worker not found.")
     return {"revoked": True}

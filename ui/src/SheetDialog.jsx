@@ -21,7 +21,7 @@ export function SheetDialog({ title, onClose, children, wide = false }) {
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
         }
       }}>
-      <header className="sheet-dialog-header"><h2>{title}</h2><button type="button" aria-label="關閉面板" onClick={onClose}>✕</button></header>
+      <header className="sheet-dialog-header"><h2>{title}</h2><button type="button" aria-label={"Close Panel"} onClick={onClose}>✕</button></header>
       {children}
     </section>
   </div>;

@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-18",
+  "stage": "English contest baseline",
+  "base_commit": "9c77cbcb6f6af5595ef013e36af2f15fe1bc17da",
+  "scope": [
+    "English studio UI and crew labels",
+    "Five-page zerofield_studio planning template",
+    "English defaults and legacy status compatibility",
+    "English agent prompts and source parsing",
+    "Accurate README and retained M8-A\u2013D/ACP/E1 functionality"
+  ],
+  "backend": {
+    "command": "python -m unittest discover -s tests -v",
+    "passed": 241,
+    "failed": 0,
+    "skipped": 0,
+    "test_seconds": 178.974,
+    "database": "zerofield_english_test",
+    "database_stopped": true
+  },
+  "frontend": {
+    "command": "npm test --prefix ui",
+    "passed": 78,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": {
+    "command": "npm run build --prefix ui",
+    "status": "passed"
+  },
+  "packaging": {
+    "command": "python -m build --wheel",
+    "resources": "passed",
+    "frontend_bytes_match": true,
+    "wheel_sha256": "52eb4cc9f434a842312d303553cb843621c3b97646f5cb1e5ad9badb7e96c01c"
+  },
+  "ui_verification": {
+    "viewport": "1280x720",
+    "environment": "Isolated synthetic database; no model worker",
+    "checks": [
+      "English hub and default studio selection",
+      "Created a five-page production through the UI",
+      "Saved Pending Review in the cinema slate and verified it after reload",
+      "English M8 board, specialist names, and sidebar controls",
+      "Five saved English pipeline stages loaded"
+    ],
+    "screenshots": [
+      "docs/research/screenshots/zerofield-english-m8.png",
+      "docs/research/screenshots/zerofield-english-pipeline.png"
+    ],
+    "preview_stopped": true,
+    "viewport_restored": true
+  },
+  "engine_review": "Control-flow and structure preserved in 32 shared engine modules; changes are message strings and tool display labels. Default/template/prompt/history changes reviewed separately.",
+  "logs_sha256": {
+    "backend-test.log": "c4c73850dbee08d7132621533f21600a871f4f4ddb2f96cbd232362ba7e63d01",
+    "ui-test.log": "6e87794fafc3fa6ba8bbc174353338b2b99f91126255ba36c015c64df9ac6ee2",
+    "ui-build.log": "cf6f9c9d26391a6e572dedbe43adbf3136ec1928839f8585c6766316e9849876",
+    "wheel-build.log": "ff0faf17d2bef0fe1cfadfa83b546074693560a4e8efcdc1a08c5152f6e59297"
+  },
+  "limits": [
+    "No live model quality or new real ACP-adapter smoke run; inherited ACP tests passed.",
+    "Docker and remote CI were not executed.",
+    "Video playback, generation workflows, sample renders, and run_studio.py remain for the next phase."
+  ]
+}

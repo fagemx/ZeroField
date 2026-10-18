@@ -43,7 +43,7 @@ export function useOrchestration(slug, enabled, open, onApplied, reloadAssistant
     pagedRef.current = true; setPaged(true);
   }, [base, board.cursor, slug]);
   const mutate = useCallback(async (path, body) => {
-    if (currentSlug.current !== slug) throw new Error('工作空間已切換，請重新開啟此工作');
+    if (currentSlug.current !== slug) throw new Error("The workspace changed. Reopen this task.");
     const data = await api.post(path, body);
     if (currentSlug.current !== slug) return data;
     if (data.proposal?.status === 'applied') callbacks.current.onApplied?.(data.proposal, []);

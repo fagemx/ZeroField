@@ -34,17 +34,17 @@ def flags(conn, me, slug) -> dict:
 
 def _gate(conn, me, slug):
     if not repo.get_project(conn, slug):
-        return _error(404, "找不到這個專案")
+        return _error(404, "Production not found.")
     if not flags(conn, me, slug)["enabled"]:
-        return _error(403, "助理還沒開放給你，請聯絡專案管理員")
+        return _error(403, "Assistant access is not enabled for your account. Contact the showrunner.")
     return None
 
 
 def _manager_gate(me, slug):
     if not slug:
-        return _error(404, "找不到這個專案")
+        return _error(404, "Production not found.")
     if not me.can_edit:
-        return _error(403, "只有管理者可以看")
+        return _error(403, "Only the showrunner can view this.")
     return None
 
 
@@ -64,7 +64,7 @@ def document(conn, me, slug, message_id, *, base_url=None):
     offered = msg and any(t.get("tool") == "offer_document" and t.get("ok") for t in msg.get("tools") or [])
     if not (msg and msg["slug"] == slug and msg["owner_id"] == me.actor_id and msg["role"] == "assistant"
             and msg["status"] == "done" and offered):
-        return _error(404, "找不到這份文件；請直接跟助理說要下載")
+        return _error(404, "Document not found. Ask the assistant for a download.")
     project = repo.get_project(conn, slug) or {"title": slug}
     tabs = [repo.get_tab(conn, slug, t["key"]) for t in repo.list_tabs(conn, slug)]
 
@@ -111,7 +111,7 @@ def send(conn, me, slug, body,*,source_ref=None):
     if problem:
         return problem
     if not isinstance(body,dict):
-        return _error(400,'訊息必須是 JSON 物件')
+        return _error(400,"The message must be a JSON object.")
     if source_ref:
         from project_assistant import orchestration_store as db
         prior=db.one(conn,"SELECT id FROM projectops.assistant_message WHERE project_slug=%s AND owner_id=%s AND role='user' AND source_ref=%s",(slug,me.actor_id,source_ref))
@@ -121,13 +121,13 @@ def send(conn, me, slug, body,*,source_ref=None):
     raw = str(body.get("text") or "").strip()
     ids = body.get("attachments") or []
     if not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
-        return _error(400, "附件的格式不對")
+        return _error(400, "Invalid attachment format.")
     if len(set(ids)) > attachments.MAX_PER_MESSAGE:
-        return _error(400, f"一次最多附 {attachments.MAX_PER_MESSAGE} 個檔案")
+        return _error(400, f"Attach up to {attachments.MAX_PER_MESSAGE} files per message.")
     if not raw and not ids:
-        return _error(400, "請先打字")
+        return _error(400, "Enter a message first.")
     if len(raw) > MAX_MESSAGE:
-        return _error(400, f"一次最多 {MAX_MESSAGE} 個字")
+        return _error(400, f"Messages support up to {MAX_MESSAGE} characters.")
     from project_assistant import agent_registry
     try:
         agent_key = agent_registry.resolve_mention(conn,slug,'' if source_ref else raw,body.get('agent_key'))
@@ -136,10 +136,10 @@ def send(conn, me, slug, body,*,source_ref=None):
     with conn.cursor() as cur:
         cur.execute('SELECT actor_id FROM projectops.member WHERE actor_id=%s FOR UPDATE',(me.actor_id,))
     if store.open_reply(conn, slug, me.actor_id,agent_key):
-        return _error(409, "這個代理還在回答，請等它答完或選擇另一位代理")
+        return _error(409, "This agent is still responding. Wait or choose another agent.")
     files = store.unsent_attachments(conn, slug, me.actor_id, ids)
     if len(files) != len(set(ids)):
-        return _error(400, "有附件找不到或已經送出過了，請重新附一次")
+        return _error(400, "An attachment is missing or was already sent. Attach it again.")
     text, notes = privacy.text(conn, slug, raw) if raw else ("", [])
     notes = notes + [note for f in files for note in f.get("notes") or []]
     scope = None
@@ -174,7 +174,7 @@ def conversation(conn, me, slug, conversation_id):
         return problem
     messages = store.conversation_messages(conn, slug, me.actor_id, conversation_id)
     if messages is None:
-        return _error(404, "找不到這段對話")
+        return _error(404, "Conversation not found.")
     ids = {m["id"] for m in messages}
     proposals = [p for p in store.proposals(conn, slug, owner_id=me.actor_id, limit=200) if p["message_id"] in ids]
     return 200, {"id": conversation_id, "messages": messages, "proposals": proposals}
@@ -185,7 +185,7 @@ def new_conversation(conn, me, slug):
     if problem:
         return problem
     if store.open_reply(conn, slug, me.actor_id):
-        return _error(409, "上一句還在回答，等它答完再開新對話")
+        return _error(409, "Wait for the current response before starting a new conversation.")
     store.new_conversation(conn, slug, me.actor_id)
     return state(conn, me, slug)
 
@@ -195,9 +195,9 @@ def resume_conversation(conn, me, slug, conversation_id):
     if problem:
         return problem
     if store.open_reply(conn, slug, me.actor_id):
-        return _error(409, "上一句還在回答，等它答完再換對話")
+        return _error(409, "Wait for the current response before switching conversations.")
     if not store.resume_conversation(conn, slug, me.actor_id, conversation_id):
-        return _error(404, "找不到這段對話")
+        return _error(404, "Conversation not found.")
     return state(conn, me, slug)
 
 
@@ -220,7 +220,7 @@ def delete_attachment(conn, me, slug, attachment_id):
     if problem:
         return problem
     if not store.delete_unsent_attachment(conn, slug, me.actor_id, attachment_id):
-        return _error(404, "找不到這個附件（送出之後就不能拿掉）")
+        return _error(404, "Attachment not found. Sent attachments cannot be removed.")
     return 200, {"ok": True}
 
 
@@ -232,10 +232,10 @@ def attachment_file(conn, me, slug, attachment_id, which):
         return problem
     found = store.attachment(conn, attachment_id)
     if not found or found["slug"] != slug or found["owner_id"] != me.actor_id:
-        return _error(404, "找不到這個附件")
+        return _error(404, "Attachment not found.")
     content = store.attachment_bytes(conn, attachment_id, {"file": "data"}.get(which, which))
     if not content:
-        return _error(404, "這個附件沒有這種版本")
+        return _error(404, "This attachment version is not available.")
     return 200, {"content_type": content[0], "data": content[1], "name": found["name"]}
 
 
@@ -262,26 +262,26 @@ def _write(conn, me, slug, proposal, content):
         tab=locked[target['tab_key']]
         try:
             if not tab:
-                raise ValueError('來源分頁已刪除')
+                raise ValueError("The source page was deleted.")
             if any(not locked[key] or locked[key]['revision']!=revision for key,revision in sources.items()):
-                raise ValueError('參考來源已更新，請重新核對')
+                raise ValueError("A reference source changed. Review it again.")
             if target.get('request_scope'):
                 request_scope.verify_source(target['request_scope'],{**tab,'key':target['tab_key']},repo.field_values(conn,slug).get(target['tab_key'],{}))
         except ValueError as exc:
             return _error(409,str(exc))
     if action == "私下轉給負責人":
         if not content:
-            return _error(400, "要問負責人的話是空的")
+            return _error(400, "The question for the owner is empty.")
         return 200, {"forward_id": store.create_forward(conn, slug, me.actor_id, proposal["id"], content)}
     if action in ("改狀態", "填交接追蹤"):
         if action == "改狀態" and content not in STATUSES:
-            return _error(400, "狀態只能是：" + "、".join(STATUSES))
+            return _error(400, "Allowed statuses:" + "、".join(STATUSES))
         return pd_service.set_field(conn, me, slug, {"tab_key": target.get("tab_key"), "field_id": target.get("fid"),
                                                       "value": content})
     request = {"tab_key": target.get("tab_key")}
     if action in ("寫進那一題的討論", "留言問負責人"):
         if not content:
-            return _error(400, "要放上去的文字是空的")
+            return _error(400, "The proposed content is empty.")
         request["body"] = _with_mentions(conn, content, target)
         if target.get("rid"):
             request["row"] = target["rid"]
@@ -292,7 +292,7 @@ def _write(conn, me, slug, proposal, content):
         if content:
             request["body"] = content
     else:
-        return _error(400, "不認得這種提案")
+        return _error(400, "Unknown proposal type.")
     return pd_service.create_annotation(conn, me, slug, request)
 
 
@@ -310,16 +310,16 @@ def _own_pending(conn, me, slug, proposal_id):
         JOIN projectops.assistant_proposal p ON p.dispatch_id=d.id WHERE p.id=%s''',(proposal_id,))
     if bound:
         if bound['project_slug']!=slug:
-            return None,_error(404,'找不到這個提案')
+            return None,_error(404,"Proposal not found.")
         cp.lock_project(conn,slug)
         try:
             run=cp.own_run(conn,me,slug,bound['run_id'],lock=True)
         except cp.OrchestrationError as exc:
             return None,_error(exc.status,str(exc))
         if bound['superseded_by'] or bound['status'] in ('canceled','failed','timeout') or run['status']=='canceled' or cp.instant(bound['deadline_at'])<=cp.now():
-            return None,_error(409,'此提案的派發已取消、過期或被重新派發')
+            return None,_error(409,"This proposal’s dispatch was canceled, expired, or reassigned.")
         if bound['status']!='awaiting_gate' or db.one(conn,"SELECT id FROM projectops.orchestration_gate WHERE dispatch_id=%s AND gate_kind='question' AND status='open'",(bound['id'],)):
-            return None,_error(409,'代理尚未完成整組輸出，請先處理待決定問題或等候執行完成')
+            return None,_error(409,"The agent has not completed all outputs. Resolve open decisions or wait for completion.")
     # Scheduler lock order: run, proposal, then target tab.
     with conn.cursor() as cur:
         cur.execute("SELECT run_id FROM projectops.limb_task WHERE proposal_id=%s", (proposal_id,))
@@ -328,9 +328,9 @@ def _own_pending(conn, me, slug, proposal_id):
             cur.execute("SELECT id FROM projectops.flow_run WHERE id=%s FOR UPDATE", (row[0],))
     proposal = store.proposal(conn, proposal_id, for_update=True)
     if not proposal or proposal["slug"] != slug or proposal["owner_id"] != me.actor_id:
-        return None, _error(404, "找不到這個提案")
+        return None, _error(404, "Proposal not found.")
     if proposal["status"] != "pending":
-        return None, _error(409, "這個提案已經處理過了")
+        return None, _error(409, "This proposal has already been handled.")
     proposal["_flow_bound"] = bool(row)
     proposal['_orchestration_bound']=bool(bound)
     return proposal, None
@@ -344,21 +344,21 @@ def apply_proposal(conn, me, slug, proposal_id, body,*,_race_task_id=None):
     if problem:
         return problem
     if proposal.get('race_group_task_id') and proposal['race_group_task_id']!=_race_task_id:
-        return _error(409,'請從競速候選比對選用版本，不能單獨套用候選')
+        return _error(409,"Select a version through candidate comparison; candidates cannot be applied individually.")
     content, notes = proposal["content"], []
     if "content" in body:
         edited = str(body.get("content") or "").strip()
         if edited != proposal["content"]:
             if proposal["action"] == "table_edit":
-                return _error(400, "表格提案請重新產生，不能只修改預覽文字")
+                return _error(400, "Regenerate this table proposal; editing preview text alone is not supported.")
             content, notes = privacy.text(conn, slug, edited)
     remaining = None
     original = proposal
     if "groups" in body:
         if proposal["action"] != "table_edit" or proposal.get("_flow_bound") or proposal.get('_orchestration_bound') or proposal.get("message_id") is None:
-            return _error(400, "這組產出需要整組核對，不能拆分套用")
+            return _error(400, "These outputs must be reviewed and applied together.")
         if body.get("review_version") != proposal_review.version(proposal["target"]):
-            return 409, {"error": "待核對項目已更新，請確認目前清單再套用", "proposal": proposal}
+            return 409, {"error": "The proposal changed. Review the current change list before applying it.", "proposal": proposal}
         try:
             selected = body["groups"]
             target = proposal_review.select_target(proposal["target"], selected)
@@ -414,7 +414,7 @@ def dismiss_proposal(conn, me, slug, proposal_id):
     if problem:
         return problem
     if proposal.get('race_group_task_id'):
-        return _error(409,'請從競速候選比對選用版本，或取消整批工作')
+        return _error(409,"Select a version through candidate comparison or cancel the whole batch.")
     store.decide_proposal(conn, proposal["id"], status="dismissed", by=me.actor_id)
     from project_assistant.flow_runner import proposal_decided
     proposal_decided(conn, proposal["id"], False)
@@ -460,12 +460,12 @@ def add_note(conn, me, slug, body):
         return problem
     text = str(body.get("body") or "").strip()
     if not text:
-        return _error(400, "交代的內容是空的")
+        return _error(400, "The assignment is empty.")
     if len(text) > MAX_NOTE:
-        return _error(400, f"一次最多 {MAX_NOTE} 個字")
+        return _error(400, f"Assignments support up to {MAX_NOTE} characters.")
     target = str(body.get("target_id") or "") or None
     if target and not any(m["actor_id"] == target and m["role"] != "admin" for m in repo.active_members(conn)):
-        return _error(404, "名單上沒有這個人")
+        return _error(404, "This person is not on the crew.")
     store.add_note(conn, slug, me.actor_id, text, target_id=target)
     return 200, {"notes": store.notes(conn, slug)}
 
@@ -475,7 +475,7 @@ def finish_note(conn, me, slug, note_id):
     if problem:
         return problem
     if not any(n["id"] == note_id for n in store.notes(conn, slug)):
-        return _error(404, "找不到這件交代")
+        return _error(404, "Assignment not found.")
     store.set_note_status(conn, note_id, "done")
     return 200, {"notes": store.notes(conn, slug)}
 
@@ -486,14 +486,14 @@ def answer_forward(conn, me, slug, forward_id, body):
         return problem
     text = str(body.get("answer") or "").strip()
     if not text:
-        return _error(400, "回覆是空的")
+        return _error(400, "The reply is empty.")
     if len(text) > MAX_MESSAGE:
-        return _error(400, f"一次最多 {MAX_MESSAGE} 個字")
+        return _error(400, f"Messages support up to {MAX_MESSAGE} characters.")
     current = next((f for f in store.forwards(conn, slug) if f["id"] == forward_id), None)
     if not current:
-        return _error(404, "找不到這個問題")
+        return _error(404, "Question not found.")
     if current["status"] == "answered":
-        return _error(409, "這個問題已經回覆過了")
+        return _error(409, "This question already has a reply.")
     answered = store.answer_forward(conn, forward_id, me.actor_id, text)
     store.add_lead_message(conn, slug, answered["owner_id"], f"關於你私下問的「{answered['question'][:40]}」：\n{text}")
     return manager(conn, me, slug)
@@ -506,7 +506,7 @@ def set_member(conn, me, slug, body):
     actor_id = str(body.get("actor_id") or "")
     member = next((m for m in repo.active_members(conn) if m["actor_id"] == actor_id), None)
     if not member or member["role"] == "admin":
-        return _error(404, "名單上沒有這個人")
+        return _error(404, "This person is not on the crew.")
     enabled = bool(body.get("enabled"))
     store.set_member_enabled(conn, slug, actor_id, enabled, me.actor_id)
     repo.add_audit(conn, slug, action="assistant_member", actor_id=me.actor_id, target=actor_id,
@@ -520,7 +520,7 @@ def set_report_source(conn, me, slug, body):
         return problem
     path = str(body.get("report_source") or "").strip()
     if not WINDOWS_PATH.match(path):
-        return _error(400, r"請填完整的資料夾路徑，例如 C:\Projects\Reports")
+        return _error(400, "Enter an absolute folder path, for example C:\\Projects\\Reports.")
     store.set_setting(conn, slug, "report_source", path)
     repo.add_audit(conn, slug, action="assistant_setting", actor_id=me.actor_id, target="report_source",
                    detail={"value": path})

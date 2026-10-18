@@ -81,7 +81,7 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
         for round_no in range(1, model_client.MAX_ROUNDS + 1):
             left = deadline - now()
             if left <= 0:
-                raise model_client.ModelError("timeout", "這一輪超過時間")
+                raise model_client.ModelError("timeout", "This turn exceeded its time limit.")
             if on_round:
                 on_round(round_no)
             payload = {
@@ -137,7 +137,7 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                     "tool_call_id": tc.get("id") or "",
                     "content": str(out),
                 })
-        raise model_client.ModelError("bad_response", "工具呼叫超過上限")
+        raise model_client.ModelError("bad_response", "Tool calls exceeded the limit.")
     except model_client.ModelError as exc:
         result.status = "quota" if exc.kind == "quota" else "error"
         result.error_kind, result.error = exc.kind, str(exc)

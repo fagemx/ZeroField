@@ -9,10 +9,10 @@ import { FlowInspector, FlowPreflight, FlowResults, Status } from "./FlowPanels.
 
 function WorkStep({ data, selected, isConnectable }) {
   return <article className={`flow-step-card ${selected ? "is-selected" : ""}`}>
-    <Handle type="target" position={Position.Left} isConnectable={isConnectable} aria-label={`${data.title} 輸入連線`} />
+    <Handle type="target" position={Position.Left} isConnectable={isConnectable} aria-label={`${data.title}  input connections`} />
     <strong>{data.title}</strong><span className="flow-step-route">{data.source} → {data.target}</span>
     <div><small>{SCOPE_LABELS[data.scope]}</small><Status status={data.status} /></div>
-    <Handle type="source" position={Position.Right} isConnectable={isConnectable} aria-label={`${data.title} 輸出連線`} />
+    <Handle type="source" position={Position.Right} isConnectable={isConnectable} aria-label={`${data.title}  output connections`} />
   </article>;
 }
 const nodeTypes = { workStep: WorkStep };
@@ -132,7 +132,7 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
   }, [dirty]);
   const save = async () => {
     finishEdit();
-    if (!definition) throw new Error("工作流尚未載入");
+    if (!definition) throw new Error("Pipeline has not loaded.");
     const data = await api.post(base, { definition, revision });
     setRevision(data.revision); setHistory((old) => ({ ...old, present: data.definition })); setSavedJSON(JSON.stringify(data.definition)); return data;
   };
@@ -146,20 +146,20 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
     const saved = dirty || !revision ? await save() : { revision };
     const input = single ? { execution_mode: "single_step", node_id: selectedId, input_mode: "current_sources", ...(selected?.row_source ? { sample_row_id: sampleRow } : {}) }
       : { ...(batch && selection ? { target_tab: selection.target_tab, row_ids: selection.row_ids } : {}), ...((startNode || (batch && redrawStart(definition, selection))) ? { start_node_id: startNode || redrawStart(definition, selection) } : {}) };
-    if (!single && batch && !selection) throw new Error("請先從表格選取列，或取消依選取列執行");
-    if (!single && batch && selection?.capability && !input.start_node_id) throw new Error("找不到對應此儲存格的工作步驟，請選擇起點");
+    if (!single && batch && !selection) throw new Error("Select rows in the table or turn off selected-row execution.");
+    if (!single && batch && selection?.capability && !input.start_node_id) throw new Error("No step matches this cell. Select a starting step.");
     input.definition_revision = saved.revision;
     const data = await api.post(`${base}/preflight`, input);
-    if (single && sourceDoc && data.source_revisions[sourceKey] !== sourceDoc.revision) throw new Error("來源已在樣本載入後變更。請更新樣本，核對新內容後再試這一步。");
+    if (single && sourceDoc && data.source_revisions[sourceKey] !== sourceDoc.revision) throw new Error("The source changed after the sample loaded. Refresh and review the sample before testing this step.");
     setPreview(data); setPreviewInput(input); setAdding(false);
   });
   const execute = () => work(async () => {
-    if (!preview?.ready || dirty) throw new Error("請先重新檢查執行範圍");
+    if (!preview?.ready || dirty) throw new Error("Review the run scope again.");
     const data = await api.post(`${base}/runs`, { ...previewInput, source_revisions: preview.source_revisions });
     setDetail(data); setRunId(data.run.id); setRuns((old) => [data.run, ...old.filter((run) => run.id !== data.run.id)]);
-    setPreview(null); setResultsOpen(true); onToast?.("已排入執行佇列，尚未完成");
+    setPreview(null); setResultsOpen(true); onToast?.("Queued for execution; not complete yet.");
   });
-  const control = (action) => work(async () => { const data = await api.post(`${base}/runs/${runId}/${action}`, {}); setDetail(data); onToast?.(action === "cancel" ? "已取消後續執行" : "以原執行設定重試未完成項目"); });
+  const control = (action) => work(async () => { const data = await api.post(`${base}/runs/${runId}/${action}`, {}); setDetail(data); onToast?.(action === "cancel" ? "Remaining tasks canceled" : "Retrying incomplete tasks with the original settings"); });
   const connect = (source, target) => { try { change(connectNodes(definition, source, target)); } catch (problem) { report(problem); } };
   const removeNodes = (ids) => { change((current) => ({ ...current, nodes: current.nodes.filter((node) => !ids.includes(node.id)), edges: current.edges.filter((edge) => !ids.includes(edge.source) && !ids.includes(edge.target)) })); setSelectedIds((current) => current.filter((id) => !ids.includes(id))); };
   const nodeChanges = (changes) => {
@@ -180,33 +180,33 @@ export function FlowSurface({ slug, tab, tabs = [], me, values, onSwitchDocMode,
   };
   const add = (kind) => { const node = createStep(kind, newId(), definition.nodes.length); change({ ...definition, nodes: [...definition.nodes, node] }); select(node.id); };
 
-  return <section className="canvas flow-workspace" aria-label="工作流編輯器" onKeyDown={keyboard}>
-    <header className="flow-topbar"><div className="flow-heading"><strong>{tab.title}</strong><small role="status">{busy ? "處理中…" : dirty ? "尚未儲存" : `已儲存 · v${revision}`}</small></div><div className="flow-top-actions">
-      <button title="撤銷 Ctrl+Z" disabled={!writable || busy || !history.past.length} onClick={() => { setHistory(undoDefinition); setPreview(null); }}>撤銷</button><button title="重做 Ctrl+Shift+Z" disabled={!writable || busy || !history.future.length} onClick={() => { setHistory(redoDefinition); setPreview(null); }}>重做</button><button disabled={busy} onClick={() => work(async () => { if (dirty) await save(); onSwitchDocMode(); })}>文件</button>
-      {writable && <><button disabled={busy || !definition || definition.nodes.length >= 100} onClick={() => { setAdding(!adding); setSelectedIds([]); setPreview(null); }}>新增步驟</button><button disabled={busy || !dirty} onClick={() => work(save)}>儲存</button><button className="primary" disabled={busy || !definition?.nodes.length} onClick={() => check(false)}>檢查並執行</button></>}
+  return <section className="canvas flow-workspace" aria-label={"Pipeline Editor"} onKeyDown={keyboard}>
+    <header className="flow-topbar"><div className="flow-heading"><strong>{tab.title}</strong><small role="status">{busy ? "Processing…" : dirty ? "Not Saved" : `Saved · v${revision}`}</small></div><div className="flow-top-actions">
+      <button title={"Undo Ctrl+Z"} disabled={!writable || busy || !history.past.length} onClick={() => { setHistory(undoDefinition); setPreview(null); }}>Undo</button><button title={"Redo Ctrl+Shift+Z"} disabled={!writable || busy || !history.future.length} onClick={() => { setHistory(redoDefinition); setPreview(null); }}>Redo</button><button disabled={busy} onClick={() => work(async () => { if (dirty) await save(); onSwitchDocMode(); })}>Document</button>
+      {writable && <><button disabled={busy || !definition || definition.nodes.length >= 100} onClick={() => { setAdding(!adding); setSelectedIds([]); setPreview(null); }}>Add Step</button><button disabled={busy || !dirty} onClick={() => work(save)}>Save</button><button className="primary" disabled={busy || !definition?.nodes.length} onClick={() => check(false)}>Review &amp; Run</button></>}
     </div></header>
-    {error && <div className="flow-feedback" role="alert"><span>{error}</span><button aria-label="關閉錯誤" onClick={() => setError("")}>×</button></div>}
+    {error && <div className="flow-feedback" role="alert"><span>{error}</span><button aria-label={"Dismiss Error"} onClick={() => setError("")}>×</button></div>}
     <div className={`flow-main ${selected || adding || preview ? "with-panel" : ""}`}><div className="flow-stage">
-      <div className="flow-canvas-tools"><label><input placeholder="搜尋步驟…" aria-label="搜尋步驟" value={search} onChange={(event) => setSearch(event.target.value)} /></label>{search && <div className="flow-search-results">{definition?.nodes.filter((node) => node.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((node) => <button key={node.id} onClick={() => { focusNode(node.id); setSearch(""); }}>{node.title}</button>)}</div>}<span>{definition?.nodes.length || 0} 步驟</span><button disabled={!runId} onClick={() => setResultsOpen(!resultsOpen)}>{resultsOpen ? "收起結果" : "結果與紀錄"}{detail && ` · ${TASK_LABELS[detail.run.status]}`}</button></div>
-      {!definition ? <p className="flow-empty-message" role="status">載入工作流…</p> : <ReactFlow nodes={canvas.nodes} edges={canvas.edges} nodeTypes={nodeTypes} onInit={(flow) => { instance.current = flow; }}
+      <div className="flow-canvas-tools"><label><input placeholder={"Search steps…"} aria-label={"Search Steps"} value={search} onChange={(event) => setSearch(event.target.value)} /></label>{search && <div className="flow-search-results">{definition?.nodes.filter((node) => node.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((node) => <button key={node.id} onClick={() => { focusNode(node.id); setSearch(""); }}>{node.title}</button>)}</div>}<span>{definition?.nodes.length || 0}  steps</span><button disabled={!runId} onClick={() => setResultsOpen(!resultsOpen)}>{resultsOpen ? "Collapse Results" : "Results & History"}{detail && ` · ${TASK_LABELS[detail.run.status]}`}</button></div>
+      {!definition ? <p className="flow-empty-message" role="status">Loading pipeline…</p> : <ReactFlow nodes={canvas.nodes} edges={canvas.edges} nodeTypes={nodeTypes} onInit={(flow) => { instance.current = flow; }}
         onNodesChange={nodeChanges} onEdgesChange={(changes) => { const selections = changes.filter((item) => item.type === "select"); if (selections.length) setSelectedEdgeIds((ids) => selections.reduce((current, item) => item.selected ? [...current.filter((id) => id !== item.id), item.id] : current.filter((id) => id !== item.id), ids)); if (!writable || busy) return; const ids = changes.filter((item) => item.type === "remove").map((item) => item.id); if (ids.length) change((current) => ({ ...current, edges: current.edges.filter((edge) => !ids.includes(`${edge.source}--${edge.target}`)) })); }}
         onNodeClick={(_, node) => { setAdding(false); setPreview(null); setSelectedIds((ids) => ids.includes(node.id) ? ids : [node.id]); }} onPaneClick={() => select(null)}
         onNodeDragStart={() => { dragStart.current = definition; }} onNodeDragStop={() => { const before = dragStart.current; dragStart.current = null; if (before) setHistory((old) => JSON.stringify(before) === JSON.stringify(old.present) ? old : { ...old, past: [...old.past.slice(-49), before], future: [] }); }}
         onConnect={({ source, target }) => connect(source, target)} nodesDraggable={writable && !busy} nodesConnectable={writable && !busy} edgesReconnectable={false} deleteKeyCode={writable && !busy ? ["Backspace", "Delete"] : null}
         fitView fitViewOptions={initialFitOptions} minZoom={0.25} maxZoom={1.8} selectionOnDrag panOnDrag={[1, 2]} panOnScroll zoomOnScroll={false} zoomOnPinch selectionKeyCode="Shift" multiSelectionKeyCode="Shift"
-        ariaLabelConfig={{ "controls.zoomIn.ariaLabel": "放大", "controls.zoomOut.ariaLabel": "縮小", "controls.fitView.ariaLabel": "符合視窗", "node.a11yDescription.default": "Enter 選取步驟。方向鍵移動，Delete 刪除。", "edge.a11yDescription.default": "Enter 選取連線，Delete 刪除。" }}>
-        <Background gap={24} size={1} color="#dce1e8" /><Controls showInteractive={false} />{!definition.nodes.length && <div className="flow-empty-message"><strong>從一件工作開始</strong><p>新增步驟，選擇資料來源，再試一筆結果。</p>{writable && <button className="primary" onClick={() => setAdding(true)}>新增第一步</button>}</div>}
+        ariaLabelConfig={{ "controls.zoomIn.ariaLabel": "Zoom In", "controls.zoomOut.ariaLabel": "Zoom Out", "controls.fitView.ariaLabel": "Fit View", "node.a11yDescription.default": "Enter selects a step. Arrow keys move it; Delete removes it.", "edge.a11yDescription.default": "Enter selects a connection; Delete removes it." }}>
+        <Background gap={24} size={1} color="#dce1e8" /><Controls showInteractive={false} />{!definition.nodes.length && <div className="flow-empty-message"><strong>Start with a Production Task</strong><p>Add a step, select its source, and test one result.</p>{writable && <button className="primary" onClick={() => setAdding(true)}>Add the First Step</button>}</div>}
       </ReactFlow>}
-      <p className="flow-navigation-help">拖曳空白處框選 · 中鍵／右鍵平移 · Shift 多選 · 左下方縮放與符合視窗</p>
+      <p className="flow-navigation-help">Drag to select · Middle / right drag to pan · Shift for multi-select · Zoom controls at bottom left</p>
     </div>
-      {adding && <aside className="flow-sidepanel" aria-label="新增工作步驟"><div className="flow-panel-title"><strong>選擇要做的工作</strong><button aria-label="關閉新增步驟" onClick={() => setAdding(false)}>×</button></div><div className="flow-kind-list">{Object.entries(STEP_KINDS).map(([kind, preset]) => <button key={kind} onClick={() => add(kind)}><strong>{preset.title}</strong><small>{preset.description}</small></button>)}</div></aside>}
+      {adding && <aside className="flow-sidepanel" aria-label={"Add Pipeline Step"}><div className="flow-panel-title"><strong>Choose a Task</strong><button aria-label={"Close Add Step"} onClick={() => setAdding(false)}>×</button></div><div className="flow-kind-list">{Object.entries(STEP_KINDS).map(([kind, preset]) => <button key={kind} onClick={() => add(kind)}><strong>{preset.title}</strong><small>{preset.description}</small></button>)}</div></aside>}
       {preview && <FlowPreflight preview={preview} busy={busy} writable={writable} onClose={() => setPreview(null)} onFocus={focusNode} onExecute={execute} />}
       {selected && !preview && !adding && <FlowInspector {...{ selected, selectedId, definition, tabs, tab, workers, agents, writable, busy, sourceDoc, sourceTables, sourceTable, targetTables, targetTable, sourceKey, targetKey, samples, sampleRow, update, change, connect }}
         onEditStart={() => { editStart.current = definition; }} onEditEnd={finishEdit}
         tasks={tasks.filter((task) => task.node_id === selectedId)} onClose={() => select(null)} onSample={(id) => { setSampleRow(id); setPreview(null); }} onRemove={() => removeNodes([selectedId])} onTest={() => check(true)} onResults={() => setResultsOpen(true)}
         onRefresh={() => work(async () => { setSourceDoc(docResponse(await api.get(`/projects/api/${slug}/tabs/${sourceKey}`))); setPreview(null); })} />}
     </div>
-    {!preview && <div className="flow-run-scope"><details><summary>執行範圍{batch && selection ? ` · ${selection.row_ids.length} 筆已選列` : " · 全流程"}</summary><div><label><input type="checkbox" checked={batch} onChange={(event) => setBatch(event.target.checked)} />使用表格選取的列</label>{selection && <span>{tabs.find((item) => item.key === selection.target_tab)?.title || selection.target_tab} · {selection.row_ids.length} 列</span>}<label>起點<select value={startNode || (batch && definition ? redrawStart(definition, selection) : "")} onChange={(event) => setStartNode(event.target.value)}><option value="">執行全部</option>{definition?.nodes.map((node) => <option value={node.id} key={node.id}>{node.title} 及所有下游</option>)}</select></label><small>從此繼續會新建執行，不重用舊上游結果。</small></div></details></div>}
+    {!preview && <div className="flow-run-scope"><details><summary>Run Scope{batch && selection ? ` · ${selection.row_ids.length}  selected rows` : "· full pipeline"}</summary><div><label><input type="checkbox" checked={batch} onChange={(event) => setBatch(event.target.checked)} />Use Selected Table Rows</label>{selection && <span>{tabs.find((item) => item.key === selection.target_tab)?.title || selection.target_tab} · {selection.row_ids.length} rows</span>}<label>Starting Step<select value={startNode || (batch && definition ? redrawStart(definition, selection) : "")} onChange={(event) => setStartNode(event.target.value)}><option value="">Run All</option>{definition?.nodes.map((node) => <option value={node.id} key={node.id}>{node.title}  and all downstream steps</option>)}</select></label><small>Continuing starts a new run without reusing earlier upstream results.</small></div></details></div>}
     {resultsOpen && <FlowResults {...{ detail, tasks, runs, runId, canControl, busy, revision, tabs, me, onOpenProposals, onOpenSource }} progress={summarizeTasks(tasks)} onRun={setRunId} onClose={() => setResultsOpen(false)} onFocus={focusNode} onControl={control} />}
   </section>;
 }

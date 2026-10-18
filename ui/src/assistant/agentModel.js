@@ -9,13 +9,13 @@ export function resolveAgentTarget(text, explicitKey, agents = []) {
   const keys = new Set();
   for (const token of tokens) {
     const found = agents.filter(a => a.agent_key === token || a.display_name === token);
-    if (found.length !== 1) throw new Error(`找不到唯一的代理 @${token}`);
+    if (found.length !== 1) throw new Error(`No unique agent found for @${token}`);
     keys.add(found[0].agent_key);
   }
-  if (keys.size > 1 || (keys.size && explicitKey && !keys.has(explicitKey))) throw new Error('一次對話請選一個代理；多位代理請使用多代理交辦');
+  if (keys.size > 1 || (keys.size && explicitKey && !keys.has(explicitKey))) throw new Error("Choose one agent per conversation. Use batch delegation for multiple agents.");
   const key = explicitKey || [...keys][0] || 'coordinator';
   const agent = agents.find(a => a.agent_key === key);
-  if (!agent || !agent.enabled || agent.role_kind === 'observer' || agent.runtime_kind !== 'builtin_llm') throw new Error('此代理目前無法接收對話');
+  if (!agent || !agent.enabled || agent.role_kind === 'observer' || agent.runtime_kind !== 'builtin_llm') throw new Error("This agent cannot receive chat messages right now.");
   return key;
 }
 
@@ -28,5 +28,5 @@ export function agentSuggestions(text, agents = []) {
 
 export function messagePersona(message) {
   const profile = message.agent_snapshot || {};
-  return `${profile.icon || '✦'} ${profile.display_name || message.agent_key || '專案助理'}${message.model ? ` · ${message.model}` : ''}`;
+  return `${profile.icon || '✦'} ${profile.display_name || message.agent_key || "Studio Assistant"}${message.model ? ` · ${message.model}` : ''}`;
 }

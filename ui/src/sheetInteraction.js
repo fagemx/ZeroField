@@ -19,10 +19,10 @@ export function historyForRow(groups, rowId, tableId) {
 export function sheetRequest(title, table, ids, instruction) {
   const picked = ids == null ? null : new Set(ids);
   const rows = table.rows.map((row, i) => ({...row, index: i + 1})).filter((row) => picked?.has(row.rid));
-  if (picked && (!picked.size || rows.length !== picked.size)) throw new Error("選取的列已不存在，請重新選取");
-  const scope = picked ? `指定的 ${rows.length} 列：${rows.map((row) => `第 ${row.index} 列「${String(row.cells[0]?.value || "未命名").slice(0, 60)}」`).join("、")}` : "整張表格";
-  const draft = `請讀取「${title}」的「${table.name}」，處理${scope}。\n\n${instruction.trim()}\n\n請先核對最新內容與列名稱，整理修改提案，等我確認後再寫回。`;
-  if (draft.length > 4000) throw new Error("需求與選取列內容過長，請縮短說明或減少選取列");
+  if (picked && (!picked.size || rows.length !== picked.size)) throw new Error("The selected row no longer exists. Select another row.");
+  const scope = picked ? `${rows.length} selected rows: ${rows.map((row) => `Row ${row.index} “${String(row.cells[0]?.value || "Untitled").slice(0, 60)}”`).join(", ")}` : "the entire table";
+  const draft = `Read “${table.name}” in “${title}” and process ${scope}.\n\n${instruction.trim()}\n\nCheck the latest content and row names, then prepare a proposal for my review before applying changes.`;
+  if (draft.length > 4000) throw new Error("The brief and selected rows are too long. Shorten the brief or select fewer rows.");
   return draft;
 }
 
@@ -42,17 +42,17 @@ export function rangeTSV(parsed, range) {
 
 export function visiblePastePayload(parsed, visibleIds, active, grid, visibleColumns = parsed.headers.map((_,i)=>i)) {
   const rowAt = visibleIds.indexOf(parsed.rows[active.r]?.rid), colAt = visibleColumns.indexOf(active.c);
-  if (rowAt < 0 || rowAt + grid.length > visibleIds.length) throw new Error('貼上超出目前可見列；請先新增列或清除篩選');
-  if (colAt < 0 || grid.some(row => row.length + colAt > visibleColumns.length)) throw new Error('貼上超出可見欄位；請先顯示或新增欄位');
+  if (rowAt < 0 || rowAt + grid.length > visibleIds.length) throw new Error("The paste exceeds visible rows. Add rows or clear filters first.");
+  if (colAt < 0 || grid.some(row => row.length + colAt > visibleColumns.length)) throw new Error("The paste exceeds visible columns. Show or add columns first.");
   const row_edits = grid.map((values,i) => {
     const old = parsed.rows.find(row=>row.rid===visibleIds[rowAt+i]);
-    if (!old) throw new Error('選取的列已不存在，請重新選取');
+    if (!old) throw new Error("The selected row no longer exists. Select another row.");
     const cells = {}, expected_cells = {};
     values.forEach((value,j) => {
       const c = visibleColumns[colAt+j], type = parsed.table.attrs.column_types?.[c];
-      if (type === 'number' && value.trim() && (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()) || !Number.isFinite(Number(value)))) throw new Error(`「${parsed.headers[c]}」需要數值（不含千分位分隔符；公式請使用公式欄）；原始貼上內容尚未寫入`);
+      if (type === 'number' && value.trim() && (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()) || !Number.isFinite(Number(value)))) throw new Error(`“${parsed.headers[c]}” requires a number without thousands separators; use a formula column for formulas. Nothing has been pasted.`);
       const options = parsed.table.attrs.column_options?.[parsed.table.attrs.column_ids?.[c]]?.options;
-      if (type === 'status' && options?.length && value && !options.includes(value)) throw new Error(`「${parsed.headers[c]}」不包含狀態「${value}」；請先設定選項`);
+      if (type === 'status' && options?.length && value && !options.includes(value)) throw new Error(`“${parsed.headers[c]}” does not include the status “${value}”. Configure this option first.`);
       cells[c] = value; expected_cells[c] = old.cells[c]?.value ?? '';
     });
     const column_ids = Object.fromEntries(Object.keys(cells).filter(c=>parsed.table.attrs.column_ids?.[c]).map(c=>[c,parsed.table.attrs.column_ids[c]]));
@@ -62,22 +62,22 @@ export function visiblePastePayload(parsed, visibleIds, active, grid, visibleCol
 }
 
 export function inverseOperation(operation) {
-  if (operation.new_rows?.length) throw new Error('新增列請從版本紀錄處理，不能以儲存格撤銷');
+  if (operation.new_rows?.length) throw new Error("Restore added rows through Version History; cell undo does not remove them.");
   return {...operation,row_edits:operation.row_edits.map(row=>({...row,cells:{...row.expected_cells},expected_cells:{...row.cells}}))};
 }
 
 // This is only offered after the user has reviewed a conflict. Automatic retry
 // always reuses the original expected values instead of overwriting new work.
 export function rebaseOperation(parsed, operation) {
-  if(parsed.tableId!==operation.table_id)throw new Error('來源表格已不存在');
+  if(parsed.tableId!==operation.table_id)throw new Error("The source table no longer exists.");
   const ids=parsed.table.attrs.column_ids||[];
   const row_edits=operation.row_edits.map(edit=>{
     const row=parsed.rows.find(r=>r.rid===edit.row_id);
-    if(!row)throw new Error('選取的列已不存在，草稿仍保留');
+    if(!row)throw new Error("The selected row no longer exists. Your draft is preserved.");
     const cells={},expected_cells={},column_ids={};
     for(const [oldIndex,value] of Object.entries(edit.cells)){
       const id=edit.column_ids?.[oldIndex],c=id?ids.indexOf(id):Number(oldIndex);
-      if(c<0||c>=parsed.headers.length)throw new Error('選取的欄位已不存在，草稿仍保留');
+      if(c<0||c>=parsed.headers.length)throw new Error("The selected column no longer exists. Your draft is preserved.");
       cells[c]=value;expected_cells[c]=row.cells[c]?.value??'';if(id)column_ids[c]=id;
     }
     return{row_id:row.rid,cells,expected_cells,...(Object.keys(column_ids).length?{column_ids}:{})};
@@ -87,7 +87,7 @@ export function rebaseOperation(parsed, operation) {
 
 export function freezeSheetScope(tab, parsed, ids = null, columns = parsed.headers.map((_,i)=>i)) {
   const rows = ids == null ? parsed.rows.map(row=>row.rid) : [...ids];
-  if (!rows.length || rows.some(id=>!parsed.rows.some(row=>row.rid===id))) throw new Error('選取的列已不存在或尚無資料，請重新選取');
+  if (!rows.length || rows.some(id=>!parsed.rows.some(row=>row.rid===id))) throw new Error("The selected rows no longer exist or contain no data. Select rows again.");
   return {target_tab:tab.key,table_id:parsed.tableId,table_name:parsed.name,base_revision:tab.revision,
     row_ids:rows,column_ids:columns.map(c=>parsed.table.attrs.column_ids?.[c]).filter(Boolean),column_indices:[...columns]};
 }

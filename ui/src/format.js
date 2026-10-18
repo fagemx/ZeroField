@@ -1,8 +1,9 @@
-export const STATUSES = ["未開始", "進行中", "生圖中", "生影片中", "等待審核", "重抽", "等待回覆", "卡住", "已完成"];
-export const STATUS_CLASS = {
-  未開始: "notstarted", 進行中: "inprogress", 等待回覆: "waiting", 卡住: "stuck", 已完成: "done",
-};
-export const ROLE_LABEL = { admin: "管理者", director: "總監", marketing_lead: "行銷主管", marketer: "行銷" };
+export const STATUSES = ["Queued", "In Progress", "Rendering Image", "Rendering Video", "Pending Review", "Retake", "Blocked", "Approved"];
+export const LEGACY_STATUSES = {"未開始":"Queued", "進行中":"In Progress", "生圖中":"Rendering Image", "生影片中":"Rendering Video", "等待審核":"Pending Review", "重抽":"Retake", "等待回覆":"Pending Review", "卡住":"Blocked", "已完成":"Approved"};
+export const STATUS_CLASS = {"Queued":"notstarted", "In Progress":"inprogress", "Rendering Image":"inprogress", "Rendering Video":"inprogress", "Pending Review":"waiting", "Retake":"stuck", "Blocked":"stuck", "Approved":"done"};
+export const ROLE_LABEL = {admin:"Showrunner", director:"Director", marketing_lead:"Cinematographer", marketer:"Crew", art_lead:"Cinematographer", writer:"Screenwriter", engineer:"VFX TD", member:"Crew", viewer:"Client / Viewer"};
+export const ACTION_LABEL = {"寫進那一題的討論":"Add to Discussion", "改狀態":"Change Status", "填交接追蹤":"Update Delivery", "留言問負責人":"Ask Owner", "在段落加標註":"Annotate Passage", "私下轉給負責人":"Forward Privately to Owner", table_edit:"Edit Table"};
+export function statusLabel(value) { return LEGACY_STATUSES[value] || value; }
 
 const PALETTE = [
   ["#e9e2d4", "#5b4a2c"], ["#dbeafe", "#1e40af"], ["#fce7f3", "#9d174d"], ["#dcfce7", "#166534"],
@@ -34,15 +35,15 @@ export function initial(name) {
 }
 
 export function statusClass(label) {
-  return STATUS_CLASS[label] || "notstarted";
+  return STATUS_CLASS[statusLabel(label)] || "notstarted";
 }
 
 // 對話裡欄位變更那一行
 export function activityLine(item) {
   const who = item.actor ? item.actor.name : "";
   const f = item.field || {};
-  if (item.kind === "status") return `${who} 把「${f.label || "狀態"}」從「${f.old}」改成「${f.new}」`;
-  if (item.kind === "fill") return f.new ? `${who} 填了「${f.label}」：${f.new}` : `${who} 清空了「${f.label}」`;
-  if (item.kind === "check") return f.new === "true" ? `${who} 勾選了「${f.label}」` : `${who} 取消勾選「${f.label}」`;
+  if (item.kind === "status") return `${who} changed ${f.label === "狀態" ? "Status" : f.label || "Status"} from ${statusLabel(f.old)} to ${statusLabel(f.new)}`;
+  if (item.kind === "fill") return f.new ? `${who} filled ${f.label}: ${f.new}` : `${who} cleared ${f.label}`;
+  if (item.kind === "check") return f.new === "true" ? `${who} checked ${f.label}` : `${who} unchecked ${f.label}`;
   return "";
 }

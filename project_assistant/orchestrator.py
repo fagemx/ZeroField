@@ -32,7 +32,7 @@ def instant(value):
             raise ValueError()
         return result
     except (ValueError,TypeError,AttributeError):
-        raise OrchestrationError(400,'截止時間必須包含時區') from None
+        raise OrchestrationError(400,"The deadline must include a time zone.") from None
 
 
 def lock_project(conn,slug):
@@ -46,11 +46,11 @@ def digest(value):
 
 def actor(conn,slug,me,write=True):
     if not repo.get_project(conn,slug):
-        raise OrchestrationError(404,'找不到這個專案')
+        raise OrchestrationError(404,"Production not found.")
     member=next((m for m in repo.active_members(conn) if m['actor_id']==me.actor_id),None)
     from project_assistant import store
     if not member or (write and member['role']=='viewer') or not store.is_member_enabled(conn,slug,me.actor_id):
-        raise OrchestrationError(403,'目前沒有執行此工作的權限')
+        raise OrchestrationError(403,"You do not have permission to run this task.")
     return member
 
 
@@ -58,37 +58,37 @@ def own_run(conn,me,slug,run_id,*,cancel=False,lock=False,write=True):
     actor(conn,slug,me,write=write)
     run=db.get_run(conn,slug,run_id,lock)
     if not run or (run['created_by']!=me.actor_id and not (cancel and me.can_edit)):
-        raise OrchestrationError(404,'找不到這個工作')
+        raise OrchestrationError(404,"Run not found.")
     return run
 
 
 def create_run(conn,me,slug,objective,*,client_request_id,limits=None,conversation_id=None,deadline_at=None,request_payload=None):
     actor(conn,slug,me)
     if not isinstance(objective,str) or not 1<=len(objective.strip())<=4000:
-        raise OrchestrationError(400,'工作描述需要 1～4000 字')
+        raise OrchestrationError(400,"Task descriptions must contain 1–4,000 characters.")
     if not isinstance(client_request_id,str) or not 1<=len(client_request_id)<=128:
-        raise OrchestrationError(400,'請提供可重送的 client_request_id')
+        raise OrchestrationError(400,"Provide a reusable client_request_id.")
     limits={} if limits is None else limits
     if not isinstance(limits,dict) or set(limits)-{'max_depth','max_parallel_dispatches','max_tasks_per_run'}:
-        raise OrchestrationError(400,'執行限制格式不對')
+        raise OrchestrationError(400,"Invalid execution limits.")
     values={'max_depth':1,'max_parallel_dispatches':6,'max_tasks_per_run':200,**limits}
     if any(type(v) is not int or not 1<=v<={'max_depth':2,'max_parallel_dispatches':6,'max_tasks_per_run':200}[k] for k,v in values.items()):
-        raise OrchestrationError(400,'執行限制超出允許範圍')
+        raise OrchestrationError(400,"Execution limits exceed the allowed range.")
     deadline=instant(deadline_at)
     if deadline and deadline<=now():
-        raise OrchestrationError(400,'工作截止時間已過')
+        raise OrchestrationError(400,"The run deadline has passed.")
     if conversation_id is not None:
         found=db.one(conn,'SELECT id FROM projectops.assistant_conversation WHERE project_slug=%s AND owner_id=%s AND id=%s',
                      (slug,me.actor_id,conversation_id))
         if not found:
-            raise OrchestrationError(404,'找不到這段對話')
+            raise OrchestrationError(404,"Conversation not found.")
     request_hash=digest({'objective':objective,'limits':values,'conversation_id':conversation_id,'deadline':deadline.isoformat() if deadline else None,'request_payload':request_payload})
     lock_project(conn,slug)
     existing=db.one(conn,'SELECT to_jsonb(r) FROM projectops.orchestration_run r WHERE project_slug=%s AND created_by=%s AND client_request_id=%s',
                     (slug,me.actor_id,client_request_id))
     if existing:
         if existing['request_hash']!=request_hash:
-            raise OrchestrationError(409,'相同請求編號的工作內容已變更')
+            raise OrchestrationError(409,"The run content changed for this request ID.")
         return existing
     identifier=str(uuid.uuid4())
     objective=privacy.sanitize(objective,privacy.mode(conn,slug))
@@ -103,14 +103,14 @@ def create_run(conn,me,slug,objective,*,client_request_id,limits=None,conversati
 def freeze_tab(conn,slug,key):
     tab=repo.get_tab(conn,slug,key)
     if not tab:
-        raise OrchestrationError(409,'來源或輸出分頁已刪除','SOURCE_CHANGED')
+        raise OrchestrationError(409,"A source or output page was deleted.",'SOURCE_CHANGED')
     return {**tab,'values':repo.field_values(conn,slug).get(key,{})}
 
 
 def _locked_snapshot(conn,slug,key):
     tab=repo.get_tab_for_update(conn,slug,key)
     if not tab:
-        raise OrchestrationError(409,'來源分頁已刪除','SOURCE_CHANGED')
+        raise OrchestrationError(409,"The source page was deleted.",'SOURCE_CHANGED')
     return {**tab,'key':key,'values':repo.field_values(conn,slug).get(key,{})}
 
 
@@ -119,7 +119,7 @@ def _task_source_matches(task,key,current):
     if scope and scope['target_tab']==key:
         request_scope.verify_source(scope,current,current['values'])
     elif task['input_snapshot']['tabs'][key]['revision']!=current['revision']:
-        raise OrchestrationError(409,'來源版本已變更，請重新交辦','SOURCE_CHANGED')
+        raise OrchestrationError(409,"The source revision changed. Create a new assignment.",'SOURCE_CHANGED')
 
 
 def _save_task_sources(conn,task,tabs):
@@ -175,48 +175,48 @@ def create_task(conn,me,slug,run_id,*,objective,agent_key=None,label_selector=No
     lock_project(conn,slug)
     run=own_run(conn,me,slug,run_id,lock=True)
     if run['status'] not in ACTIVE_RUNS:
-        raise OrchestrationError(409,'工作已結束，請建立新的工作')
+        raise OrchestrationError(409,"This run has ended. Create a new run.")
     if not isinstance(objective,str) or not 1<=len(objective.strip())<=4000 or strategy not in ('single','race','fanout_rows') or write_mode not in ('proposal','analysis_only'):
-        raise OrchestrationError(400,'任務描述、策略或寫入模式不正確')
+        raise OrchestrationError(400,"Invalid task description, strategy, or write mode.")
     existing=db.tasks(conn,slug,run_id)
     if len(existing)>=run['max_tasks_per_run']:
-        raise OrchestrationError(409,'已達本次工作任務上限','CAPACITY_EXCEEDED')
+        raise OrchestrationError(409,"This run reached its task limit.",'CAPACITY_EXCEEDED')
     if not isinstance(depends_on,(list,tuple)) or len(depends_on)>200 or len(set(depends_on))!=len(depends_on):
-        raise OrchestrationError(400,'相依任務格式不正確或重複')
+        raise OrchestrationError(400,"Invalid or duplicated dependencies.")
     dependency_ids=[db.identifier(k) for k in depends_on]
     known={t['id']:t for t in existing}
     if any(k not in known for k in dependency_ids):
-        raise OrchestrationError(400,'相依任務必須屬於同一個工作且已存在')
+        raise OrchestrationError(400,"Dependencies must exist and belong to this run.")
     # Only references to existing tasks are accepted: no mutation of a dispatched graph, so cycles cannot be introduced.
     selector=label_selector or {}
     if not isinstance(selector,dict) or any(not isinstance(k,str) or not isinstance(v,str) for k,v in selector.items()):
-        raise OrchestrationError(400,'代理標籤格式不正確')
+        raise OrchestrationError(400,"Invalid agent labels.")
     if agent_key and selector:
-        raise OrchestrationError(400,'請指定代理或使用標籤配對，不能同時使用')
+        raise OrchestrationError(400,"Specify an agent or a label selector, not both.")
     if agent_key and not isinstance(agent_key,str):
-        raise OrchestrationError(400,'代理代號格式不正確')
+        raise OrchestrationError(400,"Invalid agent key.")
     if not agent_key:
         candidates=[p for p in agent_registry.list_agents(conn,slug,labels=selector) if p['enabled'] and p['role_kind']!='observer']
         if not candidates:
-            raise OrchestrationError(400,'沒有符合標籤的可用代理')
+            raise OrchestrationError(400,"No available agent matches these labels.")
         agent_key=sorted(candidates,key=lambda p:p['agent_key'])[0]['agent_key'] if selector else 'coordinator'
     profile=agent_registry.get_agent(conn,slug,agent_key)
     if agent_key.startswith('limb:'):
         from project_assistant import limbs
         limb=next((w for w in limbs.enabled_workers(conn,slug) if 'limb:'+w['id']==agent_key),None)
         if not limb:
-            raise OrchestrationError(400,'外部手腳不可用')
+            raise OrchestrationError(400,"The external worker is unavailable.")
     elif not profile or not profile['enabled'] or profile['role_kind']=='observer':
-        raise OrchestrationError(400,'指定代理不可用')
+        raise OrchestrationError(400,"The selected agent is unavailable.")
     if parent_dispatch_id:
         parent_scope_dispatch=db.get_dispatch(conn,slug,parent_dispatch_id)
         if not parent_scope_dispatch or parent_scope_dispatch['run_id']!=run_id:
-            raise OrchestrationError(409,'父任務已失效','STALE_DISPATCH')
+            raise OrchestrationError(409,"The parent task is no longer valid.",'STALE_DISPATCH')
         parent_scope_task=db.get_task(conn,slug,parent_scope_dispatch['task_id'])
         parent_scope=effective_scope(conn,parent_scope_dispatch,parent_scope_task)
         if parent_scope:
             if scope is not None and not isinstance(scope,dict):
-                raise OrchestrationError(400,'子任務處理範圍格式不正確')
+                raise OrchestrationError(400,"Invalid child task scope.")
             scope={**copy.deepcopy(parent_scope),**(scope or {})}
             request_scope.guard_child_scope(parent_scope,scope)
         parent_target=copy.deepcopy(parent_scope_task['target'])
@@ -228,40 +228,40 @@ def create_task(conn,me,slug,run_id,*,objective,agent_key=None,label_selector=No
                 or target.get('kind','table')!=parent_target.get('kind','table')
                 or any(k in parent_target and target.get(k)!=parent_target[k] for k in ('row_id','col_index','table_id'))
                 or (parent_target.get('mode','append')=='append' and target.get('mode')=='replace')):
-                raise OrchestrationError(403,'子任務不能擴大父任務的輸出位置或寫入方式','POLICY_DENIED')
+                raise OrchestrationError(403,"A child task cannot expand its parent’s output target or write mode.",'POLICY_DENIED')
     if target is not None and (not isinstance(target,dict) or set(target)-{'tab_key','kind','mode','row_id','col_index','table_id','after_block_id'}):
-        raise OrchestrationError(400,'輸出位置格式不正確')
+        raise OrchestrationError(400,"Invalid output target.")
     target=copy.deepcopy(target or {})
     if target.get('kind','table') not in ('doc','table') or target.get('mode','append') not in ('append','replace'):
-        raise OrchestrationError(400,'輸出型態或插入方式不正確')
+        raise OrchestrationError(400,"Invalid output type or insertion mode.")
     if 'col_index' in target and (type(target['col_index']) is not int or not 0<=target['col_index']<256):
-        raise OrchestrationError(400,'輸出欄號必須為零起算整數')
+        raise OrchestrationError(400,"The output column must be a zero-based integer.")
     if any(k in target and not isinstance(target[k],str) for k in ('tab_key','row_id','table_id','after_block_id')):
-        raise OrchestrationError(400,'輸出位置識別資料必須是文字')
+        raise OrchestrationError(400,"Output target identifiers must be strings.")
     snapshots={}
     if scope is not None:
         if not isinstance(scope,dict):
-            raise OrchestrationError(400,'處理範圍格式不正確')
+            raise OrchestrationError(400,"Invalid task scope.")
         tab=freeze_tab(conn,slug,scope.get('target_tab'))
         scope=request_scope.validate_scope(scope,tab,tab['values'])
         snapshots[tab['key']]=tab
         if target.get('tab_key') and target['tab_key']!=scope['target_tab']:
-            raise OrchestrationError(400,'輸出不能超出固定的資料範圍')
+            raise OrchestrationError(400,"Output cannot exceed the selected data scope.")
         if write_mode=='proposal' and not target:
             target={'tab_key':scope['target_tab'],'kind':'doc' if scope.get('kind')=='doc' else 'table'}
     if strategy=='fanout_rows' and (not scope or scope.get('kind')=='doc'):
-        raise OrchestrationError(400,'逐列工作必須指定固定的表格列')
+        raise OrchestrationError(400,"Per-row tasks require a fixed set of table rows.")
     if parent_dispatch_id:
         parent=db.get_dispatch(conn,slug,parent_dispatch_id)
         if not parent or parent['run_id']!=run_id or parent['status']!='running' or parent['superseded_by']:
-            raise OrchestrationError(409,'父任務已失效','STALE_DISPATCH')
+            raise OrchestrationError(409,"The parent task is no longer valid.",'STALE_DISPATCH')
         parent_task=db.get_task(conn,slug,parent['task_id'])
         if parent_task['request_scope']:
             if scope is None:
                 scope=copy.deepcopy(parent_task['request_scope'])
             request_scope.guard_child_scope(parent_task['request_scope'],scope)
         if parent_task['write_mode']=='analysis_only' and write_mode!='analysis_only':
-            raise OrchestrationError(403,'子任務不能取得父任務沒有的寫入權限','POLICY_DENIED')
+            raise OrchestrationError(403,"A child task cannot gain write permissions its parent does not have.",'POLICY_DENIED')
     target_snapshot=None
     if target.get('tab_key'):
         tab=snapshots.get(target['tab_key']) or freeze_tab(conn,slug,target['tab_key'])
@@ -289,7 +289,7 @@ def handle(dispatch):
 def parse_handle(value):
     match=re.fullmatch(r'dsp_([0-9a-f-]{36})_([1-9][0-9]{0,18})',str(value))
     if not match:
-        raise OrchestrationError(400,'派發憑證格式不正確','STALE_DISPATCH')
+        raise OrchestrationError(400,"Invalid dispatch credentials.",'STALE_DISPATCH')
     return db.identifier(match[1]),int(match[2])
 
 
@@ -302,13 +302,13 @@ def runtime_profile(conn,slug,key):
         from project_assistant import limbs
         limb=next((w for w in limbs.enabled_workers(conn,slug) if 'limb:'+w['id']==key),None)
         if not limb:
-            raise OrchestrationError(400,'外部手腳已停用或無權存取專案','POLICY_DENIED')
+            raise OrchestrationError(400,"The external worker is disabled or cannot access this production.",'POLICY_DENIED')
         return {'agent_key':key,'display_name':limb['name'],'icon':'🔌','enabled':True,'role_kind':'worker',
                 'runtime_kind':'remote_limb','bound_limb_id':limb['id'],'allowed_tools':['propose','propose_table_edit'] if 'llm' in limb['capabilities'] else [],
                 'capabilities':limb['capabilities'],'provider_config':{},'system_prompt':'','knowledge_pack':'','max_concurrency':1}
     profile=agent_registry.get_agent(conn,slug,key)
     if not profile or not profile['enabled'] or profile['role_kind']=='observer':
-        raise OrchestrationError(400,'代理已停用或不可承接工作','POLICY_DENIED')
+        raise OrchestrationError(400,"The agent is disabled or cannot accept tasks.",'POLICY_DENIED')
     return profile
 
 
@@ -316,12 +316,12 @@ def spawn_dispatch(conn,slug,task_id,*,agent_key,slot_key,caller_dispatch_id=Non
     lock_project(conn,slug)
     task=db.get_task(conn,slug,task_id,True)
     if not task:
-        raise OrchestrationError(404,'找不到任務')
+        raise OrchestrationError(404,"Task not found.")
     run=db.get_run(conn,slug,task['run_id'],True)
     if run['status']=='canceled' or task['status']=='completed':
-        raise OrchestrationError(409,'工作已取消或完成','STALE_DISPATCH')
+        raise OrchestrationError(409,"The run was canceled or completed.",'STALE_DISPATCH')
     if not isinstance(slot_key,str) or not 1<=len(slot_key)<=150:
-        raise OrchestrationError(400,'派發槽格式不正確')
+        raise OrchestrationError(400,"Invalid dispatch slot.")
     profile=runtime_profile(conn,slug,agent_key)
     previous=db.one(conn,'''SELECT to_jsonb(d) FROM projectops.orchestration_dispatch d
         WHERE task_id=%s AND slot_key=%s ORDER BY attempt_no DESC LIMIT 1 FOR UPDATE''',(task_id,slot_key))
@@ -330,16 +330,16 @@ def spawn_dispatch(conn,slug,task_id,*,agent_key,slot_key,caller_dispatch_id=Non
     caller_id=caller_dispatch_id or task.get('parent_dispatch_id')
     parent=db.get_dispatch(conn,slug,caller_id) if caller_id else None
     if caller_id and (not parent or parent['run_id']!=run['id'] or parent['status'] in ('canceled','failed','timeout') or parent['superseded_by']):
-        raise OrchestrationError(409,'父派發已失效','STALE_DISPATCH')
+        raise OrchestrationError(409,"The parent dispatch is no longer valid.",'STALE_DISPATCH')
     if caller_dispatch_id and (parent['status']!='running' or not parent['lease_until'] or instant(parent['lease_until'])<=now()):
-        raise OrchestrationError(409,'委派來源已失效','STALE_DISPATCH')
+        raise OrchestrationError(409,"The delegation source is no longer valid.",'STALE_DISPATCH')
     if parent:
         caller_profile=runtime_profile(conn,slug,parent['agent_key'])
         if caller_profile['role_kind']!='primary':
-            raise OrchestrationError(403,'只有主控代理可以委派子任務','POLICY_DENIED')
+            raise OrchestrationError(403,"Only a coordinator can delegate child tasks.",'POLICY_DENIED')
         chain=parent['chain']+['agent:'+agent_key]
         if 'agent:'+agent_key in parent['chain'] or len([v for v in chain if v.startswith('agent:')])-1>run['max_depth']:
-            raise OrchestrationError(403,'委派深度超限或形成循環','POLICY_DENIED')
+            raise OrchestrationError(403,"Delegation exceeds the depth limit or creates a cycle.",'POLICY_DENIED')
     else:
         chain=['user:'+run['created_by'],'agent:'+run['coordinator_key']]
         if agent_key!=run['coordinator_key']:
@@ -348,10 +348,10 @@ def spawn_dispatch(conn,slug,task_id,*,agent_key,slot_key,caller_dispatch_id=Non
                                    previous.get('deadline_at') if previous else None) if v is not None]
     deadline=min(deadlines) if deadlines else now()+dt.timedelta(seconds=240)
     if deadline<=now():
-        raise OrchestrationError(409,'任務已超過截止時間','STALE_DISPATCH')
+        raise OrchestrationError(409,"The task deadline has passed.",'STALE_DISPATCH')
     retry_count=(previous['retry_count']+(1 if previous['status'] in ('failed','timeout') and continuation is None else 0)) if previous else 0
     if retry_count>=task['max_attempts']:
-        raise OrchestrationError(409,'此派發槽已用完重試次數','POLICY_DENIED')
+        raise OrchestrationError(409,"This dispatch slot has exhausted its retries.",'POLICY_DENIED')
     identifier=str(uuid.uuid4())
     if previous:
         db.execute(conn,'UPDATE projectops.orchestration_dispatch SET superseded_by=%s WHERE id=%s',(identifier,previous['id']))
@@ -418,12 +418,12 @@ def _authenticated_dispatch(conn,identity,dispatch_handle,token):
     identifier,admission=parse_handle(dispatch_handle)
     slug=db.one(conn,'SELECT project_slug FROM projectops.orchestration_dispatch WHERE id=%s',(identifier,))
     if not slug or (isinstance(identity,dict) and slug not in identity.get('allowed_projects',[])):
-        raise OrchestrationError(404,'找不到這個派發')
+        raise OrchestrationError(404,"Dispatch not found.")
     lock_project(conn,slug)
     dispatch=db.get_dispatch(conn,slug,identifier,True)
     if (dispatch['admission_no']!=admission or not token or dispatch['lease_owner']!=principal(identity)
         or not hmac.compare_digest(dispatch.get('lease_hash') or '',hashlib.sha256(str(token).encode()).hexdigest())):
-        raise OrchestrationError(409,'派發憑證、Worker 或租約不相符','STALE_DISPATCH')
+        raise OrchestrationError(409,"Dispatch credentials, worker, or lease do not match.",'STALE_DISPATCH')
     return dispatch
 
 
@@ -432,7 +432,7 @@ def leased_dispatch(conn,identity,dispatch_handle,token):
     run=db.get_run(conn,dispatch['project_slug'],dispatch['run_id'])
     if (dispatch['superseded_by'] or dispatch['status']!='running' or run['status'] not in ACTIVE_RUNS
         or not dispatch['lease_until'] or instant(dispatch['lease_until'])<=now() or instant(dispatch['deadline_at'])<=now()):
-        raise OrchestrationError(409,'派發已取消、過期或被重新派發','STALE_DISPATCH')
+        raise OrchestrationError(409,"The dispatch was canceled, expired, or reassigned.",'STALE_DISPATCH')
     runtime_profile(conn,dispatch['project_slug'],dispatch['agent_key'])
     task=db.get_task(conn,dispatch['project_slug'],dispatch['task_id'])
     if task.get('flow_task_id'):
@@ -440,7 +440,7 @@ def leased_dispatch(conn,identity,dispatch_handle,token):
         flow_id=db.one(conn,'SELECT run_id::text FROM projectops.limb_task WHERE id=%s',(task['flow_task_id'],))
         flow=flow_runner._get_run(conn,flow_id)
         if flow['status'] in ('failed','canceled'):
-            raise OrchestrationError(409,'工作流已停止','STALE_DISPATCH')
+            raise OrchestrationError(409,"The pipeline stopped.",'STALE_DISPATCH')
         if flow.get('execution',{}).get('mode')=='single_step':
             try:
                 flow_runner._check_source_revisions(conn,dispatch['project_slug'],flow['execution']['source_revisions'])
@@ -553,22 +553,22 @@ def refresh_run(conn,slug,run_id):
 
 def complete_dispatch(conn,identity,dispatch_handle,lease_token,*,outcome,output,proposal_ids):
     if outcome not in ('succeeded','failed','timeout','awaiting_gate') or not isinstance(output,dict):
-        raise OrchestrationError(400,'Worker 回報格式不正確')
+        raise OrchestrationError(400,"Invalid worker report.")
     try:
         encoded=json.dumps(output,ensure_ascii=False,allow_nan=False)
         fingerprint=digest({'outcome':outcome,'output':output,'proposal_ids':proposal_ids})
     except (ValueError,TypeError):
-        raise OrchestrationError(400,'Worker 回報必須是有效 JSON') from None
+        raise OrchestrationError(400,"Worker reports must be valid JSON.") from None
     if len(encoded.encode())>2*1024*1024 or not isinstance(proposal_ids,list) or any(type(p) is not int for p in proposal_ids):
-        raise OrchestrationError(400,'輸出過大或提案編號格式不正確')
+        raise OrchestrationError(400,"The output is too large or a proposal ID is invalid.")
     dispatch=_authenticated_dispatch(conn,identity,dispatch_handle,lease_token)
     if dispatch['output_digest'] and not dispatch['superseded_by'] and dispatch['status'] in ('succeeded','failed','timeout','awaiting_gate'):
         if dispatch['output_digest']!=fingerprint:
-            raise OrchestrationError(409,'此派發已回報不同的結果','STALE_DISPATCH')
+            raise OrchestrationError(409,"This dispatch already reported a different result.",'STALE_DISPATCH')
         return {'id':dispatch['id'],'handle':dispatch_handle,'status':dispatch['status']}
     waiting=dispatch['status']=='awaiting_gate' and outcome=='awaiting_gate' and not dispatch['superseded_by']
     if waiting and (instant(dispatch['deadline_at'])<=now() or db.get_run(conn,dispatch['project_slug'],dispatch['run_id'])['status']=='canceled'):
-        raise OrchestrationError(409,'等待決策的派發已失效','STALE_DISPATCH')
+        raise OrchestrationError(409,"The dispatch awaiting a decision is no longer valid.",'STALE_DISPATCH')
     if not waiting:
         dispatch=leased_dispatch(conn,identity,dispatch_handle,lease_token)
     slug=dispatch['project_slug']
@@ -576,7 +576,7 @@ def complete_dispatch(conn,identity,dispatch_handle,lease_token,*,outcome,output
     safe_output=privacy.sanitize(output,privacy.mode(conn,slug))
     actual=db.many(conn,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s ORDER BY id',(dispatch['id'],))
     if set(actual)!=set(proposal_ids):
-        raise OrchestrationError(400,'提案必須屬於本次派發，且完整回報')
+        raise OrchestrationError(400,"Proposals must belong to this dispatch and be reported completely.")
     status=outcome
     error=None
     if outcome=='succeeded':
@@ -620,14 +620,14 @@ def cancel_dispatch(conn,me,slug,dispatch_handle,reason):
     lock_project(conn,slug)
     dispatch=db.get_dispatch(conn,slug,identifier,True)
     if not dispatch:
-        raise OrchestrationError(404,'找不到派發')
+        raise OrchestrationError(404,"Dispatch not found.")
     own_run(conn,me,slug,dispatch['run_id'],cancel=True)
     if dispatch['admission_no']!=admission or dispatch['superseded_by']:
-        raise OrchestrationError(409,'取消指令的派發憑證已過期','STALE_DISPATCH')
+        raise OrchestrationError(409,"The cancellation request has stale dispatch credentials.",'STALE_DISPATCH')
     if dispatch['status']=='canceled':
         return {'canceled':True,'dispatch_handle':dispatch_handle}
     if dispatch['status'] in ('succeeded','failed','timeout'):
-        raise OrchestrationError(409,'此派發已結束；取消不會復原已確認的內容')
+        raise OrchestrationError(409,"This dispatch ended. Canceling does not revert approved content.")
     _cancel_one(conn,dispatch,privacy.sanitize(str(reason or '已取消'),privacy.mode(conn,slug)))
     refresh_run(conn,slug,dispatch['run_id'])
     repo.add_audit(conn,slug,action='orchestration_cancel',actor_id=me.actor_id,target=dispatch['id'],detail={'admission_no':admission})
@@ -640,7 +640,7 @@ def cancel_run(conn,me,slug,run_id,reason='已取消整批工作'):
     if run['status']=='canceled':
         return {'run_id':run_id,'status':'canceled'}
     if run['status'] in ('succeeded','failed'):
-        raise OrchestrationError(409,'此工作已結束，取消不會復原已確認的內容')
+        raise OrchestrationError(409,"This run ended. Canceling does not revert approved content.")
     for dispatch in db.dispatches(conn,slug,run_id=run_id):
         _cancel_one(conn,dispatch,reason)
     db.execute(conn,"UPDATE projectops.orchestration_task SET status='canceled',updated_at=NOW() WHERE run_id=%s AND status NOT IN ('completed','failed','canceled')",(run_id,))
@@ -677,13 +677,13 @@ def sweep(conn,project_slug=None):
 
 def open_gate(conn,ctx,*,question,options,blocking_task_ids=()):
     if not isinstance(question,str) or not 1<=len(question.strip())<=4000 or not isinstance(options,list) or not 2<=len(options)<=5:
-        raise OrchestrationError(400,'問題需要文字及 2～5 個選項')
+        raise OrchestrationError(400,"A decision requires a question and 2–5 options.")
     if any(not isinstance(option,str) or not 1<=len(option.strip())<=500 for option in options) or len(set(options))!=len(options):
-        raise OrchestrationError(400,'選項必須為不重複的簡短文字')
+        raise OrchestrationError(400,"Options must be unique short strings.")
     dispatch=leased_dispatch(conn,ctx.worker_id,f'dsp_{ctx.dispatch_id}_{ctx.admission_no}',ctx.lease_token)
     known={t['id'] for t in db.tasks(conn,ctx.slug,dispatch['run_id'])}
     if not isinstance(blocking_task_ids,(tuple,list)) or any(k not in known for k in blocking_task_ids):
-        raise OrchestrationError(400,'阻擋的任務必須屬於同一批工作')
+        raise OrchestrationError(400,"Blocked tasks must belong to the same run.")
     continuation=dispatch['continuation'] or {}
     for answer in continuation.get('answers',[]):
         if answer['question']==question and answer.get('options')==options:
@@ -707,33 +707,33 @@ def open_gate(conn,ctx,*,question,options,blocking_task_ids=()):
 
 def resolve_gate(conn,me,slug,gate_id,*,resolution,client_request_id):
     if not isinstance(client_request_id,str) or not 1<=len(client_request_id)<=128:
-        raise OrchestrationError(400,'請提供決定的 client_request_id')
+        raise OrchestrationError(400,"Provide a client_request_id for this decision.")
     lock_project(conn,slug)
     gate=db.get_gate(conn,slug,gate_id,True)
     if not gate:
-        raise OrchestrationError(404,'找不到這個待決定問題')
+        raise OrchestrationError(404,"Decision gate not found.")
     run=own_run(conn,me,slug,gate['run_id'],lock=True)
     if gate['status']=='resolved':
         if gate['resolution']==resolution:
             return gate
-        raise OrchestrationError(409,'這個問題已經有不同決定')
+        raise OrchestrationError(409,"This gate already has a different decision.")
     if gate['status']!='open' or run['status']=='canceled':
-        raise OrchestrationError(409,'這個問題已取消')
+        raise OrchestrationError(409,"This decision gate was canceled.")
     if gate['gate_kind']!='question':
-        raise OrchestrationError(400,'請從提案核對卡選擇版本')
+        raise OrchestrationError(400,"Select a version in proposal review.")
     choice=next((o for o in gate['options'] if o['id']==resolution),None)
     if not choice:
-        raise OrchestrationError(400,'請選擇目前問題提供的選項')
+        raise OrchestrationError(400,"Choose an option offered by this gate.")
     dispatch=db.get_dispatch(conn,slug,gate['dispatch_id'])
     if dispatch['superseded_by'] or instant(dispatch['deadline_at'])<=now():
-        raise OrchestrationError(409,'此問題的工作已過期','STALE_DISPATCH')
+        raise OrchestrationError(409,"The run associated with this gate expired.",'STALE_DISPATCH')
     action=(gate['continuation'] or {}).get('action') or {}
     flow_id=None
     if action.get('kind')=='flow_start' and resolution=='0':
         from project_assistant import flow_runner
         preview=flow_runner.preflight(conn,me,slug,action['flow_tab_key'],action['body'])
         if preview.get('errors') or preview['definition_revision']!=action['preview']['definition_revision'] or preview['source_revisions']!=action['preview']['source_revisions']:
-            raise OrchestrationError(409,'流程設定、來源或服務已改變，請重新核對','SOURCE_CHANGED')
+            raise OrchestrationError(409,"The pipeline definition, source, or worker changed. Review it again.",'SOURCE_CHANGED')
         flow_id=flow_runner.start(conn,me,slug,action['flow_tab_key'],action['body'])['run']['id']
         db.execute(conn,'UPDATE projectops.orchestration_run SET flow_run_id=%s WHERE id=%s',(flow_id,run['id']))
     continuation=copy.deepcopy(dispatch['continuation'] or {})
@@ -809,7 +809,7 @@ def schedule_ready(conn,project_slug=None):
                 with conn.transaction():
                     if task['strategy']=='race':
                         if not task.get('race_agents'):
-                            raise OrchestrationError(400,'競速沒有有效的候選代理')
+                            raise OrchestrationError(400,"The race has no valid candidate agents.")
                         from project_docs.service import Identity
                         start_race(conn,Identity(run['created_by'],'','member'),run['project_slug'],task['id'],task['race_agents'])
                     else:
@@ -836,12 +836,12 @@ def snapshot_tab(conn,slug,dispatch_id,key):
     lock_project(conn,slug)
     dispatch=db.get_dispatch(conn,slug,dispatch_id)
     if not dispatch:
-        raise OrchestrationError(404,'找不到派發')
+        raise OrchestrationError(404,"Dispatch not found.")
     task=db.get_task(conn,slug,dispatch['task_id'],True)
     snapshots=task['input_snapshot']
     if key not in snapshots['tabs']:
         if len(snapshots['tabs'])>=100:
-            raise OrchestrationError(400,'參考分頁已達 100 頁，請縮小工作範圍')
+            raise OrchestrationError(400,"The task reached 100 reference pages. Reduce the scope.")
         snapshots['tabs'][key]=freeze_tab(conn,slug,key)
         db.execute(conn,'UPDATE projectops.orchestration_task SET input_snapshot=%s::jsonb WHERE id=%s',(json.dumps(snapshots),task['id']))
     return copy.deepcopy(snapshots['tabs'][key])
@@ -853,42 +853,42 @@ def attach_proposal(conn,ctx,proposal_id):
     task=db.get_task(conn,ctx.slug,dispatch['task_id'])
     proposal=store.proposal(conn,proposal_id)
     if not proposal or proposal['slug']!=ctx.slug or proposal['owner_id']!=ctx.me.actor_id or proposal['status']!='pending':
-        raise OrchestrationError(400,'提案不屬於此派發')
+        raise OrchestrationError(400,"This proposal does not belong to this dispatch.")
     if task['write_mode']=='analysis_only':
-        raise OrchestrationError(403,'分析工作不能產生寫入提案','POLICY_DENIED')
+        raise OrchestrationError(403,"Analysis-only tasks cannot create write proposals.",'POLICY_DENIED')
     if task['strategy']=='race' and db.one(conn,"SELECT count(*) FROM projectops.assistant_proposal WHERE dispatch_id=%s AND status='pending'",(dispatch['id'],)):
-        raise OrchestrationError(400,'競速的每個候選只能產生一張完整提案')
+        raise OrchestrationError(400,"Each racing candidate can produce one complete proposal.")
     target=proposal['target']
     expected=copy.deepcopy(task['target'])
     if dispatch.get('row_id') and expected.get('row_id'):
         expected['row_id']=dispatch['row_id']
     if expected.get('tab_key') and target.get('tab_key')!=expected['tab_key']:
-        raise OrchestrationError(403,'提案不能改寫任務輸出分頁以外的內容','POLICY_DENIED')
+        raise OrchestrationError(403,"Proposals cannot modify content outside the task’s output page.",'POLICY_DENIED')
     if expected.get('tab_key') and proposal['action']=='table_edit':
         for op in target.get('ops',[]):
             if expected.get('kind')=='doc':
                 if op.get('op') not in ('put','del'):
-                    raise OrchestrationError(403,'此任務的輸出是文件段落','POLICY_DENIED')
+                    raise OrchestrationError(403,"This task outputs document passages.",'POLICY_DENIED')
             elif (op.get('op')!='put_row' or (expected.get('row_id') and op.get('rid')!=expected['row_id'])
                   or (expected.get('table_id') and op.get('table')!=expected['table_id'])
                   or ('col_index' in expected and set(op.get('edited_cols',[]))!={expected['col_index']})):
-                raise OrchestrationError(403,'提案超出任務指定的輸出列欄','POLICY_DENIED')
+                raise OrchestrationError(403,"The proposal exceeds the task’s output rows or columns.",'POLICY_DENIED')
     elif expected.get('row_id') and (target.get('rid')!=expected['row_id'] or proposal['action'] not in agent_registry.QA_ACTIONS):
-        raise OrchestrationError(403,'此儲存格任務請使用結構化修改，或在指定列提出討論','POLICY_DENIED')
+        raise OrchestrationError(403,"Use structured edits for this cell task, or discuss the selected row.",'POLICY_DENIED')
     scope=effective_scope(conn,dispatch,task)
     if scope and target.get('tab_key')!=scope['target_tab']:
-        raise OrchestrationError(403,'提案超出本次固定分頁','POLICY_DENIED')
+        raise OrchestrationError(403,"The proposal exceeds the selected page scope.",'POLICY_DENIED')
     if scope:
         if proposal['action']=='table_edit':
             if scope.get('kind')=='doc':
                 if any(op.get('op') not in ('put','del') or (op.get('base') and op.get('bid') not in scope['block_ids']) for op in target.get('ops',[])):
-                    raise OrchestrationError(403,'文件提案超出選取段落','POLICY_DENIED')
+                    raise OrchestrationError(403,"The document proposal exceeds the selected passages.",'POLICY_DENIED')
             else:
                 allowed={str(v) for v in scope['column_indices']}
                 for op in target.get('ops',[]):
                     if (op.get('op')!='put_row' or op.get('rid') not in scope['row_ids'] or op.get('table')!=scope['table_id']
                         or not op.get('base') or not {str(v) for v in op.get('edited_cols',[])}.issubset(allowed)):
-                        raise OrchestrationError(403,'提案超出選取的列欄','POLICY_DENIED')
+                        raise OrchestrationError(403,"The proposal exceeds the selected rows or columns.",'POLICY_DENIED')
         target['request_scope']=scope
     references={key:tab['revision'] for key,tab in task['input_snapshot']['tabs'].items() if key!=target.get('tab_key')}
     if references:
@@ -914,7 +914,7 @@ def prepare_dispatch_output(conn,ctx,output):
         return existing
     from project_assistant.agent_policy import can_propose_output
     if not can_propose_output(runtime_profile(conn,ctx.slug,dispatch['agent_key']),task['target']):
-        raise OrchestrationError(403,'此代理沒有產生這類畫布修改的權限','POLICY_DENIED')
+        raise OrchestrationError(403,"This agent cannot propose this type of canvas change.",'POLICY_DENIED')
     target=copy.deepcopy(task['target'])
     if dispatch.get('row_id') and target.get('row_id'):
         target['row_id']=dispatch['row_id']
@@ -1005,18 +1005,18 @@ def start_race(conn,me,slug,task_id,agent_keys):
     lock_project(conn,slug)
     task=db.get_task(conn,slug,task_id,True)
     if not task:
-        raise OrchestrationError(404,'找不到競速任務')
+        raise OrchestrationError(404,"Race task not found.")
     own_run(conn,me,slug,task['run_id'])
     if (task['strategy']!='race' or task['write_mode']!='proposal' or not task['target'].get('tab_key')
         or not isinstance(agent_keys,list) or not 2<=len(agent_keys)<=3 or any(not isinstance(k,str) for k in agent_keys)
         or len(set(agent_keys))!=len(agent_keys)):
-        raise OrchestrationError(400,'競速需要固定的輸出位置與 2～3 個不同代理')
+        raise OrchestrationError(400,"A race requires a fixed output target and 2–3 distinct agents.")
     for key in agent_keys:
         profile=runtime_profile(conn,slug,key)
         if not can_propose_output(profile,task['target']):
-            raise OrchestrationError(400,'候選代理必須具有相同輸出類型的修改權限','POLICY_DENIED')
+            raise OrchestrationError(400,"Candidate agents must have permission to edit the same output type.",'POLICY_DENIED')
     if task['race_agents'] and task['race_agents']!=agent_keys:
-        raise OrchestrationError(409,'已建立的候選代理不能變更')
+        raise OrchestrationError(409,"Candidate agents cannot be changed after creation.")
     with conn.transaction():
         db.execute(conn,'UPDATE projectops.orchestration_task SET race_agents=%s::jsonb,target_agent_key=%s WHERE id=%s',
                    (json.dumps(agent_keys),agent_keys[0],task_id))
@@ -1051,23 +1051,23 @@ def refresh_race_gate(conn,task):
 def select_race_winner(conn,me,slug,gate_id,proposal_id,*,client_request_id):
     from project_assistant import service,store
     if type(proposal_id) is not int or not isinstance(client_request_id,str) or not 1<=len(client_request_id)<=128:
-        raise OrchestrationError(400,'候選選用資料不正確')
+        raise OrchestrationError(400,"Invalid candidate selection.")
     lock_project(conn,slug)
     gate=db.get_gate(conn,slug,gate_id,True)
     if not gate or gate['gate_kind']!='race_select':
-        raise OrchestrationError(404,'找不到候選核對問題')
+        raise OrchestrationError(404,"Candidate review gate not found.")
     run=own_run(conn,me,slug,gate['run_id'])
     task=db.get_task(conn,slug,gate['task_id'],True)
     if gate['status']=='resolved':
         if gate['resolution']!={'proposal_id':proposal_id}:
-            raise OrchestrationError(409,'此競速已選用另一個版本')
+            raise OrchestrationError(409,"Another version was already selected for this race.")
         return {'gate':gate,'proposal':store.proposal(conn,proposal_id),'winning_dispatch_id':task['winning_dispatch_id'],
                 'run_id':run['id'],'task_id':task['id']}
     if gate['status']!='open' or run['status']=='canceled':
-        raise OrchestrationError(409,'這組候選已取消')
+        raise OrchestrationError(409,"These candidates were canceled.")
     proposal=next((p for p in race_proposals(conn,task) if p['id']==proposal_id),None)
     if not proposal:
-        raise OrchestrationError(409,'此候選尚未完成、已失效或不屬於這組競速')
+        raise OrchestrationError(409,"This candidate is incomplete, stale, or belongs to another race.")
     winner=db.get_dispatch(conn,slug,proposal['dispatch_id'])
     with conn.transaction():
         code,payload=service.apply_proposal(conn,me,slug,proposal_id,{},_race_task_id=task['id'])

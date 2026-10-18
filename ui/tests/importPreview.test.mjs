@@ -15,14 +15,14 @@ test('confirmed import preserves target revision and selected header without mix
 });
 test('import rejects impossible header rows and never adds target parameters for new pages',()=>{
   assert.equal(typeof imports.importPath,'function');
-  assert.throws(()=>imports.importPath('demo',null,{format:'csv',headerRow:0}),/表頭/);
-  assert.throws(()=>imports.importPath('demo',null,{format:'csv',headerRow:1.5}),/表頭/);
+  assert.throws(()=>imports.importPath('demo',null,{format:'csv',headerRow:0}),/header/);
+  assert.throws(()=>imports.importPath('demo',null,{format:'csv',headerRow:1.5}),/header/);
   const url=new URL(imports.importPath('demo',null,{format:'md',headerRow:9}),'http://localhost');
   assert.equal(url.searchParams.has('header_row'),false);
   assert.equal(url.searchParams.has('tab_key'),false);
 });
 test('replacement requires explicit confirmation but read-only preview never does',()=>{
-  assert.throws(()=>imports.importPath('demo',{key:'t',revision:7},{format:'csv',headerRow:3}),/確認/);
+  assert.throws(()=>imports.importPath('demo',{key:'t',revision:7},{format:'csv',headerRow:3}),/Confirm/);
   assert.equal(typeof imports.importPreviewPath,'function');
   const url=new URL(imports.importPreviewPath('demo',{key:'t',revision:7},{format:'csv',headerRow:3}),'http://localhost');
   assert.equal(url.pathname,'/projects/api/demo/tabs/import-preview');

@@ -84,7 +84,7 @@ def _default_bearer_token() -> str:
                 return token
         except Exception:  # noqa: BLE001
             pass
-    raise RuntimeError("尚未設定 OPENBENCH_API_KEY / OPENAI_API_KEY 或 ~/.codex/auth.json")
+    raise RuntimeError("Configure OPENBENCH_API_KEY / OPENAI_API_KEY or local CLI authentication.")
 
 
 def credentials(*, fetch=None, now=time.monotonic) -> tuple[str, str]:
@@ -196,7 +196,7 @@ def _stream_with_retry(body: dict, *, token: str, account: str, on_delta, on_ret
     for attempt in range(len(RETRY_WAITS) + 1):
         left = deadline - now()
         if left <= 0:
-            raise ModelError("timeout", "這一輪超過時間")
+            raise ModelError("timeout", "This turn exceeded its time limit.")
         try:
             return stream_once(body, token=token, account=account, on_delta=on_delta, timeout=max(5.0, left),
                                opener=opener)
@@ -232,7 +232,7 @@ def run_turn(*, instructions: str, turn_text: str, call_tool, model: str, effort
                         + [{"type": "input_image", "image_url": url} for url in images]}]
         for round_no in range(1, MAX_ROUNDS + 1):
             if now() >= deadline:
-                raise ModelError("timeout", "這一輪超過時間")
+                raise ModelError("timeout", "This turn exceeded its time limit.")
             if on_round:
                 on_round(round_no)
             text: list[str] = []
@@ -279,7 +279,7 @@ def run_turn(*, instructions: str, turn_text: str, call_tool, model: str, effort
                     args = {}
                 output = call_tool(item.get("name"), args if isinstance(args, dict) else {})
                 items.append({"type": "function_call_output", "call_id": item.get("call_id"), "output": str(output)})
-        raise ModelError("bad_response", f"用工具超過 {MAX_ROUNDS} 輪")
+        raise ModelError("bad_response", f"Tool calls exceeded {MAX_ROUNDS} rounds.")
     except ModelError as exc:
         result.status = "quota" if exc.kind == "quota" else "error"
         result.error_kind, result.error = exc.kind, str(exc)

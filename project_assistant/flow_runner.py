@@ -20,72 +20,72 @@ _TASK_KEYS = _TASK_COLUMNS.split(",")
 
 def validate_definition(value, *, allow_empty=False):
     if not isinstance(value, dict) or not isinstance(value.get("nodes"), list) or not isinstance(value.get("edges"), list):
-        raise ValueError("工作流需要 nodes 與 edges 陣列")
+        raise ValueError("A pipeline requires nodes and edges arrays.")
     nodes, edges = copy.deepcopy(value["nodes"]), copy.deepcopy(value["edges"])
     if not (0 if allow_empty else 1) <= len(nodes) <= 100 or len(edges) > 1000:
-        raise ValueError("工作流需要 1～100 個節點，最多 1000 條連線")
+        raise ValueError("A pipeline requires 1–100 nodes and at most 1,000 connections.")
     ids = set()
     for node in nodes:
         if not isinstance(node, dict) or not isinstance(node.get("id"), str) or not _ID.fullmatch(node["id"]) or node["id"] in ids:
-            raise ValueError("節點 id 無效或重複")
+            raise ValueError("Node IDs must be valid and unique.")
         ids.add(node["id"])
         if node.get("capability") not in limbs.CAPABILITIES:
-            raise ValueError("節點 capability 不支援")
+            raise ValueError("Unsupported node capability.")
         node.setdefault("title", node["id"])
         if not isinstance(node["title"], str) or len(node["title"]) > 200:
-            raise ValueError("節點名稱最多 200 字")
+            raise ValueError("Node names support up to 200 characters.")
         node.setdefault("prompt", "")
         if not isinstance(node["prompt"], str) or len(node["prompt"]) > 30000:
-            raise ValueError("節點指令最多 30000 字")
+            raise ValueError("Node instructions support up to 30,000 characters.")
         node.setdefault("write_mode", "proposal")
         if node["write_mode"] not in ("proposal", "direct"):
-            raise ValueError("write_mode 必須是 proposal 或 direct")
+            raise ValueError("write_mode must be proposal or direct.")
         node.setdefault("input_tabs", [])
         if not isinstance(node["input_tabs"], list) or len(node["input_tabs"]) > 30 or any(not isinstance(k, str) for k in node["input_tabs"]):
-            raise ValueError("input_tabs 必須是分頁鍵陣列（最多 30 個）")
+            raise ValueError("input_tabs must be an array of at most 30 page keys.")
         if "scope" in node and node["scope"] not in ("once", "rows", "aggregate"):
-            raise ValueError("scope 必須是 once、rows 或 aggregate")
+            raise ValueError("scope must be once, rows, or aggregate.")
         source = node.get("row_source")
         if node.get("scope") == "rows" and not source:
-            raise ValueError("rows 節點需要 row_source.tab_key")
+            raise ValueError("Per-row nodes require row_source.tab_key.")
         if source is not None:
             _validate_source(source)
         target = node.get("target") or {}
         if not isinstance(target, dict):
-            raise ValueError("target 必須是物件")
+            raise ValueError("target must be an object.")
         if "col_index" in target and (type(target["col_index"]) is not int or not 0 <= target["col_index"] < 256):
-            raise ValueError("col_index 必須是零起算欄號")
+            raise ValueError("col_index must be a zero-based column index.")
         if ("col_index" in target or target.get("column_id")) and not target.get("tab_key"):
-            raise ValueError("儲存格輸出需要 target.tab_key")
+            raise ValueError("Cell output requires target.tab_key.")
         for key in ("tab_key", "row_id"):
             if key in target and not isinstance(target[key], str):
-                raise ValueError(f"target.{key} 必須是文字")
+                raise ValueError(f"target.{key} must be a string.")
         node["target"] = target
         if target.get("kind", "table") not in ("table", "doc") or target.get("mode", "append") not in ("append", "replace"):
-            raise ValueError("target.kind 必須是 table/doc；mode 必須是 append/replace")
+            raise ValueError("target.kind must be table/doc; mode must be append/replace.")
         if target.get("kind") == "doc" and ("col_index" in target or "row_id" in target):
-            raise ValueError("doc 輸出不能指定儲存格")
+            raise ValueError("Document output cannot target a cell.")
         if node.get("limb_id"):
             try:
                 uuid.UUID(node["limb_id"])
             except (ValueError, TypeError, AttributeError):
-                raise ValueError("limb_id 必須是 Worker UUID") from None
+                raise ValueError("limb_id must be a worker UUID.") from None
         if node.get('agent_key'):
             from project_assistant.agent_registry import AGENT_KEY
             if not isinstance(node['agent_key'],str) or not AGENT_KEY.fullmatch(node['agent_key']):
-                raise ValueError('agent_key 格式不正確')
+                raise ValueError("Invalid agent_key.")
             if node.get('limb_id') or node['write_mode']=='direct':
-                raise ValueError('代理角色不能同時綁定手腳，且必須先核對提案')
+                raise ValueError("An agent profile cannot also bind a worker and must use proposal review.")
         for key in ("x", "y"):
             if key in node and (type(node[key]) not in (int, float) or not -100000 <= node[key] <= 100000):
-                raise ValueError("節點座標無效")
+                raise ValueError("Invalid node coordinates.")
     links = set()
     for edge in edges:
         if not isinstance(edge, dict) or edge.get("source") not in ids or edge.get("target") not in ids:
-            raise ValueError("連線指向不存在的節點")
+            raise ValueError("A connection references a missing node.")
         link = (edge["source"], edge["target"])
         if link in links:
-            raise ValueError("連線重複")
+            raise ValueError("Duplicate connection.")
         links.add(link)
     seen = set()
     while True:
@@ -94,22 +94,22 @@ def validate_definition(value, *, allow_empty=False):
             break
         seen.update(additions)
     if seen != ids:
-        raise ValueError("工作流有循環；請移除回到上游的連線")
+        raise ValueError("The pipeline contains a cycle. Remove connections that return upstream.")
     return {**copy.deepcopy(value), "nodes": nodes, "edges": edges}
 
 
 def _validate_source(source):
     if not isinstance(source, dict) or not isinstance(source.get("tab_key"), str) or not source["tab_key"]:
-        raise ValueError("row_source 需要 tab_key")
+        raise ValueError("row_source requires tab_key.")
     if "table_id" in source and (not isinstance(source["table_id"], str) or not _ID.fullmatch(source["table_id"])):
-        raise ValueError("row_source.table_id 無效")
+        raise ValueError("Invalid row_source.table_id.")
     if "status_col" in source and (type(source["status_col"]) is not int or not 0 <= source["status_col"] < 256):
-        raise ValueError("status_col 必須是零起算欄號")
+        raise ValueError("status_col must be a zero-based column index.")
     statuses = source.get("status", [])
     if isinstance(statuses, str):
         statuses = [statuses]
     if not isinstance(statuses, list) or len(statuses) > 30 or any(not isinstance(s, str) or not s for s in statuses):
-        raise ValueError("status 必須是文字或狀態陣列")
+        raise ValueError("status must be a string or an array of statuses.")
 
 
 def ready_nodes(definition, statuses):
@@ -119,7 +119,7 @@ def ready_nodes(definition, statuses):
 
 def _write_permission(me):
     if not getattr(me, "can_write", me.role != "viewer"):
-        raise ExecutionError(403, "檢視者不能變更或執行工作流")
+        raise ExecutionError(403, "Viewers cannot edit or run pipelines.")
 
 
 def _run(row):
@@ -162,10 +162,10 @@ def _get_run(conn, run_id, slug=None, key=None, lock=False):
         cur.execute(f"SELECT {_RUN_COLUMNS} FROM projectops.flow_run WHERE id=%s" + (" FOR UPDATE" if lock else ""), (run_id,))
         row = cur.fetchone()
     if not row:
-        raise ExecutionError(404, "找不到執行紀錄")
+        raise ExecutionError(404, "Run not found.")
     run = _run(row)
     if (slug and run["project_slug"] != slug) or (key and run["tab_key"] != key):
-        raise ExecutionError(404, "找不到執行紀錄")
+        raise ExecutionError(404, "Run not found.")
     return run
 
 
@@ -175,14 +175,14 @@ def _check_tabs(conn, slug, definition):
             from project_assistant import agent_registry
             profile=agent_registry.get_agent(conn,slug,node['agent_key'])
             if not profile or not profile['enabled'] or profile['role_kind']=='observer' or node['capability'] not in profile['capabilities']:
-                raise ExecutionError(400,'節點代理不存在、已停用或能力不符')
+                raise ExecutionError(400,"The node’s agent is missing, disabled, or lacks the required capability.")
         for key in node["input_tabs"] + ([node["target"]["tab_key"]] if node["target"].get("tab_key") else []) + ([node["row_source"]["tab_key"]] if node.get("row_source") else []):
             if not repo.get_tab(conn, slug, key):
-                raise ExecutionError(400, f"節點 {node['id']} 找不到分頁 {key}")
+                raise ExecutionError(400, f"Node {node['id']} cannot find page {key}.")
         if node.get("limb_id"):
             workers = limbs.enabled_workers(conn, slug)
             if not any(w["id"] == node["limb_id"] and node["capability"] in w["capabilities"] for w in workers):
-                raise ExecutionError(400, f"節點 {node['id']} 綁定的手腳不存在、已停用或能力不符")
+                raise ExecutionError(400, f"The worker bound to node {node['id']} is missing, disabled, or incompatible.")
         _resolve_column_refs(conn, slug, node)
 
 
@@ -197,30 +197,30 @@ def _resolve_column_refs(conn, slug, node):
                   and (not ref.get("table_id") or t.get("attrs", {}).get("bid") == ref["table_id"])]
         matches = [(t, column_ids(t).index(ref[id_key])) for t in tables if ref[id_key] in column_ids(t)]
         if len(matches) != 1:
-            raise ExecutionError(409, "映射欄位已刪除或不唯一，請重新選擇具名欄位")
+            raise ExecutionError(409, "The mapped column was deleted or is ambiguous. Select a named column again.")
         ref["table_id"], ref[index_key] = matches[0][0]["attrs"]["bid"], matches[0][1]
 
 
 def _check_cell_target(conn, slug, target):
     if "col_index" in target and (not target.get("tab_key") or not target.get("row_id")):
-        raise ExecutionError(400, "儲存格輸出需要指定分頁與輸出列；逐列工作請設定來源表格")
+        raise ExecutionError(400, "Cell output requires a page and output row. Per-row tasks require a source table.")
     if not target.get("tab_key") or not target.get("row_id"):
         return
     tab = repo.get_tab(conn, slug, target["tab_key"])
     if not tab:
-        raise ExecutionError(409, "輸出分頁已刪除")
+        raise ExecutionError(409, "The output page was deleted.")
     row = next((r for t in tab["doc"].get("content", []) if t.get("type") == "table" and (not target.get("table_id") or t.get("attrs", {}).get("bid") == target["table_id"])
                 for r in t.get("content", [])[_header_offset(t):] if r.get("attrs", {}).get("bid") == target["row_id"]), None)
     if row is None:
-        raise ExecutionError(400, f"輸出列 {target['row_id']} 不存在於 {target['tab_key']}")
+        raise ExecutionError(400, f"Output row {target['row_id']} does not exist in {target['tab_key']}.")
     if "col_index" in target and target["col_index"] >= len(row.get("content", [])):
-        raise ExecutionError(400, "輸出欄號超出表格範圍")
+        raise ExecutionError(400, "The output column is outside the table.")
 
 
 def definition(conn, slug, key):
     tab = repo.get_tab(conn, slug, key)
     if not tab:
-        raise ExecutionError(404, "找不到工作流分頁")
+        raise ExecutionError(404, "Pipeline page not found.")
     with conn.cursor() as cur:
         cur.execute("SELECT definition,revision FROM projectops.flow_definition WHERE project_slug=%s AND tab_key=%s", (slug, key))
         row = cur.fetchone()
@@ -238,7 +238,7 @@ def _node_connected(conn, slug, node, workers):
 def save_definition(conn, me, slug, key, body):
     _write_permission(me)
     if not repo.get_tab_for_update(conn, slug, key):
-        raise ExecutionError(404, "找不到工作流分頁")
+        raise ExecutionError(404, "Pipeline page not found.")
     try:
         value = validate_definition(body.get("definition"), allow_empty=True)
     except ValueError as exc:
@@ -246,7 +246,7 @@ def save_definition(conn, me, slug, key, body):
     _check_tabs(conn, slug, value)
     current = definition(conn, slug, key)
     if type(body.get("revision")) is not int or body["revision"] != current["revision"]:
-        raise ExecutionError(409, "工作流已被修改，請重新載入再儲存")
+        raise ExecutionError(409, "The pipeline changed. Reload it before saving.")
     with conn.cursor() as cur:
         cur.execute("""INSERT INTO projectops.flow_definition(project_slug,tab_key,definition,revision,updated_by)
                        VALUES(%s,%s,%s::jsonb,1,%s) ON CONFLICT(project_slug,tab_key)
@@ -259,11 +259,11 @@ def save_definition(conn, me, slug, key, body):
 
 def _check_source_revisions(conn, slug, revisions):
     if not isinstance(revisions, dict) or any(not isinstance(k, str) or type(v) is not int for k, v in revisions.items()):
-        raise ExecutionError(400, "source_revisions 必須包含分頁與整數版本")
+        raise ExecutionError(400, "source_revisions must map page keys to integer revisions.")
     for tab_key, revision in sorted(revisions.items()):
         tab = repo.get_tab_for_update(conn, slug, tab_key)
         if not tab or tab["revision"] != revision:
-            raise ExecutionError(409, f"來源 {tab_key} 已變更，請重新載入樣本並檢查")
+            raise ExecutionError(409, f"Source {tab_key} changed. Reload and review the sample.")
 
 
 def preflight(conn, me, slug, key, body):
@@ -275,17 +275,17 @@ def preflight(conn, me, slug, key, body):
     except ValueError as exc:
         raise ExecutionError(400, "請先儲存有效工作流：" + str(exc)) from exc
     if "definition_revision" in body and body["definition_revision"] != saved["revision"]:
-        raise ExecutionError(409, "工作流設定已變更，請重新載入")
+        raise ExecutionError(409, "The pipeline definition changed. Reload it.")
     if body.get("execution_mode", "workflow") not in ("workflow", "single_step"):
-        raise ExecutionError(400, "execution_mode 必須是 workflow 或 single_step")
+        raise ExecutionError(400, "execution_mode must be workflow or single_step.")
     single = body.get("execution_mode") == "single_step"
     if single and any(name in body for name in ("row_source", "target_tab", "row_ids", "start_node_id")):
-        raise ExecutionError(400, "單步來源與輸出使用所選步驟設定；不能混用批次或續跑範圍")
+        raise ExecutionError(400, "Single-step runs use the selected step’s source and output. Batch and continuation scopes cannot be mixed.")
     active = {n["id"] for n in value["nodes"]}
     start_id = body.get("node_id") if single else body.get("start_node_id")
     if start_id:
         if start_id not in active:
-            raise ExecutionError(400, "找不到指定步驟")
+            raise ExecutionError(400, "Step not found.")
         active = {start_id}
         if not single:
             while True:
@@ -294,14 +294,14 @@ def preflight(conn, me, slug, key, body):
                     break
                 active = grown
     elif single:
-        raise ExecutionError(400, "試這一步需要指定 node_id")
+        raise ExecutionError(400, "Testing a step requires node_id.")
     errors, warnings, sources, nodes = [], [], {}, []
     known_selection_rows = set()
     workers = limbs.connected_workers(conn, slug)
     all_values = repo.field_values(conn, slug)
     selected_rows = body.get("row_ids", [])
     if not isinstance(selected_rows, list) or len(selected_rows) > 200 or any(not isinstance(r, str) or not r for r in selected_rows) or len(set(selected_rows)) != len(selected_rows):
-        raise ExecutionError(400, "row_ids 必須是最多 200 個不重複的列 id")
+        raise ExecutionError(400, "row_ids must contain at most 200 unique row IDs.")
     for node in value["nodes"]:
         if node["id"] not in active:
             continue
@@ -312,7 +312,7 @@ def preflight(conn, me, slug, key, body):
             entry['agent_key']=node['agent_key']
         nodes.append(entry)
         if not entry["worker_connected"]:
-            errors.append({"node_id": node["id"], "message": "執行服務尚未連接，請在工作台設定連接對應 Worker"})
+            errors.append({"node_id": node["id"], "message": "The worker is not connected. Configure and connect a compatible worker."})
         try:
             _check_tabs(conn, slug, {"nodes": [node]})
             source = body.get("row_source") or node.get("row_source")
@@ -323,14 +323,14 @@ def preflight(conn, me, slug, key, body):
                     raise ExecutionError(400, str(exc)) from exc
             parents = [e["source"] for e in value["edges"] if e["target"] == node["id"]]
             if single and body.get("input_mode") != "current_sources":
-                raise ExecutionError(400, "請明確選擇讀取目前來源；單步不會挪用歷史上游結果")
+                raise ExecutionError(400, "Select the current source explicitly. Single-step runs do not reuse historical upstream results.")
             if single and parents:
                 if not source and not node["input_tabs"]:
-                    raise ExecutionError(400, "這一步有上游依賴但未指定目前來源。請先選來源分頁，或執行包含上游的流程")
-                warnings.append({"node_id": node["id"], "message": "本次只讀指定的目前來源；不執行上游，也不取用任何歷史上游結果"})
+                    raise ExecutionError(400, "This step has upstream dependencies but no current source. Select a source page or run the upstream steps too.")
+                warnings.append({"node_id": node["id"], "message": "This run reads the selected current source only. It does not execute upstream steps or reuse historical results."})
             if not single and parents and node.get("scope") in ("rows", "aggregate"):
                 entry["dynamic_rows"] = True
-                warnings.append({"node_id": node["id"], "message": "列數是目前資料的預覽；正式執行會在上游完成／核對後重新讀取符合條件的列"})
+                warnings.append({"node_id": node["id"], "message": "The row count previews current data. Execution reads matching rows again after upstream tasks finish and are approved."})
             if source:
                 known_selection_rows.update(r["row_id"] for r in _source_rows(conn, slug, {k: v for k, v in source.items() if k not in ("status", "status_col", "status_column_id")}))
                 candidates = _source_rows(conn, slug, source)
@@ -339,14 +339,14 @@ def preflight(conn, me, slug, key, body):
                 if single:
                     sample_id = body.get("sample_row_id")
                     if not sample_id or not any(r["row_id"] == sample_id for r in candidates):
-                        raise ExecutionError(400, "請選擇一筆仍符合來源條件的樣本列")
+                        raise ExecutionError(400, "Select a sample row that still matches the source conditions.")
                     candidates = [r for r in candidates if r["row_id"] == sample_id]
                 entry["row_count"] = len(candidates)
                 entry["row_ids"] = [r["row_id"] for r in candidates]
                 if len(candidates) > 200:
-                    raise ExecutionError(400, "來源超過 200 列，請篩選或選取較小範圍")
+                    raise ExecutionError(400, "The source exceeds 200 rows. Filter or select a smaller scope.")
                 if not candidates:
-                    warnings.append({"node_id": node["id"], "message": "目前沒有符合條件的列；上游寫入後會重新計算逐列範圍"})
+                    warnings.append({"node_id": node["id"], "message": "No rows currently match. Per-row scope will be recalculated after upstream changes are applied."})
             target = copy.deepcopy(node["target"])
             if body.get("target_tab") and not target.get("tab_key"):
                 target["tab_key"] = body["target_tab"]
@@ -360,7 +360,7 @@ def preflight(conn, me, slug, key, body):
                 _check_cell_target(conn, slug, target)
             target_tab = repo.get_tab(conn, slug, target["tab_key"]) if target.get("tab_key") else None
             if target.get("tab_key") and not target_tab:
-                raise ExecutionError(400, "輸出分頁不存在")
+                raise ExecutionError(400, "The output page does not exist.")
             entry["target"] = target
             entry["target_title"] = target_tab["title"] if target_tab else "保留結果，不寫回分頁"
             if target_tab:
@@ -369,9 +369,9 @@ def preflight(conn, me, slug, key, body):
                     known_selection_rows.update(row["row_id"] for table in tables for row in table["rows"])
                 table = next((t for t in tables if not target.get("table_id") or t["table_id"] == target["table_id"]), None)
                 if target.get("kind") != "doc" and not table:
-                    raise ExecutionError(400, "輸出選擇了表格修改，但指定分頁沒有對應工作表")
+                    raise ExecutionError(400, "Table changes were selected, but the output page has no matching worksheet.")
                 if "col_index" in target and table and target["col_index"] >= len(table["headers"]):
-                    raise ExecutionError(400, "輸出欄位已不存在，請重新選擇具名欄位")
+                    raise ExecutionError(400, "The output column no longer exists. Select a named column again.")
                 if "col_index" in target and table and target["col_index"] < len(table["headers"]):
                     entry["target_column"] = table["headers"][target["col_index"]]
             for source_key in dict.fromkeys(node["input_tabs"] + ([source["tab_key"]] if source else [])):
@@ -382,7 +382,7 @@ def preflight(conn, me, slug, key, body):
         except ExecutionError as exc:
             errors.append({"node_id": node["id"], "message": str(exc)})
     if selected_rows and not set(selected_rows) <= known_selection_rows:
-        errors.append({"node_id": nodes[0]["node_id"], "message": "部分選取列已不存在於本次來源，請回到表格重新選取"})
+        errors.append({"node_id": nodes[0]["node_id"], "message": "Some selected rows no longer exist in the source. Return to the table and select them again."})
     return {"execution_mode": "single_step" if single else "workflow", "definition_revision": saved["revision"],
             "nodes": nodes, "sources": list(sources.values()), "source_revisions": {k: v["revision"] for k, v in sources.items()},
             "errors": errors, "warnings": warnings, "ready": not errors,
@@ -392,14 +392,14 @@ def preflight(conn, me, slug, key, body):
 def _start_single_step(conn, me, slug, key, body):
     """One selected task, one frozen sample, no inherited upstream outputs."""
     if type(body.get("definition_revision")) is not int:
-        raise ExecutionError(400, "試這一步需要核對工作流版本")
+        raise ExecutionError(400, "Review the pipeline revision before testing this step.")
     if not repo.get_tab_for_update(conn, slug, key):
-        raise ExecutionError(404, "找不到工作流分頁")
+        raise ExecutionError(404, "Pipeline page not found.")
     preview = preflight(conn, me, slug, key, body)
     if preview["errors"]:
         raise ExecutionError(409, "；".join(e["message"] for e in preview["errors"]))
     if body.get("source_revisions") != preview["source_revisions"]:
-        raise ExecutionError(409, "來源版本與已核對樣本不同，請重新檢查")
+        raise ExecutionError(409, "The source revision differs from the reviewed sample. Review it again.")
     _check_source_revisions(conn, slug, body["source_revisions"])
     saved = definition(conn, slug, key)
     node = copy.deepcopy(next(n for n in saved["definition"]["nodes"] if n["id"] == body["node_id"]))
@@ -431,12 +431,12 @@ def _start_single_step(conn, me, slug, key, body):
 def start(conn, me, slug, key, body):
     _write_permission(me)
     if body.get("execution_mode", "workflow") not in ("workflow", "single_step"):
-        raise ExecutionError(400, "execution_mode 必須是 workflow 或 single_step")
+        raise ExecutionError(400, "execution_mode must be workflow or single_step.")
     if body.get("execution_mode") == "single_step":
         return _start_single_step(conn, me, slug, key, body)
     saved = definition(conn, slug, key)
     if "definition_revision" in body and body["definition_revision"] != saved["revision"]:
-        raise ExecutionError(409, "工作流設定已變更，請重新檢查執行範圍")
+        raise ExecutionError(409, "The pipeline definition changed. Review the run scope again.")
     try:
         value = validate_definition(saved["definition"])
     except ValueError as exc:
@@ -450,14 +450,14 @@ def start(conn, me, slug, key, body):
                 node["target"]["tab_key"] = target_tab
     rows = body.get("row_ids", [])
     if not isinstance(rows, list) or len(rows) > 200 or any(not isinstance(r, str) or not r or len(r) > 100 for r in rows) or len(set(rows)) != len(rows):
-        raise ExecutionError(400, "row_ids 必須是最多 200 個不重複的列 id")
+        raise ExecutionError(400, "row_ids must contain at most 200 unique row IDs.")
     if any("scope" in n for n in value["nodes"]) or body.get("start_node_id") or body.get("row_source"):
         return _start_scoped(conn, me, slug, key, body, value, saved["revision"])
     _check_tabs(conn, slug, value)
     if rows:
         tab_keys = [target_tab] if target_tab else list({n["target"].get("tab_key") for n in value["nodes"] if n["target"].get("tab_key")})
         if not tab_keys:
-            raise ExecutionError(400, "單列／批次執行需要 target_tab 或節點的 target.tab_key")
+            raise ExecutionError(400, "Row and batch execution require target_tab or the node’s target.tab_key.")
         known = set()
         for target_key in tab_keys:
             tab = repo.get_tab(conn, slug, target_key)
@@ -465,11 +465,11 @@ def start(conn, me, slug, key, body):
                 if table.get("type") == "table":
                     known.update(r.get("attrs", {}).get("bid") for r in table.get("content", [])[_header_offset(table):])
         if not set(rows) <= known:
-            raise ExecutionError(400, "選取列已不存在，請重新讀取表格")
+            raise ExecutionError(400, "The selected rows no longer exist. Reload the table.")
     workers = limbs.connected_workers(conn, slug)
     for node in value["nodes"]:
         if not _node_connected(conn,slug,node,workers):
-            raise ExecutionError(409, f"尚未連接 {node['capability']} 手腳；請先註冊並啟動對應 Worker")
+            raise ExecutionError(409, f"No {node['capability']} worker is connected. Register and start a compatible worker.")
     for row_id in rows or [""]:
         for node in value["nodes"]:
             target = dict(node["target"])
@@ -559,12 +559,12 @@ def _table_data(doc, values):
 def _source_rows(conn, slug, source):
     tab = repo.get_tab(conn, slug, source["tab_key"])
     if not tab:
-        raise ExecutionError(409, "列來源分頁已刪除")
+        raise ExecutionError(409, "The row source page was deleted.")
     tables = _table_data(tab["doc"], repo.field_values(conn, slug).get(source["tab_key"], {}))
     if source.get("table_id"):
         tables = [t for t in tables if t["table_id"] == source["table_id"]]
     if not tables:
-        raise ExecutionError(409, "列來源找不到表格")
+        raise ExecutionError(409, "No table found in the row source.")
     statuses = source.get("status", [])
     if isinstance(statuses, str):
         statuses = [statuses]
@@ -584,7 +584,7 @@ def _start_scoped(conn, me, slug, key, body, value, revision):
     active = {n["id"] for n in value["nodes"]}
     if start_node:
         if not isinstance(start_node, str) or start_node not in active:
-            raise ExecutionError(400, "start_node_id 不存在")
+            raise ExecutionError(400, "start_node_id does not exist.")
         active = {start_node}
         while True:
             grown = active | {e["target"] for e in value["edges"] if e["source"] in active}
@@ -607,14 +607,14 @@ def _start_scoped(conn, me, slug, key, body, value, revision):
             sources = [{"tab_key": k} for k in keys]
         known = {r["row_id"] for s in sources for r in _source_rows(conn, slug, {k: v for k, v in s.items() if k not in ("status", "status_col")})}
         if not set(rows) <= known:
-            raise ExecutionError(400, "選取列已不存在，請重新讀取表格")
+            raise ExecutionError(400, "The selected rows no longer exist. Reload the table.")
         selection_tabs = list(dict.fromkeys(s["tab_key"] for s in sources))
     workers = limbs.connected_workers(conn, slug)
     for node in value["nodes"]:
         if node["id"] not in active:
             continue
         if not _node_connected(conn,slug,node,workers):
-            raise ExecutionError(409, f"尚未連接 {node['capability']} 手腳；請先註冊並啟動對應 Worker")
+            raise ExecutionError(409, f"No {node['capability']} worker is connected. Register and start a compatible worker.")
         if node.get("scope") != "rows":
             _check_cell_target(conn, slug, node["target"])
     execution = {"version": 1, "active_nodes": [n["id"] for n in value["nodes"] if n["id"] in active],
@@ -668,7 +668,7 @@ def _advance_scoped(conn, run):
                             selected = set(state["row_ids"])
                             candidates = [r["row_id"] for r in candidates if not selected or r["row_id"] in selected]
                             if len(candidates) > 200:
-                                raise ExecutionError(400, "逐列執行最多 200 列，請使用狀態篩選或選取列")
+                                raise ExecutionError(400, "Per-row execution supports up to 200 rows. Filter by status or select rows.")
                             state["row_sets"][source_key] = candidates
                         row_ids = state["row_sets"][source_key] if node.get("scope") == "rows" else [""]
                     elif node.get("scope") in ("once", "aggregate"):
@@ -717,7 +717,7 @@ def _recover(conn, run):
 
 def list_runs(conn, slug, key):
     if not repo.get_tab(conn, slug, key):
-        raise ExecutionError(404, "找不到分頁")
+        raise ExecutionError(404, "Page not found.")
     with conn.cursor() as cur:
         cur.execute(f"SELECT {_RUN_COLUMNS} FROM projectops.flow_run WHERE project_slug=%s AND tab_key=%s ORDER BY created_at DESC LIMIT 50", (slug, key))
         return {"runs": [_run(row) for row in cur.fetchall()]}
@@ -725,7 +725,7 @@ def list_runs(conn, slug, key):
 
 def recent_tasks(conn, slug, target_tab=None):
     if not repo.get_project(conn, slug):
-        raise ExecutionError(404, "找不到專案")
+        raise ExecutionError(404, "Production not found.")
     with conn.cursor() as cur:
         cur.execute(f"""SELECT {_TASK_COLUMNS} FROM projectops.limb_task
                         WHERE project_slug=%s AND (%s::text IS NULL OR target->>'tab_key'=%s)
@@ -749,7 +749,7 @@ def control(conn, me, slug, key, identifier, action):
     orchestrator.lock_project(conn,slug)
     run = _get_run(conn, identifier, slug, key, lock=True)
     if run["created_by"] != me.actor_id and me.role != "admin":
-        raise ExecutionError(403, "只有發起人或管理者能控制此工作流")
+        raise ExecutionError(403, "Only the initiator or showrunner can control this pipeline.")
     with conn.cursor() as cur:
         if action == "cancel":
             cur.execute("UPDATE projectops.limb_task SET status='canceled',lease_hash=NULL,lease_until=NULL,updated_at=NOW() WHERE run_id=%s AND status IN ('blocked','queued','running','awaiting_approval')", (identifier,))
@@ -757,7 +757,7 @@ def control(conn, me, slug, key, identifier, action):
             cur.execute("UPDATE projectops.flow_run SET status='canceled',updated_at=NOW() WHERE id=%s", (identifier,))
         else:
             if run["status"] not in ("failed", "canceled"):
-                raise ExecutionError(409, "只能重試失敗或取消的執行")
+                raise ExecutionError(409, "Only failed or canceled runs can be retried.")
             orchestration_flow.reset_for_flow_retry(conn,slug,identifier)
             run['execution']=_get_run(conn,identifier)['execution']
             cur.execute("""UPDATE projectops.limb_task SET status='blocked',attempts=0,error=NULL,lease_hash=NULL,lease_until=NULL,
@@ -772,7 +772,7 @@ def control(conn, me, slug, key, identifier, action):
 def _creator(conn, run):
     member = next((m for m in repo.active_members(conn) if m["actor_id"] == run["created_by"]), None)
     if not member or member["role"] == "viewer":
-        raise ExecutionError(403, "執行發起人的權限已停用或變更，結果不能寫入")
+        raise ExecutionError(403, "The initiator’s permissions changed or were disabled. The result cannot be applied.")
     return service.Identity(member["actor_id"], member["name"], member["role"])
 
 
@@ -797,7 +797,7 @@ def _inputs(conn, run, task, node):
     for key in keys:
         tab = repo.get_tab(conn, run["project_slug"], key)
         if not tab:
-            raise ExecutionError(409, f"輸入分頁 {key} 已刪除")
+            raise ExecutionError(409, f"Input page {key} was deleted.")
         simple = {fid: v.get("value", "") if isinstance(v, dict) else v for fid, v in values.get(key, {}).items()}
         doc = copy.deepcopy(tab["doc"])
         if aggregate_ids is not None and key == source["tab_key"]:
@@ -850,7 +850,7 @@ def _inputs(conn, run, task, node):
         structured_rows = [r for r in structured_rows if r["row_id"] in rank]
         structured_rows.sort(key=lambda r: rank[r["row_id"]])
     if source and task["row_id"] and not any(r["row_id"] == task["row_id"] for r in structured_rows):
-        raise ExecutionError(409, "輸入列已刪除，請重新選取列")
+        raise ExecutionError(409, "An input row was deleted. Select rows again.")
     # Preserve ids/coordinates, but sanitize every model-visible prompt, tab value and predecessor result.
     for tab in inputs:
         tab["title"] = privacy.sanitize(tab["title"], mode)
@@ -870,17 +870,17 @@ def _sanitize_output(conn, slug, original, mode):
         prefix = f"/projects/api/{slug}/assets/"
         identifier = url[len(prefix):] if isinstance(url, str) and url.startswith(prefix) else ""
         if not re.fullmatch(r"pa_[0-9a-f]{32}", identifier) or not repo.get_asset(conn, slug, identifier):
-            raise ExecutionError(400, "asset_url 必須指向已上傳至本專案的媒體")
+            raise ExecutionError(400, "asset_url must reference media uploaded to this production.")
         output["asset_url"] = url
     if "table_id" in original:
         if not isinstance(original["table_id"], str) or not _ID.fullmatch(original["table_id"]):
-            raise ExecutionError(400, "table_id 無效")
+            raise ExecutionError(400, "Invalid table_id.")
         output["table_id"] = original["table_id"]
     if isinstance(original.get("row_edits"), list):
         for before, after in zip(original["row_edits"], output["row_edits"]):
             if isinstance(before, dict) and isinstance(after, dict) and "row_id" in before:
                 if not isinstance(before["row_id"], str) or not _ID.fullmatch(before["row_id"]):
-                    raise ExecutionError(400, "row_id 無效")
+                    raise ExecutionError(400, "Invalid row_id.")
                 after["row_id"] = before["row_id"]
     return output
 
@@ -952,10 +952,10 @@ def leased_task(conn, worker, identifier, token):
         cur.execute("SELECT run_id FROM projectops.limb_task WHERE id=%s", (identifier,))
         row = cur.fetchone()
     if not row:
-        raise ExecutionError(404, "找不到任務")
+        raise ExecutionError(404, "Task not found.")
     run = _get_run(conn, str(row[0]), lock=True)
     if run["project_slug"] not in worker["allowed_projects"]:
-        raise ExecutionError(403, "Worker 無權存取此專案")
+        raise ExecutionError(403, "This worker cannot access the production.")
     with conn.cursor() as cur:
         cur.execute(f"SELECT {_TASK_COLUMNS} FROM projectops.limb_task WHERE id=%s FOR UPDATE", (identifier,))
         task = _task(cur.fetchone(), private=True)
@@ -986,9 +986,9 @@ def complete(conn, worker, body):
     try:
         size = len(json.dumps(output, allow_nan=False))
     except (TypeError, ValueError) as exc:
-        raise ExecutionError(400, "output 必須是有效的 JSON（數字不得是 NaN 或 Infinity）") from exc
+        raise ExecutionError(400, "output must be valid JSON; numbers cannot be NaN or Infinity.") from exc
     if not isinstance(output, dict) or size > 2 * 1024 * 1024:
-        raise ExecutionError(400, "output 必須是 JSON 物件，最多 2 MB")
+        raise ExecutionError(400, "output must be a JSON object no larger than 2 MB.")
     me = _creator(conn, run)
     if run.get("execution", {}).get("mode") == "single_step":
         _check_source_revisions(conn, run["project_slug"], run["execution"]["source_revisions"])

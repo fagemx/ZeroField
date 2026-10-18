@@ -54,7 +54,7 @@ function ProjectList() {
     api.get("/projects/api/projects").then((data) => setState({ data })).catch((error) => setState({ error: error.message }));
   }, []);
   useEffect(() => { load(); }, [load]);
-  if (state.loading) return <div className="center-note">載入中…</div>;
+  if (state.loading) return <div className="center-note">Loading…</div>;
   if (state.error) return <div className="center-note">{state.error}</div>;
   return <ProjectHub data={state.data} onReload={load} />;
 }
@@ -298,7 +298,7 @@ function ProjectPage({ slug }) {
   }, [tabKey, data]);
 
   const pick = useCallback(async (a) => {
-    if (a.orphaned_at) { showToast("這則找不到原文了，可以按「重新選位置」"); return; }
+    if (a.orphaned_at) { showToast("Source text not found. Use Reattach to select a new location."); return; }
     setPanel(false);
     if (a.tab_key !== tabKey) {
       if (surfaceControl.current && !(await surfaceControl.current.flush())) return;
@@ -312,7 +312,7 @@ function ProjectPage({ slug }) {
     setPanel(false);
     setAttachId(a.id);
     if (a.tab_key !== tabKey) await navigate(a.tab_key);
-    showToast("在內文選一段字，再按工具列的「放在這裡」");
+    showToast("Select text, then choose Attach Here in the toolbar.");
   }, [tabKey, navigate, showToast]);
 
   const resolveFromPanel = useCallback(async (a) => {
@@ -329,9 +329,9 @@ function ProjectPage({ slug }) {
     const url = `${window.location.origin}/projects/${slug}/${tabHash(tabKey, thread)}`;
     try {
       await navigator.clipboard.writeText(url);
-      showToast(thread ? "已複製這則標註的連結" : "已複製這一頁的連結");
+      showToast(thread ? "Annotation link copied" : "Page link copied");
     } catch {
-      window.prompt("複製這個連結：", url);
+      window.prompt("Copy this link:", url);
     }
   };
 
@@ -344,7 +344,7 @@ function ProjectPage({ slug }) {
       const tab = docs[a.tab_key];
       if (!tab) continue;
       if (!cache[a.tab_key]) cache[a.tab_key] = anchorsOf(tab.doc);
-      out[a.id] = cache[a.tab_key][a.anchor.rid] || "這一列";
+      out[a.id] = cache[a.tab_key][a.anchor.rid] || "this row";
     }
     return out;
   }, [data, docs]);
@@ -364,7 +364,7 @@ function ProjectPage({ slug }) {
     if (proposal && proposal.status === "applied") {
       showToast(appliedLabel(proposal) + "：" + ((proposal.target && proposal.target.display) || ""));
     }
-    else if (proposal && proposal.status === "failed") showToast("沒放上去：" + (proposal.error || ""), "error");
+    else if (proposal && proposal.status === "failed") showToast("Could not apply:" + (proposal.error || ""), "error");
     if (notes && notes.length) showToast(notes.join(" "));
   }, [loadProject, loadTab, showToast]);
   const assistant = useAssistant(slug, paEnabled, paMode !== "off", onError, onApplied, data?.project?.privacy_mode);
@@ -390,16 +390,16 @@ function ProjectPage({ slug }) {
   }, [assistant.setScope]);
   const assignBackground = useCallback(async (text, scope, options = null) => {
     if (!options?.strategy) { askAssistant(text, null, scope); return true; }
-    if (surfaceControl.current && !(await surfaceControl.current.flush())) throw new Error('來源尚未儲存，請先處理編輯衝突');
+    if (surfaceControl.current && !(await surfaceControl.current.flush())) throw new Error("Save the source and resolve editing conflicts first.");
     const request = assignmentRequest({ objective: text, scope, target: options.target, strategy: options.strategy,
       agentKey: options.agentKey, raceAgents: options.raceAgents, mode: options.writeMode || 'proposal', requestId: options.requestId });
     await assistant.startRun(request);
-    setPaView('agents'); openAssistant(); showToast('工作已排入，結果會先提供核對');
+    setPaView('agents'); openAssistant(); showToast("Task queued. Results will be available for review.");
     return true;
   }, [assistant.startRun, askAssistant, openAssistant, showToast]);
   const onAgentRouted = useCallback(async request => {
     assistant.setSelectedAgent(request.agent_key); setPaView('chat'); openAssistant();
-    await assistant.reload(); showToast('留言已送給代理，回覆會出現在專案助理');
+    await assistant.reload(); showToast("Comment sent to the agent. The reply will appear in Studio Assistant.");
   }, [assistant.setSelectedAgent, assistant.reload, openAssistant, showToast]);
   // 點專案頁那一列的「✦ 一起回答」：打開助理、直接開始（上一句還在答時，先放進輸入框）
   const onAssistRow = useCallback(async (rid) => {
@@ -450,7 +450,7 @@ function ProjectPage({ slug }) {
       return;
     }
     if (!flashChange(id)) {
-      showToast(change.change === "removed" ? `這一處已經刪掉了，按「${change.button}」可以放回去` : "這一處現在不在頁面上");
+      showToast(change.change === "removed" ? `This content was deleted. Use “${change.button}” to restore it.` : "This content is no longer on the page.");
     }
   }, [tabKey, navigate, flashChange, showToast]);
   useEffect(() => {
@@ -462,7 +462,7 @@ function ProjectPage({ slug }) {
       if (pendingFlash.current !== id) return;
       if (flashChange(id)) { pendingFlash.current = null; return; }
       tries += 1;
-      if (tries > 20) { pendingFlash.current = null; showToast("這一處現在不在頁面上"); return; }
+      if (tries > 20) { pendingFlash.current = null; showToast("This content is no longer on the page."); return; }
       timer = setTimeout(attempt, 150);
     };
     timer = setTimeout(attempt, 100);
@@ -477,12 +477,12 @@ function ProjectPage({ slug }) {
   if (fatal) {
     return (
       <div className="center-note">
-        <p>{fatal.status === 404 ? "找不到這個專案。" : fatal.message}</p>
-        <button type="button" className="ghost" onClick={() => window.location.reload()}>重新整理</button>
+        <p>{fatal.status === 404 ? "Production not found." : fatal.message}</p>
+        <button type="button" className="ghost" onClick={() => window.location.reload()}>Refresh</button>
       </div>
     );
   }
-  if (!data) return <div className="center-note">載入中…</div>;
+  if (!data) return <div className="center-note">Loading…</div>;
 
   const me = data.me;
   const tabs = data.tabs;
@@ -494,8 +494,8 @@ function ProjectPage({ slug }) {
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
       <header className="top">
         <button type="button" className="icon-btn" onClick={() => (window.innerWidth <= 860 ? setRailOpen(!railOpen) : setRailHidden(!railHidden))}
-          aria-label="顯示／收起分頁">☰ <span className="label">分頁</span></button>
-        <a href="/projects/" className="icon-btn" title="回到多專案總覽" style={{ textDecoration: "none" }}>← <span className="label">所有專案</span></a>
+          aria-label={"Toggle pages"}>☰ <span className="label">Pages</span></button>
+        <a href="/projects/" className="icon-btn" title={"Back to productions"} style={{ textDecoration: "none" }}>← <span className="label">All Productions</span></a>
         <span className="doc-name">{data.project.title}</span>
         {data.project.status && PROJECT_STATUS[data.project.status] && (
           <span style={{
@@ -507,24 +507,24 @@ function ProjectPage({ slug }) {
           </span>
         )}
         <span className="spacer" />
-        <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title="要不要顯示大家的螢光筆和劃線"
+        <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title={"Choose which highlights and underlines to show"}
           onClick={(event) => setViewMenu(viewMenu ? null : event.currentTarget.getBoundingClientRect())}>
           <PenIcon /><span className="label">{VIEW_LABEL[view] || VIEW_LABEL.all}</span> ▾
         </button>
-        <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title="標註清單：待我處理、全部"
+        <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={"Annotations: Needs You and All"}
           onClick={() => { setPanel(!panel); setHistoryOpen(false); if (!panel && paMode === "side") setPaMode("off"); }}>
-          <NoteIcon /><span className="label">標註</span>{todo > 0 && <span className="count">{todo}</span>}
+          <NoteIcon /><span className="label">Annotations</span>{todo > 0 && <span className="count">{todo}</span>}
         </button>
         {paEnabled && (
-          <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title="專案助理"
+          <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title={"Studio Assistant"}
             onClick={() => { if (paMode === 'off') { if (assistant.orchestrationCounts?.needs_you || assistant.orchestrationCounts?.working) setPaView('agents'); openAssistant(); } else setPaMode('off'); }}>
-            <span className="spark">✦</span><span className="label">專案助理</span>
+            <span className="spark">✦</span><span className="label">Studio Assistant</span>
             {paMode === 'off' && assistant.orchestrationCounts?.needs_you > 0 && <span className="count">? {assistant.orchestrationCounts.needs_you}</span>}
             {paMode === 'off' && assistant.orchestrationCounts?.working > 0 && <span className="count">⟳ {assistant.orchestrationCounts.working}</span>}
           </button>
         )}
-        <button type="button" className="icon-btn" onClick={copyLink} title="複製這一頁（或目前這則標註）的連結" aria-label="複製連結">
-          <LinkIcon /><span className="label">複製連結</span>
+        <button type="button" className="icon-btn" onClick={copyLink} title={"Copy a link to this page or annotation"} aria-label={"Copy Link"}>
+          <LinkIcon /><span className="label">Copy Link</span>
         </button>
         <WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
         <IdentityBadge me={me} members={data.members} />
@@ -546,7 +546,7 @@ function ProjectPage({ slug }) {
           onError={onError} onToast={showToast} />
         <main className="main">
           <div className="doc-host">
-          {!tab && <div className="center-note">載入中…</div>}
+          {!tab && <div className="center-note">Loading…</div>}
           {tab && tab.surface_type === "sheet" && !versionsFor && !(docModeTabs && docModeTabs[tab.key]) && (
             <SheetSurface
               key={tab.key}

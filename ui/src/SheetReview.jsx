@@ -8,7 +8,7 @@ export function SheetReview({onClose,children}) {
     panel.current?.querySelector('button')?.focus();
     return()=>{if(previous?.isConnected)previous.focus();};
   },[]);
-  return <div ref={panel} className="sheet-review" role="dialog" aria-modal="true" aria-label="圖片與素材審核" onKeyDown={e=>{
+  return <div ref={panel} className="sheet-review" role="dialog" aria-modal="true" aria-label={"Image & Asset Review"} onKeyDown={e=>{
     if(e.key==='Escape'){e.stopPropagation();onClose();}
     if(e.key!=='Tab')return;
     const controls=[...panel.current.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]')].filter(el=>el.getClientRects().length);

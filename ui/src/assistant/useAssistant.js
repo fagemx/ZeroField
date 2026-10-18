@@ -77,10 +77,10 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
   const addFiles = useCallback((incoming) => {
     const room = MAX_FILES - filesRef.current.length;
     const picked = [...(incoming || [])];
-    if (picked.length > room) onError(`一次最多附 ${MAX_FILES} 個檔案`);
+    if (picked.length > room) onError(`Attach up to ${MAX_FILES}  files at a time`);
     for (const file of picked.slice(0, Math.max(0, room))) {
       if (file.size > MAX_BYTES) {
-        onError(`「${file.name}」超過 8 MB`);
+        onError(`“${file.name}” exceeds 8 MB`);
         continue;
       }
       seq.current += 1;
@@ -91,7 +91,7 @@ export function useAssistant(slug, enabled, open, onError, onApplied, privacyMod
       api.upload(`${base}/attachments`, file, file.name).then((result) => {
         patchFile(key, { status: "ready", attachment: result.attachment, kind: result.attachment.kind });
       }).catch((error) => {
-        onError(`「${file.name}」沒附上：${error.message}`);
+        onError(`“${file.name}” was not attached:${error.message}`);
         dropFile(key);
       });
     }

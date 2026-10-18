@@ -1,31 +1,31 @@
-# 專案助理知識包（預設範本）
+# ZeroField Studio Production Knowledge
 
-這份是助理的背景知識。專案畫布的內容會隨協作更新，因此回答問題時一律先用工具讀取最新的專案分頁，不要只靠這份檔案。
+The live canvas is the source of truth. Read current pages before giving production advice. The studio combines a Director Brief, Soul Cast lookbook, Cinema Studio slate, OpenJutsu planning matrix, and an editable Comfy Pipeline. Empty media cells are intentional. Generation workflows and sample renders are a later development phase.
 
-## 這個工作台在做什麼
+**Question 1 — What is the production goal?**
+- Purpose: Establish a clear deliverable and review boundary.
+- Completeness:
+  1. Audience and intended use.
+  2. Target duration and output format.
+  3. Story, mood, and pacing.
+  4. Delivery date and approval owner.
 
-協助跨職能團隊（产品、行銷、營運、工程）在同一個專案畫布上對齊需求、整理報表計算口徑、追蹤交接項目，並透過提案卡安全地將討論結果寫回畫布。
+**Question 2 — What must remain consistent across shots?**
+- Purpose: Protect continuity while preparing the slate.
+- Completeness:
+  1. Original cast and set identifiers.
+  2. Appearance, wardrobe, props, and reference images.
+  3. Lighting direction and optical package.
+  4. Action, screen direction, and audio cues.
 
-## 待確認問題：拿答案要做什麼、答到什麼程度才算能用
+**Question 3 — What is ready for production?**
+- Purpose: Separate planned work from verified outputs.
+- Completeness:
+  1. Approved source material and its license.
+  2. Configured workers and validated workflows.
+  3. Actual returned media and review notes.
+  4. Remaining setup, failures, or decisions.
 
-帶對方回答時，照下面的「答完整的標準」一項一項問，一次問一項。全部有了，再整理成一段給對方確認。
+## Review
 
-**第 1 題　目前的日常報表或作業流程大約要花多久？由誰負責？每天幾點前要產出？**
-- 工程拿來做什麼：估算自動化能省下多少時間，並決定系統每日更新的排程時間點。
-- 答完整的標準：
-  1. 各主要流程分別花多久時間。
-  2. 每條流程由哪個角色負責。
-  3. 每日或每週需要在幾點前交付結果。
-  4. 哪一步最花時間或最容易出錯。
-
-**第 2 題　第一階段的產品與資料範圍是什麼？其他產品線是否共用相同格式？**
-- 工程拿來做什麼：決定第一階段的驗收範圍與資料表結構設計。
-- 答完整的標準：
-  1. 目前運作中的產品或專案線有哪些。
-  2. 各產品線的報表或欄位格式是否一致。
-  3. 第一階段優先驗證哪一個項目。
-  4. 後續項目的預計導入時程。
-
-**第 3 題　跨來源的欄位是直接從單一報表匯出，還是人工用關鍵字對齊的？**
-- 工程拿來做什麼：決定資料管線要串接哪種報表 API 與關聯鍵（Join Key）。
-- 答完整的標準：一次匯出就有，還是人工對齊；若是人工對齊，是用名稱、編號還是其他欄位對齊。
+Use Queued, In Progress, Rendering Image, Rendering Video, Pending Review, Retake, Blocked, and Approved. Legacy statuses remain valid for existing documents. The internal M8 tools support persistent delegation, candidate races, decision gates, and scoped proposals. Candidate comparison does not by itself implement synchronized video-take playback.

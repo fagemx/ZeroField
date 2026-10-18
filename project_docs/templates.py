@@ -1,6 +1,50 @@
 """Reusable project archetypes and executable workflow definitions."""
 
 def tab_specs(template: str, title: str, summary: str) -> list[tuple[str, str, str, str]]:
+    if template == "zerofield_studio":
+        return [
+            ("director-brief", "Director Brief", "doc",
+             f"# {title}\n\n{summary or 'Plan an original short film, direct each shot, and review agent proposals before applying changes.'}\n\n"
+             "## Production Brief\n\n"
+             "- Genre: Science-fiction noir\n- Working title: The Last Signal\n"
+             "- Cast: Kael, an original courier carrying an analog recorder\n"
+             "- Location: A quiet observatory after the rain\n"
+             "- Optical package: 35mm anamorphic, restrained camera movement\n"
+             "- Pacing: Establish the space, reveal the signal, hold on the decision\n\n"
+             "## Scene\n\nKael enters the observatory and finds a recorder still receiving a signal. "
+             "A distant light answers as Kael reaches for the dial.\n\n"
+             "## Production Notes\n\nThe slate below is a planning template. Media cells are empty. "
+             "Image and video generation require configured workers and validated workflows.\n"),
+            ("soul-cast", "Soul Cast", "sheet",
+             "# Soul Cast & Asset Lookbook\n\n"
+             "| Asset ID | Character / Set | Locked Appearance Prompt / Seed | Reference Image | Voice / Audio Profile | Status | Notes |\n"
+             "| --- | --- | --- | --- | --- | --- | --- |\n"
+             "| CAST-01 | Kael | original fictional courier, charcoal field jacket, analog recorder; seed 48291 | | Calm, measured delivery | {{s:Queued}} | Establish a reference before generating shots. |\n"
+             "| SET-01 | Observatory | original circular observatory, rain on glass, cool dawn, warm instrument lights | | Wind and a soft radio pulse | {{s:Queued}} | Keep the lighting direction consistent. |\n"),
+            ("cinema-studio", "Cinema Studio", "sheet",
+             "# Cinema Studio Multi-Shot Slate\n\n"
+             "| Shot | Optical Rig (Camera & Lens) | Camera Motion | Action & Audio Prompt | Keyframe | Cinema Shot | Status | Director Take Notes |\n"
+             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+             "| S01 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Establish the empty observatory as Kael enters. Wind against the glass. | | | {{s:Queued}} | Establish the space and light direction. |\n"
+             "| S02 | RED V-Raptor / 85mm Prime | Static Tripod | Kael notices the pulsing recorder. A quiet radio signal becomes audible. | | | {{s:Queued}} | Match CAST-01 wardrobe and recorder. |\n"
+             "| S03 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Kael reaches for the dial as a light answers outside. Hold the final frame. | | | {{s:Queued}} | Keep the decision readable. |\n"),
+            ("openjutsu-lab", "OpenJutsu Lab", "sheet",
+             "# OpenJutsu V2V Planning Matrix\n\n"
+             "| Clip ID | Jutsu Mode | Source Driving Video | Target Cast / Swap Prompt | Remastered Video | Split-Screen MP4 | Status | Notes |\n"
+             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+             "| VFX-01 | Motion Transfer | | Restage an original source clip in the observatory while preserving its action. | | | {{s:Queued}} | Add a self-shot or appropriately licensed source in the video development phase. |\n"),
+            ("comfy-pipeline", "Comfy Pipeline", "flow",
+             "# Comfy Production Pipeline\n\n"
+             "This editable pipeline describes the intended production stages. Configure compatible workers before running it. "
+             "The English baseline does not include generation workflows or sample renders.\n\n"
+             "| Stage | Worker Capability | Delivery | Status | Setup Notes |\n"
+             "| --- | --- | --- | --- | --- |\n"
+             "| 1. Optical Script Compiler | LLM | Structured shot prompts | {{s:Queued}} | Configure an open-weights language model. |\n"
+             "| 2. Soul Cast & Keyframes | Image | Character references | {{s:Queued}} | Configure a validated FLUX workflow. |\n"
+             "| 3. Cinema Studio Shots | Video | Reviewed cinema takes | {{s:Queued}} | Video integration is planned for the next phase. |\n"
+             "| 4. OpenJutsu Remaster | Video | Remastered source clips | {{s:Queued}} | Requires source video and a validated V2V workflow. |\n"
+             "| 5. Director Cut | Media Assembly | Assembled delivery | {{s:Queued}} | Requires approved generated media. |\n"),
+        ]
     if template == "ai_drama":
         return [
             ("script", "第一集劇本與分場", "doc",
@@ -69,11 +113,14 @@ def tab_specs(template: str, title: str, summary: str) -> list[tuple[str, str, s
              "| 2. 異常診斷提案 | ✨ Google · Gemini 2.5 Pro | 產生 ProposalCard 寫回 overview | {{s:進行中}} | ROAS 低於門檻時提醒 |\n"),
         ]
     return [
-        ("overview", "總覽", "doc", f"# {title}\n\n{summary or '在這裡寫下專案目標、範圍與待確認事項。'}\n"),
+        ("overview", "Overview", "doc", f"# {title}\n\n{summary or 'Define the production goal, scope, and decisions to review.'}\n"),
     ]
 
 
 COLUMN_TYPES = {
+    "soul-cast": ["text", "text", "text", "image", "text", "status", "text"],
+    "cinema-studio": ["text", "text", "text", "text", "image", "video", "status", "text"],
+    "openjutsu-lab": ["text", "text", "video", "text", "video", "video", "status", "text"],
     "assets": ["text", "text", "text", "image", "text", "status", "text"],
     "storyboard": ["text", "text", "text", "text", "image", "video", "status", "text"],
     "asset-sheet": ["text", "text", "text", "image", "image", "status", "text"],
@@ -96,6 +143,26 @@ def flow_specs(template):
                 **({"row_source": {"tab_key": source}} if source else {})}
     def chain(nodes):
         return {"nodes": nodes, "edges": [{"source": a["id"], "target": b["id"]} for a, b in zip(nodes, nodes[1:])]}
+    if template == "zerofield_studio":
+        return {"comfy-pipeline": chain([
+            node("script", "Optical Script Compiler", "llm", "once",
+                 "Read the director brief and cast references. Propose structured shot prompts for the cinema slate. "
+                 "Preserve shot IDs and cast continuity. Leave media empty and use Queued for unproduced shots. "
+                 "Return table_id/row_edits/new_rows JSON for review.",
+                 ["director-brief", "soul-cast", "cinema-studio"], {"tab_key": "cinema-studio"}, 40),
+            node("image", "Soul Cast & Keyframes", "image_gen", "rows",
+                 "Generate an original reference using the locked appearance prompt. Return asset_url for review.",
+                 ["soul-cast", "director-brief"], {"tab_key": "soul-cast", "col_index": 3}, 440, "soul-cast"),
+            node("cinema", "Cinema Studio Shots", "video_gen", "rows",
+                 "Use the shot prompt, optical rig, and camera motion with approved cast references. Return asset_url for review.",
+                 ["cinema-studio", "soul-cast"], {"tab_key": "cinema-studio", "col_index": 5}, 840, "cinema-studio"),
+            node("v2v", "OpenJutsu Remaster", "video_gen", "rows",
+                 "Use the source driving video and target prompt. Requires a configured V2V workflow. Return asset_url for review.",
+                 ["openjutsu-lab", "soul-cast"], {"tab_key": "openjutsu-lab", "col_index": 4}, 1240, "openjutsu-lab"),
+            node("assemble", "Director Cut", "media_assemble", "aggregate",
+                 "Assemble approved cinema shots in slate order. Append the delivery link to the director brief for review.",
+                 ["cinema-studio"], {"tab_key": "director-brief", "kind": "doc", "mode": "append"}, 1640, "cinema-studio"),
+        ])}
     if template == "ai_drama":
         return {"pipeline": chain([
             node("split", "劇本拆解分鏡", "llm", "once",

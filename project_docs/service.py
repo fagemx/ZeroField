@@ -29,8 +29,8 @@ from project_docs.doc_schema import (
     validate_doc,
 )
 
-ROLE_LABEL = {"admin": "管理者", "director": "總監", "marketing_lead": "行銷主管", "marketer": "行銷",
-              "engineer": "技術部", "writer": "編劇", "art_lead": "主美", "member": "成員", "viewer": "檢視者"}
+ROLE_LABEL = {"admin": "Showrunner", "director": "Director", "marketing_lead": "Cinematographer", "marketer": "Crew",
+              "engineer": "VFX TD", "writer": "Screenwriter", "art_lead": "Cinematographer", "member": "Crew", "viewer": "Client / Viewer"}
 MENTION_RE = re.compile(r"@\{([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\}")
 MAX_COMMENT = 4000
 MAX_FILL = 2000
@@ -92,19 +92,19 @@ def _error(status: int, message: str):
 
 
 def _need_editor(me: Identity):
-    return None if me.can_edit else _error(403, "只有管理者可以看版本紀錄、復原刪掉的分頁")
+    return None if me.can_edit else _error(403, "Only the showrunner can view revisions and restore deleted pages.")
 
 
 def _need_tab_manager(me: Identity, tab: dict):
     """改名、移動、刪除一頁：管理者，或新增這一頁的人（10/15 起名單上的人都能新增分頁）。"""
     if me.can_edit or (tab.get("created_by") and tab["created_by"] == me.actor_id):
         return None
-    return _error(403, "只有新增這一頁的人和管理者可以改名、移動或刪除這一頁")
+    return _error(403, "Only the page creator and showrunner can rename, move, or delete this page.")
 
 
 def _project_or_404(conn, slug):
     project = repo.get_project(conn, slug)
-    return project, (None if project else _error(404, "找不到這個專案"))
+    return project, (None if project else _error(404, "Production not found."))
 
 
 def _member_payload(member: dict) -> dict:
@@ -140,22 +140,22 @@ def create_project(conn, me: Identity, body: dict):
     from project_docs import markdown_import, templates
     slug = str(body.get("slug") or "").strip().lower()
     if not TAB_KEY_RE.match(slug):
-        return _error(400, "專案代號請用小寫英文、數字或連字號（1～41 字）")
+        return _error(400, "Use 1–41 lowercase letters, digits, or hyphens for the production slug.")
     if repo.get_project(conn, slug):
-        return _error(400, f"專案代號 {slug} 已經存在了")
+        return _error(400, f"Production slug {slug} already exists.")
     title = _clean_title(body.get("title"))
     if title is None:
-        return _error(400, "專案名稱要 1～200 個字")
+        return _error(400, "The production title must contain 1–200 characters.")
     privacy_mode = body.get("privacy_mode", "full_access")
     if privacy_mode not in repo.PRIVACY_MODES:
-        return _error(400, "privacy_mode 必須是 full_access 或 mask_numbers")
+        return _error(400, "privacy_mode must be full_access or mask_numbers.")
     if privacy_mode != "full_access" and me.role != "admin":
-        return _error(403, "只有管理者可以修改資料遮罩策略")
+        return _error(403, "Only the showrunner can change numeric masking settings.")
     status = str(body.get("status") or "planning").strip()
     if status not in repo.PROJECT_STATUSES:
         status = "planning"
     summary = str(body.get("summary") or "").strip()[:400]
-    template = str(body.get("template") or "marketing").strip()
+    template = str(body.get("template") or "zerofield_studio").strip()
     repo.upsert_project(conn, slug, title, status=status, summary=summary)
     if privacy_mode != "full_access":
         repo.update_project_meta(conn, slug, privacy_mode=privacy_mode)
@@ -188,15 +188,15 @@ def update_project(conn, me: Identity, slug: str, body: dict):
     privacy_mode = body.get("privacy_mode", repo._UNSET)
     if privacy_mode is not repo._UNSET:
         if me.role != "admin":
-            return _error(403, "只有管理者可以修改資料遮罩策略")
+            return _error(403, "Only the showrunner can change numeric masking settings.")
         if privacy_mode not in repo.PRIVACY_MODES:
-            return _error(400, "privacy_mode 必須是 full_access 或 mask_numbers")
+            return _error(400, "privacy_mode must be full_access or mask_numbers.")
     title = _clean_title(body["title"]) if "title" in body else repo._UNSET
     if title is None:
-        return _error(400, "專案名稱要 1～200 個字")
+        return _error(400, "The production title must contain 1–200 characters.")
     status = str(body["status"]).strip() if "status" in body else repo._UNSET
     if status is not repo._UNSET and status not in repo.PROJECT_STATUSES:
-        return _error(400, "不支援這個專案狀態")
+        return _error(400, "Unsupported production status.")
     summary = str(body["summary"]).strip()[:400] if "summary" in body else repo._UNSET
     updated = repo.update_project_meta(conn, slug, title=title, status=status, summary=summary,
                                        privacy_mode=privacy_mode)
@@ -225,7 +225,7 @@ def tab_payload(conn, me: Identity, slug: str, key: str):
 
     tab = repo.get_tab(conn, slug, key)
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     doc, _ = validate_doc(tab["doc"], slug=slug)
     if doc != tab["doc"]:
         repo.save_tab_doc(conn, slug, key, doc=doc, title=tab["title"], actor_id=None,
@@ -241,20 +241,20 @@ def preview_import_file(conn, me: Identity, slug: str, filename: str, data: byte
                         tab_key=None, base_revision=None, header_row=1, worksheet=None, delivery_mode="original_patch"):
     from project_docs import file_handoff
     if not repo.get_project(conn, slug):
-        return _error(404, "找不到這個專案")
+        return _error(404, "Production not found.")
     tab = None
     if tab_key:
         if not isinstance(tab_key, str) or not TAB_KEY_RE.fullmatch(tab_key):
-            return _error(400, "分頁代號格式不對")
+            return _error(400, "Invalid page key.")
         tab = repo.get_tab_for_update(conn, slug, tab_key)
         if not tab:
-            return _error(404, "找不到這個分頁")
+            return _error(404, "Page not found.")
         try:
             expected = int(base_revision)
         except (ValueError, TypeError):
-            return _error(400, "取代既有分頁必須提供 base_revision")
+            return _error(400, "Replacing a page requires base_revision.")
         if expected != tab["revision"]:
-            return 409, {"error": "分頁已更新，請重新讀取目前內容再核對匯入", "revision": tab["revision"]}
+            return 409, {"error": "The page changed. Reload the current content before reviewing the import.", "revision": tab["revision"]}
     try:
         # Raw rows remain visible so header selection always uses source coordinates.
         preview = file_handoff.preview_file(filename, data, slug=slug)
@@ -273,27 +273,27 @@ def import_tab_file(conn, me: Identity, slug: str, filename: str, data: bytes, *
     import copy
     from project_docs import file_handoff
     if not repo.get_project(conn, slug):
-        return _error(404, "找不到這個專案")
+        return _error(404, "Production not found.")
     if tab_key is not None and (not isinstance(tab_key, str) or not TAB_KEY_RE.fullmatch(tab_key)):
-        return _error(400, "分頁代號格式不對")
+        return _error(400, "Invalid page key.")
     tab = repo.get_tab_for_update(conn, slug, tab_key) if tab_key else None
     if tab_key:
         if not tab:
-            return _error(404, "找不到這個分頁")
+            return _error(404, "Page not found.")
         try:
             if isinstance(base_revision, bool) or base_revision is None:
                 raise ValueError()
             revision = int(base_revision)
         except (TypeError, ValueError):
-            return _error(400, "取代既有分頁必須提供 base_revision")
+            return _error(400, "Replacing a page requires base_revision.")
         if revision != tab["revision"]:
-            return 409, {"error": "分頁已更新，請重新載入再匯入", "revision": tab["revision"]}
+            return 409, {"error": "The page changed. Reload it before importing.", "revision": tab["revision"]}
         # A whole-file replacement may change structure and ownership coordinates.
         # Require every collaborator's live lock to be released before replacing.
         if any(holder != me.actor_id for holder in repo.tab_locks(conn, slug, tab_key).values()):
-            return _error(409, "分頁有其他成員正在編輯，請等候編輯鎖釋放再匯入")
+            return _error(409, "Another crew member is editing this page. Wait for the lock to release before importing.")
         if confirm_replace is not True:
-            return _error(400, "請先核對差異並確認：以此檔案取代目前內容，不進行自動合併")
+            return _error(400, "Review the differences and confirm file replacement before importing.")
     try:
         imported = file_handoff.import_file(filename, data, slug=slug, header_row=header_row, worksheet=worksheet, delivery_mode=delivery_mode)
     except file_handoff.HandoffError as exc:
@@ -337,11 +337,11 @@ def export_tab_file(conn, me: Identity, slug: str, key: str, fmt: str = "", mode
     from project_docs import file_handoff
     tab = repo.get_tab(conn, slug, key)
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     source = repo.get_tab_source(conn, slug, key) or {}
     if mode == "source":
         if not source.get("blob"):
-            return _error(404, "沒有來源原檔")
+            return _error(404, "No original source file is available.")
         return 200, {"data": source["blob"], "content_type": source["mime"], "filename": source["filename"]}
     fmt = str(fmt or (source.get("metadata") or {}).get("format") or
               ("xlsx" if tab["surface_type"] == "sheet" else "md")).lower().lstrip(".")
@@ -399,7 +399,7 @@ def _run_ops(conn, me: Identity, slug: str, key: str, tab: dict, ops, session_id
         if table.get("type") == "table" and "column_ids" in table.get("attrs", {}):
             width = max((len(row.get("content", [])) for row in table.get("content", [])), default=0)
             if len(table["attrs"]["column_ids"]) != width:
-                raise DocError("欄位身分與資料寬度不符；請使用欄位選單調整結構")
+                raise DocError("Column identities do not match the table width. Adjust the structure through Column Settings.")
     doc, _ = validate_doc(result.doc, slug=slug)
     from project_docs import file_handoff, table_schema
     table_schema.guard_schema_change(conn, slug, key, tab["doc"], doc)
@@ -407,7 +407,7 @@ def _run_ops(conn, me: Identity, slug: str, key: str, tab: dict, ops, session_id
     if source and source.get("metadata", {}).get("format") == "xlsx":
         mode = delivery_mode or source["metadata"].get("delivery_mode", "original_patch")
         if mode not in ("original_patch", "new_workbook"):
-            raise DocError("不支援的交付方式")
+            raise DocError("Unsupported delivery format.")
         if mode == "original_patch":
             try:
                 file_handoff._xlsx_patch(doc, source["blob"], source["metadata"])
@@ -433,7 +433,7 @@ def _run_ops(conn, me: Identity, slug: str, key: str, tab: dict, ops, session_id
 def apply_tab_ops(conn, me: Identity, slug: str, key: str, body: dict):
     tab = repo.get_tab_for_update(conn, slug, key)
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     session_id = str(body.get("session_id") or "")[:64]
     try:
         result, doc, revision, saved_at = _run_ops(conn, me, slug, key, tab, body.get("ops"), session_id, atomic=bool(body.get("atomic")), delivery_mode=body.get("delivery_mode"))
@@ -503,7 +503,7 @@ def history_payload(conn, me: Identity, slug: str, key=None):
         return problem
     titles = {t["key"]: t["title"] for t in repo.list_tabs(conn, slug)}
     if key is not None and key not in titles:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     revisions = [r for r in repo.revision_rows(conn, slug, tab_key=key) if r["tab_key"] in titles]
     fields = [a for a in repo.activity_rows(conn, slug, tab_key=key)
               if a["kind"] != "comment" and a["field_id"] and a["tab_key"] in titles]
@@ -543,28 +543,28 @@ def revert_change(conn, me: Identity, slug: str, key: str, body: dict):
     bid, rid = body.get("bid"), body.get("rid")
     if (not isinstance(bid, str) or not ID_RE.match(bid)
             or (rid is not None and (not isinstance(rid, str) or not ID_RE.match(rid)))):
-        return _error(400, "缺少要改回的段落")
+        return _error(400, "The passage to restore is missing.")
     try:
         from_rev, to_rev = int(body.get("from_rev")), int(body.get("to_rev"))
     except (TypeError, ValueError):
-        return _error(400, "缺少要改回的是哪一次")
+        return _error(400, "Select a revision to restore.")
     tab = repo.get_tab_for_update(conn, slug, key)
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     before, after = repo.get_revision(conn, slug, key, from_rev), repo.get_revision(conn, slug, key, to_rev)
     if not before or not after or from_rev >= to_rev:
-        return _error(404, "找不到那一次的紀錄，請重新整理")
+        return _error(404, "Revision not found. Refresh the page.")
     plan = page_history.revert_plan(before["doc"], after["doc"], tab["doc"], bid, rid)
     what = "這一列" if rid else "這一段"
     if plan["state"] == "gone":
-        return _error(409, "這個表格已經不在頁面上了，沒辦法只改回一列")
+        return _error(409, "The table no longer exists, so this row cannot be restored.")
     if plan["state"] == "already":
         return 200, {"already": True, "revision": tab["revision"], "saved_at": tab["updated_at"], "doc": tab["doc"],
                      "annotations": repo.list_annotations(conn, slug)}
     if plan["state"] == "later" and not force:
         later = [r for r in repo.revision_rows(conn, slug, tab_key=key) if r["revision"] > to_rev]
         edits = page_history.later_edits(later, bid, rid, page_history.locate(after["doc"], bid, rid))
-        return 409, {"error": f"{what}之後又有人改過", "code": "changed_later", "later": _later_people(conn, edits),
+        return 409, {"error": f"{what} has been edited again since this change.", "code": "changed_later", "later": _later_people(conn, edits),
                      "preview": plan["preview"]}
     try:
         result, doc, revision, saved_at = _run_ops(
@@ -575,10 +575,10 @@ def revert_change(conn, me: Identity, slug: str, key: str, body: dict):
     if not result.applied:
         conflict = result.conflicts[0] if result.conflicts else {}
         if conflict.get("reason") == "locked":
-            return _error(409, f"{_names(conn).get(conflict.get('owner'), '別人')}正在改{what}，等改完再改回")
+            return _error(409, f"{_names(conn).get(conflict.get('owner'), 'another crew member')} is editing {what}. Wait before restoring.")
         if conflict.get("reason") == "shape":
-            return _error(409, "這個表格的欄數改過了，沒辦法只改回一列")
-        return _error(409, f"{what}剛被改過，請重新整理再試")
+            return _error(409, "The column count changed. This row cannot be restored on its own.")
+        return _error(409, f"{what} changed recently. Refresh and try again.")
     return 200, {"revision": revision, "saved_at": saved_at, "doc": doc, "annotations": repo.list_annotations(conn, slug)}
 
 
@@ -587,11 +587,11 @@ def _revert_field(conn, me: Identity, slug: str, key: str, body: dict, force: bo
     try:
         after_activity = int(body.get("after_activity") or 0)
     except (TypeError, ValueError):
-        return _error(400, "缺少要改回的是哪一次")
+        return _error(400, "Select a revision to restore.")
     tab = repo.get_tab(conn, slug, key)
     field = index_doc(tab["doc"])[0].get(field_id) if tab else None
     if not field:
-        return _error(404, "這一格已經不在頁面上，請重新整理")
+        return _error(404, "This field no longer exists. Refresh the page.")
     raw = body.get("value")
     wanted = ("true" if raw in (True, "true") else "false") if field["kind"] == "check" else str(raw if raw is not None else "").strip()
     current = repo.get_field_value(conn, slug, key, field_id)
@@ -600,7 +600,7 @@ def _revert_field(conn, me: Identity, slug: str, key: str, body: dict, force: bo
     edits = [a for a in repo.activity_rows(conn, slug, tab_key=key)
              if a["kind"] != "comment" and a["field_id"] == field_id and a["id"] > after_activity]
     if edits and not force:
-        return 409, {"error": "這一格之後又有人改過", "code": "changed_later", "later": _later_people(conn, edits),
+        return 409, {"error": "This cell has been edited again since this change.", "code": "changed_later", "later": _later_people(conn, edits),
                      "preview": str(body.get("value") if body.get("value") is not None else "")}
     status, payload = set_field(conn, me, slug, {"tab_key": key, "field_id": field_id, "value": body.get("value")})
     if status == 200 and not payload.get("activity"):
@@ -639,14 +639,14 @@ def _valid_parent(tabs, key, parent_key):
 
 def create_tab(conn, me: Identity, slug: str, body: dict):
     if not repo.get_project(conn, slug):
-        return _error(404, "找不到這個專案")
+        return _error(404, "Production not found.")
     title = _clean_title(body.get("title"))
     if title is None:
-        return _error(400, "分頁名稱要 1～200 個字")
+        return _error(400, "The page title must contain 1–200 characters.")
     tabs = repo.list_tabs(conn, slug)
     parent_key, ok = _valid_parent(tabs, None, body.get("parent_key"))
     if not ok:
-        return _error(400, "子分頁只能放在第一層分頁底下")
+        return _error(400, "Child pages must be placed under a top-level page.")
     key = "t-" + secrets.token_hex(3)
     while repo.get_tab(conn, slug, key, include_deleted=True):
         key = "t-" + secrets.token_hex(3)
@@ -695,7 +695,7 @@ def update_tab(conn, me: Identity, slug: str, key: str, body: dict):
     tabs = repo.list_tabs(conn, slug)
     tab = next((t for t in tabs if t["key"] == key), None)
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     problem = _need_tab_manager(me, tab)
     if problem:
         return problem
@@ -703,7 +703,7 @@ def update_tab(conn, me: Identity, slug: str, key: str, body: dict):
     if "title" in body:
         title = _clean_title(body.get("title"))
         if title is None:
-            return _error(400, "分頁名稱要 1～200 個字")
+            return _error(400, "The page title must contain 1–200 characters.")
         repo.update_tab_meta(conn, slug, key, title=title)
         if title != tab["title"]:
             changed["title"] = [tab["title"], title]
@@ -712,7 +712,7 @@ def update_tab(conn, me: Identity, slug: str, key: str, body: dict):
         has_children = any(t["parent_key"] == key for t in tabs)
         parent_key, ok = _valid_parent(tabs, key, body.get("parent_key"))
         if not ok or (parent_key and has_children):
-            return _error(400, "子分頁只能放在第一層分頁底下，而且底下不能再有子分頁")
+            return _error(400, "Child pages must be under top-level pages and cannot contain further child pages.")
         repo.update_tab_meta(conn, slug, key, parent_key=parent_key)
         if parent_key != tab["parent_key"]:
             changed["parent_key"] = [tab["parent_key"], parent_key]
@@ -766,12 +766,12 @@ def delete_tab(conn, me: Identity, slug: str, key: str):
     tabs = repo.list_tabs(conn, slug)
     tab = next((t for t in tabs if t["key"] == key), None)
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     problem = _need_tab_manager(me, tab)
     if problem:
         return problem
     if len(tabs) == 1:
-        return _error(400, "至少要留一個分頁")
+        return _error(400, "Keep at least one page.")
     children = [t["key"] for t in tabs if t["parent_key"] == key]
     for child in children:
         repo.update_tab_meta(conn, slug, child, parent_key=None)
@@ -790,7 +790,7 @@ def restore_tab(conn, me: Identity, slug: str, key: str):
     deleted = repo.list_tabs(conn, slug, deleted=True)
     tab = next((t for t in deleted if t["key"] == key), None)
     if not tab:
-        return _error(404, "找不到這個已刪除的分頁")
+        return _error(404, "Deleted page not found.")
     alive = {t["key"]: t for t in repo.list_tabs(conn, slug)}
     parent = alive.get(tab["parent_key"])
     if tab["parent_key"] and (not parent or parent["parent_key"]):
@@ -808,10 +808,10 @@ def restore_revision(conn, me: Identity, slug: str, key: str, revision: int):
         return problem
     old = repo.get_revision(conn, slug, key, revision)
     if not old:
-        return _error(404, "找不到這個版本")
+        return _error(404, "Revision not found.")
     tab = repo.get_tab(conn, slug, key)
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     doc, _ = validate_doc(old["doc"], slug=slug)
     result = repo.save_tab_doc(conn, slug, key, doc=doc, title=old["title"], actor_id=me.actor_id,
                                session_id="restore-" + secrets.token_hex(6), base_revision=tab["revision"])
@@ -833,32 +833,32 @@ def set_field(conn, me: Identity, slug: str, body: dict):
     field_id = str(body.get("field_id") or "")
     tab = repo.get_tab_for_update(conn, slug, tab_key) if TAB_KEY_RE.match(tab_key) else None
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     fields, _ = index_doc(tab["doc"])
     field = fields.get(field_id)
     if not field:
-        return _error(404, "這一格已經不在頁面上，請重新整理")
+        return _error(404, "This field no longer exists. Refresh the page.")
     locks = repo.tab_locks(conn, slug, tab_key)
     ancestors = [field["anchor_id"]]
     for node in tab["doc"].get("content", []):
         if any(r.get("attrs", {}).get("bid") == field["anchor_id"] for r in node.get("content", [])):
             ancestors.append(node.get("attrs", {}).get("bid"))
     if any(locks.get(unit) and locks[unit] != me.actor_id for unit in ancestors):
-        return _error(409, "這一格正由其他成員編輯")
+        return _error(409, "Another crew member is editing this field.")
     raw = body.get("value")
     if "expected_value" in body:
         existing = repo.field_values(conn, slug).get(tab_key, {}).get(field_id)
         current = existing.get("value", "") if isinstance(existing, dict) else field["default"]
         if body["expected_value"] != current:
-            return 409, {"error": "這一格已被修改，草稿尚未套用", "before": body["expected_value"], "mine": raw, "current": current}
+            return 409, {"error": "This cell changed. Your draft has not been applied.", "before": body["expected_value"], "mine": raw, "current": current}
     if field["kind"] == "status":
         if raw not in STATUSES:
-            return _error(400, "狀態只能是：" + "、".join(STATUSES))
+            return _error(400, "Allowed statuses:" + "、".join(STATUSES))
         value = raw
     elif field["kind"] == "fill":
         value = str(raw if raw is not None else "").strip()
         if len(value) > MAX_FILL:
-            return _error(400, f"這一格最多 {MAX_FILL} 個字")
+            return _error(400, f"This field supports up to {MAX_FILL} characters.")
     else:
         value = "true" if raw in (True, "true") else "false"
     old = repo.set_field_value(conn, slug, tab_key, field_id, kind=field["kind"], value=value,
@@ -886,18 +886,18 @@ def set_field(conn, me: Identity, slug: str, body: dict):
 def _comment_body(conn, raw):
     text = str(raw or "").strip()
     if not text:
-        return None, _error(400, "留言是空的")
+        return None, _error(400, "The comment is empty.")
     if len(text) > MAX_COMMENT:
-        return None, _error(400, f"留言最多 {MAX_COMMENT} 個字")
+        return None, _error(400, f"Comments can contain up to {MAX_COMMENT} characters.")
     members = {m["actor_id"] for m in repo.active_members(conn)}
     mentions = []
     for actor_id in MENTION_RE.findall(text):
         if actor_id not in members:
-            return None, _error(400, "@ 的人不在名單上")
+            return None, _error(400, "The mentioned person is not on the crew.")
         if actor_id not in mentions:
             mentions.append(actor_id)
     if "@{" in MENTION_RE.sub("", text):
-        return None, _error(400, "@ 的格式不對，請從名單選人")
+        return None, _error(400, "Invalid mention. Choose a crew member from the list.")
     return (text, mentions), None
 
 
@@ -908,7 +908,7 @@ def _one(conn, slug, annotation_id):
 
 def _annotation_or_404(conn, slug, annotation_id):
     ann = _one(conn, slug, annotation_id)
-    return ann, (None if ann else _error(404, "找不到這則標註（可能已經被刪了）"))
+    return ann, (None if ann else _error(404, "Annotation not found; it may have been deleted."))
 
 
 def _mentioned(ann) -> set:
@@ -923,7 +923,7 @@ def create_annotation(conn, me: Identity, slug: str, body: dict):
     tab_key = str(body.get("tab_key") or "")
     tab = repo.get_tab(conn, slug, tab_key) if TAB_KEY_RE.match(tab_key) else None
     if not tab:
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     comment = None
     if str(body.get("body") or "").strip():
         comment, problem = _comment_body(conn, body.get("body"))
@@ -932,31 +932,31 @@ def create_annotation(conn, me: Identity, slug: str, body: dict):
     rid = body.get("row")
     if rid is not None:
         if not isinstance(rid, str) or rid not in table_row_ids(tab["doc"]):
-            return _error(404, "這一列已經不在頁面上，請重新整理")
+            return _error(404, "This row no longer exists. Refresh the page.")
         if not comment:
-            return _error(400, "留言是空的")
+            return _error(400, "The comment is empty.")
         annotation_id = repo.row_annotation_id(conn, slug, tab_key, rid, me.actor_id)
         comment_id=repo.add_activity(conn, slug, tab_key, rid, kind="comment", actor_id=me.actor_id, body=comment[0],
                           mentions=comment[1], annotation_id=annotation_id)
         return 200, {"annotation": _one(conn, slug, annotation_id),'comment_id':comment_id}
     anchor = anchoring.clean_anchor(body.get("anchor"))
     if not anchor:
-        return _error(400, "選取的字不對，請重新選一次")
+        return _error(400, "The selection is invalid. Select the text again.")
     style, color, label = body.get("style"), body.get("color"), body.get("label")
     if style is not None and style not in STYLES:
-        return _error(400, "螢光筆或劃線的種類不對")
+        return _error(400, "Invalid highlight or underline style.")
     if style == "hl" and color not in COLORS:
-        return _error(400, "螢光筆的顏色不對")
+        return _error(400, "Invalid highlight color.")
     if style != "hl":
         color = None
     if label is not None and label not in LABELS:
-        return _error(400, "標註只能是：問題、要修改、已確認")
+        return _error(400, "Choose Question, Revise, or Approved for the annotation.")
     if not (style or label or comment):
-        return _error(400, "要畫螢光筆、劃線、標註或寫說明")
+        return _error(400, "Choose a highlight, underline, annotation, or note.")
     text = doc_text(tab["doc"])
     found = anchoring.resolve(text, anchor)
     if not found:
-        return _error(409, "原文已經變了，請重新選一次")
+        return _error(409, "The source text changed. Select it again.")
     start, end, _ = found
     anchor = anchoring.anchor_at(text, start, text[start:end])
     annotation_id = repo.create_annotation(conn, slug, tab_key, kind="text", anchor=anchor, actor_id=me.actor_id,
@@ -985,7 +985,7 @@ def resolve_annotation(conn, me: Identity, slug: str, annotation_id: int, body: 
     if problem:
         return problem
     if not (me.can_edit or ann["created_by"] == me.actor_id or me.actor_id in _mentioned(ann)):
-        return _error(403, "只有標的人、被 @ 的人或管理者能按「解決」")
+        return _error(403, "Only the author, a mentioned crew member, or the showrunner can resolve this annotation.")
     resolved = bool(body.get("resolved", True))
     repo.set_resolved(conn, annotation_id, me.actor_id if resolved else None)
     if resolved != bool(ann["resolved_at"]) or (resolved and ann["resolved_by"] != me.actor_id):
@@ -1012,7 +1012,7 @@ def reconfirm_annotation(conn, me: Identity, slug: str, annotation_id: int):
     if problem:
         return problem
     if ann["label"] != "ok" or not ann["reconfirm"]:
-        return _error(400, "這則不需要重新確認")
+        return _error(400, "This annotation does not require approval again.")
     repo.confirm_label(conn, annotation_id, me.actor_id)
     repo.add_audit(conn, slug, action="annotation_reconfirm", actor_id=me.actor_id, tab_key=ann["tab_key"],
                    target=annotation_id, detail=dict(_ann_summary(ann), reconfirm=ann["reconfirm"]))
@@ -1024,17 +1024,17 @@ def reattach_annotation(conn, me: Identity, slug: str, annotation_id: int, body:
     if problem:
         return problem
     if ann["kind"] != "text":
-        return _error(400, "整列的對話不能換位置")
+        return _error(400, "A row discussion cannot be reattached.")
     if not (me.can_edit or ann["created_by"] == me.actor_id):
-        return _error(403, "只有標的人或管理者能換位置")
+        return _error(403, "Only the author or showrunner can reattach this annotation.")
     anchor = anchoring.clean_anchor(body.get("anchor"))
     if not anchor:
-        return _error(400, "選取的字不對，請重新選一次")
+        return _error(400, "The selection is invalid. Select the text again.")
     tab = repo.get_tab(conn, slug, ann["tab_key"])
     text = doc_text(tab["doc"]) if tab else ""
     found = anchoring.resolve(text, anchor)
     if not found:
-        return _error(409, "原文已經變了，請重新選一次")
+        return _error(409, "The source text changed. Select it again.")
     start, end, _ = found
     quote = text[start:end]
     repo.reattach(conn, annotation_id, anchoring.anchor_at(text, start, quote))
@@ -1049,10 +1049,10 @@ def style_annotation(conn, me: Identity, slug: str, annotation_id: int, body: di
     if problem:
         return problem
     if ann["created_by"] != me.actor_id:
-        return _error(403, "只能改自己畫的螢光筆或劃線")
+        return _error(403, "You can only edit your own highlights and underlines.")
     style, color = body.get("style"), body.get("color")
     if style not in STYLES or (style == "hl" and color not in COLORS):
-        return _error(400, "螢光筆或劃線的種類不對")
+        return _error(400, "Invalid highlight or underline style.")
     color = color if style == "hl" else None
     repo.set_style(conn, annotation_id, style, color)
     if (style, color) != (ann["style"], ann["color"]):
@@ -1067,7 +1067,7 @@ def delete_annotation(conn, me: Identity, slug: str, annotation_id: int):
     if problem:
         return problem
     if not (me.can_edit or ann["created_by"] == me.actor_id):
-        return _error(403, "只有標的人或管理者能刪除")
+        return _error(403, "Only the author or showrunner can delete this annotation.")
     repo.delete_annotation(conn, annotation_id)
     repo.add_audit(conn, slug, action="annotation_delete", actor_id=me.actor_id, tab_key=ann["tab_key"],
                    target=annotation_id, detail=_ann_summary(ann))
@@ -1082,7 +1082,7 @@ def remove_comment(conn, me: Identity, slug: str, comment_id: int):
                        detail={"annotation_id": (comment or {}).get("annotation_id"),
                                "body": (comment or {}).get("body")})
         return 200, {"deleted": True}
-    return _error(403, "只能刪自己的留言")
+    return _error(403, "You can only delete your own comments.")
 
 
 # ---------- 編輯鎖 ----------
@@ -1090,9 +1090,9 @@ def remove_comment(conn, me: Identity, slug: str, comment_id: int):
 def lock_unit(conn, me: Identity, slug: str, body: dict):
     tab_key, unit = str(body.get("tab_key") or ""), str(body.get("unit") or "")
     if not TAB_KEY_RE.match(tab_key) or not ID_RE.match(unit):
-        return _error(400, "缺少分頁或段落")
+        return _error(400, "A page or passage is missing.")
     if not repo.get_tab_for_update(conn, slug, tab_key):
-        return _error(404, "找不到這個分頁")
+        return _error(404, "Page not found.")
     if body.get("release"):
         repo.release_lock(conn, slug, tab_key, unit, me.actor_id)
         return 200, {"held": False}
@@ -1107,7 +1107,7 @@ def lock_unit(conn, me: Identity, slug: str, body: dict):
 def upload_asset(conn, me: Identity, slug: str, data: bytes, content_type: str):
     """名單上的人都能貼圖（10/15 起大家一起編輯）。"""
     if not repo.get_project(conn, slug):
-        return _error(404, "找不到這個專案")
+        return _error(404, "Production not found.")
     from project_docs import media
     try:
         content_type = media.validate(data, content_type)

@@ -33,9 +33,9 @@ def _call_tool(name: str, args: dict) -> tuple[str, bool]:
         try:
             payload = json.loads(exc.read().decode("utf-8"))
         except ValueError:
-            payload = {"error": f"工具主機回應 {exc.code}"}
+            payload = {"error": f"Tool host returned HTTP {exc.code}."}
     except Exception as exc:  # noqa: BLE001 - 連不上也要回一個工具錯誤，不能讓伺服器掛掉
-        payload = {"error": f"工具暫時連不上（{type(exc).__name__}），請再試一次"}
+        payload = {"error": f"The tool is temporarily unavailable ({type(exc).__name__}). Try again."}
     if "error" in payload:
         return str(payload["error"]), True
     return str(payload.get("text", "")), False
@@ -62,7 +62,7 @@ def handle(message: dict):
     if method == "tools/call":
         name = params.get("name")
         if name not in {s['name'] for s in _host_tools()}:
-            raise LookupError(f"沒有「{name}」這個工具")
+            raise LookupError(f"Tool {name} does not exist.")
         text, is_error = _call_tool(name, params.get("arguments") or {})
         return {"content": [{"type": "text", "text": text}], "isError": is_error}
     raise NotImplementedError(method)
@@ -76,14 +76,14 @@ def main() -> None:
         try:
             message = json.loads(line)
         except ValueError:
-            _send({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "JSON 格式不對"}})
+            _send({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Invalid JSON."}})
             continue
         if "id" not in message:
             continue  # 通知（例如 notifications/initialized）不用回
         try:
             _send({"jsonrpc": "2.0", "id": message["id"], "result": handle(message)})
         except NotImplementedError as exc:
-            _send({"jsonrpc": "2.0", "id": message["id"], "error": {"code": -32601, "message": f"不支援 {exc}"}})
+            _send({"jsonrpc": "2.0", "id": message["id"], "error": {"code": -32601, "message": f"Unsupported operation: {exc}"}})
         except LookupError as exc:
             _send({"jsonrpc": "2.0", "id": message["id"], "error": {"code": -32602, "message": str(exc)}})
         except Exception as exc:  # noqa: BLE001

@@ -12,9 +12,9 @@ class MediaError(ValueError):
 
 def validate(data, content_type):
     if not data:
-        raise MediaError(400, "媒體檔案是空的")
+        raise MediaError(400, "The media file is empty.")
     if len(data) > MAX_BYTES:
-        raise MediaError(413, "媒體檔案最大 64 MB")
+        raise MediaError(413, "Media files must be 64 MB or smaller.")
     claimed = str(content_type or "").split(";", 1)[0].lower().strip()
     actual = None
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -39,14 +39,14 @@ def validate(data, content_type):
         actual = "audio/mpeg"
     aliases = {"audio/x-wav": "audio/wav", "audio/mp3": "audio/mpeg", "audio/x-flac": "audio/flac"}
     if not actual or claimed not in ("", "application/octet-stream", actual) and aliases.get(claimed) != actual:
-        raise MediaError(415, "媒體內容與格式不符；支援 PNG/JPEG/GIF/WebP、MP4/WebM、MP3/WAV/OGG/FLAC")
+        raise MediaError(415, "Media content does not match its format. Supported formats: PNG/JPEG/GIF/WebP, MP4/WebM, MP3/WAV/OGG/FLAC.")
     if actual.startswith("image/"):
         from PIL import Image
         try:
             with Image.open(io.BytesIO(data)) as image:
                 if image.width * image.height > 40_000_000:
-                    raise MediaError(413, "圖片最多 4000 萬像素")
+                    raise MediaError(413, "Images support at most 40 million pixels.")
                 image.verify()
         except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as exc:
-            raise MediaError(400, "圖片檔案損壞") from exc
+            raise MediaError(400, "The image file is damaged.") from exc
     return actual

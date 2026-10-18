@@ -1,3 +1,4 @@
+import { ACTION_LABEL, statusLabel } from "../format.js";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { shortTime } from "../format.js";
@@ -16,12 +17,12 @@ import {
 
 const INFO = (privacyMode) => (
   <>
-    <b>它看得到：</b>專案畫布所有內容、報表索引的工作表／欄名／公式、團隊在頁面上的留言與標註。<br />
-    <b>資料使用：</b>{privacyMode === "mask_numbers" ? "本專案已開啟數字遮罩；文字內容經遮罩後才交給模型，圖片附件停用。" : "本專案允許模型讀取完整內容，包含數字與你附上的圖片。"}它不會讀取別人的私人對話。<br />
-    <b>要改專案頁：</b>一律先送出提案卡問你，你按確認才會放上去。
+    <b>Context:</b>Production pages, indexed worksheet structures and formulas, crew comments, and annotations.<br />
+    <b>Data access:</b>{privacyMode === "mask_numbers" ? "Numeric masking is enabled. Text is masked before reaching the model; image attachments are disabled." : "The model can read complete content, including numbers and attached images."}Other crew members’ private conversations are excluded.<br />
+    <b>Applying changes:</b>Review each proposal before it updates a production page.
   </>
 );
-const STARTERS = ["整理這個專案的重點與待辦", "找出表格中缺少的資訊，先提出建議", "依文件內容，整理下一步工作"];
+const STARTERS = ["Summarize this production and its next steps", "Find missing slate information and propose improvements", "Use the production brief to suggest next steps"];
 
 const COPY_ICON = (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
@@ -57,7 +58,7 @@ async function copyText(text) {
 function CopyButton({ text, title }) {
   const [done, setDone] = useState(false);
   return (
-    <button type="button" className={"icon-copy" + (done ? " done" : "")} title={done ? "已複製" : title} aria-label={title}
+    <button type="button" className={"icon-copy" + (done ? " done" : "")} title={done ? "Copied" : title} aria-label={title}
       onClick={async () => {
         if (await copyText(text || "")) {
           setDone(true);
@@ -78,7 +79,7 @@ function Attachments({ slug, items, onZoom }) {
   return (
     <div className="u-att">
       {items.map((a) => (a.kind === "image"
-        ? <button type="button" key={a.id} className="u-img" title={`${a.name}（點開看大圖）`}
+        ? <button type="button" key={a.id} className="u-img" title={`${a.name}(open full-size image)`}
           onClick={() => onZoom && onZoom({ src: attachmentUrl(slug, a.id, "preview"), name: a.name })}>
           <img src={attachmentUrl(slug, a.id, "thumb")} alt={a.name} />
         </button>
@@ -98,7 +99,7 @@ function Lightbox({ image, onClose }) {
   return (
     <div className="pa-zoom" role="dialog" aria-label={image.name} onClick={onClose}>
       <img src={image.src} alt={image.name} />
-      <div className="cap">{image.name}　·　點一下或按 Esc 關閉</div>
+      <div className="cap">{image.name}　· Click or press Esc to close</div>
     </div>
   );
 }
@@ -143,7 +144,7 @@ function ResizeEdge() {
     try { if (width.current) localStorage.setItem(WIDTH_KEY, String(width.current)); } catch { /* 私密視窗 */ }
   };
   return (
-    <div className={"pa-resize" + (drag ? " on" : "")} title="拖拉調整寬度（雙擊回到原本寬度）" aria-hidden="true"
+    <div className={"pa-resize" + (drag ? " on" : "")} title={"Drag to resize; double-click to reset"} aria-hidden="true"
       onPointerDown={(event) => {
         event.preventDefault();
         try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* 指標已經放開 */ }
@@ -161,8 +162,8 @@ function ResizeEdge() {
 
 function NewConversation({ assistant, onDone }) {
   return (
-    <button type="button" className="ghost" title="開一段新對話（目前這段收進紀錄）"
-      onClick={async () => { if (await assistant.newConversation()) onDone(); }}>＋ 新對話</button>
+    <button type="button" className="ghost" title={"Start a new conversation; archive this conversation"}
+      onClick={async () => { if (await assistant.newConversation()) onDone(); }}>＋ New Chat</button>
   );
 }
 
@@ -201,8 +202,8 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
   const [busy, setBusy] = useState(false);
   const display = (proposal.target && proposal.target.display) || "";
   const copy = proposalCopy(proposal);
-  const actionLabel = proposal.action === "table_edit" ? "修改表格" : proposal.action;
-  if (proposal.race_group_task_id && proposal.status === 'pending') return <div className="pcard">競速候選已準備，請到「代理工作」比較並選用版本。</div>;
+  const actionLabel = ACTION_LABEL[proposal.action] || proposal.action;
+  if (proposal.race_group_task_id && proposal.status === 'pending') return <div className="pcard">Candidates are ready. Compare and select a version in Agent Tasks.</div>;
   if (proposal.status === "applied") {
     return (
       <div className="pcard sent"><div className="h">✓ {appliedLabel(proposal)}</div>
@@ -210,7 +211,7 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
     );
   }
   if (proposal.status === "dismissed") return <div className="pcard cancelled">{copy.dismissed}：{actionLabel} → {display}</div>;
-  if (proposal.status === "failed") return <div className="pcard cancelled">{copy.failed}：{proposal.error || "請跟助理說要再整理一次"}</div>;
+  if (proposal.status === "failed") return <div className="pcard cancelled">{copy.failed}：{proposal.error || "Ask the assistant to revise the proposal."}</div>;
   if (compact) return <div className="pcard">{copy.compactLead}{actionLabel} → <b>{display}</b>。{copy.compactTail}</div>;
   if (proposal.action === "table_edit") return <TableProposalReview proposal={proposal} onApply={onApply} onDismiss={onDismiss} />;
   const editable = !["改狀態", "table_edit"].includes(proposal.action);
@@ -224,11 +225,11 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
       <div className="where">{actionLabel} → <b>{display}</b></div>
       {editable
         ? <textarea value={text} rows={4} aria-label={copy.field} onChange={(event) => setText(event.target.value)} />
-        : <div className="where" style={{whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto"}}>{proposal.action === "table_edit" ? proposal.content : `改成「${proposal.content}」`}</div>}
+        : <div className="where" style={{whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto"}}>{proposal.action === "table_edit" ? proposal.content : `Change to “${statusLabel(proposal.content)}”`}</div>}
       <div className="acts">
         <button type="button" className="btn primary" disabled={busy}
           onClick={() => run(() => onApply(proposal, editable ? text : proposal.content))}>{copy.confirm}</button>
-        <button type="button" className="btn" disabled={busy} onClick={() => run(() => onDismiss(proposal))}>先不要</button>
+        <button type="button" className="btn" disabled={busy} onClick={() => run(() => onDismiss(proposal))}>Not Now</button>
         <span className="note">{copy.note}</span>
       </div>
     </div>
@@ -241,12 +242,12 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
     return (
       <>
         <div className="msg-u">
-          <CopyButton text={message.body || files.map((f) => f.name).join("、")} title="複製這句" />
+          <CopyButton text={message.body || files.map((f) => f.name).join("、")} title={"Copy Message"} />
           <div className="bubble">
             <Attachments slug={slug} items={files} onZoom={onZoom} />
             {message.body && <Inline text={message.body} />}
-            {message.source_ref && <small className="message-scope">來自標註留言的交辦</small>}
-            {message.request_scope && <small className="message-scope">{message.request_scope.kind === 'doc' ? `固定段落：${message.request_scope.tab_title} · ${message.request_scope.block_ids.length} 段` : `固定範圍：${message.request_scope.table_name} · ${message.request_scope.row_ids?.length} 列 · ${message.request_scope.column_ids?.length} 欄`}</small>}
+            {message.source_ref && <small className="message-scope">Task from an annotation</small>}
+            {message.request_scope && <small className="message-scope">{message.request_scope.kind === 'doc' ? `Selected passages:${message.request_scope.tab_title} · ${message.request_scope.block_ids.length}  passages` : `Selected scope:${message.request_scope.table_name} · ${message.request_scope.row_ids?.length} rows ·  ${message.request_scope.column_ids?.length} columns`}</small>}
           </div>
         </div>
         {(message.notes || []).map((note) => <div key={note} className="guard">🛡 {note}</div>)}
@@ -255,8 +256,8 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
   }
   if (message.role === "lead") {
     return (
-      <div className="msg-a kai"><div className="who-a">負責人</div><div className="bubble"><Rich text={message.body} /></div>
-        <div className="msg-meta"><CopyButton text={message.body} title="複製" /></div></div>
+      <div className="msg-a kai"><div className="who-a">Owner</div><div className="bubble"><Rich text={message.body} /></div>
+        <div className="msg-meta"><CopyButton text={message.body} title={"Copy"} /></div></div>
     );
   }
   if (message.status === "queued" || message.status === "running") {
@@ -268,7 +269,7 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
       <>
         <div className="msg-a writing">
           <div className="who-a">{messagePersona(message)}</div>
-          {lookedLive.length > 0 && <div className="looked">查了：{lookedLive.join("、")}</div>}
+          {lookedLive.length > 0 && <div className="looked">Read:{lookedLive.join("、")}</div>}
           <div className="bubble"><Rich text={live} /></div>
         </div>
         {working}
@@ -282,14 +283,14 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
     <>
       <div className={"msg-a" + (message.status === "failed" ? " failed" : "")}>
         <div className="who-a">{messagePersona(message)}</div>
-        {looked.length > 0 && <div className="looked">查了：{looked.join("、")}</div>}
+        {looked.length > 0 && <div className="looked">Read:{looked.join("、")}</div>}
         <div className="bubble"><Rich text={main} /></div>
-        {download && <a className="doc-dl" href={download} download>⬇ 下載 Word 檔</a>}
+        {download && <a className="doc-dl" href={download} download>⬇ Download Word</a>}
         <Sources items={sources} tabs={tabs} onOpenTab={onOpenTab} />
         {message.status === "done" && (
           <div className="msg-meta">
-            <CopyButton text={message.body} title="複製回答" />
-            {seconds != null && <span title="從你送出到回答寫完">{formatSeconds(seconds)}</span>}
+            <CopyButton text={message.body} title={"Copy Response"} />
+            {seconds != null && <span title={"Time from submission to completed response"}>{formatSeconds(seconds)}</span>}
           </div>
         )}
       </div>
@@ -325,15 +326,15 @@ function Chat({ assistant, tabs, compact, ownerName, onOpenTab, onStarter }) {
       <Lightbox image={zoom} onClose={() => setZoom(null)} />
       {earlier.length > 0 && (
         <div className="earlier">
-          <div className="earlier-t">之前的對話還有 {earlier.length} 個答案等你確認</div>
+          <div className="earlier-t">Earlier conversations have {earlier.length}  responses awaiting approval</div>
           {earlier.map((p) => <ProposalCard key={p.id} proposal={p} compact={compact} onApply={assistant.apply} onDismiss={assistant.dismiss} />)}
         </div>
       )}
       {!thread.length && (
         <>
-          <div className="msg-a"><div className="who-a">✦ 專案助理</div><div className="bubble">
-            <p>{ownerName}，你想完成什麼工作？我可以讀取專案裡的文件與表格，整理重點、找出缺漏，並提出修改建議。</p>
-            <p>要改專案頁時，我會先整理好給你確認，你按確認才會放上去。</p>
+          <div className="msg-a"><div className="who-a">✦ Studio Assistant</div><div className="bubble">
+            <p>{ownerName}, what would you like to work on? I can read production pages and slates, identify gaps, and propose changes.</p>
+            <p>I will prepare changes for your review before applying them.</p>
           </div></div>
           <div className="chips">
             {STARTERS.map((s) => <button type="button" key={s} className="chip" onClick={() => onStarter(s)}>{s}</button>)}
@@ -356,7 +357,7 @@ function named(file) {
   if (!file.type.startsWith("image/") || !/^image\.\w+$/i.test(file.name || "image.png")) return file;
   pasteCount += 1;
   const ext = (file.type.split("/")[1] || "png").replace("jpeg", "jpg");
-  return new File([file], `貼上的圖片-${pasteCount}.${ext}`, { type: file.type });
+  return new File([file], `pasted-image-${pasteCount}.${ext}`, { type: file.type });
 }
 
 function Composer({ assistant, value, onChange, inputRef }) {
@@ -401,33 +402,33 @@ function Composer({ assistant, value, onChange, inputRef }) {
         take(event.dataTransfer.files);
       }}>
       <AgentSelector agents={agents} value={assistant.selectedAgent} onChange={assistant.setSelectedAgent} disabled={assistant.sending} />
-      {suggestions.length > 0 && <div className="agent-suggestions" aria-label="代理點名建議">{suggestions.map(agent => <button key={agent.agent_key} type="button" onClick={() => {
+      {suggestions.length > 0 && <div className="agent-suggestions" aria-label={"Agent mentions"}>{suggestions.map(agent => <button key={agent.agent_key} type="button" onClick={() => {
         assistant.setSelectedAgent(agent.agent_key); onChange(value.replace(/@[^\s@]*$/, `@${agent.agent_key} `)); inputRef.current?.focus();
       }}>{agent.icon} {agent.display_name} <small>@{agent.agent_key}</small></button>)}</div>}
-      {assistant.scope && <div className="request-scope"><button type="button" aria-label="移除固定範圍" disabled={busy} onClick={() => assistant.setScope(null)}>✕</button>
-        <b>{assistant.scope.table_name || "已選資料"}</b> · {assistant.scope.row_ids.length} 列 · {assistant.scope.column_ids.length} 欄
-        <small>本次只修改選定範圍；切換分頁不會改變目標。</small></div>}
+      {assistant.scope && <div className="request-scope"><button type="button" aria-label={"Clear Selected Scope"} disabled={busy} onClick={() => assistant.setScope(null)}>✕</button>
+        <b>{assistant.scope.table_name || "Selected Data"}</b> · {assistant.scope.row_ids.length} rows ·  {assistant.scope.column_ids.length} columns
+        <small>Changes are limited to this selection. Switching pages does not change the target.</small></div>}
       {files.length > 0 && (
         <div className="att-tray">
           {files.map((f) => (
             <span key={f.key} className={"att" + (f.kind === "image" ? "" : " file") + (f.status === "uploading" ? " busy" : "")}
-              title={f.status === "uploading" ? "上傳中…" : f.name}>
+              title={f.status === "uploading" ? "Uploading…" : f.name}>
               {f.kind === "image"
                 ? <img src={f.local || (f.attachment ? attachmentUrl(assistant.slug, f.attachment.id, "thumb") : "")} alt="" />
                 : <span className="ic">{fileIcon(f.kind)}</span>}
-              <span className="nm">{f.status === "uploading" ? "上傳中…" : f.name}</span>
-              <button type="button" className="rm" title="拿掉" aria-label={`拿掉 ${f.name}`} onClick={() => assistant.removeFile(f.key)}>✕</button>
+              <span className="nm">{f.status === "uploading" ? "Uploading…" : f.name}</span>
+              <button type="button" className="rm" title={"Remove"} aria-label={`Remove ${f.name}`} onClick={() => assistant.removeFile(f.key)}>✕</button>
             </span>
           ))}
         </div>
       )}
       <div className="composer">
-        <button type="button" className="attach-btn" title="附加檔案（也可以直接貼上圖片）" aria-label="附加檔案"
+        <button type="button" className="attach-btn" title={"Attach files or paste an image"} aria-label={"Attach Files"}
           disabled={files.length >= 5} onClick={() => picker.current && picker.current.click()}>{CLIP_ICON}</button>
         <input ref={picker} type="file" multiple hidden accept={ACCEPT_FILES}
           onChange={(event) => { take(event.target.files); event.target.value = ""; }} />
-        <textarea ref={inputRef} rows={1} value={value} aria-label="跟專案助理說"
-          placeholder={assistant.busyForSelectedAgent ? "這位代理還在回答，可以選擇另一位…" : "描述工作，也可以輸入 @ 點名代理…"}
+        <textarea ref={inputRef} rows={1} value={value} aria-label={"Message Studio Assistant"}
+          placeholder={assistant.busyForSelectedAgent ? "This agent is responding. You can choose another agent…" : "Describe the task, or type @ to choose an agent…"}
           onChange={(event) => {
             const text = event.target.value; onChange(text);
             if (/@[a-zA-Z\u3400-\u9fff]/.test(text)) {
@@ -446,7 +447,7 @@ function Composer({ assistant, value, onChange, inputRef }) {
               submit();
             }
           }} />
-        <button type="button" className="send" title={assistant.uploading ? "檔案還在上傳" : "送出"} aria-label="送出"
+        <button type="button" className="send" title={assistant.uploading ? "Files are still uploading" : "Send"} aria-label={"Send"}
           disabled={busy || assistant.uploading || (!value.trim() && !ready.length)} onClick={submit}>↑</button>
       </div>
       <div className="hint">{attachmentHint(files, assistant.privacyMode)}</div>
@@ -476,20 +477,20 @@ function HistoryView({ assistant, tabs, compact, onOpenTab, onClose }) {
   return (
     <div className="scroll chat hist">
       <Lightbox image={zoom} onClose={() => setZoom(null)} />
-      {list === null && <div className="hist-empty">讀取中…</div>}
-      {list && list.filter((c) => !c.current || c.messages).length === 0 && <div className="hist-empty">還沒有以前的對話。</div>}
+      {list === null && <div className="hist-empty">Loading…</div>}
+      {list && list.filter((c) => !c.current || c.messages).length === 0 && <div className="hist-empty">No earlier conversations.</div>}
       {(list || []).map((c) => (
         <button type="button" key={c.id} className={"hist-item" + (c.current ? " current" : "") + (open && open.id === c.id ? " on" : "")}
           onClick={() => (c.current ? onClose() : view(c.id))}>
-          <span className="d">{c.current ? "目前・" : ""}{shortTime(c.last_at || c.created_at)}</span>
-          <span className="n">{c.messages} 句</span>
-          <span className="q">{c.first_text || "（新對話，還沒說話）"}</span>
+          <span className="d">{c.current ? "Current · " : ""}{shortTime(c.last_at || c.created_at)}</span>
+          <span className="n">{c.messages}  messages</span>
+          <span className="q">{c.first_text || "(new conversation)"}</span>
         </button>
       ))}
       {open && (
         <div className="hist-old">
-          <div className="hist-bar">預覽：{picked ? shortTime(picked.last_at || picked.created_at) + " 的對話" : "以前的對話"}
-            <button type="button" className="btn primary" onClick={resume}>接著這段聊</button></div>
+          <div className="hist-bar">Preview:{picked ? shortTime(picked.last_at || picked.created_at) + "’s conversation" : "Conversation History"}
+            <button type="button" className="btn primary" onClick={resume}>Continue Conversation</button></div>
           {open.messages.map((message) => (
             <Message key={message.id} slug={assistant.slug} message={message} tabs={tabs} compact onOpenTab={onOpenTab}
               seconds={elapsedSeconds(message, open.messages)} onZoom={setZoom}
@@ -505,20 +506,20 @@ function TodoList({ todo, focus, onPick, onOpenTab }) {
   const groups = todoGroups(todo);
   const on = (item) => isPicked(focus, item);
   const row = (item, label) => (
-    <button type="button" key={item.rid} className={"ti" + (item.status === "已完成" ? " done" : "") + (on(item) ? " on" : "")}
+    <button type="button" key={item.rid} className={"ti" + (statusLabel(item.status) === "Approved" ? " done" : "") + (on(item) ? " on" : "")}
       title={item.why || item.what || ""} onClick={() => onPick(item)}>
-      <span className="dot">{item.status === "已完成" ? "✓" : ""}</span><span>{label}</span>
+      <span className="dot">{statusLabel(item.status) === "Approved" ? "✓" : ""}</span><span>{label}</span>
     </button>
   );
   return (
     <>
-      {groups.notes.length > 0 && <h5>負責人交代的</h5>}
+      {groups.notes.length > 0 && <h5>Assigned by the owner</h5>}
       {groups.notes.map((n) => <div key={"n" + n.id} className="ti kai"><span className="dot" /><span>{n.text}</span></div>)}
-      <h5>待確認問題</h5>
+      <h5>Open Questions</h5>
       {groups.questions.map((q) => row(q, <><span className="n">{q.number}.</span>{clip(q.text, 24)}</>))}
-      {groups.handoff.length > 0 && <h5>交接追蹤上你要交的</h5>}
+      {groups.handoff.length > 0 && <h5>Your deliverables</h5>}
       {groups.handoff.map((h) => row(h, h.text))}
-      {groups.mentions.length > 0 && <h5>@ 你、還沒解決的</h5>}
+      {groups.mentions.length > 0 && <h5>Unresolved mentions</h5>}
       {groups.mentions.map((m) => (
         <button type="button" key={"m" + m.annotation_id} className="ti" onClick={() => onOpenTab(m.tab_key)}>
           <span className="dot" /><span>{clip(m.text, 40)}</span>
@@ -544,36 +545,36 @@ function Bench({ assistant, focus, onOpenTab }) {
       {question && (
         <>
           <div className="qcard">
-            <div className="qn">待確認問題 第 {question.number} 題　〔{question.status}〕</div>
+            <div className="qn">Open Question {question.number}  · [{question.status}〕</div>
             <div className="qt">{question.text}</div>
-            {question.why && <div className="why"><b>為什麼要問：</b>{question.why}</div>}
-            {criteria && criteria.use && <div className="why"><b>負責人拿答案要做什麼：</b>{criteria.use}</div>}
+            {question.why && <div className="why"><b>Why this matters:</b>{question.why}</div>}
+            {criteria && criteria.use && <div className="why"><b>How the owner will use this:</b>{criteria.use}</div>}
           </div>
           {criteria && criteria.criteria.length > 0 && (
             <>
-              <div className="sec-t">答完整要有</div>
+              <div className="sec-t">A complete response includes</div>
               <ul className="check">{criteria.criteria.map((c) => <li key={c}><span className="box" /><span className="t">{c}</span></li>)}</ul>
             </>
           )}
-          {!pending.length && <div className="draft"><div className="wait">還在問。答完整之後，這裡會出現整理好的答案，你確認後才會放上專案頁。</div></div>}
+          {!pending.length && <div className="draft"><div className="wait">Still discussing. A complete response will appear here for your approval before it is applied.</div></div>}
         </>
       )}
       {handoff && (
         <div className="qcard">
-          <div className="qn">交接追蹤：你要交的　〔{handoff.status}〕</div>
+          <div className="qn">Your deliverable · [{handoff.status}〕</div>
           <div className="qt">{handoff.text}</div>
           {handoff.what && <div className="why">{handoff.what}</div>}
-          <button type="button" className="src" onClick={() => onOpenTab(handoff.tab_key)}>↗ 打開交接追蹤</button>
+          <button type="button" className="src" onClick={() => onOpenTab(handoff.tab_key)}>↗ Open Deliverables</button>
         </div>
       )}
       {!pending.length && !question && !handoff && (
         <>
-          <div className="empty">代理整理好的修改提案會出現在這裡。先核對內容與要更新的分頁，確認後才會寫回。</div>
-          <div className="sec-t">它看得到什麼</div>
+          <div className="empty">Agent proposals appear here. Review the content and target page before applying changes.</div>
+          <div className="sec-t">What the Agent Can Read</div>
           <div className="empty">{INFO(assistant.privacyMode)}</div>
         </>
       )}
-      {looked.length > 0 && <><div className="sec-t">上一輪查過的</div><div className="empty">{looked.join("、")}</div></>}
+      {looked.length > 0 && <><div className="sec-t">Read in the Previous Turn</div><div className="empty">{looked.join("、")}</div></>}
     </>
   );
 }
@@ -581,8 +582,8 @@ function Bench({ assistant, focus, onOpenTab }) {
 function Seg({ view, onView }) {
   return (
     <div className="seg">
-      <button type="button" className={view === "chat" ? "on" : ""} onClick={() => onView("chat")}>對話</button>
-      <button type="button" className={view === "manage" ? "on" : ""} onClick={() => onView("manage")}>管理</button>
+      <button type="button" className={view === "chat" ? "on" : ""} onClick={() => onView("chat")}>Chat</button>
+      <button type="button" className={view === "manage" ? "on" : ""} onClick={() => onView("manage")}>Manage</button>
     </div>
   );
 }
@@ -607,24 +608,24 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
   };
   // 10/15 負責人：上面太亂 → 標題列只留名字、ⓘ 和視窗按鈕；下面一列分頁（跟「標註」清單同一套）＋「＋ 新對話」
   return (
-    <aside className="pa" aria-label="專案助理">
+    <aside className="pa" aria-label={"Studio Assistant"}>
       <ResizeEdge />
       <div className="pa-top">
-        <span className="t"><span className="spark">✦</span>專案助理</span>
-        <button type="button" className={"info" + (info ? " on" : "")} title="它看得到什麼" aria-label="它看得到什麼"
+        <span className="t"><span className="spark">✦</span>Studio Assistant</span>
+        <button type="button" className={"info" + (info ? " on" : "")} title={"What the Agent Can Read"} aria-label={"What the Agent Can Read"}
           aria-expanded={info} onClick={() => setInfo(!info)}>ⓘ</button>
         <span className="grow" />
-        <button type="button" className="icon-btn" title="展開成工作區" aria-label="展開成工作區" onClick={onExpand}>⤢</button>
-        <button type="button" className="icon-btn x" title="收起" aria-label="收起" onClick={onClose}>✕</button>
+        <button type="button" className="icon-btn" title={"Expand Workspace"} aria-label={"Expand Workspace"} onClick={onExpand}>⤢</button>
+        <button type="button" className="icon-btn x" title={"Collapse"} aria-label={"Collapse"} onClick={onClose}>✕</button>
       </div>
-      <div className="pop-tabs" role="tablist" aria-label="專案助理分頁">
+      <div className="pop-tabs" role="tablist" aria-label={"Studio Assistant Tabs"}>
         {paneTabs(manager, forwardsOpen).map((t) => (
           <button type="button" key={t.key} role="tab" aria-selected={tab === t.key} className={tab === t.key ? "on" : undefined}
-            title={t.count ? `有 ${t.count} 個私下問題等你回覆` : undefined} onClick={() => pick(t.key)}>
+            title={t.count ? `There are ${t.count}  private questions awaiting your reply` : undefined} onClick={() => pick(t.key)}>
             {t.label}{t.count > 0 && <span className="n hot">{t.count}</span>}
           </button>
         ))}
-        <button type="button" role="tab" aria-selected={tab === 'agents'} className={tab === 'agents' ? 'on' : undefined} onClick={() => pick('agents')}>代理工作</button>
+        <button type="button" role="tab" aria-selected={tab === 'agents'} className={tab === 'agents' ? 'on' : undefined} onClick={() => pick('agents')}>Agent Tasks</button>
         {view !== "manage" && view !== 'agents' && <NewConversation assistant={assistant} onDone={() => setHistory(false)} />}
       </div>
       <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => pick('agents')} />
@@ -635,7 +636,7 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
         <div className="pa-chat"><HistoryView assistant={assistant} tabs={tabs} onOpenTab={onOpenTab} onClose={() => setHistory(false)} /></div>
       ) : (
         <>
-          {task && <div className="pa-task on"><span>{task}</span><button type="button" className="src" onClick={onExpand}>在工作台看</button></div>}
+          {task && <div className="pa-task on"><span>{task}</span><button type="button" className="src" onClick={onExpand}>Open in Workspace</button></div>}
           <div className="pa-chat"><Chat assistant={assistant} tabs={tabs} ownerName={me.name} onOpenTab={onOpenTab} onStarter={onStarter} /></div>
           <Composer assistant={assistant} value={draft} onChange={onDraft} inputRef={inputRef} />
         </>
@@ -669,42 +670,41 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
     try { localStorage.setItem("pa.help", "min"); } catch { /* 私密視窗沒有 localStorage */ }
   };
   return (
-    <div className="ws" aria-label="專案助理工作區">
+    <div className="ws" aria-label={"Studio Assistant Workspace"}>
       <div className="ws-head">
-        <h1><span className="spark">✦</span>專案助理</h1>
+        <h1><span className="spark">✦</span>Studio Assistant</h1>
         <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => onView('agents')} />
-        <span className="sub">{me.name}的工作區｜陪你把專案往前推</span>
+        <span className="sub">{me.name}’s workspace | Move the production forward</span>
         {manager && <Seg view={view} onView={onView} />}
         <div className="pills">
-          <span className="pill">待確認問題 已完成 <b>{counts.questionsDone}</b>/{counts.questions}</span>
-          {counts.handoff > 0 && <span className="pill">交接追蹤 <b>{counts.handoffDone}</b>/{counts.handoff}</span>}
+          <span className="pill">Open Questions Completed <b>{counts.questionsDone}</b>/{counts.questions}</span>
+          {counts.handoff > 0 && <span className="pill">Deliverables <b>{counts.handoffDone}</b>/{counts.handoff}</span>}
           {manager && (assistant.state.forwards_open || 0) > 0 && (
-            <button type="button" className="pill" onClick={() => onView("manage")}>私下問題等你回覆 <b>{assistant.state.forwards_open}</b></button>
+            <button type="button" className="pill" onClick={() => onView("manage")}>Private questions awaiting your reply <b>{assistant.state.forwards_open}</b></button>
           )}
         </div>
-        <button type="button" className="btn" onClick={onCollapse}><span className="lg">⤡ 收回側邊欄</span><span className="sm">← 回到專案頁</span></button>
+        <button type="button" className="btn" onClick={onCollapse}><span className="lg">⤡ Return to Sidebar</span><span className="sm">← Back to Production</span></button>
       </div>
       {view === 'agents' ? <AgentBoard assistant={assistant} me={me} onOpenTarget={onOpenTab} /> : view === "manage" ? (
         <div className="kai-full"><ManagerPanel slug={slug} onError={onError} onToast={onToast} /></div>
       ) : (
         <>
           {help && (
-            <div className="ws-help"><button type="button" onClick={hideHelp}>收起</button><b>工作區</b>：左邊是待辦（點一題就開始），
-              中間是對話，右邊工作台跟著你正在做的事變。收回後回到你原本看的那一頁。</div>
+            <div className="ws-help"><button type="button" onClick={hideHelp}>Collapse</button><b>Workspace</b>: Select a task on the left, discuss it in the center, and review results on the right. Collapse to return to your page.</div>
           )}
           <div className="mtabs">
-            {[["todo", "待辦"], ["chat", "對話"], ["bench", "工作台"]].map(([key, label]) => (
+            {[["todo", "To Do"], ["chat", "Conversation"], ["bench", "Workbench"]].map(([key, label]) => (
               <button type="button" key={key} className={mtab === key ? "on" : ""} onClick={() => setMtab(key)}>{label}</button>
             ))}
           </div>
           <div className="ws-grid">
-            <section className={"col todo-col" + (mtab === "todo" ? " show" : "")}><h4>待辦</h4>
+            <section className={"col todo-col" + (mtab === "todo" ? " show" : "")}><h4>To Do</h4>
               <div className="scroll todo"><TodoList todo={assistant.state && assistant.state.todo} focus={focusNow} onPick={pick} onOpenTab={onOpenTab} /></div>
             </section>
             <section className={"col chat-col" + (mtab === "chat" ? " show" : "")}>
               <h4 className="tabbed">
-                <button type="button" className={history ? undefined : "on"} onClick={() => setHistory(false)}>對話</button>
-                <button type="button" className={history ? "on" : undefined} onClick={() => setHistory(true)}>紀錄</button>
+                <button type="button" className={history ? undefined : "on"} onClick={() => setHistory(false)}>Chat</button>
+                <button type="button" className={history ? "on" : undefined} onClick={() => setHistory(true)}>History</button>
                 <span className="h4-acts"><NewConversation assistant={assistant} onDone={() => setHistory(false)} /></span>
               </h4>
               {history ? (
@@ -716,7 +716,7 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
                 </>
               )}
             </section>
-            <section className={"col bench-col" + (mtab === "bench" ? " show" : "")}><h4>工作台</h4>
+            <section className={"col bench-col" + (mtab === "bench" ? " show" : "")}><h4>Workbench</h4>
               <div className="scroll bench"><Bench assistant={assistant} focus={focus} onOpenTab={onOpenTab} /></div>
             </section>
           </div>

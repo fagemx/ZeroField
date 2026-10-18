@@ -25,24 +25,24 @@ export function AgentSettings({ slug, onSaved }) {
       await api.post(`/projects/api/${slug}/agents`, payload); await reload(); onSaved?.();
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   };
-  return <section className="agent-settings"><h3>專家代理</h3>
+  return <section className="agent-settings"><h3>Specialist Agents</h3>
     {error && <p className="error" role="alert">{error}</p>}
     <div className="agent-roster-edit">{agents.map(agent => <button type="button" key={agent.agent_key} onClick={() => choose(agent)}>
-      {agent.icon} {agent.display_name}{agent.enabled ? '' : '（停用）'}</button>)}<button type="button" onClick={() => choose(null)}>＋ 自訂代理</button></div>
+      {agent.icon} {agent.display_name}{agent.enabled ? '' : "(disabled)"}</button>)}<button type="button" onClick={() => choose(null)}>＋ Custom Agent</button></div>
     {active && <form onSubmit={save}>
-      <label>代理代號<input required pattern="[a-z][a-z0-9_-]{0,63}" value={draft.agent_key} readOnly={editing} onChange={e => field('agent_key', e.target.value)} /></label>
-      <label>顯示名稱<input required maxLength={120} value={draft.display_name} onChange={e => field('display_name', e.target.value)} /></label>
-      <label>圖示<input maxLength={20} value={draft.icon} onChange={e => field('icon', e.target.value)} /></label>
-      <label>角色<select value={draft.role_kind} onChange={e => field('role_kind', e.target.value)}><option value="primary">主控</option><option value="worker">專家</option><option value="observer">唯讀觀察</option></select></label>
-      <label>角色指令<textarea rows={5} maxLength={30000} value={draft.system_prompt} onChange={e => field('system_prompt', e.target.value)} /></label>
-      <label>知識包<textarea rows={3} maxLength={50000} value={draft.knowledge_pack} onChange={e => field('knowledge_pack', e.target.value)} /></label>
-      <fieldset><legend>允許工具</legend><div className="agent-tool-options">{toolNames.map(name => <label key={name}>
+      <label>Agent Key<input required pattern="[a-z][a-z0-9_-]{0,63}" value={draft.agent_key} readOnly={editing} onChange={e => field('agent_key', e.target.value)} /></label>
+      <label>Display Name<input required maxLength={120} value={draft.display_name} onChange={e => field('display_name', e.target.value)} /></label>
+      <label>Icon<input maxLength={20} value={draft.icon} onChange={e => field('icon', e.target.value)} /></label>
+      <label>Role<select value={draft.role_kind} onChange={e => field('role_kind', e.target.value)}><option value="primary">Coordinator</option><option value="worker">Specialist</option><option value="observer">Read-only Observer</option></select></label>
+      <label>Role Instructions<textarea rows={5} maxLength={30000} value={draft.system_prompt} onChange={e => field('system_prompt', e.target.value)} /></label>
+      <label>Knowledge Pack<textarea rows={3} maxLength={50000} value={draft.knowledge_pack} onChange={e => field('knowledge_pack', e.target.value)} /></label>
+      <fieldset><legend>Allowed Tools</legend><div className="agent-tool-options">{toolNames.map(name => <label key={name}>
         <input type="checkbox" checked={draft.allowed_tools.includes(name)} onChange={e => field('allowed_tools', e.target.checked ? [...draft.allowed_tools, name] : draft.allowed_tools.filter(n => n !== name))} />{name}</label>)}</div></fieldset>
-      <label>模型設定<textarea rows={4} spellCheck={false} value={provider} onChange={e => setProvider(e.target.value)} /></label>
-      <small>空物件沿用全域模型。可填 kind、base_url、model、effort、api_key_env；憑證只填部署者允許的環境變數名稱。</small>
-      <label>同時執行上限<input type="number" min={1} max={32} value={draft.max_concurrency} onChange={e => field('max_concurrency', Number(e.target.value))} /></label>
-      <label><input type="checkbox" checked={draft.enabled} onChange={e => field('enabled', e.target.checked)} />啟用</label>
-      <button type="submit" disabled={busy}>{busy ? '儲存中…' : '儲存代理設定'}</button>
+      <label>Model Configuration<textarea rows={4} spellCheck={false} value={provider} onChange={e => setProvider(e.target.value)} /></label>
+      <small>Use {} to inherit the default model. Supported keys: kind, base_url, model, effort, api_key_env. Reference credentials by an environment variable allowed by the deployment.</small>
+      <label>Concurrency Limit<input type="number" min={1} max={32} value={draft.max_concurrency} onChange={e => field('max_concurrency', Number(e.target.value))} /></label>
+      <label><input type="checkbox" checked={draft.enabled} onChange={e => field('enabled', e.target.checked)} />Enabled</label>
+      <button type="submit" disabled={busy}>{busy ? "Saving…" : "Save Agent"}</button>
     </form>}
   </section>;
 }

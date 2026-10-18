@@ -14,7 +14,7 @@ def run_for(ctx,conn):
         return cp.own_run(conn,ctx.me,ctx.slug,ctx.run_id)
     reply=store.message(conn,ctx.message_id) if ctx.message_id else None
     if not reply or reply['owner_id']!=ctx.me.actor_id or reply['slug']!=ctx.slug:
-        raise cp.OrchestrationError(403,'此工具需要有效對話或執行脈絡')
+        raise cp.OrchestrationError(403,"This tool requires a valid conversation or execution context.")
     question=store.message(conn,reply['reply_to']) if reply.get('reply_to') else reply
     run=cp.create_run(conn,ctx.me,ctx.slug,question['body'] or '附件工作',client_request_id='message:'+str(ctx.message_id),conversation_id=reply['conversation_id'])
     db.execute(conn,'UPDATE projectops.orchestration_run SET coordinator_key=%s,trigger_message_id=%s WHERE id=%s',(ctx.agent_key,ctx.message_id,run['id']))
@@ -34,10 +34,10 @@ def spawn_agent(ctx,conn,args):
     run=run_for(ctx,conn)
     strategy=args.get('strategy','single')
     if strategy=='race' and not hasattr(cp,'start_race'):
-        raise cp.OrchestrationError(400,'競速模式需要啟用候選核對功能')
+        raise cp.OrchestrationError(400,"Candidate comparison must be enabled for race mode.")
     target=args.get('target_agent')
     if target==ctx.agent_key:
-        raise cp.OrchestrationError(403,'不能循環委派給自己','POLICY_DENIED')
+        raise cp.OrchestrationError(403,"An agent cannot delegate to itself.",'POLICY_DENIED')
     scope=args.get('scope',getattr(ctx,'scope',None))
     if scope and 'tab_key' in scope:
         scope={**scope,'target_tab':scope['tab_key']}
@@ -54,7 +54,7 @@ def spawn_agent(ctx,conn,args):
         label_selector=args.get('label_selector'),scope=scope,target=args.get('target'),depends_on=args.get('depends_on',[]),
         strategy=strategy,write_mode=mode,parent_dispatch_id=parent['id'] if parent else None)
     if task['target_agent_key']==ctx.agent_key:
-        raise cp.OrchestrationError(403,'標籤配對指向呼叫者，不能循環委派','POLICY_DENIED')
+        raise cp.OrchestrationError(403,"The label selector matches the caller and would create a delegation cycle.",'POLICY_DENIED')
     dispatches=[]
     if strategy=='race':
         dispatches=cp.start_race(conn,ctx.me,ctx.slug,task['id'],args.get('race_agents'))
@@ -73,7 +73,7 @@ def check_delegation(ctx,conn,args):
         identifier,admission=cp.parse_handle(args['dispatch_handle'])
         dispatch=db.get_dispatch(conn,ctx.slug,identifier)
         if not dispatch or dispatch['admission_no']!=admission:
-            raise cp.OrchestrationError(404,'找不到派發')
+            raise cp.OrchestrationError(404,"Dispatch not found.")
         run_id=dispatch['run_id']
     if not run_id and getattr(ctx,'dispatch_id',None):
         run_id=db.get_dispatch(conn,ctx.slug,ctx.dispatch_id)['run_id']
@@ -133,11 +133,11 @@ def trigger_flow_run(ctx,conn,args):
         body['row_ids']=ctx.scope['row_ids']
     preview=flow_runner.preflight(conn,ctx.me,ctx.slug,key,body)
     if preview.get('errors'):
-        raise cp.OrchestrationError(409,'工作流尚有需要處理的來源或服務問題')
+        raise cp.OrchestrationError(409,"Resolve source or worker issues before running this pipeline.")
     definition=flow_runner.definition(conn,ctx.slug,key)
     run=run_for(ctx,conn)
     if run.get('flow_run_id'):
-        raise cp.OrchestrationError(409,'此工作已有啟動的流程；另一個流程請另行交辦')
+        raise cp.OrchestrationError(409,"This task already started a pipeline. Create a separate task for another pipeline.")
     body['definition_revision']=preview['definition_revision']
     body['source_revisions']=preview['source_revisions']
     direct=any(node.get('write_mode')=='direct' for node in preview['nodes'])

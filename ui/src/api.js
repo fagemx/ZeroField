@@ -17,9 +17,9 @@ async function handle(response) {
     data = null;
   }
   if (!response.ok) {
-    throw new ApiError(response.status, (data && data.error) || `伺服器回應 ${response.status}`, data);
+    throw new ApiError(response.status, (data && data.error) || `Server response ${response.status}`, data);
   }
-  if (data === null) throw new ApiError(0, "連線中斷或登入過期，請重新整理頁面");
+  if (data === null) throw new ApiError(0, "Connection lost or session expired. Refresh the page.");
   return data;
 }
 
@@ -28,7 +28,7 @@ async function send(path, init) {
   try {
     response = await fetch(path, { credentials: "same-origin", ...init });
   } catch {
-    throw new ApiError(0, "連線中斷或登入過期，請重新整理頁面");
+    throw new ApiError(0, "Connection lost or session expired. Refresh the page.");
   }
   return handle(response);
 }

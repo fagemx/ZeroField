@@ -326,7 +326,7 @@ class PostgreSQLExecutionTests(unittest.TestCase):
         with self.assertRaises(limbs.ExecutionError) as error:
             flow_runner.start(self.conn, self.me, self.slug, "flow", {})
         self.assertEqual(error.exception.status, 409)
-        self.assertIn("Worker", str(error.exception))
+        self.assertIn("worker", str(error.exception).lower())
 
 
 if __name__ == "__main__":

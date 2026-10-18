@@ -120,7 +120,7 @@ def sync_project(conn,slug):
         flow=flows._get_run(conn,run['flow_run_id'])
         if flow['status'] in ('failed','canceled'):
             for dispatch in db.dispatches(conn,slug,run_id=run['id']):
-                cp._cancel_one(conn,dispatch,'工作流已停止')
+                cp._cancel_one(conn,dispatch,"The pipeline stopped.")
             db.execute(conn,"UPDATE projectops.orchestration_task SET status='canceled' WHERE run_id=%s AND status NOT IN ('completed','failed')",(run['id'],))
             db.execute(conn,'UPDATE projectops.orchestration_run SET status=%s,finished_at=NOW() WHERE id=%s',('canceled' if flow['status']=='canceled' else 'failed',run['id']))
         elif flow['status']=='succeeded':

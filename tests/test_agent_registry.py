@@ -57,7 +57,7 @@ class AgentRegistryTests(unittest.TestCase):
 
     def test_mentions_route_only_explicit_agent_tokens(self):
         for text, expected in [('hello', 'coordinator'), ('@doc_writer 請整理', 'doc_writer'),
-                               ('@表格與分鏡量產代理 請核對', 'sheet_ops'), ('mail@example.com', 'coordinator'),
+                               ('@Cinematographer 請核對', 'sheet_ops'), ('mail@example.com', 'coordinator'),
                                ('`@doc_writer`', 'coordinator'), ('> @doc_writer\nhello', 'coordinator'),
                                ('@{' + self.actor + '}', 'coordinator')]:
             with self.subTest(text=text):

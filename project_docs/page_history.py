@@ -23,10 +23,10 @@ CONTEXT = 16  # 改的地方前後各留幾個字
 LIMIT = 280  # 一處最多顯示幾個字
 TINY = 2  # 兩處修改中間只隔這麼少的相同字：併成一處，不要切成碎片
 
-WHAT = {"heading": "一個標題", "table": "一個表格", "image": "一張圖", "horizontalRule": "一條分隔線"}
-THIS = {"heading": "這個標題", "table": "這個表格", "image": "這張圖", "horizontalRule": "這條分隔線"}
-EMPTY = {"image": "（圖片）", "horizontalRule": "（分隔線）", "table": "（空白表格）"}
-CHECK = {"true": "已勾", "false": "沒勾"}
+WHAT = {"heading": "a heading", "table": "a table", "image": "an image", "horizontalRule": "a divider"}
+THIS = {"heading": "this heading", "table": "this table", "image": "this image", "horizontalRule": "this divider"}
+EMPTY = {"image": "(image)", "horizontalRule": "(divider)", "table": "(empty table)"}
+CHECK = {"true": "Checked", "false": "Unchecked"}
 SPECIAL_SESSIONS = (("revert-", "revert"), ("restore-", "restore"), ("rewrite-", "rewrite"))
 
 
@@ -78,7 +78,7 @@ def block_text(node) -> str:
 
 
 def _shown(text: str, kind=None) -> str:
-    return text if text.strip() else EMPTY.get(kind, "（空白一行）")
+    return text if text.strip() else EMPTY.get(kind, "(empty line)")
 
 
 def _block(document, bid):
@@ -151,16 +151,16 @@ def text_segments(before: str, after: str) -> list[list[str]]:
 def _block_change(change, bid, old, new) -> dict:
     node = new or old
     kind = node.get("type")
-    what, this = WHAT.get(kind, "一段"), THIS.get(kind, "這一段")
+    what, this = WHAT.get(kind, "a passage"), THIS.get(kind, "this passage")
     if change == "added":
-        label, button = "新增" + what, "拿掉" + this
+        label, button = "Added " + what, "Remove " + this
         segments = [["+", _clip(_shown(block_text(new), kind), 160)]]
     elif change == "removed":
-        label, button = "刪掉" + what, "加回" + this
+        label, button = "Deleted " + what, "Restore " + this
         segments = [["-", _clip(_shown(block_text(old), kind), 160)]]
     else:
         a, b = block_text(old), block_text(new)
-        label, button = ("改了" + what if a != b else "改了" + what + "的格式"), "改回" + this
+        label, button = ("Changed " + what if a != b else "Changed formatting of " + what), "Restore " + this
         segments = text_segments(_shown(a, kind), _shown(b, kind))
     return {"key": bid, "bid": bid, "change": change, "label": label, "button": button, "segments": segments}
 
@@ -183,7 +183,7 @@ def _row_changes(old_table, new_table, bid, title):
     olds, news = _children(old_table), _children(new_table)
     if any(key is None for key, _ in olds + news) or not _same(_shell(old_table), _shell(new_table)):
         return None  # 改到表格本身（欄數、欄寬）：整個表格算一處
-    name = f"表格「{title}」" if title else "表格"
+    name = f"Table “{title}”" if title else "Table"
     before, after = dict(olds), dict(news)
     out = []
 
@@ -193,19 +193,19 @@ def _row_changes(old_table, new_table, bid, title):
 
     removed_after = _removed_positions(olds, after)
     for rid in removed_after.get(None, []):
-        out.append(item(rid, "removed", f"{name}刪掉一列", "加回這一列", [["-", _clip(row_text(before[rid]), 160)]]))
+        out.append(item(rid, "removed", f"Deleted a row from {name}", "Restore Row", [["-", _clip(row_text(before[rid]), 160)]]))
     for rid, row in news:
         prev = before.get(rid)
         if prev is None:
-            out.append(item(rid, "added", f"{name}新增一列", "拿掉這一列", [["+", _clip(row_text(row), 160)]]))
+            out.append(item(rid, "added", f"Added a row to {name}", "Remove Row", [["+", _clip(row_text(row), 160)]]))
         elif not _same(prev, row):
             a, b = row_text(prev), row_text(row)
-            label = f"{name}改了一列" if a != b else f"{name}一列改了格式"
-            out.append(item(rid, "changed", label, "改回這一列", text_segments(a, b)))
+            label = f"Changed a row in {name}" if a != b else f"Changed row formatting in {name}"
+            out.append(item(rid, "changed", label, "Restore Row", text_segments(a, b)))
         for gone in removed_after.get(rid, []):
-            out.append(item(gone, "removed", f"{name}刪掉一列", "加回這一列", [["-", _clip(row_text(before[gone]), 160)]]))
+            out.append(item(gone, "removed", f"Deleted a row from {name}", "Restore Row", [["-", _clip(row_text(before[gone]), 160)]]))
     if [k for k, _ in olds if k in after] != [k for k, _ in news if k in before]:
-        out.append({"key": f"{bid}/order", "label": f"調整了{name}的列順序", "button": None, "segments": []})
+        out.append({"key": f"{bid}/order", "label": f"Reordered rows in {name}", "button": None, "segments": []})
     return out
 
 
@@ -236,7 +236,7 @@ def block_changes(old_doc, new_doc) -> list[dict]:
         if _same(old_doc, new_doc):
             return []
         a, b = doc_text(old_doc or {}), doc_text(new_doc or {})
-        return [{"key": "doc", "label": "改了內文" if a != b else "改了格式", "button": None,
+        return [{"key": "doc", "label": "Changed content" if a != b else "Changed formatting", "button": None,
                  "segments": text_segments(a, b)}]
     before, after = dict(olds), dict(news)
     removed_after = _removed_positions(olds, after)
@@ -253,14 +253,14 @@ def block_changes(old_doc, new_doc) -> list[dict]:
         for gone in removed_after.get(bid, []):
             out.append(_block_change("removed", gone, before[gone], None))
     if [k for k, _ in olds if k in after] != [k for k, _ in news if k in before]:
-        out.append({"key": "order", "label": "調整了段落順序", "button": None, "segments": []})
+        out.append({"key": "order", "label": "Reordered passages", "button": None, "segments": []})
     return out
 
 
 def _field_value(kind, value) -> str:
     if kind == "check":
         return CHECK.get(str(value), str(value))
-    return str(value) if str(value or "").strip() else "（空白）"
+    return str(value) if str(value or "").strip() else "(empty)"
 
 
 def _field_changes(events, row_labels) -> list[dict]:
@@ -280,11 +280,11 @@ def _field_changes(events, row_labels) -> list[dict]:
             continue
         kind = end["kind"]
         place = (row_labels or {}).get(end.get("anchor_id")) or ""
-        label = "勾選" if kind == "check" else (end.get("field_label") or "這一格")
+        label = "Checkbox" if kind == "check" else (end.get("field_label") or "Field")
         segments = [["=", f"「{place}」"]] if place else []
         segments += [["-", _field_value(kind, start["old"])], ["=", " → "], ["+", _field_value(kind, end["new"])]]
         out.append({"key": f"f:{fid}", "field_id": fid, "anchor_id": end.get("anchor_id"), "label": label,
-                    "button": "改回", "segments": segments, "value": start["old"], "after_activity": end["id"],
+                    "button": "Restore", "segments": segments, "value": start["old"], "after_activity": end["id"],
                     **_media_versions(start["old"], end["new"])})
     return out
 
@@ -357,7 +357,7 @@ def build_groups(revisions, field_events, names, *, starts=None, titles=None, ro
         out.append({
             "id": f"{group['tab']}:{group['kind']}:{from_rev}-{to_rev}:{group['end'].isoformat()}",
             "tab_key": group["tab"], "tab_title": titles.get(group["tab"], ""), "kind": group["kind"],
-            "actor_id": actor, "name": names.get(actor or "") or ("系統" if not actor else "（不在名單）"),
+            "actor_id": actor, "name": names.get(actor or "") or ("System" if not actor else "(former crew member)"),
             "at": group["end"].isoformat(), "from_rev": from_rev, "to_rev": to_rev, "changes": changes,
         })
     out.sort(key=lambda g: g["at"], reverse=True)

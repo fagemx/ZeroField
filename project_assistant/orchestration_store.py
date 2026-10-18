@@ -10,7 +10,7 @@ def identifier(value):
         return str(uuid.UUID(str(value)))
     except (ValueError,TypeError,AttributeError):
         from project_assistant.agent_registry import AgentError
-        raise AgentError(400,'任務識別資料格式不正確') from None
+        raise AgentError(400,"Invalid task identity.") from None
 
 
 def one(conn,sql,params=()):

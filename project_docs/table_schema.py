@@ -66,25 +66,25 @@ def edit_table(table, body, values=None):
     operation = body.get("operation")
     identifier = body.get("column_id")
     if operation not in ("add", "reorder", "restore") and identifier not in ids:
-        raise ValueError("欄位已不存在，請重新讀取")
+        raise ValueError("The column no longer exists. Reload the page.")
     index = ids.index(identifier) if identifier in ids else None
     if operation == "restore":
         if body.get("expected_table") != table or not isinstance(body.get("table"), dict):
-            raise ValueError("表格已有後續修改，不能撤銷欄位操作")
+            raise ValueError("The table changed after this edit. The column operation cannot be undone.")
         if body["table"].get("attrs", {}).get("bid") != table.get("attrs", {}).get("bid"):
-            raise ValueError("撤銷表格身分不符")
+            raise ValueError("The undo operation does not match this table.")
         return copy.deepcopy(body["table"])
     if operation == "rename":
         name = str(body.get("name", "")).strip()
         if not name or len(name) > 100:
-            raise ValueError("欄名需要 1～100 字")
+            raise ValueError("Column names must contain 1–100 characters.")
         first = result.get("content", [{}])[0]
         if not first.get("content") or not all(c.get("type") == "tableHeader" for c in first["content"]):
-            raise ValueError("這張表格沒有標題列")
+            raise ValueError("This table has no header row.")
         first["content"][index] = {**_cell(name), "type": "tableHeader"}
     elif operation == "add":
         if width >= 100:
-            raise ValueError("最多 100 欄")
+            raise ValueError("Tables support up to 100 columns.")
         name = str(body.get("name") or f"欄 {width + 1}")[:100]
         attrs["column_ids"].append(new_id("c"))
         attrs["column_types"].append("text")
@@ -93,7 +93,7 @@ def edit_table(table, body, values=None):
             row.setdefault("content", []).append({**_cell(name if header else ""), "type": "tableHeader" if header else "tableCell"})
     elif operation == "delete":
         if width <= 1:
-            raise ValueError("至少保留一個欄位")
+            raise ValueError("Keep at least one column.")
         attrs["column_ids"].pop(index)
         attrs["column_types"].pop(index)
         attrs.get("column_options", {}).pop(identifier, None)
@@ -102,7 +102,7 @@ def edit_table(table, body, values=None):
     elif operation == "reorder":
         order = body.get("order")
         if not isinstance(order, list) or len(order) != width or set(order) != set(ids):
-            raise ValueError("欄位順序必須完整包含每個欄位一次")
+            raise ValueError("Column order must include each column exactly once.")
         positions = [ids.index(cid) for cid in order]
         attrs["column_ids"] = order.copy()
         attrs["column_types"] = [attrs["column_types"][i] for i in positions]
@@ -115,18 +115,18 @@ def edit_table(table, body, values=None):
         if operation == "change_type" or "column_type" in body:
             kind = body.get("column_type")
             if kind not in ("text", "number", "formula", "image", "video", "audio", "status"):
-                raise ValueError("不支援的欄位型態")
+                raise ValueError("Unsupported column type.")
             attrs["column_types"][index] = kind
         if "options" in body:
             options = body["options"]
             if not isinstance(options, list) or not options or len(options) > 100 or any(not isinstance(v, str) or not 0 < len(v) <= 100 for v in options) or len(set(options)) != len(options):
-                raise ValueError("狀態選項需要不重複的 1～100 字文字")
+                raise ValueError("Status options must be unique strings of 1–100 characters.")
             attrs.setdefault("column_options", {})[identifier] = {"options": options}
         for row in result.get("content", []):
             if row.get("content") and row["content"][index].get("type") != "tableHeader":
                 validate_value(result, index, cell_value(row["content"][index], values or {}))
     else:
-        raise ValueError("不支援的欄位操作")
+        raise ValueError("Unsupported column operation.")
     return result
 
 
@@ -134,18 +134,18 @@ def apply(conn, me, slug, key, body):
     from project_docs import service
     tab = repo.get_tab_for_update(conn, slug, key)
     if not tab:
-        return 404, {"error": "找不到分頁"}
+        return 404, {"error": "Page not found."}
     table = tables(tab["doc"]).get(body.get("table_id"))
     if not table:
-        return 404, {"error": "找不到表格"}
+        return 404, {"error": "Table not found."}
     if body.get("base_revision") != tab["revision"] or body.get("expected_column_ids") != column_ids(table):
-        return 409, {"error": "表格已變更，請重新核對欄位操作"}
+        return 409, {"error": "The table changed. Review the column operation again."}
     try:
         after = edit_table(table, body, repo.field_values(conn, slug).get(key, {}))
         op = {"op": "put", "bid": body["table_id"], "base": table, "node": after}
         result, doc, revision, saved_at = service._run_ops(conn, me, slug, key, tab, [op], "schema-" + new_id("s"), atomic=True, delivery_mode=body.get("delivery_mode"))
         if result.conflicts:
-            return 409, {"error": "表格已變更或正在編輯", "conflicts": result.conflicts}
+            return 409, {"error": "The table changed or is being edited.", "conflicts": result.conflicts}
         return 200, {"doc": doc, "revision": revision, "saved_at": saved_at, "schema_patch": {"before": table, "after": tables(doc)[body["table_id"]]}}
     except ValueError as exc:
         return 400, {"error": str(exc), "dependencies": getattr(exc, "dependencies", [])}

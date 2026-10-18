@@ -4,9 +4,9 @@ import { groupBoardItems, reconcileBoard, raceSelectionPayload, assignmentReques
 
 test('a pending gate cancels its whole run and a working dispatch keeps exact admission', () => {
   assert.deepEqual(cancellationRequest('/base','project',{kind:'race_select',gate_id:'g',run_id:'r'}),
-    {path:'/base/runs/r/cancel',body:{reason:'由看板取消整批工作'}});
+    {path:'/base/runs/r/cancel',body:{reason:'Batch canceled from Agent Board'}});
   assert.deepEqual(cancellationRequest('/base','project',{kind:'dispatch',dispatch_id:'d',admission_no:7}),
-    {path:'/base/dispatches/d/cancel',body:{admission_no:7,reason:'由看板取消'}});
+    {path:'/base/dispatches/d/cancel',body:{admission_no:7,reason:'Canceled from Agent Board'}});
 });
 
 test('deduplicate gate and proposal', () => {

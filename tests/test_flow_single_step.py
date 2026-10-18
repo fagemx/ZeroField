@@ -133,7 +133,7 @@ class SingleStepTests(unittest.TestCase):
         failed = flow_runner.detail(self.conn, self.slug, "flow", data["run"]["id"])
         self.assertEqual(failed["tasks"][0]["status"], "failed")
         self.assertEqual(failed["tasks"][0]["attempts"], 0)
-        self.assertIn("來源 shots 已變更", failed["tasks"][0]["error"])
+        self.assertIn("Source shots changed", failed["tasks"][0]["error"])
         flow_runner.control(self.conn, self.me, self.slug, "flow", data["run"]["id"], "retry")
         self.assertIsNone(self.claim())
 
@@ -158,9 +158,9 @@ class SingleStepTests(unittest.TestCase):
         self.save(graph)
         preview = flow_runner.preflight(self.conn, self.me, self.slug, "flow", self.request())
         self.assertFalse(preview["ready"])
-        self.assertIn("上游依賴", str(preview["errors"]))
+        self.assertIn("upstream dependencies", str(preview["errors"]))
         full = flow_runner.preflight(self.conn, self.me, self.slug, "flow", {})
-        self.assertIn("輸出列", str(full["errors"]))
+        self.assertIn("output row", str(full["errors"]))
 
     def test_queue_availability_is_reported_before_execution(self):
         self.save(self.graph())
@@ -168,7 +168,7 @@ class SingleStepTests(unittest.TestCase):
             cur.execute("UPDATE projectops.agent_limb SET last_seen_at=NULL WHERE id=%s", (self.worker["id"],))
         preview = flow_runner.preflight(self.conn, self.me, self.slug, "flow", self.request())
         self.assertFalse(preview["ready"])
-        self.assertIn("服務尚未連接", str(preview["errors"]))
+        self.assertIn("worker is not connected", str(preview["errors"]))
         with self.assertRaises(flow_runner.ExecutionError):
             flow_runner.start(self.conn, self.me, self.slug, "flow", self.request())
 
@@ -176,7 +176,7 @@ class SingleStepTests(unittest.TestCase):
         self.save(self.graph())
         preview = flow_runner.preflight(self.conn, self.me, self.slug, "flow", {"row_ids": ["missing-row"]})
         self.assertFalse(preview["ready"])
-        self.assertIn("部分選取列已不存在", str(preview["errors"]))
+        self.assertIn("selected rows no longer exist", str(preview["errors"]))
 
     def test_stable_column_reference_resolves_after_reorder(self):
         from project_docs.doc_schema import column_ids

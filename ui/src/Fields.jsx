@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { STATUSES, shortTime, statusClass } from "./format.js";
+import { STATUSES, shortTime, statusClass, statusLabel } from "./format.js";
 
 // 狀態膠囊：點了選，選了就存。選單放在最上層（不會被表格的捲動區切掉），上次是誰改的寫在下面。
 export function StatusPill({ value, info, onChange }) {
@@ -34,7 +34,7 @@ export function StatusPill({ value, info, onChange }) {
     <span className="pill-wrap" data-interactive="">
       <button type="button" ref={button} className={"badge " + statusClass(value)} aria-haspopup="menu"
         aria-expanded={Boolean(rect)} onClick={toggle} onMouseDown={(event) => event.preventDefault()}>
-        {value}
+        {statusLabel(value)}
       </button>
       {rect && createPortal(
         <span ref={menu} className="menu pill-menu" role="menu" data-interactive=""
@@ -44,12 +44,12 @@ export function StatusPill({ value, info, onChange }) {
             <button type="button" key={label} role="menuitem"
               onClick={() => { setRect(null); if (label !== value) onChange(label); }}>
               <span className={"badge " + statusClass(label)}>{label}</span>
-              {label === value && <span className="tick">✓</span>}
+              {label === statusLabel(value) && <span className="tick">✓</span>}
             </button>
           ))}
           <span className="who">
-            {info && info.by_name ? `上次：${info.by_name}・${shortTime(info.at)}` : "還沒有人改過"}
-            <br />點選就儲存，紀錄會掛你的名字出現在這一列的對話裡。
+            {info && info.by_name ? `Last changed:${info.by_name}・${shortTime(info.at)}` : "No changes yet"}
+            <br />Select to save. Your change is recorded in this row’s discussion.
           </span>
         </span>,
         document.body,
@@ -93,13 +93,13 @@ export function FillField({ value, info, onSave }) {
     );
   }
   return (
-    <span className="fill-field" role="button" tabIndex={0} title="點這裡填寫，離開格子就會儲存" data-interactive=""
+    <span className="fill-field" role="button" tabIndex={0} title={"Click to add notes; click outside to save"} data-interactive=""
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => setEditing(true)}
       onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); setEditing(true); } }}>
-      {value ? <span className="fill-value">{value}</span> : <span className="ph">點這裡填寫</span>}
+      {value ? <span className="fill-value">{value}</span> : <span className="ph">Click to add director notes…</span>}
       {value && info && info.by_name && <span className="by">{info.by_name}・{shortTime(info.at)}</span>}
-      {saved && <span className="saved-tip">已儲存</span>}
+      {saved && <span className="saved-tip">Saved</span>}
     </span>
   );
 }

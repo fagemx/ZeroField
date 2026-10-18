@@ -375,3 +375,7 @@ button.pill:hover { background: var(--pa-accent-bg); color: var(--pa-accent); }
 .agent-settings textarea{resize:vertical}
 .agent-tool-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:4px;font-size:12px}
 .agent-tool-options label{display:flex;gap:5px;align-items:center;overflow-wrap:anywhere}
+
+/* English labels must fit the narrow studio sidebar. */
+.pa > .pop-tabs { flex-wrap: wrap; gap: 4px; }
+.pa > .pop-tabs > button { flex: 0 0 auto; white-space: nowrap; }

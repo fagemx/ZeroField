@@ -36,8 +36,8 @@ function TaskItemView({ node }) {
   return (
     <NodeViewWrapper as="div" className="task-row" data-checked={checked ? "true" : "false"}>
       <label contentEditable={false} data-interactive="" suppressContentEditableWarning>
-        <input type="checkbox" checked={checked} aria-label="勾選"
-          title={info && info.by_name ? `${info.by_name}・${shortTime(info.at)}` : "勾了就儲存"}
+        <input type="checkbox" checked={checked} aria-label={"Select"}
+          title={info && info.by_name ? `${info.by_name}・${shortTime(info.at)}` : "Select to save"}
           onMouseDown={(event) => event.stopPropagation()}
           onChange={() => node.attrs.fid && onField(node.attrs.fid, checked ? "false" : "true")} />
       </label>

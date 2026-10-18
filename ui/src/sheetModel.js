@@ -7,10 +7,10 @@ export function readCell(node, values = {}) {
   const walk = (n) => {
     if (n.type === "text") value += n.text || "";
     if (n.type === "hardBreak") value += "\n";
-    if (n.type === "image") { value = `![${n.attrs?.alt || "圖片"}](${n.attrs?.src})`; kind = "image"; }
+    if (n.type === "image") { value = `![${n.attrs?.alt || "Image"}](${n.attrs?.src})`; kind = "image"; }
     if (n.type === "status" || n.type === "fill") {
       kind = n.type; fid = n.attrs?.fid;
-      value = values[fid]?.value ?? (kind === "status" ? n.attrs?.label || "未開始" : "");
+      value = values[fid]?.value ?? (kind === "status" ? n.attrs?.label || "Queued" : "");
     }
     for (const c of n.content || []) walk(c);
   };
@@ -22,10 +22,10 @@ export function tablesOf(doc, values = {}) {
   return (doc?.content || []).filter((n) => n.type === "table").map((table, index) => {
     const first = table.content?.[0];
     const hasHeader = first?.content?.every((c) => c.type === "tableHeader");
-    return { table, tableId: table.attrs.bid, name: table.attrs.sheet_name || table.attrs.worksheet_name || `表格 ${index + 1}`,
+    return { table, tableId: table.attrs.bid, name: table.attrs.sheet_name || table.attrs.worksheet_name || `Table ${index + 1}`,
       headers: hasHeader ? first.content.map((c) => readCell(c, values).value) : first?.content?.map((_, i) => columnName(i)) || [],
       header: hasHeader ? first : null,
-      rows: (table.content || []).slice(hasHeader ? 1 : 0).map((row) => ({ rid: row.attrs.bid, rawRow: row, cells: row.content.map((c) => readCell(c, values)) })) };
+     rows: (table.content || []).slice(hasHeader ? 1 : 0).map((row) => ({ rid: row.attrs.bid, rawRow: row, cells: row.content.map((c) => readCell(c, values)) })) };
   });
 }
 
@@ -44,21 +44,21 @@ export function parseTSV(text) {
     if (c === '"' && (quoted || !value)) {
       if (quoted && text[i + 1] === '"') { value += '"'; i++; } else quoted = !quoted;
     } else if (!quoted && (c === "\t" || c === "\n")) {
-      rows.at(-1).push(value); value = "";
+     rows.at(-1).push(value); value = "";
       if (c === "\n") rows.push([]);
     } else value += c;
   }
-  if (quoted) throw new Error("貼上的引號不完整");
-  rows.at(-1).push(value);
+  if (quoted) throw new Error("Pasted text has an unclosed quote.");
+ rows.at(-1).push(value);
   if (rows.length > 1 && rows.at(-1).length === 1 && rows.at(-1)[0] === "") rows.pop();
-  if (rows.length > 200 || rows.some((r) => r.length > 100)) throw new Error("一次最多貼上 200 列、100 欄");
+  if (rows.length > 200 || rows.some((r) => r.length > 100)) throw new Error("Paste up to 200 rows and 100 columns at a time.");
   return rows;
 }
 
 // Send field-backed cells and ordinary cells together so the server can validate
 // the entire paste before applying either kind of change.
 export function tableEditPayload(parsed, startRow, startCol, grid) {
-  if (startRow < 0 || startRow > parsed.rows.length || startCol < 0 || grid.some((r) => startCol + r.length > parsed.headers.length)) throw new Error("貼上範圍超出欄數，請先新增欄位");
+  if (startRow < 0 || startRow > parsed.rows.length || startCol < 0 || grid.some((r) => startCol + r.length > parsed.headers.length)) throw new Error("The paste exceeds the column count. Add columns first.");
   const row_edits = [], new_rows = [];
   grid.forEach((cells, offset) => {
     const old = parsed.rows[startRow + offset];
@@ -104,15 +104,15 @@ export function evaluate(value, rows, seen = new Set(), offset = 0) {
     const cell = (letters, row) => {
       let c = 0; for (const x of letters) c = c * 26 + x.charCodeAt(0) - 64;
       const key = `${letters}${row}`;
-      if (seen.has(key)) throw new Error("循環參照");
+      if (seen.has(key)) throw new Error("Circular reference");
       const raw = rows[Number(row) - 1 - offset]?.cells[c - 1]?.value ?? "0";
       const result = evaluate(raw, rows, new Set([...seen, key]), offset);
       const n = Number(String(result).replaceAll(",", ""));
-      if (!Number.isFinite(n)) throw new Error("無法計算");
+      if (!Number.isFinite(n)) throw new Error("Cannot calculate");
       return n;
     };
     expr = expr.replace(/(SUM|AVG|AVERAGE)\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)/g, (_, fn, c1, r1, c2, r2) => {
-      if (c1 !== c2 || Math.abs(+r2 - +r1) > 10000) throw new Error("不支援的範圍");
+      if (c1 !== c2 || Math.abs(+r2 - +r1) > 10000) throw new Error("Unsupported range");
       let sum = 0; for (let r = Math.min(+r1, +r2); r <= Math.max(+r1, +r2); r++) sum += cell(c1, r);
       return String(fn === "SUM" ? sum : sum / (Math.abs(+r2 - +r1) + 1));
     });

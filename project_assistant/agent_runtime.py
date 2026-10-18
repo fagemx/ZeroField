@@ -35,7 +35,7 @@ def provider_for(profile,env=None):
     if config.get('api_key_env'):
         permitted={n.strip() for n in env.get('OPENBENCH_AGENT_KEY_ENVS','').split(',') if n.strip()}
         if config['api_key_env'] not in permitted:
-            raise tools.ToolError('POLICY_DENIED：模型憑證參照已撤銷')
+            raise tools.ToolError("POLICY_DENIED: The model credential reference was revoked.")
         key=env.get(config['api_key_env'],'')
     kind=config.get('kind',base.kind)
     if kind=='codex': kind='codex_cli'

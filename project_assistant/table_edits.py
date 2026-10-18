@@ -13,7 +13,7 @@ def _plain(value):
         text = str(value)
         if len(text) <= 10000:
             return text
-    raise ValueError("儲存格內容必須是文字或數值，最多 10000 字")
+    raise ValueError("Cell content must be text or a number with at most 10,000 characters.")
 
 
 def _cell(value):
@@ -72,11 +72,11 @@ def validate_value(table, index, text):
     ids = attrs.get("column_ids", [])
     options = attrs.get("column_options", {}).get(ids[index] if index < len(ids) else "", {}).get("options", [])
     if text and kind == "number" and not re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", text):
-        raise ValueError(f"第 {index + 1} 欄需要數值；內容未寫入")
+        raise ValueError(f"Column {index + 1} requires a number. Nothing was applied.")
     if text and kind == "formula" and not text.startswith("="):
-        raise ValueError(f"第 {index + 1} 欄需要以 = 開始的公式")
+        raise ValueError(f"Column {index + 1} requires a formula starting with =.")
     if text and kind == "status" and options and text not in options:
-        raise ValueError(f"第 {index + 1} 欄的狀態不在設定選項內")
+        raise ValueError(f"The status in column {index + 1} is not among its configured options.")
 
 
 def check_expected(doc, edits, values, table_id=None):
@@ -87,14 +87,14 @@ def check_expected(doc, edits, values, table_id=None):
     conflicts = []
     for edit in edits:
         if not isinstance(edit, dict) or not isinstance(edit.get("cells"), dict):
-            raise ValueError("row_edits 必須包含 cells")
+            raise ValueError("row_edits must include cells.")
         expected = edit.get("expected_cells")
         if not isinstance(expected, dict) or set(expected) != set(edit["cells"]):
-            raise ValueError("每個修改格都需要 expected_cells 原值")
+            raise ValueError("Each changed cell requires its original value in expected_cells.")
         table, row = rows.get(edit.get("row_id"), ({}, {}))
         for col, mine in edit["cells"].items():
             if not str(col).isdigit():
-                raise ValueError("欄號必須是零起算整數")
+                raise ValueError("Column indices must be zero-based integers.")
             index = int(col)
             cells = row.get("content", [])
             current = cell_value(cells[index], values) if index < len(cells) else None
@@ -115,14 +115,14 @@ def _row_meta(row):
 
 def prepare(doc, row_edits, new_rows, values, table_id=None):
     if not isinstance(row_edits, list) or not isinstance(new_rows, list) or not 0 < len(row_edits) + len(new_rows) <= 200:
-        raise ValueError("請提供 1～200 列修改或新增")
+        raise ValueError("Provide changes or additions for 1–200 rows.")
     tables = [n for n in doc.get("content", []) if n.get("type") == "table"]
     if table_id:
         tables = [t for t in tables if t.get("attrs", {}).get("bid") == table_id]
     if not tables:
-        raise ValueError("找不到表格")
+        raise ValueError("Table not found.")
     if new_rows and len(tables) != 1:
-        raise ValueError("分頁有多張表格；新增列時請指定 table_id")
+        raise ValueError("This page contains multiple tables. Specify table_id when adding rows.")
     rows = {}
     for table in tables:
         for row in table.get("content", []):
@@ -132,16 +132,16 @@ def prepare(doc, row_edits, new_rows, values, table_id=None):
     ops, fields, preview, touched = [], [], [], set()
     for edit in row_edits:
         if not isinstance(edit, dict) or not isinstance(edit.get("cells"), dict) or not edit["cells"]:
-            raise ValueError("row_edits 必須包含 row_id 與 cells（零起算欄號對應內容）")
+            raise ValueError("row_edits must include row_id and cells mapping zero-based column indices to content.")
         rid = edit.get("row_id")
         if rid not in rows or rid in touched:
-            raise ValueError("列不存在或重複；請重新讀取分頁的 row_id")
+            raise ValueError("A row is missing or duplicated. Read the page’s row IDs again.")
         touched.add(rid)
         table, before = rows[rid]
         after = copy.deepcopy(before)
         for col, value in edit["cells"].items():
             if not str(col).isdigit() or int(col) >= len(after.get("content", [])):
-                raise ValueError("欄號超出表格範圍（零起算）")
+                raise ValueError("The zero-based column index is outside the table.")
             index, text = int(col), _plain(value)
             validate_value(table, index, text)
             old_cell = before["content"][index]
@@ -153,7 +153,7 @@ def prepare(doc, row_edits, new_rows, values, table_id=None):
                 ids = table.get("attrs", {}).get("column_ids", [])
                 options = table.get("attrs", {}).get("column_options", {}).get(ids[index] if index < len(ids) else "", {}).get("options", STATUSES)
                 if kind == "status" and text not in options:
-                    raise ValueError("不支援這個狀態")
+                    raise ValueError("Unsupported status.")
                 base = values.get(fid)
                 fields.append({"fid": fid, "kind": kind, "base": base, "value": text})
                 if kind == "status":
@@ -169,7 +169,7 @@ def prepare(doc, row_edits, new_rows, values, table_id=None):
         previous = table["content"][-1]["attrs"]["bid"]
         for row in new_rows:
             if not isinstance(row, list) or len(row) != width:
-                raise ValueError(f"新增列需要 {width} 格")
+                raise ValueError(f"New rows require {width} cells.")
             for index, value in enumerate(row):
                 validate_value(table, index, _plain(value))
             rid = new_id("b")
@@ -186,22 +186,22 @@ def apply(conn, me, slug, target):
     versions = target.get("source_revisions")
     source_scopes=target.get('source_scopes',[])
     if not isinstance(source_scopes,list) or len(source_scopes)>100 or any(not isinstance(s,dict) or not isinstance(s.get('target_tab'),str) for s in source_scopes):
-        return 400,{'error':'來源範圍格式不正確'}
+        return 400,{'error':"Invalid source scope."}
     if versions is not None or source_scopes:
         versions={} if versions is None else versions
         if not isinstance(versions, dict) or len(versions) > 100 or any(not isinstance(k, str) or type(v) is not int or v < 0 for k, v in versions.items()):
-            return 400, {"error": "試跑來源版本資料無效"}
+            return 400, {"error": "Invalid source revision for this test run."}
         # Consistent key order prevents reciprocal source/target lock deadlocks.
         locked = {source_key: repo.get_tab_for_update(conn, slug, source_key) for source_key in sorted(set(versions) | {s['target_tab'] for s in source_scopes} | {key})}
         if any(not locked[source_key] or locked[source_key]["revision"] != expected for source_key, expected in versions.items()):
-            return 409, {"error": "試跑來源已變更或刪除，請重新核對來源並試跑"}
+            return 409, {"error": "The test source changed or was deleted. Review it and test again."}
         tab = locked[key]
     else:
         tab = repo.get_tab_for_update(conn, slug, key)
     if not tab:
-        return 404, {"error": "分頁已刪除"}
+        return 404, {"error": "The page was deleted."}
     if target.get("expected_revision") is not None and target["expected_revision"] != tab["revision"]:
-        return 409, {"error": "分頁已更新，請重新產生新增列提案"}
+        return 409, {"error": "The page changed. Generate a new proposal for added rows."}
     ops = copy.deepcopy(target.get("ops", []))
     # Parallel branches may update different cells of the same row. Rebase only
     # explicitly edited columns whose own bases are unchanged. Row structure,
@@ -212,7 +212,7 @@ def apply(conn, me, slug, target):
     tables = {table.get("attrs", {}).get("bid"): table for table in tab["doc"].get("content", []) if table.get("type") == "table"}
     for op in ops:
         if op.get("column_ids") and op["column_ids"] != column_ids(tables.get(op.get("table"), {})):
-            return 409, {"error": "欄位結構已變更，請重新核對修改位置"}
+            return 409, {"error": "The column structure changed. Review the edit targets again."}
         if op.get("op") != "put_row" or not op.get("edited_cols") or not op.get("base"):
             continue
         before, after = op["base"], op.get("node", {})
@@ -231,7 +231,7 @@ def apply(conn, me, slug, target):
         op["base"], op["node"] = current, merged
     checked = blocks.apply_ops(tab["doc"], ops, blocks.Actor(me.actor_id, me.can_edit), locks=repo.tab_locks(conn, slug, key), now=service._now())
     if checked.conflicts:
-        return 409, {"error": "資料已變更或正在編輯，請重新產生提案", "conflicts": checked.conflicts}
+        return 409, {"error": "The data changed or is being edited. Generate a new proposal.", "conflicts": checked.conflicts}
     values = repo.field_values(conn, slug).get(key, {})
     if source_scopes:
         from project_assistant.request_scope import verify_source
@@ -239,7 +239,7 @@ def apply(conn, me, slug, target):
         try:
             for scope in source_scopes:
                 if not locked[scope['target_tab']]:
-                    raise ValueError('來源分頁已刪除')
+                    raise ValueError("The source page was deleted.")
                 verify_source(scope,{**locked[scope['target_tab']],'key':scope['target_tab']},all_values.get(scope['target_tab'],{}))
         except ValueError as exc:
             return 409,{'error':str(exc)}
@@ -251,7 +251,7 @@ def apply(conn, me, slug, target):
             return 409, {"error": str(exc)}
     for edit in target.get("field_edits", []):
         if values.get(edit["fid"]) != edit.get("base"):
-            return 409, {"error": "欄位已變更，請重新產生提案"}
+            return 409, {"error": "The column changed. Generate a new proposal."}
     after_values = {**values, **{edit["fid"]: {"value": edit["value"]} for edit in target.get("field_edits", [])}}
     try:
         for op in ops:
@@ -271,7 +271,7 @@ def apply(conn, me, slug, target):
     except ValueError as exc:
         return 400, {"error": str(exc), "dependencies": getattr(exc, "dependencies", [])}
     if result.conflicts:
-        return 409, {"error": "資料已變更或正在編輯，請重新產生提案", "conflicts": result.conflicts}
+        return 409, {"error": "The data changed or is being edited. Generate a new proposal.", "conflicts": result.conflicts}
     changed_fields = False
     for edit in target.get("field_edits", []):
         repo.set_field_value(conn, slug, key, edit["fid"], kind=edit["kind"], value=edit["value"], actor_id=me.actor_id)

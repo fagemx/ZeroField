@@ -9,7 +9,7 @@ test("result row context uses the claimed source snapshot and never offers a non
   const task = { node_id: "step", row_id: "r2", source_context: { tab_key: "source", table_id: "table", title: "原始資料", revision: 3, cells: ["鏡頭二", "待核對"] } };
   assert.deepEqual(taskSourceContext(task, run), { tabKey: "source", tableId: "table", rowId: "r2", colIndex: 0, title: "原始資料", revision: 3, label: "鏡頭二 · 待核對" });
   assert.equal(taskSourceContext({ ...task, row_id: null }, run), null);
-  assert.equal(taskSourceContext({ node_id: "step", row_id: "r2" }, run).label, "來源資料列");
+  assert.equal(taskSourceContext({ node_id: "step", row_id: "r2" }, run).label, "Source Rows");
   const input = { tabs: [{ tab_key: "source", title: "來源", revision: 2 }], rows: [{ row_id: "r2", tab_key: "reference", table_id: "table", cells: ["錯誤參考列"] }, { row_id: "r2", tab_key: "source", table_id: "table", cells: ["正確來源列"] }] };
   assert.equal(taskSourceContext({ node_id: "step", row_id: "r2", input }, run).label, "正確來源列");
 });
@@ -54,9 +54,9 @@ test("DAG editor permits branching and joins, rejects back edges and duplicates"
   dag = connectNodes(dag, "c", "d");
   assert.equal(dag.edges.length, 4);
   assert.equal(connectNodes(dag, "a", "b"), dag);
-  assert.throws(() => connectNodes(dag, "d", "a"), /循環/);
-  assert.throws(() => connectNodes(dag, "a", "a"), /自己/);
-  assert.throws(() => connectNodes(dag, "missing", "a"), /找不到/);
+  assert.throws(() => connectNodes(dag, "d", "a"), /cycle/);
+  assert.throws(() => connectNodes(dag, "a", "a"), /itself/);
+  assert.throws(() => connectNodes(dag, "missing", "a"), /not found/);
   assert.equal(graph.edges.length, 0);
 });
 

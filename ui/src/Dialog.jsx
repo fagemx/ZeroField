@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 // 簡單的對話框：一行輸入（可選）、一個下拉（可選）、確定／取消。
-export function Dialog({ title, message, input, inputLabel, select, confirmLabel = "確定", cancelLabel = "取消", danger, onConfirm, onCancel, children, hideConfirm = false, className = '', returnFocusRef }) {
+export function Dialog({ title, message, input, inputLabel, select, confirmLabel = "Confirm", cancelLabel = "Cancel", danger, onConfirm, onCancel, children, hideConfirm = false, className = '', returnFocusRef }) {
   const [text, setText] = useState(input && input.value ? input.value : "");
   const [choice, setChoice] = useState(select && select.value ? select.value : "");
   const field = useRef(null);

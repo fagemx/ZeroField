@@ -66,7 +66,7 @@ class RequestReviewHTTPTests(unittest.TestCase):
         path = f"/projects/api/{self.slug}/assistant/proposals/{proposal['id']}/apply"
         status, rejected, _ = self.request(path, method="POST", data={})
         self.assertEqual(status, 409, rejected)
-        self.assertIn("來源", rejected["error"])
+        self.assertIn("source", rejected["error"])
         self.assertEqual(store.proposal(self.conn, proposal["id"])["status"], "pending")
         current = repo.get_tab(self.conn, self.slug, "shots")
         self.assertEqual(node_text(current["doc"]["content"][0]["content"][1]["content"][1]), "original")

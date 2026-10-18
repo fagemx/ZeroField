@@ -10,11 +10,11 @@ from project_docs import repository as repo,service,media
 def context(conn,worker,body):
     dispatch=cp.leased_dispatch(conn,worker,body.get('dispatch_handle'),body.get('lease_token'))
     if str(body.get('task_id'))!=dispatch['id']:
-        raise cp.OrchestrationError(409,'任務與派發憑證不相符','STALE_DISPATCH')
+        raise cp.OrchestrationError(409,"Task and dispatch credentials do not match.",'STALE_DISPATCH')
     run=db.get_run(conn,dispatch['project_slug'],dispatch['run_id'])
     member=next((m for m in repo.active_members(conn) if m['actor_id']==run['created_by']),None)
     if not member:
-        raise cp.OrchestrationError(403,'發起人已停用')
+        raise cp.OrchestrationError(403,"The initiator is disabled.")
     me=service.Identity(member['actor_id'],member['name'],member['role'])
     task=db.get_task(conn,dispatch['project_slug'],dispatch['task_id'])
     ctx=tools.ToolContext(lambda:None,dispatch['project_slug'],me,Path('.'),None,agent_key=dispatch['agent_key'],
@@ -70,26 +70,26 @@ def renew(conn,worker,body):
 def complete(conn,worker,body):
     outcome=body.get('outcome','succeeded')
     if outcome not in ('succeeded','awaiting_gate'):
-        raise cp.OrchestrationError(400,'不支援此完成狀態')
+        raise cp.OrchestrationError(400,"Unsupported completion status.")
     previous=cp._authenticated_dispatch(conn,worker,body.get('dispatch_handle'),body.get('lease_token'))
     if str(body.get('task_id'))!=previous['id']:
-        raise cp.OrchestrationError(409,'任務與派發憑證不相符','STALE_DISPATCH')
+        raise cp.OrchestrationError(409,"Task and dispatch credentials do not match.",'STALE_DISPATCH')
     if previous['output_digest']:
         proposals=db.many(conn,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s ORDER BY id',(previous['id'],))
         return cp.complete_dispatch(conn,worker,body['dispatch_handle'],body['lease_token'],outcome=outcome,output=body.get('output'),proposal_ids=proposals)
     if outcome=='awaiting_gate':
         gate=db.one(conn,"SELECT id FROM projectops.orchestration_gate WHERE dispatch_id=%s AND status='open' AND gate_kind='question'",(previous['id'],))
         if not gate or previous['status']!='awaiting_gate':
-            raise cp.OrchestrationError(409,'沒有本次已提交的待決問題','STALE_DISPATCH')
+            raise cp.OrchestrationError(409,"No committed decision gate exists for this turn.",'STALE_DISPATCH')
         proposals=db.many(conn,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s ORDER BY id',(previous['id'],))
         return cp.complete_dispatch(conn,worker,body['dispatch_handle'],body['lease_token'],outcome=outcome,output=body.get('output'),proposal_ids=proposals)
     dispatch,task,ctx=context(conn,worker,body)
     output=body.get('output')
     if not isinstance(output,dict):
-        raise cp.OrchestrationError(400,'output 必須是 JSON 物件')
+        raise cp.OrchestrationError(400,"output must be a JSON object.")
     runtime=body.get('runtime',{})
     if not isinstance(runtime,dict) or set(runtime)-{'model','adapter'} or any(not isinstance(v,str) or len(v)>120 for v in runtime.values()):
-        raise cp.OrchestrationError(400,'執行器摘要格式不正確')
+        raise cp.OrchestrationError(400,"Invalid runtime summary.")
     if runtime:
         db.execute(conn,'UPDATE projectops.orchestration_dispatch SET executed_model=%s,executed_provider=%s WHERE id=%s',
                    (runtime.get('model'),runtime.get('adapter'),dispatch['id']))
@@ -115,7 +115,7 @@ def tool_list(conn,worker,body):
     dispatch,task,ctx=context(conn,worker,body)
     profile=agent_registry.get_agent(conn,ctx.slug,ctx.agent_key)
     if not profile or not profile['enabled']:
-        raise cp.OrchestrationError(403,'代理已停用','POLICY_DENIED')
+        raise cp.OrchestrationError(403,"The agent is disabled.",'POLICY_DENIED')
     return {'tools':[spec for spec in agent_policy.tool_specs_for(profile) if spec['name'] in ctx.allowed_tools]}
 
 

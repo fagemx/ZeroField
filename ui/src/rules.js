@@ -1,11 +1,11 @@
 // 標註的規則：誰該處理、誰能解決、清單怎麼分組、內文上用什麼樣子。跟伺服器 service.py 的權限一致。
 
 export const LABELS = {
-  q: { name: "問題", cls: "lb-q", open: true, hint: "看不懂、有疑問。會一直算待處理，直到有人按「解決」" },
-  fix: { name: "要修改", cls: "lb-fix", open: true, hint: "內容不對或要改寫。會一直算待處理，直到有人按「解決」" },
-  ok: { name: "已確認", cls: "lb-ok", open: false, hint: "這段我確認過了。之後這段字被改，會請你重新確認" },
+  q: { name: "Question", cls: "lb-q", open: true, hint: "Ask a question. It stays open until someone resolves it." },
+  fix: { name: "Revise", cls: "lb-fix", open: true, hint: "Request a correction or rewrite. It stays open until resolved." },
+  ok: { name: "Approved", cls: "lb-ok", open: false, hint: "Approve this passage. Changes to its text will require approval again." },
 };
-export const COLORS = { y: ["黃", "#ffd400"], g: ["綠", "#46c864"], b: ["藍", "#5096ff"], p: ["粉", "#ff64a0"] };
+export const COLORS = { y: ["Yellow", "#ffd400"], g: ["Green", "#46c864"], b: ["Blue", "#5096ff"], p: ["Pink", "#ff64a0"] };
 
 export const comments = (a) => (a.messages || []).filter((m) => m.kind === "comment");
 
@@ -68,10 +68,10 @@ export function panelGroups(list, me, isAdmin, mineOnly) {
 }
 
 export function chipFor(a) {
-  if (a.reconfirm) return { cls: "re", text: "要重新確認" };
+  if (a.reconfirm) return { cls: "re", text: "Approval required again" };
   if (a.label) return { cls: LABELS[a.label].cls, text: LABELS[a.label].name };
-  if (a.kind === "row") return { cls: "row", text: "整列" };
-  return { cls: "nt", text: "補充說明" };
+  if (a.kind === "row") return { cls: "row", text: "Whole Row" };
+  return { cls: "nt", text: "Add Note" };
 }
 
 // 內文上這一則畫成什麼樣子

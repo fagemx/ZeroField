@@ -23,7 +23,7 @@ def prepare(conn,me,slug,body,annotation_id=None):
     if not named:
         return None  # Social references, email, and plain text are not agent commands.
     if len(named)!=1:
-        raise agent_registry.AgentError(400,'留言一次請點名一位代理；多位候選請使用表格的競速入口')
+        raise agent_registry.AgentError(400,"Mention one agent per comment. Use the table’s candidate comparison for multiple agents.")
     key=agent_registry.resolve_mention(conn,slug,'',next(iter(named)))
     with conn.cursor() as cur:
         cur.execute('SELECT actor_id FROM projectops.member WHERE actor_id=%s FOR UPDATE',(me.actor_id,))
@@ -31,26 +31,26 @@ def prepare(conn,me,slug,body,annotation_id=None):
     if annotation_id is not None:
         found=repo.list_annotations(conn,slug,annotation_id=annotation_id)
         if not found:
-            raise agent_registry.AgentError(404,'找不到來源標註')
+            raise agent_registry.AgentError(404,"Source annotation not found.")
         annotation=found[0]
     tab_key=annotation['tab_key'] if annotation else body.get('tab_key')
     tab=repo.get_tab_for_update(conn,slug,tab_key)
     if not tab:
-        raise agent_registry.AgentError(404,'來源分頁已不存在')
+        raise agent_registry.AgentError(404,"The source page no longer exists.")
     tab={**tab,'key':tab_key}
     if type(body.get('source_revision')) is not int or body['source_revision']!=tab['revision']:
-        raise agent_registry.AgentError(409,'來源已更新，請先儲存並重新核對要交給代理的內容','SOURCE_CHANGED')
+        raise agent_registry.AgentError(409,"The source changed. Save and review it before assigning the task.",'SOURCE_CHANGED')
     rid=annotation['anchor']['rid'] if annotation and annotation['kind']=='row' else body.get('row')
     if rid:
         table=next((t for t in tab['doc'].get('content',[]) if t.get('type')=='table' and any(r.get('attrs',{}).get('bid')==rid for r in t.get('content',[]))),None)
         if not table:
-            raise agent_registry.AgentError(409,'來源資料列已不存在','SOURCE_CHANGED')
+            raise agent_registry.AgentError(409,"The source row no longer exists.",'SOURCE_CHANGED')
         raw={'target_tab':tab_key,'table_id':table['attrs']['bid'],'base_revision':tab['revision'],'row_ids':[rid],'column_ids':column_ids(table)}
     else:
         anchor=annotation['anchor'] if annotation else anchoring.clean_anchor(body.get('anchor'))
         resolved=anchoring.resolve(doc_text(tab['doc']),anchor or {})
         if not resolved or not resolved[2]:
-            raise agent_registry.AgentError(409,'無法精確定位來源段落，請重新選取','SOURCE_CHANGED')
+            raise agent_registry.AgentError(409,"The source passage cannot be located precisely. Select it again.",'SOURCE_CHANGED')
         start,end,_=resolved
         selected=[]; offset=0; preceding=False
         def has_textblock(node):
@@ -72,7 +72,7 @@ def route_result(conn,me,slug,prepared,payload):
         return 200,payload
     comment_id=payload.get('comment_id')
     if type(comment_id) is not int:
-        raise agent_registry.AgentError(409,'留言未完成，沒有建立代理工作')
+        raise agent_registry.AgentError(409,"The comment was not completed; no agent task was created.")
     source_ref='activity:'+str(comment_id)
     code,result=assistant.send(conn,me,slug,{'text':prepared['text'],'agent_key':prepared['agent_key'],'scope':prepared['scope']},source_ref=source_ref)
     if code>=400:

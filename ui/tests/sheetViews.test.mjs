@@ -58,10 +58,10 @@ test('status changes address one original row and one status column only', () =>
   assert.deepEqual(statusMovePayload(parsed, 'r3', 2, '已完成'), {
     table_id: 't1', row_edits: [{row_id: 'r3', cells: {'2': '已完成'}}], new_rows: [],
   });
-  assert.throws(() => statusMovePayload(parsed, 'deleted', 2, '已完成'), /不存在/);
-  assert.throws(() => statusMovePayload(parsed, 'r1', 0, '已完成'), /狀態欄/);
-  assert.throws(() => statusMovePayload(parsed, 'r1', 2, '任意未知值'), /選項/);
-  assert.throws(() => statusMovePayload(parsed, 'r1', 5, ''), /選項/);
+  assert.throws(() => statusMovePayload(parsed, 'deleted', 2, '已完成'), /no longer exist/);
+  assert.throws(() => statusMovePayload(parsed, 'r1', 0, '已完成'), /status column/);
+  assert.throws(() => statusMovePayload(parsed, 'r1', 2, '任意未知值'), /status option/);
+  assert.throws(() => statusMovePayload(parsed, 'r1', 5, ''), /status option/);
 });
 
 test('view preferences survive reload but stale column bindings and malformed storage are discarded', () => {

@@ -1,5 +1,7 @@
 # ZeroField Studio — Agent Instructions & Guardrails (`AGENTS.md`)
 
+> **2026-10-18 English contest baseline:** The M8-A–D / ACP / E1 engine is retained. English UI, crew labels, a five-page `zerofield_studio` planning template, and legacy status compatibility are implemented. Backend 241 / frontend 78 tests, UI build, wheel resources, and isolated desktop UI checks passed; see [`docs/english-baseline.json`](./docs/english-baseline.json). Video-specific development, generation workflows, real sample renders, and `run_studio.py` are the next phase. Use README’s Available now section for current capability claims.
+
 > **給接手的 AI 代理（Codex / Claude / Antigravity）**：
 > 本專案 **`ZeroField`**（位於 `C:\ai_project\ZeroField`）是專為參加 ComfyUI **「Open Source Higgsfield Challenge」**（截止日：2026-10-30 09:00 PT）獨立出來的參賽專用 Repo。
 >

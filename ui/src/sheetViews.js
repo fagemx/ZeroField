@@ -1,8 +1,8 @@
 import { evaluate, mediaOf, tableEditPayload } from './sheetModel.js';
-import { STATUSES } from './format.js';
+import { STATUSES, LEGACY_STATUSES, statusLabel } from './format.js';
 
 const MODES = ['grid', 'gallery', 'kanban'];
-const COMMON_STATUSES = ['未開始', '進行中', '等待審核', '已完成'];
+const COMMON_STATUSES = STATUSES;
 
 function viewColumns(parsed) {
   const types = parsed.table.attrs.column_types || [];
@@ -17,7 +17,7 @@ export function statusOptions(parsed, column, row) {
   const existing = parsed.rows.map(r => String(r.cells[column]?.value ?? '')).filter(Boolean);
   const configured = parsed.table.attrs.column_options?.[parsed.table.attrs.column_ids?.[column]]?.options;
   const options = [...new Set([...(configured?.length ? configured : COMMON_STATUSES), ...existing])];
-  return row?.cells[column]?.kind === 'status' ? options.filter(value => STATUSES.includes(value)) : options;
+  return row?.cells[column]?.kind === 'status' ? options.filter(value => STATUSES.includes(value) || value in LEGACY_STATUSES) : options;
 }
 
 export function sheetViewModel(parsed, visibleRows, preferences = {}) {
@@ -29,7 +29,7 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}) {
     const index = indexById.get(row.rid);
     const media = coverColumn < 0 ? null : mediaOf(row.cells[coverColumn]?.value, 'image');
     return {
-      row, index, title: String(row.cells[0]?.value || `第 ${index + 1} 列`),
+      row, index, title: String(row.cells[0]?.value || `Row ${index + 1}`),
       cover: media?.kind === 'image' ? {...media, column: coverColumn, value: row.cells[coverColumn].value} : null,
       summary: row.cells.flatMap((cell, c) => c === 0 || c === coverColumn || statusColumns.some(s => s.index === c) || mediaOf(cell.value, parsed.table.attrs.column_types?.[c]) || !String(cell.value ?? '').trim() ? [] : [{
         label: parsed.headers[c], value: evaluate(cell.value, parsed.rows, new Set(), parsed.table.attrs.worksheet_name ? parsed.table.attrs.source_header_row || 1 : 0),
@@ -38,10 +38,10 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}) {
   });
   const groups = new Map();
   if (groupColumn >= 0) {
-    for (const value of statusOptions(parsed, groupColumn)) groups.set(value, {value, label: value, cards: []});
+    for (const value of statusOptions(parsed, groupColumn)) groups.set(value, {value, label: statusLabel(value), cards: []});
     for (const card of cards) {
       const value = String(card.row.cells[groupColumn]?.value ?? '');
-      if (!groups.has(value)) groups.set(value, {value, label: value || '未設定', cards: []});
+      if (!groups.has(value)) groups.set(value, {value, label: statusLabel(value) || "Not Configured", cards: []});
       groups.get(value).cards.push(card);
     }
   }
@@ -50,10 +50,11 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}) {
 
 export function statusMovePayload(parsed, rowId, column, value) {
   const rowIndex = parsed.rows.findIndex(row => row.rid === rowId);
-  if (rowIndex < 0) throw new Error('這一列已不存在，請重新整理');
-  if (!viewColumns(parsed).statusColumns.some(c => c.index === column)) throw new Error('請先選擇狀態欄');
+  if (rowIndex < 0) throw new Error("This row no longer exists. Refresh the page.");
+  if (!viewColumns(parsed).statusColumns.some(c => c.index === column)) throw new Error("Select a status column first.");
   const row = parsed.rows[rowIndex];
-  if (!(value === '' && row.cells[column]?.kind !== 'status') && !statusOptions(parsed, column, row).includes(value)) throw new Error('請選擇有效的狀態選項');
+  const options = statusOptions(parsed, column, row);
+  if (!(value === '' && row.cells[column]?.kind !== 'status') && !options.includes(value) && !(value in LEGACY_STATUSES && options.includes(statusLabel(value)))) throw new Error("Choose a valid status option.");
   return tableEditPayload(parsed, rowIndex, column, [[value]]);
 }
 

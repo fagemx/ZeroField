@@ -111,7 +111,7 @@ function lockChip(at, name) {
     const chip = document.createElement("span");
     chip.className = "pd-lockchip";
     chip.contentEditable = "false";
-    chip.textContent = `${name} 正在編輯`;
+    chip.textContent = `${name}  is editing`;
     return chip;
   }, { side: 1, ignoreSelection: true, key: `lock-${name}-${at}` });
 }
@@ -119,8 +119,8 @@ function lockChip(at, name) {
 function ownerNote(node, ctx) {
   const owner = node.attrs.owner;
   if (!owner || ctx.adminIds.has(owner)) return null;
-  const name = ctx.names.get(owner) || "已不在名單的人";
-  return `— ${name} 新增${node.attrs.created ? " · " + shortTime(node.attrs.created) : ""}`;
+  const name = ctx.names.get(owner) || "Former Crew Member";
+  return `— ${name} Add${node.attrs.created ? " · " + shortTime(node.attrs.created) : ""}`;
 }
 
 function permissionDecorations(doc, ctx) {
@@ -336,8 +336,8 @@ export const StatusNode = Node.create({
     return {
       fid: dataAttribute("fid", false),
       label: {
-        default: "未開始",
-        parseHTML: (element) => element.getAttribute("data-label") || "未開始",
+        default: "Queued",
+        parseHTML: (element) => element.getAttribute("data-label") || "Queued",
         renderHTML: (attrs) => ({ "data-label": attrs.label }),
       },
     };
@@ -377,7 +377,7 @@ export const FillNode = Node.create({
     return [{ tag: "span[data-fill]" }];
   },
   renderHTML({ HTMLAttributes }) {
-    return ["span", mergeAttributes(HTMLAttributes, { "data-fill": "", class: "fill-chip" }), "大家可填"];
+    return ["span", mergeAttributes(HTMLAttributes, { "data-fill": "", class: "fill-chip" }), "Shared Field"];
   },
   renderText() {
     return "";
@@ -405,7 +405,7 @@ function assistChip(at, rid, label, ctx) {
     chip.className = "pa-chip";
     chip.contentEditable = "false";
     chip.textContent = "✦ " + label;
-    chip.title = "跟專案助理一起做這一項";
+    chip.title = "Work on this with Studio Assistant";
     chip.addEventListener("mousedown", (event) => event.preventDefault());
     chip.addEventListener("click", (event) => {
       event.preventDefault();

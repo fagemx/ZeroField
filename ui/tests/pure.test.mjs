@@ -61,9 +61,9 @@ test("time is shown in Taipei time", () => {
 
 test("activity lines name the person", () => {
   assert.equal(activityLine({ kind: "status", actor: { name: "Mia" }, field: { label: "狀態", old: "未開始", new: "等待回覆" } }),
-    "Mia 把「狀態」從「未開始」改成「等待回覆」");
-  assert.equal(activityLine({ kind: "fill", actor: { name: "Sam" }, field: { label: "負責人", new: "" } }), "Sam 清空了「負責人」");
-  assert.equal(activityLine({ kind: "check", actor: { name: "Alex" }, field: { label: "寄出", new: "true" } }), "Alex 勾選了「寄出」");
+    "Mia changed Status from Queued to Pending Review");
+  assert.equal(activityLine({ kind: "fill", actor: { name: "Sam" }, field: { label: "負責人", new: "" } }), "Sam cleared 負責人");
+  assert.equal(activityLine({ kind: "check", actor: { name: "Alex" }, field: { label: "寄出", new: "true" } }), "Alex checked 寄出");
 });
 
 test("avatar colors are stable per person", () => {

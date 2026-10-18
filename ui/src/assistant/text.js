@@ -3,9 +3,9 @@
 export function splitSources(text) {
   const value = String(text || "");
   const lines = value.split("\n");
-  const index = lines.map((line) => line.trim()).findIndex((line) => /^出處[:：]/.test(line));
+  const index = lines.map((line) => line.trim()).findIndex((line) => /^(?:Sources|出處)[:：]/i.test(line));
   if (index < 0) return { main: value, sources: [] };
-  const raw = lines.slice(index).join(" ").replace(/^\s*出處[:：]\s*/, "").split(/[、；;]/).map((s) => s.trim()).filter(Boolean);
+  const raw = lines.slice(index).join(" ").replace(/^\s*(?:Sources|出處)[:：]\s*/i, "").split(/[、；;]/).map((s) => s.trim()).filter(Boolean);
   const merged = [];
   for (const item of raw) {
     if (/^[A-Z]{1,3}\d+$/.test(item) && merged.length) merged[merged.length - 1] += "、" + item;
@@ -76,10 +76,10 @@ export function lookedAt(tools) {
 
 export function workingLine(reply) {
   if (!reply) return "";
-  if (reply.status === "queued") return reply.attempts > 0 ? "重新試一次…" : "排隊中…";
-  if (reply.status === "running" && reply.body) return "正在寫…";
+  if (reply.status === "queued") return reply.attempts > 0 ? "Retrying…" : "Queued…";
+  if (reply.status === "running" && reply.body) return "Writing…";
   const looked = lookedAt(reply.tools);
-  return looked.length ? "正在看：" + looked.slice(-3).join("、") : "正在想…";
+  return looked.length ? "Reading: " + looked.slice(-3).join(", ") : "Thinking…";
 }
 
 // 還在寫的回答：助理邊寫，資料庫那一則就邊存（worker 的 write_partial），畫面先把寫好的部分秀出來。
@@ -94,8 +94,8 @@ export function openReply(thread) {
 }
 
 export function questionNumber(text) {
-  const match = String(text || "").match(/第\s*(\d{1,2})\s*題/);
-  return match ? Number(match[1]) : null;
+  const match = String(text || "").match(/(?:question\s+(\d{1,2})\b|第\s*(\d{1,2})\s*題)/i);
+  return match ? Number(match[1] || match[2]) : null;
 }
 
 function lastUser(thread) {
@@ -145,18 +145,18 @@ export function elapsedSeconds(reply, thread) {
 
 export function formatSeconds(seconds) {
   if (seconds == null) return "";
-  if (seconds < 60) return `${seconds} 秒`;
+  if (seconds < 60) return `${seconds} s`;
   const minutes = Math.floor(seconds / 60);
-  return seconds % 60 ? `${minutes} 分 ${seconds % 60} 秒` : `${minutes} 分鐘`;
+  return seconds % 60 ? `${minutes} m ${seconds % 60} s` : `${minutes} min`;
 }
 
-export const DEFAULT_HINT = "此專案允許助理讀取數字與公式。請勿輸入權杖或金鑰。";
+export const DEFAULT_HINT = "The assistant can read numbers and formulas. Keep credentials out of production content.";
 
 export function attachmentHint(files, privacyMode = "full_access") {
   const kinds = new Set((files || []).map((f) => f.kind));
-  if (privacyMode === "mask_numbers") return "此專案已開啟數值遮罩；敏感數值會先遮掉，圖片不會傳給助理。";
-  if (kinds.has("image")) return "圖片會交給助理；附件數字與公式依此專案設定完整提供。請勿上傳金鑰。";
-  if (kinds.size) return "附件中的數字、文字與公式會提供給助理，供分析與編輯提案使用。";
+  if (privacyMode === "mask_numbers") return "Numeric masking is enabled. Sensitive values are masked and images are excluded.";
+  if (kinds.has("image")) return "Images, numbers, and formulas are shared according to production settings. Keep credentials out of attachments.";
+  if (kinds.size) return "Attachment text, numbers, and formulas are available for analysis and editing proposals.";
   return DEFAULT_HINT;
 }
 
@@ -202,13 +202,13 @@ export function todoGroups(todo) {
 
 export function progressCounts(todo) {
   const { questions, handoff } = todoGroups(todo);
-  const done = (list) => list.filter((i) => i.status === "已完成").length;
+  const done = (list) => list.filter((i) => ["Approved", "已完成"].includes(i.status)).length;
   return { questionsDone: done(questions), questions: questions.length, handoffDone: done(handoff), handoff: handoff.length };
 }
 
 export function draftPrompt(item) {
-  if (item.kind === "question") return `我們來回答第 ${item.number} 題`;
-  if (item.kind === "handoff") return `我們來做交接追蹤的「${item.text}」`;
+  if (item.kind === "question") return `Let’s work on question ${item.number}`;
+  if (item.kind === "handoff") return `Let’s work on the deliverable “${item.text}”`;
   return "";
 }
 
@@ -217,18 +217,18 @@ export function assistRows(todo) {
   const rows = new Map();
   for (const item of todo || []) {
     if (!item.rid) continue;
-    if (item.kind === "question") rows.set(item.rid, { label: "一起回答", cell: 1, prompt: draftPrompt(item) });
-    if (item.kind === "handoff") rows.set(item.rid, { label: "這一項怎麼交", cell: 0, prompt: draftPrompt(item) });
+    if (item.kind === "question") rows.set(item.rid, { label: "Work Together", cell: 1, prompt: draftPrompt(item) });
+    if (item.kind === "handoff") rows.set(item.rid, { label: "Plan This Delivery", cell: 0, prompt: draftPrompt(item) });
   }
   return rows;
 }
 
 export function taskLine(state, focus) {
   const pending = ((state && state.proposals) || []).filter((p) => p.status === "pending");
-  if (pending.length) return pending.length > 1 ? `有 ${pending.length} 個答案等你確認` : "答案整理好了，等你確認";
+  if (pending.length) return pending.length > 1 ? `There are ${pending.length}  responses awaiting approval` : "Response ready for approval";
   const current = currentFocus(state && state.thread, focus);
-  if (current && current.kind === "question") return `正在處理：第 ${current.number} 題`;
-  if (current && current.kind === "handoff") return `正在處理：${current.text}`;
+  if (current && current.kind === "question") return `Working on question ${current.number}`;
+  if (current && current.kind === "handoff") return `Working on:${current.text}`;
   return "";
 }
 
@@ -246,39 +246,39 @@ export function documentUrl(slug, message) {
 
 // 確認後的說法：私下轉給負責人不會出現在專案頁，不能說「已放上專案頁」。
 export function appliedLabel(proposal) {
-  return proposal && proposal.action === "私下轉給負責人" ? "已私下轉給負責人" : "已放上專案頁";
+  return proposal && proposal.action === "私下轉給負責人" ? "Forwarded privately to owner" : "Applied to production";
 }
 
 // 卡片上的說法：私下轉給負責人只有負責人看得到、不會放上專案頁，整張卡都不能出現「放上去」
 export function proposalCopy(proposal) {
   if (proposal?.action === "table_edit") {
     return {
-      ask: "確認這些表格修改？", confirm: "確認寫回", field: "修改內容",
-      note: "確認後才會更新表格；若資料已變更，會請你重新核對。",
-      dismissed: "未套用", failed: "未能寫回",
-      compactLead: "修改提案已整理好：", compactTail: "請到工作台核對內容，再確認寫回。",
+      ask: "Apply these table changes?", confirm: "Apply Changes", field: "Change Details",
+      note: "The table updates after approval. Changed source data will require another review.",
+      dismissed: "Not Applied", failed: "Could Not Apply",
+      compactLead: "Proposal ready:", compactTail: "Review the proposal in the workbench, then apply it.",
     };
   }
   if (proposal && proposal.action === "私下轉給負責人") {
     return {
-      ask: "要私下問負責人嗎？", confirm: "確認轉給負責人", field: "要問負責人的話",
-      note: "只有負責人看得到，不會放上專案頁；可以先改字再確認",
-      dismissed: "先不轉", failed: "沒轉出去",
-      compactLead: "要私下問負責人的話整理好了：", compactTail: "在工作台確認後才會送給負責人，不會放上專案頁。",
+      ask: "Send a private question to the owner?", confirm: "Send to Owner", field: "Question for the Owner",
+      note: "Only the owner can see this. Edit the text before sending.",
+      dismissed: "Do Not Forward", failed: "Not Forwarded",
+      compactLead: "Private question ready:", compactTail: "Approve in the workbench to send privately to the owner.",
     };
   }
   return {
-    ask: "要放到專案頁嗎？", confirm: "確認放上去", field: "要放上去的內容", note: "可以先改字再確認",
-    dismissed: "先不放", failed: "沒放上去",
-    compactLead: "答案整理好了：", compactTail: "在工作台確認後就會放上專案頁。",
+    ask: "Apply this to the production page?", confirm: "Apply to Page", field: "Content to Apply", note: "Edit the text before approving.",
+    dismissed: "Not Now", failed: "Not Applied",
+    compactLead: "Response ready:", compactTail: "Approve in the workbench to apply it to the page.",
   };
 }
 
 // 側邊欄的分頁（10/15 跟「標註」清單同一套）：對話、紀錄（以前的對話）、管理（只有管理者）。
 // 私下問題等負責人回覆的數字掛在「管理」上，不另外佔一條。
 export function paneTabs(manager, forwardsOpen) {
-  const tabs = [{ key: "chat", label: "對話" }, { key: "history", label: "紀錄" }];
-  if (manager) tabs.push({ key: "manage", label: "管理", count: forwardsOpen > 0 ? forwardsOpen : 0 });
+  const tabs = [{ key: "chat", label: "Chat" }, { key: "history", label: "History" }];
+  if (manager) tabs.push({ key: "manage", label: "Manage", count: forwardsOpen > 0 ? forwardsOpen : 0 });
   return tabs;
 }
 

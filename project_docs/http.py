@@ -141,7 +141,7 @@ def _write_allowed(handler) -> str | None:
 
     headers = handler.headers
     if (headers.get("X-Requested-With") or "").strip().lower() != "projects":
-        return "缺少必要的請求標頭"
+        return "A required request header is missing."
     origin = (headers.get("Origin") or "").strip()
     if origin:
         host = (headers.get("Host") or "").strip().lower()
@@ -155,18 +155,18 @@ def _json_body(handler):
     try:
         length = int(handler.headers.get("Content-Length") or 0)
     except ValueError:
-        return None, (400, {"error": "請求長度不對"})
+        return None, (400, {"error": "Invalid request length."})
     if length < 0:
-        return None, (400, {"error": "請求長度不對"})
+        return None, (400, {"error": "Invalid request length."})
     if length > MAX_JSON_BODY:
-        return None, (413, {"error": "內容太大"})
+        return None, (413, {"error": "Content exceeds the size limit."})
     content_type = (handler.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
     if content_type != "application/json":
-        return None, (415, {"error": "請用 JSON 送出"})
+        return None, (415, {"error": "Send the request as JSON."})
     try:
         body = handler.read_json_body()
     except ValueError:
-        return None, (400, {"error": "JSON 格式不對"})
+        return None, (400, {"error": "Invalid JSON."})
     return (body if isinstance(body, dict) else {}), None
 
 
@@ -174,15 +174,15 @@ def _raw_body(handler, too_big="圖片最大 8 MB"):
     try:
         length = int(handler.headers.get("Content-Length") or 0)
     except ValueError:
-        return None, (400, {"error": "請求長度不對"})
+        return None, (400, {"error": "Invalid request length."})
     if length < 0:
-        return None, (400, {"error": "請求長度不對"})
+        return None, (400, {"error": "Invalid request length."})
     if length > MAX_UPLOAD_BODY:
         return None, (413, {"error": too_big})
     data = handler.rfile.read(length) if length else b""
     handler._body_consumed = True
     if len(data) != length:
-        return None, (400, {"error": "檔案未完整送達"})
+        return None, (400, {"error": "The file upload is incomplete."})
     return data, None
 
 
@@ -258,7 +258,7 @@ POST_ROUTES = [
     (re.compile(rf"/projects/api/{SLUG}/assistant/attachments"), "assistant_upload"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/attachments/(\d{{1,18}})/delete"), "assistant_attachment_delete"),
 ]
-RAW_UPLOADS = {"upload_asset": "媒體檔案最大 64 MB", "assistant_upload": "檔案最大 8 MB", "import_tab": "檔案最大 8 MB", "import_preview": "檔案最大 8 MB"}
+RAW_UPLOADS = {"upload_asset": "Media files must be 64 MB or smaller.", "assistant_upload": "Files must be 8 MB or smaller.", "import_tab": "Files must be 8 MB or smaller.", "import_preview": "Files must be 8 MB or smaller."}
 WRITES = {name for _, name in POST_ROUTES}
 COMMIT_READS = {"tab"}  # 讀舊內容時會補 bid 並存回
 
@@ -330,7 +330,7 @@ def _call(name, conn, me, args, query, body, raw):
             if name == 'toggle_agent':
                 profile = agent_registry.get_agent(conn,args[0],args[1])
                 if not profile:
-                    return 404, {'error':'找不到這個代理'}
+                    return 404, {'error':"Agent not found."}
                 body = {'agent_key':args[1], 'enabled':body.get('enabled',not profile['enabled'])}
             return 200, {'agent':agent_registry.save_agent(conn,me,args[0],body)}
         except agent_registry.AgentError as exc:
@@ -347,13 +347,13 @@ def _call(name, conn, me, args, query, body, raw):
         from project_assistant import table_edits
         tab = repo.get_tab_for_update(conn, args[0], args[1])
         if not tab:
-            return 404, {"error": "找不到分頁"}
+            return 404, {"error": "Page not found."}
         edits = body.get("row_edits", [])
         cas = isinstance(edits, list) and bool(edits) and all(isinstance(edit, dict) and "expected_cells" in edit for edit in edits)
         if body.get("base_revision") != tab["revision"] and (not cas or body.get("new_rows")):
-            return 409, {"error": "分頁已更新，請重新整理後再貼上"}
+            return 409, {"error": "The page changed. Refresh it before pasting."}
         if body.get("base_revision") != tab["revision"] and any(set(edit.get("column_ids", {})) != set(edit["cells"]) for edit in edits):
-            return 409, {"error": "分頁已更新，跨版本修改需包含每個儲存格的穩定欄位身分"}
+            return 409, {"error": "The page changed. Cross-revision edits require each cell’s stable column identity."}
         try:
             values = repo.field_values(conn, args[0]).get(args[1], {})
             if cas:
@@ -445,7 +445,7 @@ def _call(name, conn, me, args, query, body, raw):
 def _api(handler, parsed, method: str) -> None:
     name, args = _route(method, parsed.path)
     if not name:
-        handler.send_json(404, {"error": "沒有這個功能"})
+        handler.send_json(404, {"error": "This feature is not available."})
         return
     identity, problem = handler.project_docs_identity()
     if problem:
@@ -459,7 +459,7 @@ def _api(handler, parsed, method: str) -> None:
     body, raw = {}, b""
     if name in WRITES:
         if not me.can_write:
-            handler.send_json(403, {"error": "唯讀成員不能修改專案"})
+            handler.send_json(403, {"error": "Read-only crew members cannot modify a production."})
             return
         refused = _write_allowed(handler)
         if refused:
@@ -479,7 +479,7 @@ def _api(handler, parsed, method: str) -> None:
         conn = open_connection()
     except Exception as exc:  # noqa: BLE001
         print(f"projects: database unavailable: {type(exc).__name__}: {exc}", flush=True)
-        handler.send_json(503, {"error": "資料庫暫時連不上，請稍後再試"})
+        handler.send_json(503, {"error": "The database is temporarily unavailable. Try again shortly."})
         return
     try:
         _ensure_schema(conn)
@@ -496,13 +496,13 @@ def _api(handler, parsed, method: str) -> None:
         if name == "asset_meta":
             found = repo.get_asset(conn, args[0], args[1])
             conn.rollback()
-            handler.send_json(200 if found else 404, {"content_type": found[0], "bytes": len(found[1])} if found else {"error": "找不到媒體"})
+            handler.send_json(200 if found else 404, {"content_type": found[0], "bytes": len(found[1])} if found else {"error": "Media not found."})
             return
         if name == "asset":
             found = repo.get_asset(conn, args[0], args[1])
             conn.rollback()
             if not found:
-                handler.send_json(404, {"error": "找不到這張圖"})
+                handler.send_json(404, {"error": "Image not found."})
                 return
             handler.send_skillops_bytes(200, found[0], found[1],
                                         cache_control="private, max-age=31536000, immutable",
@@ -540,7 +540,7 @@ def _api(handler, parsed, method: str) -> None:
     except Exception as exc:  # noqa: BLE001
         conn.rollback()
         print(f"projects: {name} failed: {type(exc).__name__}: {exc}", flush=True)
-        handler.send_json(500, {"error": "伺服器出錯了，請稍後再試；一直這樣請聯絡專案管理員"})
+        handler.send_json(500, {"error": "A server error occurred. Try again shortly or contact the showrunner if it continues."})
         return
     finally:
         conn.close()
@@ -565,7 +565,7 @@ def handle_projects(handler, parsed, method: str) -> bool:
         _api(handler, parsed, method)
         return True
     if method != "GET":
-        handler.send_json(405, {"error": "不支援這個操作"})
+        handler.send_json(405, {"error": "Unsupported operation."})
         return True
     if path.startswith("/projects/assets/"):
         _send_static(handler, unquote(path[len("/projects/assets/"):]))

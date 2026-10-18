@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
-WEEKDAYS = "一二三四五六日"
-SPEAKER = {"assistant": "助理", "lead": "負責人回覆"}
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+SPEAKER = {"assistant": "Assistant", "lead": "Owner reply"}
 
 
 def load() -> tuple[str, str]:
@@ -20,8 +20,8 @@ def load_agent(profile) -> tuple[str,str]:
     return baseline+'\n\n'+profile.get('system_prompt',''),profile.get('knowledge_pack','')
 
 
-KIND_LABEL = {"image": "圖片，是否提供依專案隱私設定", "sheet": "Excel",
-              "doc": "文件（Word／PDF）", "text": "文字檔"}
+KIND_LABEL = {"image": "Image, subject to production privacy settings", "sheet": "Excel",
+              "doc": "Document (Word / PDF)", "text": "Text file"}
 
 
 def build_prompt(*, system: str, knowledge: str, today: dt.date, owner_name: str, owner_role: str = "",
@@ -39,38 +39,38 @@ def build_parts(*, system: str, knowledge: str, today: dt.date, owner_name: str,
     """(固定的規則＋知識包, 這一輪的內容)。直接呼叫模型時，固定的那段當 instructions，模型那端可以快取。
     attachments：這一輪附的檔案 [{kind, name, extracted}]；圖片本身另外跟著訊息送，這裡只寫是哪張。"""
 
-    instructions = "\n".join([system, "\n## 知識包\n", knowledge])
-    parts = [f"\n## 現在\n今天是 {today.isoformat()}（星期{WEEKDAYS[today.weekday()]}）。"
-             f"你在專案頁右側的助理欄，跟{owner_name}" + (f"（{owner_role}）" if owner_role else "") + "一對一對話。"]
+    instructions = "\n".join([system, "\n## Knowledge Pack\n", knowledge])
+    parts = [f"\n## Current Context\nToday is {today.isoformat()} ({WEEKDAYS[today.weekday()]}). "
+             f"You are in Studio Assistant, speaking privately with {owner_name}" + (f" ({owner_role})" if owner_role else "") + "."]
     if history:
-        parts.append("\n## 先前的對話（只用來接續，不要逐段重複）")
+        parts.append("\n## Conversation History (use for continuity; do not repeat it)")
         for item in history:
             files = item.get("files") or []
-            body = item["body"] + (f"（附了：{'、'.join(files)}）" if files else "")
+            body = item["body"] + (f" (attached: {', '.join(files)})" if files else "")
             parts.append(f"{SPEAKER.get(item['role'], owner_name)}：{body}")
     if pending:
-        parts.append("\n## 已經建立、還沒確認的提案")
+        parts.append("\n## Existing Proposals Awaiting Approval")
         parts += [f"- #{p['id']}：{p['action']} → {(p.get('target') or {}).get('display', '')}" for p in pending]
-    parts.append(f"\n## {owner_name}這一輪說")
-    parts.append(message if message or not attachments else "（只附了檔案，沒有打字）")
+    parts.append(f"\n## Current Message from {owner_name}")
+    parts.append(message if message or not attachments else "(Attachments only; no message text.)")
     if guard_notes:
-        parts.append("（系統附註：" + "；".join(guard_notes) + "）")
+        parts.append("(System notes: " + "; ".join(guard_notes) + ")")
     if attachments:
-        parts.append("\n## 這一輪附的檔案")
+        parts.append("\n## Attachments for This Turn")
         for i, item in enumerate(attachments, 1):
-            header = f"### 附件 {i}：{item['name']}（{KIND_LABEL.get(item['kind'], item['kind'])}）"
+            header = f"### Attachment {i}: {item['name']} ({KIND_LABEL.get(item['kind'], item['kind'])})"
             parts.append(header + (f"\n{item['extracted']}" if item.get("extracted") else ""))
     return instructions, "\n".join(parts)
 
 
 def question_criteria(knowledge: str) -> dict[int, dict]:
     out: dict[int, dict] = {}
-    blocks = re.split(r"(?m)^\*\*第 (\d+) 題　", knowledge)
+    blocks = re.split(r"(?m)^\*\*(?:第 |Question )(\d+)(?: 題　| — )", knowledge)
     for i in range(1, len(blocks) - 1, 2):
         number, body = int(blocks[i]), blocks[i + 1]
         title = body.split("**", 1)[0].strip()
-        use = re.search(r"- (?:負責人|工程|負責人)?拿(?:答案|來)?要?做什麼：(.*)", body)
-        block = re.search(r"- 答完整的標準：(.*?)(?=\n\*\*第 |\n## |\Z)", body, re.S)
+        use = re.search(r"- (?:(?:負責人|工程|負責人)?拿(?:答案|來)?要?做什麼：|Purpose:)(.*)", body)
+        block = re.search(r"- (?:答完整的標準：|Completeness:)(.*?)(?=\n\*\*(?:第 |Question )|\n## |\Z)", body, re.S)
         criteria: list[str] = []
         if block:
             items = re.findall(r"(?m)^\s+\d+\.\s+(.*)$", block.group(1))

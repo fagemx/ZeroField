@@ -15,10 +15,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from project_assistant import tools
 
 MAX_BODY = 64 * 1024
-LABELS = {"list_pages": "專案頁分頁", "read_page": "專案頁", "search_pages": "搜尋專案頁", "my_todo": "待辦",
-          "report_list": "報表清單", "report_overview": "報表總覽", "report_sheet": "報表", "report_cell": "報表格子",
-          "report_find": "在報表裡找", "propose": "提出修改",
-          "offer_document": "準備文件下載"}
+LABELS = {"list_pages": "Production Pages", "read_page": "Production Page", "search_pages": "Search Pages", "my_todo": "Tasks",
+          "report_list": "Workbooks", "report_overview": "Workbook Overview", "report_sheet": "Worksheet", "report_cell": "Worksheet Cell",
+          "report_find": "Search Workbooks", "propose": "Propose Changes", "propose_table_edit": "Propose Slate Changes",
+          "offer_document": "Prepare Document Download", "list_agents": "Agents & Workers", "spawn_agent": "Assign Task",
+          "check_delegation": "Task Progress", "cancel_delegation": "Cancel Task", "ask_decision_gate": "Decision Required", "trigger_flow_run": "Run Pipeline"}
 
 
 def summarize(name: str, args: dict) -> dict:
@@ -58,11 +59,11 @@ class ToolHost:
             def do_GET(self):  # noqa: N802
                 if (self.path!='/tools' or any(k.lower().startswith('cf-') for k in self.headers)
                     or not hmac.compare_digest(self.headers.get('X-PA-Token') or '',host.token)):
-                    return host._reply(self,403,{'error':'權杖或工具清單路徑不正確'})
+                    return host._reply(self,403,{'error':"Invalid token or tool-list endpoint."})
                 try:
                     host._reply(self,200,{'tools':host.specs()})
                 except Exception:
-                    host._reply(self,403,{'error':'此回合的工具權限已失效'})
+                    host._reply(self,403,{'error':"This turn’s tool permissions expired."})
 
             def log_message(self, *args):
                 pass
@@ -102,27 +103,27 @@ class ToolHost:
 
     def _handle(self, request) -> None:
         if any(key.lower().startswith("cf-") for key in request.headers.keys()):
-            return self._reply(request, 403, {"error": "不接受從外面來的請求"})
+            return self._reply(request, 403, {"error": "External requests are not accepted."})
         if not hmac.compare_digest(request.headers.get("X-PA-Token") or "", self.token):
-            return self._reply(request, 403, {"error": "權杖不對"})
+            return self._reply(request, 403, {"error": "Invalid token."})
         if not request.path.startswith("/tool/"):
-            return self._reply(request, 404, {"error": "沒有這個功能"})
+            return self._reply(request, 404, {"error": "This feature is not available."})
         name = request.path[len("/tool/"):]
         try:
             length = int(request.headers.get("Content-Length") or 0)
         except ValueError:
-            return self._reply(request,400,{'error':'參數長度不正確'})
+            return self._reply(request,400,{'error':"Invalid argument length."})
         if length < 0 or length > MAX_BODY:
-            return self._reply(request, 413, {"error": "參數太長"})
+            return self._reply(request, 413, {"error": "Arguments exceed the size limit."})
         try:
             args = json.loads(request.rfile.read(length) or b"{}")
         except ValueError:
-            return self._reply(request, 400, {"error": "參數不是 JSON"})
+            return self._reply(request, 400, {"error": "Arguments must be JSON."})
         args = args if isinstance(args, dict) else {}
         summary = summarize(name, args)
         try:
             if name not in {spec['name'] for spec in self.specs()}:
-                raise tools.ToolError('POLICY_DENIED：此回合未授予此工具')
+                raise tools.ToolError("POLICY_DENIED: This tool is not granted for this turn.")
             result = self.call_tool(name, args) if self.call_tool else tools.call(self.ctx, name, args)
             payload = {"text": result}
             if name in ('ask_decision_gate','trigger_flow_run'):
@@ -137,7 +138,7 @@ class ToolHost:
             summary["ok"] = False
         except Exception as exc:  # noqa: BLE001 - 工具壞了要回給模型，不能讓這一輪卡住
             print(f"project-assistant: tool {name} failed: {type(exc).__name__}: {exc}", flush=True)
-            payload = {"error": "工具出錯了，請換個方式再試一次"}
+            payload = {"error": "The tool failed. Try another approach."}
             summary["ok"] = False
         summary["at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
         self.calls.append(summary)

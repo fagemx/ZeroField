@@ -8,17 +8,17 @@ import { Avatar } from "./Talk.jsx";
 
 // 修改紀錄（10/15 起大家一起編輯：大家都能改字，所以大家都要看得到誰改了什麼、改錯了能改回）。
 // 一筆＝同一個人連續改的一次；每一處都可以單獨改回，改回本身也記成一筆。
-export const HISTORY_RULE = "名單上的人都看得到誰改了什麼，也都能改回。同一個人連續改的算一筆（停 10 分鐘以上算新的一筆）。"
-  + "改回只換回那一處，別人改的其他地方不動；改回本身也會記成一筆，可以再改回來。";
+export const HISTORY_RULE = "The crew can see and restore changes. Consecutive edits by one person form a revision; editing after a 10-minute pause starts another."
+  + "Restoring affects only the selected content. Other edits remain, and the restoration is recorded as a new revision.";
 const SHOWN = 3; // 一筆先列幾處，其他的收在「還有 N 處」
 
 export function headline(group) {
   const n = group.changes.length;
-  if (group.kind === "create") return "新增這一頁";
-  if (group.kind === "revert") return `改回 ${n} 處`;
-  if (group.kind === "restore") return `把這一頁換回以前的版本，改了 ${n} 處`;
-  if (group.kind === "rewrite") return `整份改寫，改了 ${n} 處`;
-  return n ? `改了 ${n} 處` : null; // 沒有差別：另外寫「改了又改回」
+  if (group.kind === "create") return "Created Page";
+  if (group.kind === "revert") return `Restore ${n}  changes`;
+  if (group.kind === "restore") return `Restored this page to an earlier revision, changing ${n}  changes`;
+  if (group.kind === "rewrite") return `Rewrote the page, changing ${n}  changes`;
+  return n ? `Changed ${n}  changes` : null; // 沒有差別：另外寫「改了又改回」
 }
 
 function Segments({ segments }) {
@@ -67,7 +67,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
 
   const revert = async (group, change, force = false) => {
     if (flush && (await flush()) === false) {
-      onError("還有沒存好的修改，存好再改回");
+      onError("Save pending edits before restoring a revision.");
       return;
     }
     const body = change.field_id
@@ -77,7 +77,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
     try {
       const result = await api.post(`/projects/api/${slug}/tabs/${group.tab_key}/revert`, force ? { ...body, force: true } : body);
       setConfirm(null);
-      onToast(result.already ? "這一處已經是改之前的樣子了" : "已改回。這次改回也記在修改紀錄裡，要的話可以再改回來。");
+      onToast(result.already ? "This content already matches its earlier version." : "Restored. This restoration is also recorded in Change History.");
       onReverted(group.tab_key, result, Boolean(change.field_id));
       load();
     } catch (error) {
@@ -104,14 +104,14 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
         <div className="grp-hd">
           <Avatar id={group.actor_id || ""} name={group.name} size={18} />
           <b>{group.name}</b>
-          {head || <span className="noop">改了又改回，沒有差別</span>}
+          {head || <span className="noop">No difference after restoring</span>}
           <span className="t">{shortTime(group.at)}</span>
         </div>
         {scope === "all" && group.tab_title && <div className="grp-tab">{group.tab_title}</div>}
         {list.map((change) => {
           const key = group.id + "|" + change.key;
           return (
-            <div className="ch" key={change.key} role="button" tabIndex={0} title="到頁面上看這一處"
+            <div className="ch" key={change.key} role="button" tabIndex={0} title={"Locate on Page"}
               onClick={() => onPick(group, change)} onKeyDown={(event) => { if (event.key === "Enter") onPick(group, change); }}>
               <div className="what">
                 {change.label}
@@ -119,7 +119,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
                   <span className="acts">
                     <button type="button" className="ghost xs" disabled={busy === key}
                       onClick={(event) => { event.stopPropagation(); revert(group, change); }}>
-                      {busy === key ? "改回中…" : change.button}
+                      {busy === key ? "Restoring…" : change.button}
                     </button>
                   </span>
                 )}
@@ -130,7 +130,7 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
         })}
         {all.length > SHOWN && !isOpen && (
           <button type="button" className="more-ch" onClick={() => setExpanded(new Set(expanded).add(group.id))}>
-            還有 {all.length - SHOWN} 處 ▾
+            Also {all.length - SHOWN}  changes ▾
           </button>
         )}
       </div>
@@ -139,26 +139,26 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
 
   const current = data && data.scope === scope && (scope === "all" || data.key === tabKey) ? data : null;
   let body;
-  if (!current) body = <div className="empty">讀取中…</div>;
-  else if (!current.groups.length) body = <div className="empty">還沒有修改紀錄</div>;
+  if (!current) body = <div className="empty">Loading…</div>;
+  else if (!current.groups.length) body = <div className="empty">No changes recorded yet.</div>;
   else {
     body = current.groups.map(item);
-    if (current.more) body.push(<div className="empty" key="more">只列出最近 {current.groups.length} 筆</div>);
+    if (current.more) body.push(<div className="empty" key="more">Showing the latest {current.groups.length}  items</div>);
   }
 
   let dialog = null;
   if (confirm) {
     const { group, change, info } = confirm;
-    const unit = change.field_id ? "這一格" : change.rid ? "這一列" : "這一段";
-    const people = (info.later || []).map((p) => p.name).join("、") || "別人";
+    const unit = change.field_id ? "this cell" : change.rid ? "this row" : "this passage";
+    const people = (info.later || []).map((p) => p.name).join("、") || "Another crew member";
     const last = (info.later || []).slice(-1)[0];
     dialog = createPortal(
-      <Dialog title={`${change.button}？`} confirmLabel="改回"
-        message={`${unit}在${group.name}改過之後，${people}又改過${last ? `（${shortTime(last.at)}）` : ""}。改回會連${people}的修改一起換掉。`}
+      <Dialog title={`${change.button}？`} confirmLabel={"Restore"}
+        message={`${unit}after${group.name} changed it,${people} changed it again${last ? `(${shortTime(last.at)})` : ""}. Restoring will also replace${people}’s changes.`}
         onConfirm={() => revert(group, change, true)} onCancel={() => setConfirm(null)}>
         <div className="hist-preview">
-          <div className="hd">改回後會變成</div>
-          {info.preview || "（空白）"}
+          <div className="hd">After restoring</div>
+          {info.preview || "(empty)"}
         </div>
       </Dialog>,
       document.body,
@@ -166,14 +166,14 @@ export function HistoryPanel({ open, slug, tabKey, tabTitle, version, onPick, on
   }
 
   return (
-    <div className="pop on hist" ref={ref} role="dialog" aria-label="修改紀錄">
+    <div className="pop on hist" ref={ref} role="dialog" aria-label={"Change History"}>
       <div className="pop-hd">
-        <b>修改紀錄</b>
+        <b>Change History</b>
         {scope === "tab" && tabTitle && <span className="pop-sub">{tabTitle}</span>}
       </div>
       <div className="pop-tabs">
-        <button type="button" className={scope === "tab" ? "on" : undefined} onClick={() => setScope("tab")}>這一頁</button>
-        <button type="button" className={scope === "all" ? "on" : undefined} onClick={() => setScope("all")}>全部分頁</button>
+        <button type="button" className={scope === "tab" ? "on" : undefined} onClick={() => setScope("tab")}>This Page</button>
+        <button type="button" className={scope === "all" ? "on" : undefined} onClick={() => setScope("all")}>All Pages</button>
         <span className="info" tabIndex={0} data-tip={HISTORY_RULE} aria-label={HISTORY_RULE}>ⓘ</span>
       </div>
       <div className="pop-list">{body}</div>

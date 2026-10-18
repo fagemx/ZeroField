@@ -62,7 +62,7 @@ class AgentRuntimeTests(unittest.TestCase):
         snapshot = sent['reply']['agent_snapshot']
         agent_registry.save_agent(self.conn,self.me,self.slug,{'agent_key':'doc_writer','display_name':'Renamed'})
         self.assertEqual(store.message(self.conn,sent['reply']['id'])['agent_snapshot'],snapshot)
-        self.assertEqual(snapshot['display_name'],'企劃與劇本代理')
+        self.assertEqual(snapshot['display_name'],'Screenwriter')
 
     def test_profile_credentials_are_resolved_only_in_runtime(self):
         with patch.dict(os.environ,{'OPENBENCH_AGENT_KEY_ENVS':'TEST_AGENT_KEY','TEST_AGENT_KEY':'private-fixture-key'}):

@@ -63,7 +63,7 @@ def _keep_row_owners(old_table, new_table, new_owner) -> None:
 
 def apply_ops(doc: dict, ops, actor: Actor, *, locks: dict, now: str) -> OpsResult:
     if not isinstance(ops, list) or len(ops) > MAX_OPS:
-        raise OpsError("ops 格式不對")
+        raise OpsError("Invalid ops format.")
     doc = copy.deepcopy(doc)
     blocks = doc.setdefault("content", [])
     result = OpsResult(doc=doc)
@@ -101,12 +101,12 @@ def apply_ops(doc: dict, ops, actor: Actor, *, locks: dict, now: str) -> OpsResu
 
     for op in ops:
         if not isinstance(op, dict):
-            raise OpsError("ops 格式不對")
+            raise OpsError("Invalid ops format.")
         kind = op.get("op")
         if kind == "put":
             bid, node = op.get("bid"), op.get("node")
             if not isinstance(bid, str) or not ID_RE.match(bid) or not isinstance(node, dict):
-                raise OpsError("區塊格式不對")
+                raise OpsError("Invalid block format.")
             if node.get("type") not in BLOCK_TYPES:
                 conflict(bid, "forbidden")
                 continue
@@ -163,7 +163,7 @@ def apply_ops(doc: dict, ops, actor: Actor, *, locks: dict, now: str) -> OpsResu
         elif kind in ("put_row", "del_row"):
             table_bid, rid = op.get("table"), op.get("rid")
             if not isinstance(table_bid, str) or not isinstance(rid, str) or not ID_RE.match(rid):
-                raise OpsError("表格列格式不對")
+                raise OpsError("Invalid table row format.")
             index = find(table_bid)
             if index < 0 or blocks[index].get("type") != "table":
                 conflict(rid, "gone")
@@ -187,7 +187,7 @@ def apply_ops(doc: dict, ops, actor: Actor, *, locks: dict, now: str) -> OpsResu
                 continue
             node = op.get("node")
             if not isinstance(node, dict) or node.get("type") != "tableRow":
-                raise OpsError("表格列格式不對")
+                raise OpsError("Invalid table row format.")
             width = len(rows[0].get("content") or []) if rows else 0
             if width and len(node.get("content") or []) != width:
                 conflict(rid, "shape")
@@ -224,12 +224,12 @@ def apply_ops(doc: dict, ops, actor: Actor, *, locks: dict, now: str) -> OpsResu
         elif kind == "order":
             wanted = op.get("bids")
             if not isinstance(wanted, list):
-                raise OpsError("排序格式不對")
+                raise OpsError("Invalid ordering format.")
             remaining = {_bid(block): block for block in blocks}
             ordered = [remaining.pop(bid) for bid in wanted if isinstance(bid, str) and bid in remaining]
             ordered.extend(block for block in blocks if _bid(block) in remaining)  # 沒列到的照原本順序接在後面
             blocks[:] = ordered
             result.applied += 1
         else:
-            raise OpsError("不認得的 op")
+            raise OpsError("Unknown operation.")
     return result

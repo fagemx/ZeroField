@@ -391,7 +391,7 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
             output={'text':outcome.answer}
         state='succeeded' if outcome.status=='ok' else 'awaiting_gate' if outcome.status=='awaiting_gate' else 'failed'
         if state=='failed':
-            output={'error':outcome.detail or outcome.answer or '代理執行失敗','retryable':outcome.kind in ('unavailable','timeout','crash')}
+            output={'error':outcome.detail or outcome.answer or "Agent execution failed.",'retryable':outcome.kind in ('unavailable','timeout','crash')}
         def complete(c):
             cp.leased_dispatch(c,worker_id,claim['handle'],claim['lease_token']) if state!='awaiting_gate' else None
             db.execute(c,'UPDATE projectops.orchestration_dispatch SET executed_model=%s,executed_provider=%s WHERE id=%s',

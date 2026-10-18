@@ -82,7 +82,7 @@ class OpenBenchCoreTests(unittest.TestCase):
 
     def test_prompting_parses_generic_knowledge_criteria(self):
         system, knowledge = prompting.load()
-        self.assertIn("專案助理", system)
+        self.assertIn("Studio Assistant", system)
         criteria = prompting.question_criteria(knowledge)
         self.assertIn(1, criteria)
         self.assertTrue(len(criteria[1]["criteria"]) >= 3)

@@ -1,4 +1,4 @@
-name: OpenBench CI
+name: ZeroField Studio CI
 
 on:
   push:

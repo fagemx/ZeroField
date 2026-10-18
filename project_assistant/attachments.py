@@ -75,22 +75,22 @@ def process(name: str, content_type: str, data: bytes, *, mask_numbers: bool = F
     name = clean_name(name)
     data = bytes(data or b"")
     if not data:
-        raise AttachmentError(400, "檔案是空的")
+        raise AttachmentError(400, "The file is empty.")
     if len(data) > MAX_BYTES:
-        raise AttachmentError(413, "檔案最大 8 MB")
+        raise AttachmentError(413, "Files must be 8 MB or smaller.")
     ext = PurePath(name).suffix.lower()
     if ext in SHEET_EXT | DOC_EXT:
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 if len(archive.infolist()) > 5000 or sum(i.file_size for i in archive.infolist()) > 64 * 1024 * 1024:
-                    raise AttachmentError(413, "Office 解壓後大小超過限制")
+                    raise AttachmentError(413, "The expanded Office file exceeds the size limit.")
         except zipfile.BadZipFile:
-            raise AttachmentError(400, "Office 檔案格式無效") from None
+            raise AttachmentError(400, "Invalid Office file format.") from None
     claimed = (content_type or "").split(";", 1)[0].strip().lower()
     image_type = _image_type(data)
     if image_type or ext in IMAGE_EXT or claimed.startswith("image/"):
         if not image_type:
-            raise AttachmentError(415, "只收 PNG、JPEG、GIF、WebP 圖片，這個檔案的內容跟圖片格式對不上")
+            raise AttachmentError(415, "The file content does not match PNG, JPEG, GIF, or WebP image formats.")
         thumb, preview = _image_versions(data)
         return _row("image", name, image_type, data, thumb=thumb, preview=preview)
     if ext in SHEET_EXT:
@@ -106,7 +106,7 @@ def process(name: str, content_type: str, data: bytes, *, mask_numbers: bool = F
     if ext in TEXT_EXT or claimed.startswith("text/"):
         text, notes = guard_input(_decode(data), mask_numbers=mask_numbers)
         if not text.strip():
-            raise AttachmentError(400, "檔案是空的")
+            raise AttachmentError(400, "The file is empty.")
         return _row("text", name, "text/plain", data, extracted=_clip(text), notes=[f"{name}：{n}" for n in notes])
     raise AttachmentError(415, "這種檔案還不能附；" + SUPPORTED)
 
@@ -134,7 +134,7 @@ def _image_versions(data: bytes) -> tuple[bytes, bytes]:
             image = ImageOps.exif_transpose(opened)
             image.load()
     except (Image.DecompressionBombError, OSError, ValueError, SyntaxError):
-        raise AttachmentError(400, "圖片讀不出來，請換一張或重新截圖") from None
+        raise AttachmentError(400, "The image could not be read. Try another image or a new screenshot.") from None
     if image.mode not in ("RGB", "RGBA"):
         image = image.convert("RGBA" if ("A" in image.getbands() or image.mode == "P") else "RGB")
 
@@ -169,7 +169,7 @@ def _full_sheet_text(data):
         finally:
             workbook.close()
     except Exception as exc:
-        raise AttachmentError(400, "這個 Excel 打不開") from exc
+        raise AttachmentError(400, "The Excel workbook could not be opened.") from exc
 
 def _sheet_text(name: str, data: bytes) -> str:
     import openpyxl
@@ -180,7 +180,7 @@ def _sheet_text(name: str, data: bytes) -> str:
         wb_f = openpyxl.load_workbook(io.BytesIO(data), data_only=False)
         wb_v = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
     except Exception:  # noqa: BLE001 - 壞檔、加密檔、其實不是 Excel
-        raise AttachmentError(400, "這個 Excel 打不開（可能有密碼或檔案壞了）") from None
+        raise AttachmentError(400, "The workbook could not be opened; it may be encrypted or damaged.") from None
     try:
         book = {"code": "附件", "file": name, "purpose": "", "package": {}, "power_query": [],
                 "sheets": [report_index.index_sheet(ws, wb_v[ws.title]) for ws in wb_f.worksheets]}
@@ -191,7 +191,7 @@ def _sheet_text(name: str, data: bytes) -> str:
     leaks: list = []
     report_index.walk_book(book, leaks)
     if leaks:
-        raise AttachmentError(422, "這本 Excel 裡有擋不掉的數字，沒辦法交給助理；請改用報表資料夾裡的那幾本")
+        raise AttachmentError(422, "This workbook contains values that cannot be masked safely. Use an indexed workbook instead.")
     parts = [tools.overview_text(book, "使用者附的 Excel")]
     parts += [tools.sheet_text(book, sh) for sh in book["sheets"]]
     return _clip("\n\n".join(parts))
@@ -221,7 +221,7 @@ def _docx_text(data: bytes) -> str:
         with zipfile.ZipFile(io.BytesIO(data)) as package:
             root = ElementTree.fromstring(package.read("word/document.xml"))
     except (zipfile.BadZipFile, KeyError, ElementTree.ParseError):
-        raise AttachmentError(400, "這個 Word 檔打不開（可能有密碼或檔案壞了）") from None
+        raise AttachmentError(400, "The Word document could not be opened; it may be encrypted or damaged.") from None
     body = root.find(W + "body")
     lines: list[str] = []
 
@@ -249,20 +249,20 @@ def _pdf_text(data: bytes) -> str:
     try:
         import pypdf
     except ImportError:
-        raise AttachmentError(415, "PDF 還不能讀（伺服器少了讀 PDF 的套件，請告訴負責人）；可以先改成截圖附上") from None
+        raise AttachmentError(415, "PDF support is not installed on the server. Contact the showrunner or attach a screenshot.") from None
     try:
         reader = pypdf.PdfReader(io.BytesIO(data))
         if reader.is_encrypted and not reader.decrypt(""):
-            raise AttachmentError(400, "這個 PDF 有密碼，請先解除再附")
+            raise AttachmentError(400, "Remove the PDF password before attaching it.")
         total = len(reader.pages)
         pages = [(page.extract_text() or "").strip() for page in list(reader.pages)[:PDF_PAGES]]
     except AttachmentError:
         raise
     except Exception:  # noqa: BLE001 - 壞檔、加密方式讀不了、不是 PDF
-        raise AttachmentError(400, "這個 PDF 打不開（可能有密碼或檔案壞了）") from None
+        raise AttachmentError(400, "The PDF could not be opened; it may be encrypted or damaged.") from None
     pages = [text for text in pages if text]
     if not pages:
-        raise AttachmentError(400, "這個 PDF 抽不出文字（可能是掃描的圖片），請改成截圖附上")
+        raise AttachmentError(400, "No text could be extracted from this PDF. Attach a screenshot if it is a scanned document.")
     text = "\n\n".join(pages)
     if total > PDF_PAGES:
         text += f"\n（後面還有 {total - PDF_PAGES} 頁沒讀）"

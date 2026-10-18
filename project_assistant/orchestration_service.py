@@ -13,12 +13,12 @@ def result(action):
     except cp.OrchestrationError as exc:
         return exc.status,{'error':str(exc),'code':exc.code}
     except (ValueError,TypeError,KeyError) as exc:
-        return 400,{'error':'請求內容無效：'+str(exc)[:200],'code':'INVALID_REQUEST'}
+        return 400,{'error':"Invalid request:"+str(exc)[:200],'code':'INVALID_REQUEST'}
 
 
 def object_body(body,allowed):
     if not isinstance(body,dict) or set(body)-set(allowed):
-        raise cp.OrchestrationError(400,'請求欄位不正確')
+        raise cp.OrchestrationError(400,"Invalid request fields.")
     return body
 
 
@@ -27,12 +27,12 @@ def create_run_request(conn,me,slug,body):
         object_body(body,('client_request_id','objective','scope','target','agent_key','label_selector','strategy','race_agents',
                           'write_mode','limits','conversation_id','deadline_at','depends_on'))
         if body.get('depends_on'):
-            raise cp.OrchestrationError(400,'初始任務不能依賴另一批工作的任務')
+            raise cp.OrchestrationError(400,"An initial task cannot depend on tasks from another run.")
         strategy=body.get('strategy','single')
         if strategy=='race' and not hasattr(cp,'start_race'):
-            raise cp.OrchestrationError(400,'競速模式尚未啟用')
+            raise cp.OrchestrationError(400,"Race mode is not enabled.")
         if body.get('conversation_id') is not None and type(body['conversation_id']) is not int:
-            raise cp.OrchestrationError(400,'對話編號格式不正確')
+            raise cp.OrchestrationError(400,"Invalid conversation ID.")
         run=cp.create_run(conn,me,slug,body.get('objective'),client_request_id=body.get('client_request_id'),
             limits=body.get('limits'),conversation_id=body.get('conversation_id'),deadline_at=body.get('deadline_at'),
             request_payload={k:v for k,v in body.items() if k!='client_request_id'})
@@ -78,7 +78,7 @@ def run_detail(conn,me,slug,run_id,*,cursor=None):
         run=cp.own_run(conn,me,slug,run_id,write=False)
         after=0 if cursor is None else int(cursor)
         if after<0:
-            raise ValueError('游標不正確')
+            raise ValueError("Invalid cursor.")
         messages=db.many(conn,'SELECT to_jsonb(m) FROM projectops.orchestration_message m WHERE run_id=%s AND id>%s ORDER BY id LIMIT 201',(run_id,after))
         return {'run':run,'tasks':db.tasks(conn,slug,run_id),
             'dispatches':[public_dispatch(d) for d in db.dispatches(conn,slug,run_id=run_id)],
@@ -106,9 +106,9 @@ def _page(groups,limit,cursor):
     try:
         anchors=json.loads(base64.urlsafe_b64decode(cursor+'='*((-len(cursor))%4))) if cursor else {}
     except (ValueError,TypeError):
-        raise cp.OrchestrationError(400,'看板游標格式不正確') from None
+        raise cp.OrchestrationError(400,"Invalid board cursor.") from None
     if not isinstance(anchors,dict) or set(anchors)-set(groups) or any(not isinstance(v,list) or len(v)!=2 or any(not isinstance(n,str) for n in v) for v in anchors.values()):
-        raise cp.OrchestrationError(400,'看板游標格式不正確')
+        raise cp.OrchestrationError(400,"Invalid board cursor.")
     next_anchors={**anchors}
     paged={}
     more=False
@@ -130,7 +130,7 @@ def board(conn,me,slug,*,cursor=None,limit=50,counts_only=False):
         cp.actor(conn,slug,me,write=False)
         page_size=int(limit)
         if not 1<=page_size<=200 or (cursor and (not isinstance(cursor,str) or len(cursor)>4096)):
-            raise cp.OrchestrationError(400,'看板分頁參數不正確')
+            raise cp.OrchestrationError(400,"Invalid board pagination parameters.")
         counts=_counts(conn,me,slug)
         groups={'needs_you':[],'working':[],'done':[],'idle':[]}
         if counts_only:
@@ -203,7 +203,7 @@ def cancel_run_request(conn,me,slug,run_id,body):
         object_body(body,('reason','client_request_id'))
         reason=body.get('reason','已取消整批工作')
         if not isinstance(reason,str) or len(reason)>1000:
-            raise cp.OrchestrationError(400,'取消原因最多 1000 字')
+            raise cp.OrchestrationError(400,"Cancellation reasons support up to 1,000 characters.")
         return cp.cancel_run(conn,me,slug,run_id,reason)
     return result(action)
 
@@ -212,10 +212,10 @@ def cancel_dispatch_request(conn,me,slug,dispatch_id,body):
     def action():
         object_body(body,('admission_no','reason','client_request_id'))
         if type(body.get('admission_no')) is not int or body['admission_no']<=0:
-            raise cp.OrchestrationError(400,'取消必須帶精確 admission_no')
+            raise cp.OrchestrationError(400,"Cancellation requires the exact admission_no.")
         reason=body.get('reason','已取消')
         if not isinstance(reason,str) or len(reason)>1000:
-            raise cp.OrchestrationError(400,'取消原因最多 1000 字')
+            raise cp.OrchestrationError(400,"Cancellation reasons support up to 1,000 characters.")
         return cp.cancel_dispatch(conn,me,slug,f'dsp_{db.identifier(dispatch_id)}_{body["admission_no"]}',reason)
     return result(action)
 
@@ -225,29 +225,29 @@ def resolve_gate_request(conn,me,slug,gate_id,body):
         object_body(body,('client_request_id','resolution'))
         nonce=body.get('client_request_id')
         if not isinstance(nonce,str) or not 1<=len(nonce)<=128:
-            raise cp.OrchestrationError(400,'請提供決定的 client_request_id')
+            raise cp.OrchestrationError(400,"Provide a client_request_id for this decision.")
         cp.lock_project(conn,slug)
         gate=db.get_gate(conn,slug,gate_id)
         if not gate:
-            raise cp.OrchestrationError(404,'找不到此問題')
+            raise cp.OrchestrationError(404,"Question not found.")
         cp.own_run(conn,me,slug,gate['run_id'])
         if gate['gate_kind']=='race_select':
             value=body.get('resolution')
             if not isinstance(value,dict) or type(value.get('proposal_id')) is not int:
-                raise cp.OrchestrationError(400,'請選擇候選提案')
+                raise cp.OrchestrationError(400,"Select a candidate proposal.")
             return cp.select_race_winner(conn,me,slug,gate_id,value['proposal_id'],client_request_id=body.get('client_request_id'))
         if gate['gate_kind']=='proposal_review':
             from project_assistant import service
             value=body.get('resolution')
             if (not isinstance(value,dict) or set(value)-{'proposal_id','decision'} or type(value.get('proposal_id')) is not int
                 or value['proposal_id'] not in gate['options'] or value.get('decision','apply') not in ('apply','dismiss')):
-                raise cp.OrchestrationError(400,'請核對此問題所列提案')
+                raise cp.OrchestrationError(400,"Review a proposal listed by this gate.")
             fingerprint=cp.digest(value)
             prior=db.one(conn,"SELECT payload FROM projectops.orchestration_message WHERE run_id=%s AND msg_type='system' AND payload->>'gate_id'=%s AND payload->>'gate_resolution_request_id'=%s",
                          (gate['run_id'],gate_id,nonce))
             if prior:
                 if prior['decision_hash']!=fingerprint:
-                    raise cp.OrchestrationError(409,'相同請求編號已有不同核對決定')
+                    raise cp.OrchestrationError(409,"This request ID already has a different review decision.")
                 return {'gate':db.get_gate(conn,slug,gate_id),'proposal':store.proposal(conn,prior['proposal_id'])}
             code,payload=service.apply_proposal(conn,me,slug,value['proposal_id'],{}) if value.get('decision','apply')=='apply' else service.dismiss_proposal(conn,me,slug,value['proposal_id'])
             if code>=400:
@@ -265,22 +265,22 @@ def retry_task_request(conn,me,slug,task_id,body):
         object_body(body,('client_request_id','reason'))
         nonce=body.get('client_request_id')
         if not isinstance(nonce,str) or not 1<=len(nonce)<=128:
-            raise cp.OrchestrationError(400,'請提供重試請求編號')
+            raise cp.OrchestrationError(400,"Provide a retry request ID.")
         cp.lock_project(conn,slug)
         task=db.get_task(conn,slug,task_id)
         if not task:
-            raise cp.OrchestrationError(404,'找不到任務')
+            raise cp.OrchestrationError(404,"Task not found.")
         run=cp.own_run(conn,me,slug,task['run_id'],cancel=True)
         prior=db.one(conn,"SELECT payload FROM projectops.orchestration_message WHERE task_id=%s AND msg_type='system' AND payload->>'retry_request_id'=%s",(task_id,nonce))
         if prior:
             return prior
         if run['status']=='canceled' or task['status'] not in ('failed','canceled'):
-            raise cp.OrchestrationError(409,'整批取消或尚未失敗的工作不能從此處重試，請重新交辦')
+            raise cp.OrchestrationError(409,"Canceled batches and tasks that have not failed cannot be retried here. Create a new assignment.")
         if task.get('flow_task_id'):
-            raise cp.OrchestrationError(409,'這是工作流步驟，請從工作流執行紀錄重試，以保留上下游順序')
+            raise cp.OrchestrationError(409,"Retry this step from pipeline history to preserve dependency order.")
         latest=[d for d in db.dispatches(conn,slug,task_id) if not d['superseded_by'] and d['status'] in ('failed','timeout','canceled')]
         if not latest:
-            raise cp.OrchestrationError(409,'此任務尚未派發，請先處理上游問題')
+            raise cp.OrchestrationError(409,"This task has not been dispatched. Resolve upstream issues first.")
         admitted=[cp.spawn_dispatch(conn,slug,task_id,agent_key=d['agent_key'],slot_key=d['slot_key']) for d in latest]
         descendants={task_id}
         for candidate in db.tasks(conn,slug,run['id']):

@@ -1,15 +1,15 @@
 import { tablesOf } from "./sheetModel.js";
 
-export const CAPABILITIES = { llm: "文字與推理", image_gen: "圖片生成", video_gen: "影片生成", media_assemble: "音訊與合成" };
-export const TASK_LABELS = { blocked: "等待上游", queued: "排隊中", running: "執行中", awaiting_approval: "等待提案審核", succeeded: "已完成", failed: "失敗", canceled: "已取消" };
-export const SCOPE_LABELS = { once: "執行一次", rows: "逐列處理", aggregate: "全部完成後匯總", legacy: "依批次選取" };
+export const CAPABILITIES = { llm: "Text & Reasoning", image_gen: "Image Generation", video_gen: "Video Generation", media_assemble: "Audio & Assembly" };
+export const TASK_LABELS = { blocked: "Waiting for Upstream", queued: "Queued", running: "Running", awaiting_approval: "Pending Review", succeeded: "Completed", failed: "Failed", canceled: "Canceled" };
+export const SCOPE_LABELS = { once: "Run Once", rows: "Per Row", aggregate: "Aggregate After Completion", legacy: "Use Batch Selection" };
 
 export const STEP_KINDS = {
-  read: { title: "讀取與擷取", description: "從文件或表格擷取需要的內容", capability: "llm", prompt: "從指定來源擷取需要的內容，保留來源依據。" },
-  transform: { title: "整理內容", description: "分類、改寫、摘要或計算說明", capability: "llm", prompt: "整理指定來源，回傳清楚且可核對的結果。" },
-  generate: { title: "生成圖片", description: "依資料與指令產出圖片", capability: "image_gen", prompt: "依指定來源與指令生成圖片。" },
-  review: { title: "提出核對建議", description: "整理建議，指定寫回位置後由人核對", capability: "llm", prompt: "檢查指定內容並提出具體修正建議，說明修改理由。" },
-  write: { title: "寫入文件或表格", description: "依目標欄位整理結果，核對後寫回", capability: "llm", prompt: "將指定來源整理成符合目標文件或表格欄位的結果。" },
+  read: { title: "Read & Extract", description: "Extract relevant content from a document or slate", capability: "llm", prompt: "Extract relevant content while preserving source references." },
+  transform: { title: "Organize Content", description: "Classify, rewrite, summarize, or explain calculations", capability: "llm", prompt: "Organize the source into a clear result that can be reviewed." },
+  generate: { title: "Generate Image", description: "Generate an image from the source and instructions", capability: "image_gen", prompt: "Generate an image using the specified source and instructions." },
+  review: { title: "Propose Revisions", description: "Prepare suggestions for human review at a selected destination", capability: "llm", prompt: "Review the content and propose specific revisions with reasons." },
+  write: { title: "Update a Document or Table", description: "Prepare results for the target fields and apply after review", capability: "llm", prompt: "Prepare source content to match the destination document or table fields." },
 };
 
 export function createStep(kind, id, index = 0) {
@@ -36,11 +36,11 @@ export function flowToCanvas(definition, selectedIds = [], tabs = [], tasks = []
   return {
     nodes: definition.nodes.map((node) => ({ id: node.id, type: "workStep", position: { x: node.x ?? 0, y: node.y ?? 0 },
       selected: selectedIds.includes(node.id), data: { title: node.title, scope: node.scope || "legacy",
-        source: name(node.row_source?.tab_key || node.input_tabs?.[0]) || "尚未選來源",
-        target: name(node.target?.tab_key) || "保留結果", status: summarizeTasks(tasks.filter((t) => t.node_id === node.id)).status },
-      ariaLabel: `${node.title}；${name(node.row_source?.tab_key || node.input_tabs?.[0]) || "尚未選來源"} → ${name(node.target?.tab_key) || "保留結果"}` })),
+        source: name(node.row_source?.tab_key || node.input_tabs?.[0]) || "No Source Selected",
+        target: name(node.target?.tab_key) || "Keep Result", status: summarizeTasks(tasks.filter((t) => t.node_id === node.id)).status },
+      ariaLabel: `${node.title}；${name(node.row_source?.tab_key || node.input_tabs?.[0]) || "No Source Selected"} → ${name(node.target?.tab_key) || "Keep Result"}` })),
     edges: definition.edges.map((edge) => ({ id: `${edge.source}--${edge.target}`, source: edge.source, target: edge.target,
-      label: "完成後執行", ariaLabel: "前一步完成並通過核對後執行；輸出以來源步驟識別提供", markerEnd: { type: "arrowclosed" } })),
+      label: "Run After Completion", ariaLabel: "Run after the previous step completes and is approved; output is identified by its source step", markerEnd: { type: "arrowclosed" } })),
   };
 }
 
@@ -58,7 +58,7 @@ export function seedDefinition(doc, values) {
     const capability = /image|生圖|ComfyUI|Flux|即夢/i.test(provider) ? "image_gen"
       : /video|影片|Seedance|Kling|Veo/i.test(provider) ? "video_gen"
         : /media|合成|FFmpeg|TTS/i.test(provider) ? "media_assemble" : "llm";
-    return { id: row.rid, title: cells[0] || `節點 ${i + 1}`, capability,
+    return { id: row.rid, title: cells[0] || `Node ${i + 1}`, capability,
       prompt: [cells[2], cells[4]].filter(Boolean).join("\n"), x: 40 + i * 400, y: 70,
       input_tabs: [], target: {}, write_mode: "proposal" };
   });
@@ -66,13 +66,13 @@ export function seedDefinition(doc, values) {
 }
 
 export function connectNodes(definition, source, target) {
-  if (source === target) throw new Error("節點不能連回自己");
-  if (!definition.nodes.some((n) => n.id === source) || !definition.nodes.some((n) => n.id === target)) throw new Error("找不到連線節點");
+  if (source === target) throw new Error("A node cannot connect to itself.");
+  if (!definition.nodes.some((n) => n.id === source) || !definition.nodes.some((n) => n.id === target)) throw new Error("Connection node not found.");
   if (definition.edges.some((e) => e.source === source && e.target === target)) return definition;
   const edges = [...definition.edges, { source, target }];
   const visited = new Set();
   const visit = (id, path = new Set()) => {
-    if (path.has(id)) throw new Error("這條連線會形成循環");
+    if (path.has(id)) throw new Error("This connection would create a cycle.");
     if (visited.has(id)) return;
     for (const edge of edges.filter((e) => e.source === id)) visit(edge.target, new Set([...path, id]));
     visited.add(id);
@@ -120,5 +120,5 @@ export function taskSourceContext(task, run, tabs = []) {
   return { tabKey, tableId: row?.table_id || source.table_id, rowId: task.row_id, colIndex: 0,
     title: row?.title || inputTab?.title || tabs.find((item) => item.key === tabKey)?.title || tabKey,
     revision: row?.revision ?? inputTab?.revision,
-    label: (row?.cells || []).slice(0, 2).map(cellText).filter(Boolean).join(" · ") || "來源資料列" };
+    label: (row?.cells || []).slice(0, 2).map(cellText).filter(Boolean).join(" · ") || "Source Rows" };
 }

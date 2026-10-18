@@ -6,7 +6,7 @@ from project_assistant.masking import guard_input
 def mode(conn, slug):
     project = repo.get_project(conn, slug)
     if not project:
-        raise ValueError("找不到這個專案")
+        raise ValueError("Production not found.")
     return project.get("privacy_mode", "full_access")
 
 

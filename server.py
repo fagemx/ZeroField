@@ -1,4 +1,4 @@
-"""OpenBench standalone server (HTTP Workbench + Background Agent Worker).
+"""ZeroField Studio server (HTTP Workbench + Background Agent Worker).
 
 Usage:
     python server.py --embedded-db --port 3020
@@ -25,124 +25,47 @@ from project_docs import auth, doc_schema, http as projects_http, markdown_impor
 DEMO_MEMBERS = [
     {
         "actor_id": "11111111-1111-4111-8111-111111111111",
-        "name": "Alex",
+        "name": "Alex Rivera",
         "role": "admin",
-        "email": "alex@openbench.dev",
+        "email": "alex@zerofield.example",
     },
     {
         "actor_id": "22222222-2222-4222-8222-222222222222",
-        "name": "Mia",
-        "role": "marketer",
-        "email": "mia@openbench.dev",
+        "name": "Maya Chen",
+        "role": "director",
+        "email": "maya@zerofield.example",
     },
     {
         "actor_id": "33333333-3333-4333-8333-333333333333",
-        "name": "Sam",
+        "name": "Sam Reed",
         "role": "engineer",
-        "email": "sam@openbench.dev",
+        "email": "sam@zerofield.example",
     },
 ]
 
-DEMO_TABS = [
-    (
-        "overview",
-        "總覽與待確認問題",
-        "doc",
-        """# 總覽與待確認問題
-
-歡迎使用 **OpenBench**！這是一個結合「多人段落鎖定、螢光筆標註討論、多畫布分頁」與「頭手分離任務代理」的開源專案工作台。
-
-## 請行銷回答
-
-| 題號 | 待確認問題 | 為什麼要確認 | 狀態 |
-| --- | --- | --- | --- |
-| 1 | 目前的日常報表或作業流程大約要花多久？由誰負責？每天幾點前要產出？ | 估算自動化效益與決定每日排程時間 | 〔未開始〕 |
-| 2 | 第一階段的產品與資料範圍是什麼？其他產品線是否共用相同格式？ | 決定第一階段驗收邊界與資料表結構 | 〔進行中〕 |
-| 3 | 跨來源的欄位是直接從單一報表匯出，還是人工用關鍵字對齊的？ | 決定資料管線的串接 API 與 Join Key | 〔等待回覆〕 |
-""",
-    ),
-    (
-        "daily-sheet",
-        "每日投放日報表",
-        "sheet",
-        """# 每日投放日報表
-
-這是一張 **Sheet（試算表／日報）** 畫布分頁。你可以在表格內直接填寫「內容或位置」、切換每一列的處理狀態、選字畫重點或 @同事討論，也可以點上方按鈕請右側代理協助檢查。
-
-## 欄位口徑與交接追蹤
-
-| 項目 | 說明與公式口徑 | 提供方 | 內容或位置 | 狀態 |
-| --- | --- | --- | --- | --- |
-| 渠道安裝轉換動作 | 定義各廣告渠道計入有效安裝的事件名稱 | 行銷 | 請填寫事件名稱 | 〔進行中〕 |
-| 有效留存與付費回補 | 首日與第 7 天付費回補規則（區分未到與真零） | 行銷 | 請填寫回補規則 | 〔未開始〕 |
-| 自動排程匯入驗證 | 每日 09:00 前完成前一日資料拉取與驗算 | 工程 | 已建立測試管線 | 〔已完成〕 |
-""",
-    ),
-    (
-        "agent-flow",
-        "代理自動化工作流",
-        "flow",
-        """# 代理自動化工作流
-
-這是一張 **Flow（節點工作流）** 畫布分頁，用來定義「頭與手腳分離」的多代理任務串接。
-
-## 節點串接定義
-
-| 節點順序 | 節點名稱 | 執行代理／來源 | 輸入與輸出規則 | 狀態 |
-| --- | --- | --- | --- | --- |
-| 1 | 讀取日報結構索引 | Local / Remote Worker | 掃描日報分頁與去數值化報表結構 | 〔已完成〕 |
-| 2 | 異常與缺漏欄位檢核 | OpenAI / Claude / CLI Agent | 比對「答完整的標準」找出缺漏項 | 〔進行中〕 |
-| 3 | 產出修改提案卡（Proposal） | Workbench Head | 產生待確認提案卡，經成員按確認後寫回畫布 | 〔進行中〕 |
-""",
-    ),
-]
-
-
 def seed_demo_data(conn) -> None:
+    """Create an editable English planning example without fabricated renders."""
     repo.ensure_schema(conn)
-    for m in DEMO_MEMBERS:
+    for member in DEMO_MEMBERS:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM projectops.member WHERE actor_id=%s", (m["actor_id"],))
+            cur.execute("SELECT 1 FROM projectops.member WHERE actor_id=%s", (member["actor_id"],))
             exists = cur.fetchone()
         if not exists:
-            repo.upsert_member(conn, m["actor_id"], m["name"], m["role"], m["email"], "active")
-    existing_slugs = {p["slug"] for p in repo.list_projects(conn)}
+            repo.upsert_member(conn, member["actor_id"], member["name"], member["role"], member["email"], "active")
+    slug = "zerofield-showcase"
     admin_id = DEMO_MEMBERS[0]["actor_id"]
-    if "demo-launch" not in existing_slugs:
-        slug = "demo-launch"
-        repo.upsert_project(
-            conn,
-            slug,
-            "跨部門數據與日報自動化專案",
-            status="active",
-            summary="示範文件畫布（Doc）、每日報表畫布（Sheet）、代理工作流畫布（Flow）與右側任務助理協作。",
-        )
-        tab_keys = {k for k, _, _, _ in DEMO_TABS}
-        for pos, (key, title, surface_type, md) in enumerate(DEMO_TABS, start=1):
-            doc, values = markdown_import.markdown_to_doc(
-                md, tab_keys=tab_keys, image_src=lambda _: None, fill_headers=("請填", "內容或位置", "確認日期")
-            )
-            doc, _ = doc_schema.validate_doc(doc, slug=slug)
-            repo.create_tab(
-                conn, slug, key=key, title=title, parent_key=None, doc=doc,
-                actor_id=admin_id, position=pos * 10, surface_type=surface_type,
-            )
-            for fid, (kind, val) in values.items():
-                repo.set_field_value(conn, slug, key, fid, kind=kind, value=val, actor_id=admin_id)
-        for m in DEMO_MEMBERS:
-            assistant_store.set_member_enabled(conn, slug, m["actor_id"], True, admin_id)
-    if "ai-drama-ep1" not in existing_slugs:
-        from project_docs import service as pd_service
-        me = pd_service.Identity(actor_id=admin_id, name=DEMO_MEMBERS[0]["name"], role="admin")
-        pd_service.create_project(conn, me, {
-            "slug": "ai-drama-ep1",
-            "title": "🎬 AI 影劇《霓虹記憶》第一集量產台",
-            "template": "ai_drama",
-            "status": "active",
-            "summary": "示範從劇本 (Doc)、角色定妝表 (Sheet)、EP01 分鏡量產表 (Sheet) 到生圖／生影片／成片合成 (Flow) 的完整 AI 影劇產線。",
+    if not repo.get_project(conn, slug):
+        from project_docs import service
+        me = service.Identity(admin_id, DEMO_MEMBERS[0]["name"], "admin")
+        code, result = service.create_project(conn, me, {
+            "slug": slug, "title": "The Last Signal — ZeroField Studio",
+            "template": "zerofield_studio", "status": "planning",
+            "summary": "An editable production brief, cast lookbook, shot slate, V2V plan, and pipeline. Media generation is not configured.",
         })
-        for m in DEMO_MEMBERS:
-            assistant_store.set_member_enabled(conn, "ai-drama-ep1", m["actor_id"], True, admin_id)
+        if code != 200:
+            raise RuntimeError(result.get("error", "Could not create the studio example"))
+        for member in DEMO_MEMBERS:
+            assistant_store.set_member_enabled(conn, slug, member["actor_id"], True, admin_id)
     conn.commit()
 
 
@@ -283,9 +206,9 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
 
     def _login_page(self, error=""):
         mode = auth.config()["mode"]
-        content = ('<form method="post" action="/login"><label>存取權杖 <input name="token" type="password" autocomplete="current-password" required></label><button>登入</button></form>'
-                   if mode == "token" else '<p>請透過已設定的反向代理登入。</p>' if mode == "header" else '<a href="/projects/">開啟工作台</a>')
-        page = '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OpenBench 登入</title><style>body{font:16px system-ui;max-width:480px;margin:12vh auto;padding:24px;background:#f8fafc;color:#1e293b}input,button{padding:12px;margin:12px 0;display:block;width:100%;box-sizing:border-box}button{background:#4338ca;color:white;border:0;border-radius:6px}</style><h1>OpenBench</h1><p>' + html.escape(error) + '</p>' + content + '</html>'
+        content = ('<form method="post" action="/login"><label>Access Token <input name="token" type="password" autocomplete="current-password" required></label><button>Sign In</button></form>'
+                   if mode == "token" else '<p>Sign in through the configured reverse proxy.</p>' if mode == "header" else '<a href="/projects/">Open Studio</a>')
+        page = '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ZeroField Studio — Sign In</title><style>body{font:16px system-ui;max-width:480px;margin:12vh auto;padding:24px;background:#f8fafc;color:#1e293b}input,button{padding:12px;margin:12px 0;display:block;width:100%;box-sizing:border-box}button{background:#4338ca;color:white;border:0;border-radius:6px}</style><h1>ZeroField Studio</h1><p>' + html.escape(error) + '</p>' + content + '</html>'
         self.send_skillops_bytes(200, "text/html; charset=utf-8", page.encode())
 
     def _login(self, logout=False):
@@ -295,10 +218,10 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
             return
         origin = self.headers.get("Origin", "")
         if origin and origin not in ("http://" + self.headers.get("Host", ""), "https://" + self.headers.get("Host", "")):
-            self.send_json(403, {"error": "不接受跨站登入"})
+            self.send_json(403, {"error": "Cross-origin sign-in is not allowed."})
             return
         if logout and projects_http._write_allowed(self):
-            self.send_json(403, {"error": "缺少必要的請求標頭"})
+            self.send_json(403, {"error": "A required request header is missing."})
             return
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -306,7 +229,7 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
                 raise ValueError()
             data = parse_qs(self.rfile.read(length).decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
-            self.send_json(400, {"error": "登入格式不正確"})
+            self.send_json(400, {"error": "Invalid sign-in request."})
             return
         actor = None if logout else auth.token_actor((data.get("token") or [""])[0], cfg)
         if not logout and actor:
@@ -316,7 +239,7 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
         if not logout and not actor:
-            self._login_page("權杖無效或帳號已停用")
+            self._login_page("Invalid token or disabled account.")
             return
         cookie = "" if logout else auth.issue_session(actor, cfg)
         secure = "; Secure" if os.environ.get("OPENBENCH_COOKIE_SECURE") == "1" else ""
@@ -383,11 +306,11 @@ def _start_local_postgres() -> tuple[str, object]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="OpenBench standalone server")
+    parser = argparse.ArgumentParser(description="ZeroField Studio server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=3020)
-    parser.add_argument("--embedded-db", action="store_true", help="使用內建本機 PostgreSQL 啟動開發資料庫")
-    parser.add_argument("--no-worker", action="store_true", help="不啟動內建背景代理 Worker（改由外部遠端 Worker 領取）")
+    parser.add_argument("--embedded-db", action="store_true", help="Start an embedded PostgreSQL development database")
+    parser.add_argument("--no-worker", action="store_true", help="Disable the built-in background agent worker")
     args = parser.parse_args()
     try:
         cfg = auth.config()
@@ -400,7 +323,7 @@ def main() -> int:
     if args.embedded_db and not os.environ.get("OPENBENCH_DB_URI"):
         uri, cleanup_pg = _start_local_postgres()
         os.environ["OPENBENCH_DB_URI"] = uri
-        print(f"openbench: started local postgres at {uri}", flush=True)
+        print(f"zerofield: started local postgres at {uri}", flush=True)
 
     conn = projects_http.open_connection()
     try:
@@ -425,7 +348,7 @@ def main() -> int:
         assistant_worker.start_in_background(projects_http.open_connection, shutdown)
 
     server = OpenBenchHTTPServer((args.host, args.port), OpenBenchHandler)
-    print(f"OpenBench running at http://{args.host}:{args.port}/projects/", flush=True)
+    print(f"ZeroField Studio running at http://{args.host}:{args.port}/projects/", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

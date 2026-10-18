@@ -167,7 +167,7 @@ def read_page(ctx, conn, args):
         try:
             offset, limit = max(0, int(args.get("offset", 0))), max(1, min(30, int(args.get("limit", 15))))
         except (ValueError, TypeError):
-            raise ToolError("offset/limit 必須為整數") from None
+            raise ToolError("offset/limit must be integers.") from None
         values = tab.get('_plain_values') if '_plain_values' in tab else todo.plain_values(conn, ctx.slug).get(tab["key"], {})
         items = []
         for table in tab["doc"].get("content", []):
@@ -200,7 +200,7 @@ def read_page(ctx, conn, args):
 def search_pages(ctx, conn, args):
     query = str(args.get("query") or "").strip()
     if not query:
-        raise ToolError("query 不能是空的")
+        raise ToolError("query cannot be empty.")
     hits = []
     for t in _tabs(conn, ctx.slug):
         tab = _context_tab(ctx,conn,t['key'])
@@ -250,7 +250,7 @@ def _catalog(ctx):
     path = Path(ctx.report_dir) / "catalog.json"
     with report_index.LOCK:
         if not path.exists():
-            raise ToolError("還沒有報表索引。請使用者把報表放進報表資料夾，或請負責人確認資料夾設定。")
+            raise ToolError("No workbook index exists. Add workbooks to the configured folder or ask the owner to check its settings.")
         return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -272,7 +272,7 @@ def report_overview(ctx, conn, args):
     code = str(args.get("code") or "")
     book = _book(ctx, code)
     if not book:
-        raise ToolError(f"沒有代號「{code}」的報表。")
+        raise ToolError(f"Workbook {code} not found.")
     return overview_text(book, code)
 
 
@@ -304,10 +304,10 @@ def report_sheet(ctx, conn, args):
     code, sheet, columns = (str(args.get(k) or "") for k in ("code", "sheet", "columns"))
     book = _book(ctx, code)
     if not book:
-        raise ToolError(f"沒有代號「{code}」的報表。")
+        raise ToolError(f"Workbook {code} not found.")
     sh = _sheet(book, sheet)
     if not sh:
-        raise ToolError(f"「{code}」沒有工作表「{sheet}」。工作表有：{'、'.join(s['name'] for s in book['sheets'])}")
+        raise ToolError(f"Workbook {code} has no worksheet {sheet}. Available: {', '.join(s['name'] for s in book['sheets'])}")
     wanted = None
     if columns:
         wanted = set()
@@ -319,7 +319,7 @@ def report_sheet(ctx, conn, args):
                 elif part:
                     wanted.add(idx(part.upper()))
         except ValueError:
-            raise ToolError('columns 要寫成像 "A:K" 或 "B,F,AA" 這樣') from None
+            raise ToolError("Write columns as a range such as A:K or a list such as B,F,AA.") from None
     return sheet_text(book, sh, wanted)
 
 
@@ -362,10 +362,10 @@ def report_cell(ctx, conn, args):
     book = _book(ctx, code)
     sh = _sheet(book, sheet) if book else None
     if not sh:
-        raise ToolError("找不到這本報表或工作表。")
+        raise ToolError("Workbook or worksheet not found.")
     m = re.fullmatch(r"\$?([A-Za-z]{1,3})\$?(\d+)", cell.strip())
     if not m:
-        raise ToolError("儲存格要寫成像 F12 這樣。")
+        raise ToolError("Use a cell reference such as F12.")
     L, row = m.group(1).upper(), int(m.group(2))
     col = sh["columns"].get(L, {})
     date = sh["dates_by_row"].get(str(row), "這一列沒有日期")
@@ -385,7 +385,7 @@ def report_cell(ctx, conn, args):
 def report_find(ctx, conn, args):
     text, code = str(args.get("text") or ""), str(args.get("code") or "")
     if not text:
-        raise ToolError("text 不能是空的")
+        raise ToolError("text cannot be empty.")
     hits = []
     for b in _catalog(ctx):
         if code and b["code"] != code:
@@ -430,7 +430,7 @@ def _rows_of(tab):
 def _find_row(tab, row):
     row = str(row or "").strip()
     if not row:
-        raise ToolError("要寫 row：題號（例如 1）或那一列第一格的名稱")
+        raise ToolError("Provide row as a question number or the first cell’s exact value.")
     rows = _rows_of(tab)
     numbered = re.fullmatch(r"(.*?)\s*第?\s*(\d+)\s*題?", row)
     if numbered:
@@ -460,13 +460,13 @@ def _row_field(tab, rid, kind, column=""):
 def _quote_anchor(tab, quote):
     quote = str(quote or "").strip()
     if len(quote) < 4:
-        raise ToolError("quote 要是頁面上一字不差的一段字（至少 4 個字）")
+        raise ToolError("quote must exactly match at least four characters on the page.")
     text = doc_text(tab["doc"])
     start = text.find(quote)
     if start < 0:
-        raise ToolError("頁面上找不到這段字；請用 read_page 複製一字不差的原文")
+        raise ToolError("The quote was not found. Use read_page to copy its exact text.")
     if text.find(quote, start + 1) >= 0:
-        raise ToolError("這段字在頁面上出現不只一次；請多選幾個字，讓它只出現一次")
+        raise ToolError("This quote occurs more than once. Select a longer, unique passage.")
     return anchoring.anchor_at(text, start, quote), quote
 
 
@@ -490,13 +490,13 @@ def _display(action, target):
 def propose(ctx, conn, args):
     scope=_request_scope(ctx,conn)
     if scope and args.get('action') not in ('在段落加標註','寫進那一題的討論','留言問負責人'):
-        raise ToolError('這次需求有固定範圍，請使用結構化修改或對選取資料提出標註／討論')
+        raise ToolError("This task has a fixed scope. Use structured edits or annotate / discuss the selected data.")
     action = args.get("action")
     if action not in PROPOSE_ACTIONS:
         raise ToolError("action 只能是：" + "、".join(PROPOSE_ACTIONS))
     content = str(args.get("content") or "").strip()
     if len(content) > MAX_CONTENT:
-        raise ToolError(f"content 最多 {MAX_CONTENT} 個字")
+        raise ToolError(f"content supports up to {MAX_CONTENT} characters.")
     target: dict = {}
     tab = None
     if action != "私下轉給負責人":
@@ -514,12 +514,12 @@ def propose(ctx, conn, args):
         content = status
     elif action == "填交接追蹤":
         if not content:
-            raise ToolError("content 是要填進格子的內容")
+            raise ToolError("content must contain the value to enter in the field.")
         fid, field = _row_field(tab, target["rid"], "fill", str(args.get("column") or ""))
         target.update({"fid": fid, "field_label": field["label"]})
     elif action in ("寫進那一題的討論", "留言問負責人"):
         if not content:
-            raise ToolError("content 是要放上去的文字（用使用者的口吻）")
+            raise ToolError("content must contain the proposed text in the user’s voice.")
         if "rid" not in target:
             target["anchor"], target["quote"] = _quote_anchor(tab, args.get("quote"))
         target["mention_admin"] = True
@@ -530,17 +530,17 @@ def propose(ctx, conn, args):
         target["anchor"], target["quote"] = _quote_anchor(tab, args.get("quote"))
         target["label"] = LABELS[label]
     elif not content:
-        raise ToolError("content 是要問負責人的話")
+        raise ToolError("content must contain the question for the owner.")
     target["display"] = _display(action, target)
     if scope:
         if tab['key']!=scope['target_tab']:
-            raise ToolError('POLICY_DENIED：標註超出固定分頁')
+            raise ToolError("POLICY_DENIED: The annotation exceeds the selected page.")
         if scope.get('kind')=='doc':
             selected=[block for block in tab['doc'].get('content',[]) if block.get('attrs',{}).get('bid') in scope['block_ids']]
             if target.get('rid') or not target.get('quote') or target['quote'] not in doc_text({'type':'doc','content':selected}):
-                raise ToolError('POLICY_DENIED：標註超出選取段落')
+                raise ToolError("POLICY_DENIED: The annotation exceeds the selected passages.")
         elif target.get('rid') not in scope['row_ids']:
-            raise ToolError('POLICY_DENIED：請對選取列提出討論')
+            raise ToolError("POLICY_DENIED: Discuss a selected row.")
         target['request_scope']=scope
     proposal_id = store.create_proposal(conn, ctx.slug, ctx.me.actor_id, ctx.message_id, action, target, content)
     if getattr(ctx,'dispatch_id',None):
@@ -607,7 +607,7 @@ HANDLERS.update(delegation_tools.HANDLERS)
 
 def call(ctx: ToolContext, name: str, args) -> str:
     if name not in TOOL_NAMES:
-        raise ToolError(f"沒有「{name}」這個工具")
+        raise ToolError(f"Tool {name} does not exist.")
     args = args if isinstance(args, dict) else {}
     conn = ctx.connection_factory()
     try:

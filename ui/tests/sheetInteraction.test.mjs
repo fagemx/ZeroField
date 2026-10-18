@@ -25,10 +25,10 @@ test("row history retains table-wide changes when schema and cells were edited t
 test("agent draft names selected records in table order without internal tool syntax", () => {
   const table = {name: "名單", rows: [{rid: "r_a", cells: [{value: "甲"}]}, {rid: "r_b", cells: [{value: "乙"}]}]};
   const draft = sheetRequest("合作專案", table, ["r_b", "r_a"], "補上缺少的說明");
-  assert.ok(draft.includes("第 1 列「甲」、第 2 列「乙」"));
+  assert.ok(draft.includes("Row 1 “甲”, Row 2 “乙”"));
   assert.ok(draft.includes("補上缺少的說明"));
   assert.ok(!/row_id|propose_table_edit|r_a/.test(draft));
-  assert.throws(() => sheetRequest("合作專案", table, ["deleted"], "修改"), /不存在/);
-  assert.ok(sheetRequest("合作專案", table, null, "檢查").includes("整張表格"));
-  assert.throws(() => sheetRequest("合作專案", table, null, "字".repeat(4000)), /過長/);
+  assert.throws(() => sheetRequest("合作專案", table, ["deleted"], "修改"), /no longer exist/);
+  assert.ok(sheetRequest("合作專案", table, null, "檢查").includes("the entire table"));
+  assert.throws(() => sheetRequest("合作專案", table, null, "字".repeat(4000)), /too long/);
 });

@@ -34,11 +34,11 @@ test("inline formatting is parsed, never injected", () => {
 test("working line says what it is looking at", () => {
   const tools = [{ label: "待辦", detail: "" }, { label: "專案頁", detail: "questions" }, { label: "待辦", detail: "" }];
   assert.deepEqual(lookedAt(tools), ["待辦", "專案頁 questions"]);
-  assert.equal(workingLine({ status: "running", tools }), "正在看：待辦、專案頁 questions");
-  assert.equal(workingLine({ status: "running", tools: [] }), "正在想…");
-  assert.equal(workingLine({ status: "queued", attempts: 0, tools: [] }), "排隊中…");
-  assert.equal(workingLine({ status: "queued", attempts: 1, tools: [] }), "重新試一次…");
-  assert.equal(workingLine({ status: "running", tools, body: "第 2 題要" }), "正在寫…");
+  assert.equal(workingLine({ status: "running", tools }), "Reading: 待辦, 專案頁 questions");
+  assert.equal(workingLine({ status: "running", tools: [] }), "Thinking…");
+  assert.equal(workingLine({ status: "queued", attempts: 0, tools: [] }), "Queued…");
+  assert.equal(workingLine({ status: "queued", attempts: 1, tools: [] }), "Retrying…");
+  assert.equal(workingLine({ status: "running", tools, body: "第 2 題要" }), "Writing…");
   const thread = [{ role: "user", body: "我們來回答第 8 題" }, { role: "assistant", status: "running", tools: [] }];
   assert.equal(openReply(thread).status, "running");
   assert.equal(openReply([{ role: "assistant", status: "done" }]), null);
@@ -54,15 +54,15 @@ test("todo counts, row prompts and the task strip", () => {
     { kind: "handoff", rid: "h1", text: "AppsFlyer 事件名稱", status: "未開始" },
   ];
   assert.deepEqual(progressCounts(todo), { questionsDone: 1, questions: 2, handoffDone: 0, handoff: 1 });
-  assert.equal(draftPrompt(todo[1]), "我們來回答第 2 題");
-  assert.equal(draftPrompt(todo[3]), "我們來做交接追蹤的「AppsFlyer 事件名稱」");
+  assert.equal(draftPrompt(todo[1]), "Let’s work on question 2");
+  assert.equal(draftPrompt(todo[3]), "Let’s work on the deliverable “AppsFlyer 事件名稱”");
   const rows = assistRows(todo);
-  assert.deepEqual(rows.get("q1"), { label: "一起回答", cell: 1, prompt: "我們來回答第 1 題" });
-  assert.equal(rows.get(todo[3].rid).label, "這一項怎麼交");
+  assert.deepEqual(rows.get("q1"), { label: "Work Together", cell: 1, prompt: "Let’s work on question 1" });
+  assert.equal(rows.get(todo[3].rid).label, "Plan This Delivery");
   assert.equal(rows.get(todo[3].rid).cell, 0);
   assert.equal(rows.has("1"), false);
-  assert.equal(taskLine({ proposals: [{ status: "pending" }], thread: [] }, null), "答案整理好了，等你確認");
-  assert.equal(taskLine({ proposals: [], thread: [{ role: "user", body: "第 2 題" }] }, null), "正在處理：第 2 題");
+  assert.equal(taskLine({ proposals: [{ status: "pending" }], thread: [] }, null), "Response ready for approval");
+  assert.equal(taskLine({ proposals: [], thread: [{ role: "user", body: "第 2 題" }] }, null), "Working on question 2");
   assert.equal(taskLine({ proposals: [], thread: [] }, null), "");
 });
 
@@ -77,8 +77,8 @@ test("download link only on a finished answer that offered the document", () => 
 });
 
 test("a private forward is never described as put on the page", () => {
-  assert.equal(appliedLabel({ action: "私下轉給負責人" }), "已私下轉給負責人");
-  assert.equal(appliedLabel({ action: "寫進那一題的討論" }), "已放上專案頁");
+  assert.equal(appliedLabel({ action: "私下轉給負責人" }), "Forwarded privately to owner");
+  assert.equal(appliedLabel({ action: "寫進那一題的討論" }), "Applied to production");
 });
 
 test("the top-bar count is notes plus answers waiting for confirmation", () => {
@@ -102,13 +102,13 @@ test("a picked todo item can be unpicked, and the auto-filled line goes with it"
   const q2 = { kind: "question", number: 2, rid: "r2" };
   const thread = [{ id: 5, role: "user", body: "嗨" }, { id: 6, role: "assistant", body: "嗨" }];
   const picked = pickTodo(null, q2, "", thread);
-  assert.deepEqual(picked, { focus: { kind: "question", number: 2 }, draft: "我們來回答第 2 題" });
+  assert.deepEqual(picked, { focus: { kind: "question", number: 2 }, draft: "Let’s work on question 2" });
   assert.equal(isPicked(picked.focus, q2), true);
-  const unpicked = pickTodo(picked.focus, q2, "我們來回答第 2 題", thread);
+  const unpicked = pickTodo(picked.focus, q2, "Let’s work on question 2", thread);
   assert.deepEqual(unpicked, { focus: { kind: "none", after: 5 }, draft: "" });
-  assert.equal(pickTodo(picked.focus, q2, "我們來回答第 2 題，先從產品開始", thread).draft, "我們來回答第 2 題，先從產品開始");
+  assert.equal(pickTodo(picked.focus, q2, "Let’s work on question 2，先從產品開始", thread).draft, "Let’s work on question 2，先從產品開始");
   // 取消之後，就算上一句提到第幾題也不自動選；她再送一句才照那一句判斷
-  const asked = [{ id: 5, role: "user", body: "我們來回答第 2 題" }];
+  const asked = [{ id: 5, role: "user", body: "Let’s work on question 2" }];
   assert.equal(currentFocus(asked, { kind: "none", after: 5 }), null);
   assert.deepEqual(currentFocus([...asked, { id: 9, role: "user", body: "第 3 題呢" }], { kind: "none", after: 5 }),
     { kind: "question", number: 3 });
@@ -120,14 +120,14 @@ test("how long an answer took: from her question to the finished answer", () => 
   assert.equal(elapsedSeconds(reply, thread), 7);
   assert.equal(elapsedSeconds({ ...reply, reply_to: 99 }, thread), 4);  // 找不到那一句就用 worker 記的秒數
   assert.equal(elapsedSeconds({ ...reply, status: "failed" }, thread), null);
-  assert.deepEqual([formatSeconds(9), formatSeconds(65), formatSeconds(120), formatSeconds(null)], ["9 秒", "1 分 5 秒", "2 分鐘", ""]);
+  assert.deepEqual([formatSeconds(9), formatSeconds(65), formatSeconds(120), formatSeconds(null)], ["9 s", "1 m 5 s", "2 min", ""]);
 });
 
 test("attachment hint, kinds, side panel width and answers left in older conversations", () => {
   assert.equal(attachmentHint([]), DEFAULT_HINT);
-  assert.match(attachmentHint([{ kind: "sheet" }, { kind: "image" }]), /圖片會交給助理/);
-  assert.match(attachmentHint([{ kind: "doc" }]), /數字、文字與公式/);
-  assert.match(attachmentHint([{ kind: "image" }], "mask_numbers"), /圖片不會傳給助理/);
+  assert.match(attachmentHint([{ kind: "sheet" }, { kind: "image" }]), /Images, numbers/);
+  assert.match(attachmentHint([{ kind: "doc" }]), /text, numbers, and formulas/);
+  assert.match(attachmentHint([{ kind: "image" }], "mask_numbers"), /images are excluded/);
   assert.deepEqual(["a.PNG", "報表.xlsx", "說明.docx", "規格.pdf", "n.csv"].map((name) => guessKind({ name, type: "" })),
     ["image", "sheet", "doc", "doc", "text"]);
   assert.equal(guessKind({ name: "image.png", type: "image/png" }), "image");
@@ -141,16 +141,16 @@ test("attachment hint, kinds, side panel width and answers left in older convers
 
 test("a private question to the lead never reads like it goes on the page", () => {
   const forward = proposalCopy({ action: "私下轉給負責人" });
-  assert.equal(forward.ask, "要私下問負責人嗎？");
-  assert.equal(forward.confirm, "確認轉給負責人");
-  assert.match(forward.note, /只有負責人看得到/);
-  assert.match(forward.compactTail, /不會放上專案頁/);
-  assert.doesNotMatch(JSON.stringify(forward), /放上去|放到專案頁/);
+  assert.equal(forward.ask, "Send a private question to the owner?");
+  assert.equal(forward.confirm, "Send to Owner");
+  assert.match(forward.note, /Only the owner can see/);
+  assert.match(forward.compactTail, /send privately to the owner/);
+  assert.doesNotMatch(JSON.stringify(forward), /Apply to Page|Apply this to the production page/);
   const page = proposalCopy({ action: "寫進那一題的討論" });
-  assert.deepEqual([page.ask, page.confirm, page.dismissed], ["要放到專案頁嗎？", "確認放上去", "先不放"]);
+  assert.deepEqual([page.ask, page.confirm, page.dismissed], ["Apply this to the production page?", "Apply to Page", "Not Now"]);
   const table = proposalCopy({action: "table_edit"});
-  assert.equal(table.confirm, "確認寫回");
-  assert.match(table.note, /資料已變更/);
+  assert.equal(table.confirm, "Apply Changes");
+  assert.match(table.note, /Changed source data/);
   assert.doesNotMatch(JSON.stringify(table), /table_edit/);
 });
 
@@ -163,7 +163,7 @@ test("the lead's count includes private questions waiting for a reply", () => {
 test("side panel tabs: 對話、紀錄, and 管理 only for managers, carrying the waiting count", () => {
   assert.deepEqual(paneTabs(false, 3).map((t) => t.key), ["chat", "history"]);
   const kai = paneTabs(true, 2);
-  assert.deepEqual(kai.map((t) => t.label), ["對話", "紀錄", "管理"]);
+  assert.deepEqual(kai.map((t) => t.label), ["Chat", "History", "Manage"]);
   assert.equal(kai[2].count, 2);
   assert.equal(paneTabs(true, 0)[2].count, 0);
   assert.equal(paneTabs(true, undefined)[2].count, 0);

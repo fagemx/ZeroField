@@ -348,7 +348,7 @@ def replacement_preview(current, incoming, values=None, *, limit=50):
             unmatched = any(rid not in new_map and node_text((row.get("content") or [{}])[0]) == key for rid, row in old_map.items())
             if unmatched and (old_keys[key] > 1 or new_keys[key] > 1):
                 ambiguities.append({"table": name, "key": key[:160], "old_count": old_keys[key], "new_count": new_keys[key],
-                    "message": "重複列名無法唯一對位；不依位置沿用列身分。舊列留言會保留為未附著，新列取得新身分。"})
+                    "message": "Duplicate row names cannot be matched uniquely. Existing comments remain unattached and new rows receive new identities."})
         old_header = old.get("content", [{}])[0].get("content", []) if old.get("content") else []
         new_header = new.get("content", [{}])[0].get("content", []) if new.get("content") else []
         if old and new and [node_text(c) for c in old_header] != [node_text(c) for c in new_header]:
@@ -382,7 +382,7 @@ def replacement_preview(current, incoming, values=None, *, limit=50):
             add(kind, None, f"段落 {i + 1}", "文件", left, right)
     return {"mode": "replace_all", "summary": summary, "changes": changes, "truncated": total_changes > limit,
             "change_count": total_changes, "ambiguities": ambiguities[:50],
-            "message": "此操作以外部檔案取代目前內容，不會合併本地與外部修改；未出現在新檔的內容會被移除。"}
+            "message": "This replaces current content with the external file. Changes are not merged; content absent from the file will be removed."}
 
 
 def _patch_zip(raw, patches):

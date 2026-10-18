@@ -164,7 +164,7 @@ def _table(rows, *, tab_keys, fill_headers, values) -> dict:
     }]
     for cells in body:
         if len(cells) != len(head):
-            raise ValueError(f"表格列有 {len(cells)} 格，表頭有 {len(head)} 格：{cells}")
+            raise ValueError(f"The row has {len(cells)} cells, but its header has {len(head)}: {cells}")
         row_cells = []
         for index, value in enumerate(cells):
             if index in fill_columns:

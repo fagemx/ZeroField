@@ -14,7 +14,8 @@ import re
 import secrets
 import hashlib
 
-STATUSES = ("未開始", "進行中", "生圖中", "生影片中", "等待審核", "重抽", "等待回覆", "卡住", "已完成")
+STATUSES = ("Queued", "In Progress", "Rendering Image", "Rendering Video", "Pending Review", "Retake", "Blocked", "Approved",
+            "未開始", "進行中", "生圖中", "生影片中", "等待審核", "重抽", "等待回覆", "卡住", "已完成")
 DEFAULT_STATUS = STATUSES[0]
 MAX_DOC_BYTES = 2_000_000
 MAX_DEPTH = 40
@@ -197,10 +198,10 @@ class _Cleaner:
 
     def clean(self, node, depth: int = 0):
         if depth > MAX_DEPTH:
-            raise DocError("內容巢狀太深")
+            raise DocError("Content nesting is too deep.")
         if not isinstance(node, dict) or node.get("type") not in NODE_TYPES:
             kind = node.get("type") if isinstance(node, dict) else type(node).__name__
-            raise DocError(f"不支援的內容：{kind}")
+            raise DocError(f"Unsupported content: {kind}")
         kind = node["type"]
         if kind == "text":
             text = node.get("text")
@@ -240,11 +241,11 @@ def validate_doc(doc, *, slug: str) -> tuple[dict, bool]:
     try:
         size = len(json.dumps(doc, ensure_ascii=False).encode("utf-8"))
     except (TypeError, ValueError) as exc:
-        raise DocError("內容不是合法的 JSON") from exc
+        raise DocError("Content is not valid JSON.") from exc
     if size > MAX_DOC_BYTES:
-        raise DocError("這一頁內容太大（超過 2 MB），請拆成兩頁")
+        raise DocError("This page exceeds 2 MB. Split it into smaller pages.")
     if not isinstance(doc, dict) or doc.get("type") != "doc":
-        raise DocError("內容最外層必須是 doc")
+        raise DocError("The root content node must be doc.")
     cleaner = _Cleaner(slug)
     clean = cleaner.clean(doc) or {"type": "doc"}
     content = clean.setdefault("content", [])
@@ -309,14 +310,14 @@ def _walk_fields(node, ctx, out, anchors):
     headers = ctx.get("headers") or []
     column_label = headers[ctx["column"]] if "column" in ctx and ctx["column"] < len(headers) else ""
     if kind == "status":
-        out[attrs.get("fid")] = {"kind": "status", "anchor_id": anchor, "label": column_label or "狀態",
+        out[attrs.get("fid")] = {"kind": "status", "anchor_id": anchor, "label": column_label or "Status",
                                  "default": attrs.get("label", DEFAULT_STATUS)}
     elif kind == "fill":
         out[attrs.get("fid")] = {"kind": "fill", "anchor_id": anchor,
-                                 "label": column_label or attrs.get("label") or "這一格", "default": ""}
+                                 "label": column_label or attrs.get("label") or "Field", "default": ""}
     elif kind == "taskItem":
         out[attrs.get("fid")] = {"kind": "check", "anchor_id": anchor,
-                                 "label": node_text(node).strip()[:40] or "勾選項",
+                                 "label": node_text(node).strip()[:40] or "Checklist Item",
                                  "default": "true" if attrs.get("checked") else "false"}
     children = node.get("content") or []
     for index, child in enumerate(children):
