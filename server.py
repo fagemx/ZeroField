@@ -209,6 +209,22 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
             return
         self.send_json(404, {"error": "Not found"})
 
+    def _story_mutation(self, method):
+        parsed = urlparse(self.path)
+        if not (parsed.path == "/aivideo/open/v1" or parsed.path.startswith("/aivideo/open/v1/")):
+            self.send_json(405, {"error": "Unsupported operation."})
+            return
+        projects_http.handle_projects(self, parsed, method)
+
+    def do_PUT(self):  # noqa: N802
+        self._story_mutation("PUT")
+
+    def do_PATCH(self):  # noqa: N802
+        self._story_mutation("PATCH")
+
+    def do_DELETE(self):  # noqa: N802
+        self._story_mutation("DELETE")
+
     def _login_page(self, error=""):
         from project_docs.locale import request_locale, login_html, preference_headers
         locale = request_locale(self)
@@ -345,6 +361,10 @@ def main() -> int:
                     parser.error("First start in header mode requires OPENBENCH_ADMIN_ID")
                 repo.upsert_member(conn, actor, os.environ.get("OPENBENCH_ADMIN_NAME", "Admin"), "admin")
             conn.commit()
+        from project_docs import story_openapi
+        story_openapi.restore_cards(conn)
+        conn.commit()
+        story_openapi.resume_deliveries(conn)
     finally:
         conn.close()
 

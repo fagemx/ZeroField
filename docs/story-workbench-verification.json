@@ -1,0 +1,63 @@
+{
+  "spec": "SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO",
+  "verifiedDate": "2026-10-19",
+  "checkpointCommit": "36ef1e8",
+  "backend": {
+    "command": "python -m unittest discover -s tests -p \"test_*.py\"",
+    "tests": 306,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "database": "Dedicated temporary PostgreSQL 16 instance; OPENBENCH_TEST_DB_URI was set",
+    "storyTests": 17,
+    "realIntegrations": ["HTTP", "PostgreSQL", "FFmpeg/FFprobe two-clip MP4 assembly"],
+    "isolatedDependencies": ["GPU generation", "LLM refinement endpoint", "Public webhook HTTPS transport"]
+  },
+  "frontend": {
+    "command": "npm test --prefix ui",
+    "tests": 108,
+    "failures": 0,
+    "skipped": 0,
+    "buildCommand": "npm run build --prefix ui",
+    "build": "passed",
+    "warning": "Existing large-chunk warning remains; production JS is approximately 1.47 MB before gzip."
+  },
+  "packaging": {
+    "command": "python -m pip wheel --no-deps --no-build-isolation --no-index .",
+    "result": "passed",
+    "isolatedImportCheck": "Extracted wheel outside checkout: Story module, migration, seven Studio Cards and their workflow graphs resolved successfully.",
+    "note": "python -m build was unavailable; pip's installed build backend produced the wheel without installing dependencies."
+  },
+  "browser": {
+    "viewport": "1280x720",
+    "project": "Disposable synthetic production in the dedicated test database",
+    "checked": [
+      "All five navigation entries",
+      "Script import, asset extraction and storyboard creation",
+      "Scene-grouped Gallery and correct count interpolation",
+      "Asset Vault wardrobe creation and valid browser form pattern",
+      "Toolbox card inspection",
+      "Open API examples and read-only capabilities call",
+      "English / Traditional Chinese switching without translating project content",
+      "Single-shot review remains open alongside Studio Assistant",
+      "No console errors after the final walkthrough"
+    ],
+    "screenshots": [
+      "docs/research/screenshots/spec06-workbench.png",
+      "docs/research/screenshots/spec06-review-assistant.png"
+    ]
+  },
+  "safety": [
+    "Existing project tabs remain authoritative; schema migration is additive.",
+    "Delayed renders become candidates without replacing manually changed rows.",
+    "Interrupted execution requires explicit retry; no automatic paid resubmission.",
+    "Card imports require writable member authentication and cannot reference arbitrary server files or replace built-in IDs.",
+    "Webhook validation rejects private addresses, pins the validated IP and signs exact bytes; retries are bounded."
+  ],
+  "notVerifiedLive": [
+    "Real model/GPU inference and 4K visual quality",
+    "Comfy provider billing or quota behavior",
+    "Public webhook networking"
+  ],
+  "usage": "docs/STORY_WORKBENCH.md"
+}

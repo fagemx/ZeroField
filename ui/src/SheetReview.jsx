@@ -8,6 +8,7 @@ export function SheetReview({onClose,onStep,children}) {
   const panel=useRef(null);
   useEffect(()=>{
     const previous=document.activeElement;
+    panel.current?.scrollIntoView({block:'start'});
     panel.current?.querySelector('button')?.focus();
     return()=>{if(previous?.isConnected)previous.focus();};
   },[]);

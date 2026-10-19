@@ -10,6 +10,8 @@ import { Avatar } from "./Talk.jsx";
 import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { SheetDialog } from "./SheetDialog.jsx";
 
+export { StoryWorkbench as StudioModeBar } from './StoryWorkbenchModals.jsx';
+
 export const PROJECT_STATUS = {
   planning: { get label() { return uiText("surfaces.planning"); }, color: "#5b5bd6", bg: "#eef0ff" },
   active: { get label() { return uiText("surfaces.inProgress"); }, color: "#0d7a5f", bg: "#e6f6f1" },

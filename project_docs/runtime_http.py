@@ -14,6 +14,9 @@ ASSET = re.compile(r"^/projects/api/([a-z0-9][a-z0-9-]{0,40})/assets/(pa_[0-9a-f
 
 def handle(handler, parsed, method):
     """Return True only for owned routes; enforce member or worker identity independently."""
+    if parsed.path == "/aivideo/open/v1" or parsed.path.startswith("/aivideo/open/v1/"):
+        from project_docs import story_openapi
+        return story_openapi.handle(handler, parsed, method)
     if parsed.path.startswith("/openapi/v2/"):
         return _handle_openapi(handler, parsed, method)
     asset = ASSET.fullmatch(parsed.path)
@@ -196,6 +199,10 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
             handler.send_skillops_bytes(200, mime, raw_bytes, cache_control="private, max-age=3600")
             return True
         if path == "/openapi/v2/cards" and method == "GET":
+            from project_docs import story_openapi as story
+            with http.open_connection() as conn:
+                http._ensure_schema(conn)
+                story.restore_cards(conn)
             handler.send_json(200, {"code": 0, "msg": "success", "cards": worker.openapi_list_cards()})
             return True
         if method != "POST":
@@ -223,7 +230,25 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
             handler.send_json(err[0], {"code": err[0], "msg": err[1].get("error", "Invalid JSON")})
             return True
         if path == "/openapi/v2/cards/register":
-            handler.send_json(200, worker.openapi_register_card(body))
+            from project_docs import story_openapi as story
+            identity, problem = handler.project_docs_identity()
+            me = service.identity_from(identity) if not problem else None
+            if not me:
+                handler.send_json(401, {"code": 401, "msg": "Sign in to import a workflow."})
+                return True
+            if not handler.headers.get("Authorization", "").startswith("Bearer ") and http._write_allowed(handler):
+                handler.send_json(403, {"code": 403, "msg": "A same-origin write header is required."})
+                return True
+            try:
+                with http.open_connection() as conn:
+                    http._ensure_schema(conn)
+                    result = story.register_card(conn, me, body)
+                with http.open_connection() as conn:
+                    story.restore_cards(conn)
+            except story.StoryError as exc:
+                handler.send_json(exc.status, {"code": exc.code, "msg": str(exc)})
+                return True
+            handler.send_json(200, result)
             return True
         if path == "/openapi/v2/query":
             handler.send_json(200, worker.openapi_query_task(body))

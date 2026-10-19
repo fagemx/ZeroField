@@ -11,7 +11,7 @@ import { HistoryPanel } from "./History.jsx";
 import { parseLocation, tabHash } from "./route.js";
 import { isOpen } from "./rules.js";
 import { TabRail } from "./TabRail.jsx";
-import { IdentityBadge, PROJECT_STATUS, ProjectHub, SurfaceHeader } from "./Surfaces.jsx";
+import { IdentityBadge, PROJECT_STATUS, ProjectHub, SurfaceHeader, StudioModeBar } from "./Surfaces.jsx";
 import { FlowSurface, SheetSurface } from "./CanvasViews.jsx";
 import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { AssistantSide, AssistantWorkspace } from "./assistant/AssistantViews.jsx";
@@ -93,6 +93,7 @@ function ProjectPage({ slug }) {
   const surfaceControl = useRef(null);
   const [versionsFor, setVersionsFor] = useState(null); // 左邊「⋯ → 找回以前的內容…」：換到那一頁後打開版本紀錄
   const [docModeTabs, setDocModeTabs] = useState({});
+  const [storyEpisode, setStoryEpisode] = useState(`ep_${slug}_01`);
   const versionsShown = useCallback(() => setVersionsFor(null), []);
   const annSeq = useRef(0);
   const pendingFocus = useRef((() => {
@@ -555,6 +556,9 @@ function ProjectPage({ slug }) {
           onVersions={async (key) => { if (await flushSurface() && await navigate(key)) setVersionsFor(key); }}
           onError={onError} onToast={showToast} />
         <main className="main">
+          {tabs.some(item => item.key === 'cinema-studio') && <StudioModeBar slug={slug} tab={tab} me={me} activeEpisode={storyEpisode}
+            onEpisode={setStoryEpisode} version={tab?.updated_at} flush={flushSurface} onNavigate={navigate}
+            onReload={async () => {await loadProject(); if(tabKey)await loadTab(tabKey,true);}}/>}
           <div className="doc-host">
           {!tab && <div className="center-note">{uiText("app.loading")}</div>}
           {tab && tab.surface_type === "sheet" && !versionsFor && !(docModeTabs && docModeTabs[tab.key]) && (
@@ -568,6 +572,7 @@ function ProjectPage({ slug }) {
               values={data.values[tabKey]}
               annotations={data.annotations} locks={data.locks || []}
               focusRow={sheetFocus}
+              storyEpisode={storyEpisode}
               onField={setField}
               onReloadTab={async () => { await loadTab(tab.key, true); await loadProject(); }}
               onAskAgent={paEnabled ? assignBackground : null}

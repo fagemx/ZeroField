@@ -23,6 +23,7 @@ class BuildRuntimeResources(build_py):
         for source in (root / "workflows").glob("*"):
             if source.is_file() and source.suffix in (".json", ".md"):
                 shutil.copy2(source, target / "workflows" / source.name)
+        shutil.copytree(root / "workflows" / "cards", target / "workflows" / "cards", dirs_exist_ok=True)
         (target / "samples").mkdir(parents=True, exist_ok=True)
         for source in (root / "samples").glob("*"):
             if source.is_file() and source.suffix in (".png", ".mp4", ".md", ".py"):

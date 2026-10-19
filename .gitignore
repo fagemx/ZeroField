@@ -29,3 +29,4 @@ Thumbs.db
 *.lnk
 .vscode/
 .idea/
+.gstack/

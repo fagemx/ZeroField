@@ -5,7 +5,7 @@ export const OPTICAL_PRESETS = ['ARRI Alexa 65 / 35mm Anamorphic f/1.4', 'RED V-
 export const MOTION_PRESETS = ['Slow Dolly Push-In', 'Tracking Shot', 'Static Tripod', 'Handheld Urgency', 'Crane Rise High-Angle', 'Drone Orbit 180°', 'Rack Focus', 'Whip Pan', 'POV'];
 export const JUTSU_PRESETS = ['Motion Transfer', 'Object Swap'];
 export function assetReferences(row) {
-  return [...new Set((row.cells.map(cell => String(cell?.value || '')).join(' ').match(/@?\b(?:CAST|SET|LOC|PROP|STYLE)-\d+\b/gi) || []).map(id => id.replace(/^@/, '').toUpperCase()))];
+  return [...new Set((row.cells.map(cell => String(cell?.value || '')).join(' ').match(/@?\b(?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?\b/gi) || []).map(id => id.replace(/^@/, '').replace('#', ':').toUpperCase()))];
 }
 function stageRole(label) {
   if (/source.*video|driving.*video/i.test(label)) return 0;
@@ -31,12 +31,24 @@ export function mediaStages(parsed, row) {
 export function buildAssetLookup(documents) {
   const lookup = {};
   for (const tab of documents) for (const table of tablesOf(tab.doc, tab.values || {})) for (const row of table.rows) {
-    const id = row.cells.map(cell => String(cell?.value || '').trim()).find(value => /^@?(?:CAST|SET|LOC|PROP|STYLE)-\d+$/i.test(value));
+    const id = row.cells.map(cell => String(cell?.value || '').trim()).find(value => /^@?(?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?$/i.test(value));
     if (!id) continue;
     const stage = mediaStages(table, row).find(item => item.media);
-    lookup[id.replace(/^@/, '').toUpperCase()] = {id: id.replace(/^@/, '').toUpperCase(), tabKey: tab.key, rowId: row.rid, ...(stage || {})};
+    const key = id.replace(/^@/, '').replace('#', ':').toUpperCase();
+    lookup[key] = {id:key, tabKey:tab.key, rowId:row.rid, ...(stage || {})};
+  }
+  for (const [id, asset] of Object.entries(lookup)) {
+    const base = lookup[id.split(':')[0]];
+    if (id.includes(':') && !asset.media && base?.media) lookup[id] = {...base, ...asset, value:base.value, media:base.media, type:base.type};
   }
   return lookup;
+}
+export function resolveAssetReference(id, lookup) {
+  return {...(lookup[id] || lookup[id.split(':')[0]] || {}), id};
+}
+export function assetVariants(id, lookup) {
+  const base = id.split(':')[0];
+  return Object.keys(lookup).filter(key => key === base || key.startsWith(base + ':'));
 }
 export function presetsFor(header, assetIds = []) {
   if (/motion|movement/i.test(header)) return MOTION_PRESETS;

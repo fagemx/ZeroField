@@ -31,7 +31,9 @@ NON_TAKE_KINDS = frozenset({"archive", ".zip", ".tar", ".gz", ".7z"})
 CARD_FIELD_TYPES = frozenset({"IMAGE", "AUDIO", "VIDEO", "STRING", "LIST", "INT", "FLOAT"})
 CARD_SLOTS = frozenset({None, "ref", "prompt", "driving_video", "structure_video", "duration", "aspect_ratio", "seed"})
 CARD_OUTPUT_MODES = frozenset({"video", "image", "audio"})
-CARDS_DIR = Path(__file__).resolve().parents[1] / "workflows" / "cards"
+from openbench_data import resource_path
+
+CARDS_DIR = resource_path("workflows", "cards")
 
 
 class WorkerError(RuntimeError):
@@ -785,13 +787,13 @@ def resolve_studio_context(task: dict) -> dict:
     excluded_refs = []
     for header, value in columns:
         if isinstance(value, str) and re.search(r"exclude|forbid|ban|禁用|排除", str(header), re.I):
-            for match in re.finditer(r"@?\b((?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+)\b", value, re.I):
+            for match in re.finditer(r"@?\b((?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+(?:[:#][a-z0-9_-]+)?)\b", value, re.I):
                 ident = match[1].upper()
                 if ident not in excluded_refs:
                     excluded_refs.append(ident)
     for cell in cells:
         if isinstance(cell, str):
-            for match in re.finditer(r"(?:!-@?|!@|-@)\b((?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+)\b", cell, re.I):
+            for match in re.finditer(r"(?:!-@?|!@|-@)\b((?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+(?:[:#][a-z0-9_-]+)?)\b", cell, re.I):
                 ident = match[1].upper()
                 if ident not in excluded_refs:
                     excluded_refs.append(ident)
@@ -800,9 +802,9 @@ def resolve_studio_context(task: dict) -> dict:
     appear_counts = {}
     for cell in cells:
         if isinstance(cell, str):
-            cleaned = re.sub(r"(?:!-@?|!@|-@)\b(?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+\b", " ", cell, flags=re.I)
-            for match in re.finditer(r"@?\b((?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+)\b", cleaned, re.I):
-                identifier = match[1].upper()
+            cleaned = re.sub(r"(?:!-@?|!@|-@)\b(?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+(?:[:#][a-z0-9_-]+)?\b", " ", cell, flags=re.I)
+            for match in re.finditer(r"@?\b((?:CAST|SET|LOC|PROP|CHAR|SCENE|STYLE)-\d+(?:[:#][a-z0-9_-]+)?)\b", cleaned, re.I):
+                identifier = match[1].upper().replace("#", ":")
                 if identifier in excluded_set:
                     continue
                 appear_counts[identifier] = appear_counts.get(identifier, 0) + 1
@@ -820,7 +822,7 @@ def resolve_studio_context(task: dict) -> dict:
                 values = asset_row.get("cells", [])
                 if len(values) < 3:
                     continue
-                identifier = str(values[0]).strip().lstrip("@").upper()
+                identifier = str(values[0]).strip().lstrip("@").upper().replace("#", ":")
                 cast_idx += 1
                 if identifier in mentions and identifier not in assets and identifier not in excluded_set:
                     appearance = str(values[2])
@@ -830,6 +832,20 @@ def resolve_studio_context(task: dict) -> dict:
                         "appearance_prompt": appearance, "seed": int(seed[1]) if seed else None,
                         "reference_urls": ref_urls, "appear_count": appear_counts.get(identifier, 1),
                         "cast_order": cast_idx}
+    # An unpictured wardrobe variant inherits the base image, never its wardrobe prompt.
+    for identifier in mentions:
+        base = re.split(r"[:#]", identifier)[0]
+        if base in excluded_set:
+            assets.pop(identifier, None)
+            continue
+        if ":" in identifier and not assets.get(identifier, {}).get("reference_urls"):
+            for tab in source.get("tabs", []):
+                for asset_table in tab.get("tables", []):
+                    if tab.get("tab_key") not in ("soul-cast", "assets", "asset-sheet"):
+                        continue
+                    base_row = next((r for r in asset_table.get("rows", []) if r.get("cells") and str(r["cells"][0]).lstrip("@").upper() == base), None)
+                    if base_row and _media_urls(base_row["cells"]):
+                        assets.setdefault(identifier, {"asset_id": identifier, "name": str(base_row["cells"][1]), "appearance_prompt": str(base_row["cells"][2]), "seed": None, "appear_count": appear_counts.get(identifier, 1), "cast_order": 1000000})["reference_urls"] = _media_urls(base_row["cells"])
     resolved = [assets[identifier] for identifier in mentions if identifier in assets]
     optical = column(r"optical|rig|camera.*lens|film\s*setup")
     motion = column(r"camera\s*motion|movement|景別|運鏡")
@@ -1694,6 +1710,18 @@ def comfyui(task, config, head):
         raise WorkerError("Comfy execution failed; verify deployment, workflow nodes and model files") from None
     finally:
         client.close()
+
+
+def execute_story_card(task, card, values, head):
+    """Use the same card compiler for Story jobs, including imported in-memory cards."""
+    graph = task.get("workflow")
+    if graph is None:
+        _, graph = _resolve_openapi_card_and_workflow(card["card_id"])
+    with tempfile.TemporaryDirectory(prefix="zerofield-story-card-") as folder:
+        path = Path(folder) / "workflow.json"
+        path.write_text(json.dumps(graph), encoding="utf-8")
+        config = dict(card.get("engine_config", {}), card=card, workflow=str(path), card_values=values)
+        return comfyui(task, config, head)
 
 
 def ffmpeg_binary(config):

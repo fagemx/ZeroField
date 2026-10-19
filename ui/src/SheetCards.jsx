@@ -4,7 +4,7 @@ import { MediaCell } from './MediaCell.jsx';
 import { statusOptions } from './sheetViews.js';
 import { statusClass, statusLabel } from './format.js';
 
-export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, onStatus, writable, busy, parsed, onUpload, onRunStep}) {
+export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, onStatus, writable, busy, parsed, onUpload, onRunStep, onVariant, onRebuildScene, scenes=[]}) {
   const locale = useLocale();
   const card = (item) => {
     const {row, index, title, cover, summary} = item;
@@ -23,7 +23,7 @@ export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, 
         <button className="sheet-card-title" onClick={() => onOpen(row.rid)} title={uiText("sheetCards.viewRowDetailsDiscussionAndHistory")}>{title}</button>
         <span className="sheet-card-index">{index + 1}</span>
       </div>
-        <div className="card-asset-chips">{item.assets?.map(asset => <span key={asset.id} className="card-asset-chip">{item.mediaChain?.length<=1&&asset.value && <MediaCell compact value={asset.value} type={asset.type} label={'@' + asset.id} onLightbox={media => onPreview({...media, label:'@' + asset.id})} />}<small>@{asset.id}</small></span>)}</div>
+        <div className="card-asset-chips">{item.assets?.map(asset => <span key={asset.id} className="card-asset-chip">{item.mediaChain?.length<=1&&asset.value && <MediaCell compact value={asset.value} type={asset.type} label={'@' + asset.id} onLightbox={media => onPreview({...media, label:'@' + asset.id})} />}{asset.variants?.length>1 ? <button disabled={!writable||busy} title={uiText('story.cycleVariant')} onClick={() => onVariant?.(row,asset.id,asset.variants[(asset.variants.indexOf(asset.id)+1)%asset.variants.length])}>@{asset.id} ↻</button> : <small>@{asset.id}</small>}</span>)}</div>
         <dl className="sheet-card-summary">{summary.map((field, i) => <div key={i}><dt>{field.label}</dt><dd title={String(field.value)}>{field.value}</dd></div>)}</dl>
         <div className="sheet-card-actions">{column >= 0 && <select aria-label={uiText("sheetCards.message", {v0: (parsed.headers[column]), v1: (title)})} value={value} disabled={!writable || busy} onChange={event => onStatus(row.rid, column, event.target.value)}>
           <option value="" disabled={row.cells[column]?.kind === 'status'}>{uiText("sheetCards.notConfigured")}</option>
@@ -33,6 +33,12 @@ export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, 
       </div>
     </article>;
   };
+  if (mode === 'gallery' && model.sceneGroups?.length) return <div className="story-scene-groups">{model.sceneGroups.map(group => {
+    const scene = scenes.find(s => 'SC'+String(s.sceneIndex).padStart(2,'0') === group.key || s.sceneId === group.key);
+    return <details open key={group.key} className="story-scene"><summary>{scene?.title || group.key || uiText('story.ungrouped')} · {uiText('story.shotCount',{count:group.cards.length})}</summary>
+      {scene && writable && <button disabled={busy} onClick={() => onRebuildScene?.(scene.sceneId)}>{uiText('story.rebuildScene')}</button>}
+      <div className="sheet-gallery" role="list" aria-label={scene?.title || group.key}>{group.cards.map(card)}</div></details>;
+  })}</div>;
   if (mode === 'gallery') return <div className="sheet-gallery" role="list" aria-label={uiText("sheetCards.galleryItems")}>{model.cards.map(card)}</div>;
   return <div className="sheet-board" aria-label={uiText("sheetCards.statusBoard")}>{model.groups.map(group => <section className="sheet-board-column" key={group.value} aria-label={uiText("sheetCards.items", {v0: (group.label), v1: (group.cards.length)})}>
     <header><span className={`sheet-board-dot${statusClass(group.value) === 'done' ? ' done' : ''}`} /><h2>{group.label}</h2><span>{group.cards.length}</span></header>

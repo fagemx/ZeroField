@@ -1,7 +1,9 @@
 # ZeroField Studio — 4090 PC Development Handoff (`docs/HANDOFF_4090_PC.md`)
 
 **Handoff Date**: 2026-10-18  
-**Target Machine**: RTX 4090 Development PC (Local ComfyUI + GPU Inference & `SPEC_05` Implementation)  
+**Target Machine**: RTX 4090 Development PC (Local ComfyUI + GPU deployment validation)
+
+**2026-10-19 update**: SPEC_06 is implemented. See [Story Workbench usage and limits](./STORY_WORKBENCH.md) and [verification receipt](./story-workbench-verification.json). Backend 306 / frontend 108 tests and the UI build pass; GPU/provider inference and public webhook delivery remain deployment checks, not claimed live validation.
 **Main Repository**: `https://github.com/fagemx/ZeroField.git` (Branch: `main`)
 
 ---
@@ -17,11 +19,15 @@
 | **[`SPEC_03`](./specs/SPEC_03_ASSET_BINDING_AND_COMFY_PLATFORM.md)** | ✅ Done | `resolve_studio_context()`, `prepare_reference_media()` (`extract_frame`, `motion_structure` with `edge_lineart`/`luma_depth`/`frame_diff`, `side_by_side`), `bind_external_workflow()`, `ComfyPlatformClient` (`local` + `comfy_sdk`), and initial `workflows/*.json`. |
 | **[`SPEC_04`](./specs/SPEC_04_SHOWCASE_SEED_AND_LAUNCHER.md)** | ✅ Done | One-command launcher `run_studio.py`, `seed_showcase_media()`, and pre-rendered CC0 showcase assets in `samples/`. |
 | **[`SPEC_05`](./specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)** | ✅ Done | Self-Hosted RunningHub `/openapi/v2` Card Engine (`workflows/cards/*.json`, `convert_litegraph_to_api`, `parse_runninghub_curl_or_payload`, `inject_node_info_into_workflow`), `H3-Context-IR`, `Ingredients Sheet`, `line-worlds`, and `.bounded.mp4` trimming. |
-| **[`SPEC_06`](./specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md)** | 📋 **Next to Execute** | **Self-Hosted RH STORY AI Drama Workbench (`/aivideo/open/v1/*`) & Macro ↔ Meso ↔ Micro Integration** (see [`docs/references/runninghub-open-api-2026-10-18/`](./references/runninghub-open-api-2026-10-18/README.md)). |
+| **[`SPEC_06`](./specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md)** | ✅ Implemented | **Self-Hosted RH STORY AI Drama Workbench (`/aivideo/open/v1/*`) & Macro ↔ Meso ↔ Micro Integration** (see [`docs/references/runninghub-open-api-2026-10-18/`](./references/runninghub-open-api-2026-10-18/README.md)). |
 
 ---
 
-## 2. Immediate Next Step on the 4090 PC: Implement `SPEC_05`
+## 2. Current handoff: SPEC_06 delivered
+
+Restart `python run_studio.py` to load the backend and migration `162_story_workbench.sql`. Use Start Creating → Gallery → Shot Review; the compiled UI is already updated. For live generation, configure and validate the intended Comfy deployment and weights. Do not infer model quality from the synthetic test fixtures. Interrupted execution tasks require explicit retry; cancellation prevents late writeback but cannot promise provider-side termination.
+
+### Completed SPEC_05 baseline (historical implementation brief)
 
 Read **[`docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md`](./specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)** first. It contains the complete, self-contained specification for:
 
@@ -105,4 +111,4 @@ python run_studio.py
 
 ### Prompt for the Next Coding Agent (`SPEC_06`)
 When you open the next coding agent session, simply tell it:
-> **"Read `AGENTS.md`, `docs/HANDOFF_4090_PC.md`, and `docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md`, then implement `SPEC_06` and verify all backend and frontend unit tests."**
+> **"Read `AGENTS.md`, `docs/HANDOFF_4090_PC.md`, and `docs/STORY_WORKBENCH.md`. SPEC_06 is implemented; do not rebuild it from scratch. Review `docs/story-workbench-verification.json`, preserve existing data, and obtain the current task before starting further development or resource-consuming generation."**

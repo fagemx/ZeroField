@@ -2,7 +2,8 @@ import { t as uiText } from './i18n/index.js';
 import { evaluate, mediaOf, tableEditPayload } from './sheetModel.js';
 import { STATUSES, LEGACY_STATUSES, statusLabel, normalizeStatus } from './format.js';
 
-import { assetReferences, mediaStages } from './studioModel.js';
+import { assetReferences, assetVariants, mediaStages, resolveAssetReference } from './studioModel.js';
+import { sceneKey } from './storyModel.js';
 
 const MODES = ['grid', 'gallery', 'kanban'];
 const COMMON_STATUSES = STATUSES;
@@ -34,7 +35,8 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}, assetLooku
     return {
       row, index, title: String(row.cells[0]?.value || uiText("sheetViews.row", {v0: (index + 1)})),
       mediaChain: mediaStages(parsed, row), assetRefs: assetReferences(row),
-      assets: assetReferences(row).map(id => ({id, ...assetLookup[id]})),
+      scene: sceneKey(parsed, row),
+      assets: assetReferences(row).map(id => ({...resolveAssetReference(id, assetLookup), variants:assetVariants(id, assetLookup)})),
       cover: ['image','video','asset'].includes(media?.kind) ? {...media, column: coverColumn, value: row.cells[coverColumn].value} : null,
       summary: row.cells.flatMap((cell, c) => c === 0 || c === coverColumn || statusColumns.some(s => s.index === c) || mediaOf(cell.value, parsed.table.attrs.column_types?.[c]) || !String(cell.value ?? '').trim() ? [] : [{
         label: parsed.headers[c], value: evaluate(cell.value, parsed.rows, new Set(), parsed.table.attrs.worksheet_name ? parsed.table.attrs.source_header_row || 1 : 0),
@@ -50,7 +52,13 @@ export function sheetViewModel(parsed, visibleRows, preferences = {}, assetLooku
       groups.get(value).cards.push(card);
     }
   }
-  return {statusColumns, coverColumns, groupColumn, coverColumn, cards, groups: [...groups.values()]};
+  const sceneGroups = new Map();
+  for (const card of cards) {
+    if (!sceneGroups.has(card.scene)) sceneGroups.set(card.scene, {key:card.scene, cards:[]});
+    sceneGroups.get(card.scene).cards.push(card);
+  }
+  return {statusColumns, coverColumns, groupColumn, coverColumn, cards, groups: [...groups.values()],
+    sceneGroups:cards.some(card => card.scene) ? [...sceneGroups.values()] : []};
 }
 
 export function statusMovePayload(parsed, rowId, column, value) {

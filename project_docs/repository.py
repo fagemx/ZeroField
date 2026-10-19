@@ -11,7 +11,7 @@ from openbench_data import resource_path
 SCHEMA_DIR = resource_path("db")
 SCHEMA_FILES = ("149_project_docs_schema.sql", "151_project_docs_annotations.sql", "153_project_docs_audit.sql",
                 "154_project_assistant.sql", "156_project_assistant_conversations.sql", "157_execution.sql", "158_agent_profiles.sql",
-                "159_agent_orchestration.sql", "160_agent_races.sql", "161_agent_comment_routes.sql")
+                "159_agent_orchestration.sql", "160_agent_races.sql", "161_agent_comment_routes.sql", "162_story_workbench.sql")
 _UNSET = object()
 PROJECT_STATUSES = ("planning", "active", "recurring", "blocked", "archived")
 PRIVACY_MODES = ("full_access", "mask_numbers")
