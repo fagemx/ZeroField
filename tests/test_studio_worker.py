@@ -828,6 +828,10 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
         base = f'http://127.0.0.1:{port}'
         auth_headers = {'Authorization': 'Bearer ' + http_fixture.member_token, 'X-Requested-With': 'projects', 'X-Project-Slug': http_fixture.slug}
         try:
+            with self.assertRaises(urllib.error.HTTPError) as denied:
+                urllib.request.urlopen(base + '/openapi/v2/cards', timeout=10)
+            self.assertEqual(denied.exception.code, 401)
+            denied.exception.close()
             def post_json(path, obj):
                 req = urllib.request.Request(
                     base + path,
@@ -835,7 +839,7 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
                     headers={**auth_headers, 'Content-Type': 'application/json'},
                     method='POST',
                 )
-                return json.loads(urllib.request.urlopen(req).read().decode('utf-8'))
+                return json.loads(urllib.request.urlopen(req, timeout=10).read().decode('utf-8'))
 
             def post_bin(path, raw, mime, fname):
                 req = urllib.request.Request(
@@ -844,7 +848,7 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
                     headers={**auth_headers, 'Content-Type': mime, 'X-File-Name': fname},
                     method='POST',
                 )
-                return json.loads(urllib.request.urlopen(req).read().decode('utf-8'))
+                return json.loads(urllib.request.urlopen(req, timeout=10).read().decode('utf-8'))
 
             up_img = post_bin('/openapi/v2/media/upload/binary', self.img1_bytes.getvalue(), 'image/png', 'ref1.png')
             up_vid = post_bin('/openapi/v2/media/upload/binary', self.raw_video, 'video/mp4', 'drive.mp4')
@@ -888,7 +892,7 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
                 self.assertNotIn('ref_images.ref_image_1', q_res['compiledWorkflow']['26']['inputs'])
                 self.assertEqual(q_res['compiledWorkflow']['26']['inputs']['ref_images.ref_image_0'], ['54', 0])
 
-                with urllib.request.urlopen(urllib.request.Request(q_res['results'][0]['url'], headers=auth_headers)) as resp:
+                with urllib.request.urlopen(urllib.request.Request(q_res['results'][0]['url'], headers=auth_headers), timeout=10) as resp:
                     downloaded = resp.read()
                 self.assertEqual(downloaded, self.raw_video)
         finally:

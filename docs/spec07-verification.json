@@ -8,7 +8,7 @@
     "3f103572bdd9dffdd15b3ae77ca92632f93bdef1"
   ],
   "integrationRevision": "The commit containing this receipt; its frozen full SHA is recorded in the managed integration-recovered.json handoff.",
-  "result": "checked locally: backend 361 / frontend 109 tests pass, zero failures and zero skips; production build, browser and installed-wheel checks pass",
+  "result": "latest follow-up: backend 362 tests pass, zero failures/errors/skips; frontend 109/build/browser/wheel evidence retained from unchanged product commit 6255b940a7ee6aae3e4168c573bd77ebd4879cca",
   "commandsRan": [
     {
       "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -m unittest discover -s tests -p \"test_*.py\"",
@@ -120,5 +120,46 @@
     "Cancellation cannot guarantee provider-side termination or prevent charges. Ambiguous/interrupted paid jobs need reconciliation and an explicit new reviewed request; internal media is never automatically retried.",
     "Lower-level registry/media/task storage remains process-local; an interrupted in-process M8 worker is not an exactly-once provider transaction. Persistent Story candidates remain database-backed.",
     "GPU seconds/billed credits are uncalibrated; catalog policy labels do not independently certify imported graph/model weights or contest eligibility."
-  ]
+  ],
+  "followupVerification": {
+    "baseCommit": "6255b940a7ee6aae3e4168c573bd77ebd4879cca",
+    "scope": "Test-only follow-up: all legacy urllib smoke requests now timeout after 10 seconds; its unauthenticated refusal assertion and a real runtime identity-exception safe-response regression are added. No production/frontend/package changes.",
+    "commandsRan": [
+      {
+        "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> PYTHONPATH=tests python -X utf8 -m unittest test_story_hybrid_integration test_studio_worker.Spec05MediaAndLineWorldsTests.test_suite8_runninghub_interoperability_and_self_hosted_openapi_v2 -q",
+        "result": "passed",
+        "tests": 15,
+        "skips": 0,
+        "seconds": 70.139,
+        "log": "logs/followup-narrow.log"
+      },
+      {
+        "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -m unittest discover -s tests -p \"test_*.py\"",
+        "result": "passed",
+        "tests": 362,
+        "failures": 0,
+        "errors": 0,
+        "skips": 0,
+        "seconds": 171.805,
+        "log": "logs/backend-followup-final-362.log"
+      },
+      {
+        "command": "file-backed pg_ctl -w -t 12 start/stop on the same owned cluster; psycopg SELECT database/port/1",
+        "result": "passed",
+        "summary": "Both controls exited 0; SELECT returned postgres/55447/1; cluster stopped and postmaster.pid absent. No other service touched.",
+        "log": "control-followup.log"
+      }
+    ],
+    "readNotRerun": [
+      "6255b94 frontend 109-test pass and build",
+      "6255b94 Playwright EN/zh-TW browser evidence",
+      "6255b94 installed-wheel imports/resources and SHA256 cca75caa15a5117a70237d676c42d948ec949e4e29c3d285068ad94ee21f58e6"
+    ],
+    "preservedReceipts": [
+      "<owned-temp>/spec07-verification-at-6255b94.json",
+      "<owned-temp>/integration-recovered-at-6255b94.json",
+      "Original blocked integration.json and failed backend-full-1.log retained unchanged"
+    ],
+    "handoffRule": "Writer released after follow-up commit; delayed informational messages do not reauthorize edits after review starts."
+  }
 }

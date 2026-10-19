@@ -370,3 +370,11 @@ class StoryHybridIntegrationTests(unittest.TestCase):
             self.assertEqual(extracted[0]['content_type'],'image/png')
             self.assertEqual(self.submits[-1][1]['inputs']['image_url'],'fixture-reference')
             self.resolve(second)
+
+    def test_v2_identity_exception_returns_safe_response_before_dispatch(self):
+        with patch.object(self.server.RequestHandlerClass, 'project_docs_identity', side_effect=RuntimeError('fixture-sensitive-identity-detail')):
+            code,payload,_=self.request('/openapi/v2/cards')
+        self.assertEqual(code,500,payload)
+        self.assertEqual(payload['msg'],'Media API unavailable; check deployment configuration.')
+        self.assertNotIn('fixture-sensitive-identity-detail',json.dumps(payload))
+        self.assertEqual(self.submits,[])
