@@ -391,6 +391,18 @@ class Spec05StudioCardAndDualEngineTests(unittest.TestCase):
                 self.assertEqual(card['card_id'], card_id)
                 self.assertTrue(card['nodes'])
 
+        with tempfile.TemporaryDirectory() as cwd:
+            card_file = Path(cwd, 'stray.json')
+            card_file.write_text(json.dumps(worker.load_studio_card('local-smoke')), encoding='utf-8')
+            previous = os.getcwd()
+            os.chdir(cwd)
+            try:
+                with self.assertRaisesRegex(worker.WorkerError, 'not found'):
+                    worker.load_studio_card('stray.json')
+            finally:
+                os.chdir(previous)
+            self.assertEqual(worker.load_studio_card(card_file)['card_id'], 'local-smoke')
+
         h3_card = worker.load_studio_card('h3-reference')
         info = worker.build_node_info(h3_card, {
             '27.video': 'driving.mp4',

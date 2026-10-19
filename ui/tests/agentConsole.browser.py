@@ -161,6 +161,10 @@ class ConsoleInteractions(unittest.TestCase):
         self.page.locator('.ac-list').get_by_role('button',name=re.compile('Browser skill')).click()
         self.page.get_by_role('button',name='Version history',exact=True).click()
         expect(self.page.locator('.ac-json')).to_contain_text('reviewed 35mm camera')
+        # A saved creation must not linger as the next "New resource" draft (stale version -> 409).
+        self.page.locator('.ac-list').get_by_role('button',name='New resource',exact=True).click()
+        expect(self.page.get_by_label('Skill ID',exact=True)).to_have_value('')
+        expect(self.page.get_by_label('Skill ID',exact=True)).to_be_enabled()
         self.open('memory_store','style_rules')
         self.page.get_by_label('Entry ID',exact=True).fill('browser_lens')
         self.page.get_by_label('Title',exact=True).fill('Browser lens rule')

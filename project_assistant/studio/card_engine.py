@@ -243,9 +243,13 @@ def validate_studio_card(card: dict) -> dict:
 
 
 def load_studio_card(card_id_or_path: str | Path) -> dict:
-    """Load and validate a Studio Card by card_id, webappId/workflowId, or file path."""
-    candidate = Path(str(card_id_or_path))
-    if not candidate.is_file():
+    """Load and validate a Studio Card by card_id, webappId/workflowId, or Path object.
+
+    Strings are identifiers resolved inside CARDS_DIR only: HTTP/task supplied IDs such
+    as ``.env`` must never be read as files relative to the process working directory.
+    """
+    candidate = card_id_or_path if isinstance(card_id_or_path, Path) else None
+    if candidate is None or not candidate.is_file():
         stem = str(card_id_or_path).strip().removesuffix(".json")
         candidate = legacy.CARDS_DIR / f"{stem}.json"
         if not candidate.is_file() and legacy.CARDS_DIR.is_dir():

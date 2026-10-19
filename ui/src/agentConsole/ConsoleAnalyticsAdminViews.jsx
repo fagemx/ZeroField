@@ -28,5 +28,6 @@ function LimitsEditor({data}) {
       const body=pick(parseObject(text),LIMIT_FIELDS);if(body.comfy_router_budget_mode==='estimate_soft')body.estimate_soft_consent=consent;
       const result=await request('/spend-rate-limits',{method:'POST',body});setText(pretty(pick(result.settings,LIMIT_FIELDS)));setConsent(false);refresh();
     })}>{t('console.save')}</button>
+    {config?.version!==data.settings.version && <button onClick={()=>{if(window.confirm(t('console.replaceDraftConfirm'))){setText(pretty(pick(data.settings,LIMIT_FIELDS)));setConsent(false);}}}>{t('console.loadCurrent')}</button>}
   </fieldset></>;
 }

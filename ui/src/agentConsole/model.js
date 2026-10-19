@@ -47,10 +47,12 @@ export function mergeSession(previous, next) {
   for (const message of next.messages || []) messages.set(message.id,message);
   return {...next,messages:[...messages.values()]};
 }
+const SEARCH_KEY = {agents:'agent_key',skills:'skill_key',deployments:'deployment_key',environments:'env_key',memory_store:'store_key'};
 export function resourceSearch(catalog, query) {
   const entries = PAGES.map(page => ({page,key:page,label:t('console.pages.'+page)}));
   for (const [page,items] of Object.entries(catalog)) for (const item of items || []) {
-    const key = item.agent_key || item.skill_key || item.deployment_key || item.env_key || item.store_key || item.id;
+    // Deployment rows also carry agent_key, so the page decides which key identifies the row.
+    const key = item[SEARCH_KEY[page]] ?? item.id;
     entries.push({page,key,label:item.display_name || item.objective || key,resource:key});
   }
   return entries.filter(e => (e.label+' '+e.key).toLowerCase().includes(query.toLowerCase())).slice(0,60);

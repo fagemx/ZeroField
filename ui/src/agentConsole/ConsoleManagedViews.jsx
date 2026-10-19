@@ -60,9 +60,10 @@ const DEFAULT_RESOURCE = {
 };
 export function ResourceEditor({endpoint,items,resourceKey,selectedKey,onSelect,canWrite,extra,query='',newItem}) {
   const selected=items?.find(item=>item[resourceKey]===selectedKey);
-  return <div className="ac-split"><aside className="ac-list">{(items || []).map(item=><button key={item[resourceKey]} aria-current={selectedKey===item[resourceKey] ? 'true':undefined} onClick={()=>onSelect(item[resourceKey])}>{item.display_name || item.title || item[resourceKey]}<small>v{item.version} · {item[resourceKey]}</small></button>)}<button onClick={()=>onSelect('new')}>{t('console.newResource')}</button></aside><section><ResourceForm key={endpoint+':'+(selectedKey || 'new')} endpoint={endpoint} item={selected || newItem || DEFAULT_RESOURCE[endpoint]} resourceKey={resourceKey} canWrite={canWrite} query={query}/>{selected && extra?.(selected)}</section></div>;
+  // A named resource is editable only once loaded; earlier edits would land in the ':new' draft and be lost.
+  return <div className="ac-split"><aside className="ac-list">{(items || []).map(item=><button key={item[resourceKey]} aria-current={selectedKey===item[resourceKey] ? 'true':undefined} onClick={()=>onSelect(item[resourceKey])}>{item.display_name || item.title || item[resourceKey]}<small>v{item.version} · {item[resourceKey]}</small></button>)}<button onClick={()=>onSelect('new')}>{t('console.newResource')}</button></aside><section>{(selected || !selectedKey || selectedKey==='new') && <ResourceForm key={endpoint+':'+(selectedKey || 'new')} endpoint={endpoint} item={selected || newItem || DEFAULT_RESOURCE[endpoint]} resourceKey={resourceKey} canWrite={canWrite} query={query} onSelect={onSelect}/>}{selected && extra?.(selected)}</section></div>;
 }
-function ResourceForm({endpoint,item,resourceKey,canWrite,query}) {
+function ResourceForm({endpoint,item,resourceKey,canWrite,query,onSelect}) {
   const {action,request,refresh}=useConsole();
   const draftId=endpoint+':'+(endpoint==='memory-entries' ? item.store_key+':' : '')+(item[resourceKey] || 'new');
   const [text,setText]=useDraft(draftId,pretty(pick(item,RESOURCE_FIELDS[endpoint])));
@@ -72,7 +73,9 @@ function ResourceForm({endpoint,item,resourceKey,canWrite,query}) {
   const set=(key,value)=>setText(pretty({...config,[key]:value}));
   const merged=()=>{const result=parseObject(text);for(const [key,value] of Object.entries(objectTexts))result[key]=JSON.parse(value);return result;};
   let parseValid=Boolean(config),valid=false;try{const body=merged();valid=[resourceKey,...['display_name','title'].filter(key=>Object.hasOwn(body,key))].every(key=>typeof body[key]==='string' && body[key].trim());}catch{parseValid=false;}
-  const save=()=>action(async()=>{const result=await request('/'+endpoint+query,{method:'POST',body:pick(merged(),RESOURCE_FIELDS[endpoint])});setText(pretty(pick(result.item || result.deployment || result.entry,RESOURCE_FIELDS[endpoint])));setObjectTexts({});refresh();});
+  const save=()=>action(async()=>{const result=await request('/'+endpoint+query,{method:'POST',body:pick(merged(),RESOURCE_FIELDS[endpoint])});const saved=result.item || result.deployment || result.entry;setObjectTexts({});
+    // A created resource leaves the shared ':new' draft blank and opens under its own key.
+    if(item.version>0)setText(pretty(pick(saved,RESOURCE_FIELDS[endpoint])));else{setText(pretty(pick(item,RESOURCE_FIELDS[endpoint])));onSelect(saved[resourceKey]);}refresh();});
   return <><div className="ac-actions"><button disabled={!parseValid} onClick={()=>{if(!raw){setText(pretty(merged()));setObjectTexts({});}setRaw(!raw);}}>{t(raw ? 'console.formView':'console.rawView')}</button><button disabled={!canWrite || !valid} onClick={save}>{t('console.save')}</button>{item.version>0 && !['deployments','memory-entries'].includes(endpoint) && <History path={'/'+endpoint+'/'+encodeURIComponent(item[resourceKey])+'/history'+query}/>} </div>
     {raw || !config ? <JsonField label="configuration" value={text} onChange={setText} rows={20} disabled={!canWrite}/> : <fieldset disabled={!canWrite}>{RESOURCE_FIELDS[endpoint].filter(k=>Object.hasOwn(config,k)).map(key=>{
       const value=config[key];

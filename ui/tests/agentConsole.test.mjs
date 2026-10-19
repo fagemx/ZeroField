@@ -56,5 +56,6 @@ test('all navigation/templates/badges/errors/consent are semantic bilingual; sta
 test('resource search finds pages and actual catalog resources without mutating custom labels',()=>{
   const catalog={agents:[{agent_key:'custom',display_name:'Original 自訂 name'}],sessions:[{id:'run-1',objective:'Inspect optics'}]};
   assert.equal(resourceSearch(catalog,'Original')[0].resource,'custom');assert.equal(resourceSearch(catalog,'optics')[0].page,'sessions');assert.equal(catalog.agents[0].display_name,'Original 自訂 name');assert.equal(resourceSearch({},'')[0].page,'dashboard');
+  const deployments=resourceSearch({deployments:[{deployment_key:'nightly',agent_key:'coordinator'},{deployment_key:'weekly',agent_key:'coordinator'}]},'').filter(e=>e.resource).map(e=>e.resource);assert.deepEqual(deployments,['nightly','weekly']);
   for(const text of ['[]','null','false','42','broken'])assert.throws(()=>parseObject(text));
 });

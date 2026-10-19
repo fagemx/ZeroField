@@ -29,11 +29,12 @@ export function useDraft(key, fallback) {
   const [value,setValue] = useState(load);
   const lastKey = useRef(storageKey);
   useEffect(() => {if(lastKey.current!==storageKey){lastKey.current=storageKey;setValue(load());}},[storageKey]); // identity/project boundary
-  const update = next => setValue(current => {
-    const result = typeof next === 'function' ? next(current) : next;
-    try {sessionStorage.setItem(storageKey,JSON.stringify(result));} catch { /* The mounted draft remains available. */ }
-    return result;
-  });
+  const persist = result => {try {sessionStorage.setItem(storageKey,JSON.stringify(result));} catch { /* The mounted draft remains available. */ }};
+  // Plain values persist synchronously: a lazy updater never runs if the form unmounts first.
+  const update = next => {
+    if (typeof next !== 'function') {persist(next);setValue(next);return;}
+    setValue(current => {const result=next(current);persist(result);return result;});
+  };
   return [value,update];
 }
 export function Field({label,children}) {return <label className="ac-field"><span>{t('console.'+label)}</span>{children}</label>;}

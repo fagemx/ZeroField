@@ -17,7 +17,9 @@ export function AgentConsoleApp({slug,me,project,route,episodeId,onReturn}) {
   useEffect(()=>{actionController.current?.abort();setError('');},[route.page,route.resource]);
   useEffect(()=>()=>lifetime.current.abort(),[]);
   const base='/projects/api/'+encodeURIComponent(slug)+'/agent-console';
-  const signals=options=>AbortSignal.any([lifetime.current.signal,...(options.signal ? [options.signal]:[]),...(actionController.current ? [actionController.current.signal]:[])]);
+  // Loads carry their own signal; only signal-less action calls follow the pending action, so
+  // navigating away during an action cannot abort the next page's load.
+  const signals=options=>AbortSignal.any([lifetime.current.signal,...(options.signal ? [options.signal] : actionController.current ? [actionController.current.signal]:[])]);
   const request=useCallback((path,options={})=>consoleRequest(base,path,{...options,signal:signals(options)}),[base]);
   const externalRequest=useCallback((path,options={})=>consoleRequest('',path,{...options,signal:signals(options)}),[]);
   const [revision,setRevision]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState('');
