@@ -5,10 +5,10 @@ Implementations depend only on lower layers; importing Studio never starts a wor
 from importlib import import_module
 
 from . import (_compat, runtime, context_compiler, ffmpeg_runtime, line_worlds,
-               media_prep, card_engine, model_router, openapi_v2_hub)
+               media_prep, card_engine, model_router, agent_allocator, openapi_v2_hub)
 
 _MODULES = (runtime, context_compiler, ffmpeg_runtime, line_worlds,
-            media_prep, card_engine, model_router, openapi_v2_hub)
+            media_prep, card_engine, model_router, agent_allocator, openapi_v2_hub)
 for _module in _MODULES:
     for _name in _module.__all__:
         _compat.OWNERS[_name] = _module

@@ -26,6 +26,30 @@ class AgentError(ValueError):
         self.status, self.code = status, code
 
 
+def recommend_agent_provider_tier(agent_key, budget_mode="hybrid_balanced", *, task_kind="script_breakdown"):
+    """Advisory product-runtime capabilities only; never rewrites or runs a model.
+
+    Families are examples, not executable provider settings or a CLI command.
+    An administrator must retain/select an authorized configured runtime/model.
+    """
+    from project_assistant.studio.agent_allocator import BUDGET_MODES
+    if not isinstance(agent_key, str) or agent_key not in {row[0] for row in ROSTER}:
+        raise AgentError(400, "Unknown specialist agent.")
+    if budget_mode not in BUDGET_MODES or task_kind not in ("script_breakdown", "formatting", "translation", "shot_triage"):
+        raise AgentError(400, "Invalid agent recommendation mode or task.")
+    economical = agent_key == 'doc_writer' and task_kind in ('formatting', 'translation')
+    vision = agent_key == 'qa_critic'
+    return {'agent_key': agent_key, 'budget_mode': budget_mode, 'advisory_only': True,
+            'provider_tier': 'economical_local' if economical else 'vision_reasoning' if vision else 'flagship_reasoning',
+            'required_capabilities': ['vision', 'reasoning'] if vision else ['text', 'reasoning'],
+            'provider_kind_hint': 'openai_compat' if economical else None,
+            'model_family_examples': ['local open-weights'] if economical else ['Claude', 'GPT', 'Gemini'],
+            'reasons': ['bulk_formatting_or_translation' if economical else 'frame_sheet_failure_diagnosis' if vision else 'story_structure_and_shot_triage'],
+            'reference_media': {'kind': 'frame_sheet', 'frames': 8, 'width': 1600, 'height': 600} if vision else None,
+            'requires_admin_configuration': True, 'changes_configuration': False,
+            'launches_external_cli': False}
+
+
 def default_tools(key,orchestration=True):
     reads = ['list_pages', 'read_page', 'search_pages']
     reports = sorted(n for n in tool_specs.TOOL_NAMES if n.startswith('report_'))
