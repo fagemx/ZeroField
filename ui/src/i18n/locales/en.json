@@ -1950,7 +1950,7 @@
     "summary": "Allocation preflight",
     "counts": "{{open}} local open-weights · {{closed}} closed hero · {{cloud}} cloud burst",
     "estimateCaution": "Planned assignments, not completed renders. GPU seconds and billed credits are uncalibrated; no guaranteed savings or model-quality claim.",
-    "blocked": "Configuration blocked",
+    "blocked": "Dispatch blocked",
     "preflightRequired": "A ready allocation preflight is required.",
     "complexity_b_roll": "B-ROLL",
     "complexity_standard": "STANDARD",
@@ -1971,6 +1971,21 @@
     "run_awaiting_gate": "Director review required",
     "run_succeeded": "Reviewed media chain complete",
     "run_failed": "Media execution stopped. Check configuration/source authority and reconcile any paid job before a new allocation.",
-    "run_canceled": "Media chain canceled; late writeback is blocked."
+    "run_canceled": "Media chain canceled; late writeback is blocked.",
+    "blockerProvider": "Configure the provider endpoint and credential reference.",
+    "blockerLocalOffline": "Local ComfyUI is offline.",
+    "blockerLocalUnknown": "Local ComfyUI availability is not confirmed.",
+    "blockerCard": "The selected card is unavailable.",
+    "blockerHybrid": "This strategy requires authorized Hybrid Studio permission.",
+    "blockerRequiredMedia": "Required media is missing.",
+    "blockerOwnership": "Reference media must belong to this production.",
+    "blockerMissingMedia": "Reference media no longer exists.",
+    "blockerMediaSize": "Reference media is empty or exceeds the size limit.",
+    "blockerMediaType": "Reference media has the wrong image/video/audio type.",
+    "blockerPreparationSource": "Preparation needs a source video or reference image.",
+    "blockerPreparation": "The preparation bindings or dependencies need correction.",
+    "blockerCardInputs": "The card inputs or output type need correction.",
+    "blockerUnknown": "Resolve the input or configuration issue before dispatch.",
+    "blockerField": "{{message}} Input: {{field}}"
   }
 }

@@ -1950,7 +1950,7 @@
     "summary": "資源分配預檢",
     "counts": "{{open}} 鏡本地開放權重 · {{closed}} 鏡閉源主力 · {{cloud}} 鏡雲端",
     "estimateCaution": "這是規劃分配，並非完成渲染。GPU 秒數與帳單點數尚未校準；不保證節省費用或模型品質。",
-    "blocked": "設定尚未就緒",
+    "blocked": "派發尚未就緒",
     "preflightRequired": "請先完成可執行的資源分配預檢。",
     "complexity_b_roll": "空鏡／輔助",
     "complexity_standard": "一般鏡頭",
@@ -1971,6 +1971,21 @@
     "run_awaiting_gate": "等待導演審核",
     "run_succeeded": "已完成媒體鏈與審核",
     "run_failed": "媒體執行已停止。請檢查設定與來源權限，確認供應商付費任務狀態後再重新分配。",
-    "run_canceled": "媒體鏈已取消；已阻止遲到結果寫回。"
+    "run_canceled": "媒體鏈已取消；已阻止遲到結果寫回。",
+    "blockerProvider": "請設定供應商端點與憑證參照。",
+    "blockerLocalOffline": "本地 ComfyUI 尚未上線。",
+    "blockerLocalUnknown": "尚未確認本地 ComfyUI 是否可用。",
+    "blockerCard": "所選卡片目前無法使用。",
+    "blockerHybrid": "此策略需要已授權的混合製片權限。",
+    "blockerRequiredMedia": "缺少必要媒體。",
+    "blockerOwnership": "參考媒體必須屬於此製片專案。",
+    "blockerMissingMedia": "參考媒體已不存在。",
+    "blockerMediaSize": "參考媒體為空或超過大小限制。",
+    "blockerMediaType": "參考媒體的圖片、影片或音訊類型不符。",
+    "blockerPreparationSource": "前置處理需要來源影片或參考圖片。",
+    "blockerPreparation": "請修正前置處理的綁定或相依關係。",
+    "blockerCardInputs": "請修正卡片輸入或輸出類型。",
+    "blockerUnknown": "請先排除輸入或設定問題再派發。",
+    "blockerField": "{{message}} 輸入：{{field}}"
   }
 }

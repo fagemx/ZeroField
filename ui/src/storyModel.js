@@ -62,3 +62,27 @@ export function allocationDispatchBody(allocation, budgetMode, productionPolicy)
   if (!allocation?.ready || !allocation.allocationId || !allocation.allocations?.length) throw new Error(t('allocation.preflightRequired'));
   return {allocationId:allocation.allocationId,shotIds:allocation.allocations.map(item=>item.shotId),budgetMode,productionPolicy};
 }
+
+export function approvedCompositionSource(takes) {
+  const video = takes.videos.find(take => take.selected);
+  if (video) return {referenceSourceVideoId:video.videoId};
+  const image = takes.images.find(take => take.selected);
+  return image ? {referenceSourceImageId:image.imageId} : null;
+}
+
+const BLOCKER_KEYS = {
+  provider_not_configured:'blockerProvider',local_comfy_offline:'blockerLocalOffline',
+  local_comfy_availability_unknown:'blockerLocalUnknown',card_unavailable:'blockerCard',selected_card_unavailable:'blockerCard',
+  chain_requires_hybrid_paid_permission:'blockerHybrid',strategy_requires_hybrid_paid_permission:'blockerHybrid',
+  required_media_missing:'blockerRequiredMedia',media_not_owned:'blockerOwnership',media_missing:'blockerMissingMedia',
+  media_size_invalid:'blockerMediaSize',media_type_mismatch:'blockerMediaType',
+  missing_preparation_source:'blockerPreparationSource',invalid_preparation_binding:'blockerPreparation',
+  invalid_dependencies:'blockerPreparation',invalid_preparation_output:'blockerPreparation',
+  invalid_generation_output:'blockerCardInputs',invalid_card_inputs:'blockerCardInputs',
+};
+export function allocationBlockerLabel(blocker) {
+  const [code, , ...field] = String(blocker).split(':');
+  const key = Object.hasOwn(BLOCKER_KEYS,code) ? BLOCKER_KEYS[code] : 'blockerUnknown';
+  const message = t('allocation.'+key);
+  return field.length && key !== 'blockerUnknown' ? t('allocation.blockerField',{message,field:field.join(':')}) : message;
+}

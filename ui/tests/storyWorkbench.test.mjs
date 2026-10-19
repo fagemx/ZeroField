@@ -56,3 +56,24 @@ test('allocation preflight wire paths and dispatch use the reviewed immutable as
   assert.deepEqual(allocationDispatchBody(plan,'deadline_rush','hybrid_studio'),{allocationId:'al_one',shotIds:['sh_demo_b1'],budgetMode:'deadline_rush',productionPolicy:'hybrid_studio'});
   assert.equal(plan.allocations[0].assignedCardId,'custom-card');
 });
+
+test('approved composition chooses selected image when no video exists and preserves selected-video precedence', async () => {
+  const {approvedCompositionSource} = await import('../src/storyModel.js');
+  const image={imageId:'im_keyframe',selected:true}, video={videoId:'vd_acting',selected:true};
+  assert.deepEqual(approvedCompositionSource({images:[image],videos:[]}),{referenceSourceImageId:'im_keyframe'});
+  assert.deepEqual(approvedCompositionSource({images:[image],videos:[video]}),{referenceSourceVideoId:'vd_acting'});
+  assert.equal(approvedCompositionSource({images:[{...image,selected:false}],videos:[]}),null);
+  assert.equal(image.selected,true);
+});
+
+test('allocation blockers use semantic bilingual messages without translating input IDs or leaking unknown codes', async () => {
+  const {allocationBlockerLabel} = await import('../src/storyModel.js');
+  const {setLocale} = await import('../src/i18n/index.js');
+  for(const [locale,missing] of [['en','Required media is missing'],['zh-TW','缺少必要媒體']]){
+    await setLocale(locale);
+    const label=allocationBlockerLabel('required_media_missing:generate:51.image');
+    assert.ok(label.includes(missing));assert.ok(label.includes('51.image'));assert.ok(!label.includes('required_media_missing'));
+    assert.ok(!allocationBlockerLabel('unrecognized_internal_blocker').includes('unrecognized_internal_blocker'));
+  }
+  await setLocale('en');
+});
