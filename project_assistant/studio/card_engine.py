@@ -7,6 +7,7 @@ import copy
 import io
 import json
 import mimetypes
+import math
 import os
 import re
 import tempfile
@@ -26,6 +27,8 @@ __all__ = [
     'CARD_OUTPUT_MODES',
     'CARDS_DIR',
     'validate_studio_card',
+    'card_execution_profile',
+    'validate_direct_card_values',
     'load_studio_card',
     'build_node_info',
     '_PASSTHROUGH_IMAGE_CLASSES',
@@ -57,6 +60,61 @@ CARD_OUTPUT_MODES = frozenset({"video", "image", "audio"})
 CARDS_DIR = resource_path("workflows", "cards")
 
 
+def card_execution_profile(card: dict) -> dict:
+    """Legacy graphs default to local open weights; explicit drivers have fixed tiers."""
+    config = card.get("engine_config") or {}
+    driver = config.get("driver") or ("comfy_local" if card.get("engine", "comfyui") == "comfyui" else "vendor_api")
+    tiers = {"comfy_local": "open_weights", "comfy_partner": "closed_hybrid",
+             "vendor_api": "closed_hero", "runninghub_cloud": "cloud_burst"}
+    if not isinstance(driver, str) or driver not in tiers:
+        raise runtime.WorkerError("Unsupported Studio card driver")
+    tier = config.get("tier", tiers[driver])
+    requires = driver in ("comfy_local", "comfy_partner")
+    if tier != tiers[driver] or ("requires_comfyui" in config and config["requires_comfyui"] is not requires):
+        raise runtime.WorkerError("Studio card driver, tier and requires_comfyui disagree")
+    return {"driver": driver, "tier": tier, "requires_comfyui": requires}
+
+
+def validate_direct_card_values(card: dict, values: dict) -> list[dict]:
+    """Validate semantic API inputs without inspecting or compiling graph nodes."""
+    if not isinstance(values, dict):
+        raise runtime.WorkerError("Card inputs must be an object")
+    nodes = {f"{n['nodeId']}.{n['fieldName']}": n for n in card["nodes"]}
+    if set(values) - set(nodes):
+        raise runtime.WorkerError("Unknown direct card input")
+    result = build_node_info(card, values)
+    for item in result:
+        key = f"{item['nodeId']}.{item['fieldName']}"
+        node = nodes[key]
+        value = values.get(key)
+        if value is None:
+            value = node.get("defaultValue", "")
+        if isinstance(value, (dict, list, tuple, bool)):
+            raise runtime.WorkerError("Invalid direct card input type")
+        text = str(value).strip()
+        kind = node["fieldType"]
+        missing = not text or (kind in ("IMAGE", "VIDEO", "AUDIO") and text.lower() == "none")
+        if node.get("required") and missing:
+            raise runtime.WorkerError("Required direct card input is missing")
+        if kind in ("INT", "FLOAT"):
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                raise runtime.WorkerError("Direct card numeric input is invalid") from None
+            if (not math.isfinite(number) or (kind == "INT" and not number.is_integer())
+                    or (node.get("min") is not None and number < node["min"])
+                    or (node.get("max") is not None and number > node["max"])):
+                raise runtime.WorkerError("Direct card numeric input is outside its allowed range")
+            item["fieldValue"] = str(int(number)) if kind == "INT" else str(number)
+        elif kind == "LIST" and text not in node["options"]:
+            raise runtime.WorkerError("Direct card selection is not an allowed option")
+        elif kind in ("IMAGE", "VIDEO", "AUDIO"):
+            item["fieldValue"] = "None" if missing else text
+        elif len(text) > 64000:
+            raise runtime.WorkerError("Direct card text exceeds the input limit")
+    return result
+
+
 def validate_studio_card(card: dict) -> dict:
     """Validate and normalize a RunningHub-style declarative Studio Card."""
     if not isinstance(card, dict):
@@ -71,6 +129,10 @@ def validate_studio_card(card: dict) -> dict:
     engine_config = card.get("engine_config")
     if not isinstance(engine_config, dict):
         raise runtime.WorkerError("Studio card engine_config must be an object")
+    engine_config = dict(engine_config, **card_execution_profile(card))
+    direct = engine_config["driver"] in ("vendor_api", "runninghub_cloud")
+    if direct and any(engine_config.get(k) for k in ("locked_nodes", "disabled_loras")):
+        raise runtime.WorkerError("Direct cards cannot configure graph node mutations")
     raw_nodes = card.get("nodes")
     if not isinstance(raw_nodes, (list, tuple)) or not raw_nodes:
         raise runtime.WorkerError("Studio card nodes must be a non-empty list")
@@ -85,6 +147,11 @@ def validate_studio_card(card: dict) -> dict:
         node_label = str(raw.get("label") or "").strip()
         if not node_id or not field_name or not node_label:
             raise runtime.WorkerError(f"nodes[{idx}] requires nodeId, fieldName and label")
+        if engine_config["driver"] == "vendor_api":
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", node_id) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", field_name):
+                raise runtime.WorkerError("Vendor card requires named semantic input identifiers, not graph node IDs")
+            if any(n["fieldName"] == field_name for n in normalized_nodes):
+                raise runtime.WorkerError("Vendor semantic field names must be unique")
         if field_type not in CARD_FIELD_TYPES:
             raise runtime.WorkerError(f"nodes[{idx}].fieldType is not supported: {field_type}")
         if (node_id, field_name) in seen:
@@ -131,7 +198,15 @@ def validate_studio_card(card: dict) -> dict:
         if field_type in ("INT", "FLOAT"):
             for bound in ("min", "max", "step"):
                 if raw.get(bound) is not None:
-                    node[bound] = float(raw[bound])
+                    try:
+                        number = float(raw[bound])
+                    except (TypeError, ValueError):
+                        raise runtime.WorkerError(f"nodes[{idx}] numeric bounds must be finite") from None
+                    if not math.isfinite(number) or (bound == "step" and number <= 0):
+                        raise runtime.WorkerError(f"nodes[{idx}] numeric bounds must be finite with positive step")
+                    node[bound] = number
+            if node.get("min", -math.inf) > node.get("max", math.inf):
+                raise runtime.WorkerError(f"nodes[{idx}] min cannot exceed max")
             check_vals = []
             if "defaultValue" in node:
                 check_vals.append(node["defaultValue"])
@@ -141,6 +216,8 @@ def validate_studio_card(card: dict) -> dict:
                     num = float(raw_val)
                 except (TypeError, ValueError):
                     raise runtime.WorkerError(f"nodes[{idx}] default value must be numeric") from None
+                if not math.isfinite(num) or (field_type == "INT" and not num.is_integer()):
+                    raise runtime.WorkerError(f"nodes[{idx}] default value must be finite and match fieldType")
                 if node.get("min") is not None and num < node["min"]:
                     raise runtime.WorkerError(f"nodes[{idx}] default value is below min")
                 if node.get("max") is not None and num > node["max"]:
@@ -1167,6 +1244,11 @@ def comfyui(task, config, head):
     card_spec = config.get("card") or config.get("card_id")
     if card_spec and str(card_spec).lower() != "auto":
         card = validate_studio_card(card_spec) if isinstance(card_spec, dict) else legacy.load_studio_card(card_spec)
+    from .model_router import enforce_card_policy
+    profile = card_execution_profile(card or {"engine_config": config})
+    enforce_card_policy(card or {"engine_config": config}, task.get("production_policy", config.get("production_policy")))
+    if profile["driver"] not in ("comfy_local", "comfy_partner"):
+        raise runtime.WorkerError("Direct cards must execute through ModelRouter, not ComfyUI")
     workflow_path = config.get("workflow") or (card.get("engine_config", {}).get("workflow") if card else None)
     if not workflow_path:
         raise runtime.WorkerError("ComfyUI execution requires a workflow path or studio card")
@@ -1192,6 +1274,8 @@ def comfyui(task, config, head):
                 workflow = bind_external_workflow(workflow, ctx, config, task, head, client)
         else:
             workflow = bind_external_workflow(workflow, ctx, config, task, head, client)
+        if profile["driver"] == "comfy_partner":
+            head.paid_request_submitted = True
         identifier = client.submit_workflow(workflow, str(task["id"]), config.get("metadata"))
         deadline = time.monotonic() + config.get("timeout", (card.get("engine_config", {}).get("timeout", 1800) if card else 1800))
         output_node = config.get("output_node") or (card.get("engine_config", {}).get("output_node") if card else None)
@@ -1232,9 +1316,12 @@ def comfyui(task, config, head):
                 raise runtime.WorkerError("ComfyUI completed without a supported saved media output")
             time.sleep(config.get("poll_seconds", 2))
         raise runtime.WorkerError("ComfyUI workflow timed out")
-    except runtime.WorkerError:
+    except runtime.WorkerError as exc:
+        if profile["driver"] == "comfy_partner":
+            raise runtime.NonRetryableWorkerError(str(exc)) from None
         raise
     except Exception:
-        raise runtime.WorkerError("Comfy execution failed; verify deployment, workflow nodes and model files") from None
+        error = runtime.NonRetryableWorkerError if profile["driver"] == "comfy_partner" else runtime.WorkerError
+        raise error("Comfy execution failed; verify deployment, workflow nodes and model files") from None
     finally:
         client.close()

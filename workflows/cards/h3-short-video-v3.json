@@ -13,7 +13,10 @@
     "frame_formula": "17n+5",
     "grid_size": 32,
     "instance": "default",
-    "timeout": 7200
+    "timeout": 7200,
+    "driver": "comfy_local",
+    "tier": "open_weights",
+    "requires_comfyui": true
   },
   "status": "active",
   "sort_order": 23,

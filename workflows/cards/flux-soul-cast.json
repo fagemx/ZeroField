@@ -15,7 +15,10 @@
     "frame_rule": "none",
     "grid_size": 32,
     "timeout": 900,
-    "output_node": "9"
+    "output_node": "9",
+    "driver": "comfy_local",
+    "tier": "open_weights",
+    "requires_comfyui": true
   },
   "nodes": [
     {

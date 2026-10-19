@@ -16,6 +16,7 @@ __all__ = [
     'NON_TAKE_KINDS',
     'WorkerError',
     'TransientWorkerError',
+    'NonRetryableWorkerError',
     'NoRedirect',
     'fetch',
     'json_fetch',
@@ -41,8 +42,14 @@ class TransientWorkerError(WorkerError):
     pass
 
 
+class NonRetryableWorkerError(WorkerError):
+    """An ambiguous/paid operation needs reconciliation, even after transient lease errors."""
+    no_retry = True
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        fp.close()
         raise WorkerError("HTTP redirects are disabled; configure the final endpoint")
 
 
@@ -67,6 +74,7 @@ def fetch(url, *, payload=None, data=None, token=None, mime=None, timeout=60, li
     except urllib.error.HTTPError as exc:
         # Provider errors can contain credentials or signed URLs; report status only.
         error = TransientWorkerError if exc.code in (408, 429) or exc.code >= 500 else WorkerError
+        exc.close()
         raise error(f"HTTP {exc.code} from configured endpoint") from None
     except (urllib.error.URLError, TimeoutError) as exc:
         raise TransientWorkerError("Configured endpoint temporarily unavailable") from None

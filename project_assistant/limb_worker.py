@@ -162,6 +162,7 @@ def process_one(head, config):
     if not task:
         return False
     head.prefer_orchestration=queue!='orchestration/'
+    head.paid_request_submitted = False
     lease = {"task_id": task["id"], "lease_token": task["lease_token"]}
     if task.get('dispatch_handle'):
         lease['dispatch_handle']=task['dispatch_handle']
@@ -199,8 +200,9 @@ def process_one(head, config):
     except Exception as exc:
         message = str(exc) if isinstance(exc, WorkerError) else f"Adapter error: {type(exc).__name__}"
         try:
-            head.action(queue+"fail", dict(lease, error=message, retryable=isinstance(exc, TransientWorkerError)
-                                    or any(isinstance(e, TransientWorkerError) for e in errors)))
+            retryable = not (getattr(exc, 'no_retry', False) or head.paid_request_submitted) and (
+                isinstance(exc, TransientWorkerError) or any(isinstance(e, TransientWorkerError) for e in errors))
+            head.action(queue+"fail", dict(lease, error=message, retryable=retryable))
         except Exception:
             pass
         print(json.dumps({"task_id": task["id"], "error": message}), flush=True)

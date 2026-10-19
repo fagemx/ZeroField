@@ -1,0 +1,97 @@
+{
+  "card_id": "seedance-20-pro",
+  "label": "Seedance 2.0 Pro",
+  "sublabel": "Requires operator-configured provider adapter",
+  "output_mode": "video",
+  "engine_config": {
+    "driver": "vendor_api",
+    "provider": "seedance",
+    "tier": "closed_hero",
+    "requires_comfyui": false,
+    "webappId": "2108000000000000001",
+    "base_url_env": "SEEDANCE_API_URL",
+    "api_key_env": "SEEDANCE_API_KEY",
+    "fallback_open_card_id": "h3-short-video-v3",
+    "timeout": 600,
+    "cost_weight": 5,
+    "concurrency_limit": 10,
+    "adapter_contract": "zerofield_media_v1",
+    "model": "seedance-2.0-pro"
+  },
+  "nodes": [
+    {
+      "nodeId": "ref_1",
+      "fieldName": "image_url",
+      "fieldType": "IMAGE",
+      "label": "Primary Character / First Frame",
+      "slot": "ref",
+      "defaultValue": "None",
+      "required": false
+    },
+    {
+      "nodeId": "ref_2",
+      "fieldName": "ref_image_2",
+      "fieldType": "IMAGE",
+      "label": "Secondary Reference",
+      "slot": "ref",
+      "defaultValue": "None",
+      "required": false
+    },
+    {
+      "nodeId": "motion_ref",
+      "fieldName": "driving_video_url",
+      "fieldType": "VIDEO",
+      "label": "Driving Motion Video",
+      "slot": "driving_video",
+      "defaultValue": "None",
+      "required": false
+    },
+    {
+      "nodeId": "prompt",
+      "fieldName": "prompt",
+      "fieldType": "STRING",
+      "label": "Director Shot Prompt",
+      "slot": "prompt",
+      "defaultValue": "",
+      "required": true
+    },
+    {
+      "nodeId": "duration",
+      "fieldName": "duration",
+      "fieldType": "INT",
+      "label": "Duration (Seconds)",
+      "slot": "duration",
+      "defaultValue": "5",
+      "required": true,
+      "min": 1,
+      "max": 15,
+      "step": 1
+    },
+    {
+      "nodeId": "aspect_ratio",
+      "fieldName": "aspect_ratio",
+      "fieldType": "LIST",
+      "label": "Aspect Ratio",
+      "slot": "aspect_ratio",
+      "defaultValue": "16:9",
+      "required": true,
+      "options": [
+        "16:9",
+        "9:16",
+        "1:1"
+      ]
+    },
+    {
+      "nodeId": "seed",
+      "fieldName": "seed",
+      "fieldType": "INT",
+      "label": "Seed",
+      "slot": "seed",
+      "defaultValue": "0",
+      "required": false,
+      "min": 0,
+      "max": 2147483647,
+      "step": 1
+    }
+  ]
+}

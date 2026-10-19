@@ -7,15 +7,13 @@ import hashlib
 import json
 import mimetypes
 import re
-import tempfile
 import threading
 import time
 
-from . import card_engine, runtime
+from . import card_engine, runtime, model_router
 from . import _compat as legacy
 
 __all__ = [
-    'execute_story_card',
     '_OPENAPI_LOCK',
     '_OPENAPI_SEQ',
     '_OPENAPI_MEDIA_STORE',
@@ -33,18 +31,6 @@ __all__ = [
 ]
 
 
-def execute_story_card(task, card, values, head):
-    """Use the same card compiler for Story jobs, including imported in-memory cards."""
-    graph = task.get("workflow")
-    if graph is None:
-        _, graph = legacy._resolve_openapi_card_and_workflow(card["card_id"])
-    with tempfile.TemporaryDirectory(prefix="zerofield-story-card-") as folder:
-        path = Path(folder) / "workflow.json"
-        path.write_text(json.dumps(graph), encoding="utf-8")
-        config = dict(card.get("engine_config", {}), card=card, workflow=str(path), card_values=values)
-        return legacy.comfyui(task, config, head)
-
-
 _OPENAPI_LOCK = threading.Lock()
 
 
@@ -54,7 +40,7 @@ _OPENAPI_SEQ = 100000
 _OPENAPI_MEDIA_STORE: dict[str, tuple[bytes, str]] = {}
 
 
-_OPENAPI_CARDS: dict[str, tuple[dict, dict]] = {}
+_OPENAPI_CARDS: dict[str, tuple[dict, dict | None]] = {}
 
 
 _OPENAPI_TASKS: dict[str, dict] = {}
@@ -191,13 +177,15 @@ def openapi_list_cards() -> list[dict]:
     return list(cards_by_id.values())
 
 
-def _resolve_openapi_card_and_workflow(webapp_id: str) -> tuple[dict, dict]:
+def _resolve_openapi_card_and_workflow(webapp_id: str) -> tuple[dict, dict | None]:
     key = str(webapp_id or "").strip()
     with _OPENAPI_LOCK:
         if key in _OPENAPI_CARDS:
             card, wf = _OPENAPI_CARDS[key]
-            return copy.deepcopy(card), copy.deepcopy(wf)
+            return copy.deepcopy(card), copy.deepcopy(wf) if card_engine.card_execution_profile(card)["requires_comfyui"] else None
     card = legacy.load_studio_card(key)
+    if not card_engine.card_execution_profile(card)["requires_comfyui"]:
+        return card, None
     wf_ref = card.get("engine_config", {}).get("workflow")
     if not wf_ref:
         raise runtime.WorkerError(f"Card {card['card_id']} has no workflow configured")
@@ -210,7 +198,36 @@ def _resolve_openapi_card_and_workflow(webapp_id: str) -> tuple[dict, dict]:
 
 def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                           node_info: list[dict], base_url: str) -> None:
+    client = None
     try:
+        policy = _OPENAPI_TASKS[task_id].get("production_policy")
+        model_router.enforce_card_policy(card, policy)
+        if not card_engine.card_execution_profile(card)["requires_comfyui"]:
+            class MediaHead:
+                def lease_lost(self):
+                    with _OPENAPI_LOCK:
+                        return _OPENAPI_TASKS.get(task_id, {}).get("status") != "RUNNING"
+
+                def asset(self, task, reference):
+                    stored = openapi_get_media(reference)
+                    if stored is None:
+                        raise runtime.WorkerError("Direct OpenAPI inputs require an uploaded media reference")
+                    return stored
+
+                def upload(self, task, raw, mime):
+                    if self.lease_lost():
+                        raise runtime.WorkerError("OpenAPI task was canceled")
+                    saved = openapi_upload_binary(raw, mime)["data"]["fileName"]
+                    return {"asset_url": f"{base_url.rstrip('/')}/openapi/v2/media/output/{saved}", "content_type": mime}
+
+            output = legacy.execute_story_card({"id": task_id, "production_policy": policy}, card,
+                {f"{n['nodeId']}.{n['fieldName']}": n["fieldValue"] for n in node_info}, MediaHead())
+            with _OPENAPI_LOCK:
+                if _OPENAPI_TASKS[task_id]["status"] == "RUNNING":
+                    _OPENAPI_TASKS[task_id].update(status="SUCCESS", results=[{
+                        "url": output["asset_url"], "outputType": "mp4" if card["output_mode"] == "video" else output["content_type"].split("/")[-1],
+                        "nodeId": "output"}])
+            return
         ecfg = dict(card.get("engine_config") or {})
         client = legacy.ComfyPlatformClient(ecfg)
         wf_to_send = copy.deepcopy(compiled_workflow)
@@ -258,6 +275,8 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                 first_item = raw_items[0]
                 out_filename = str(first_item.get("filename", getattr(first_item.get("sdk_output"), "name", "output.mp4")))
                 raw_out, out_mime = client.download_output(first_item)
+                if not raw_out or len(raw_out) > legacy.MAX_MEDIA:
+                    raise runtime.WorkerError("Comfy output exceeds the 64 MB asset limit or is empty")
                 ext = Path(out_filename).suffix.lower() or (".mp4" if out_mime.startswith("video/") else ".png")
                 out_type = ext.lstrip(".")
                 saved_name = hashlib.sha256(raw_out).hexdigest() + ext
@@ -278,17 +297,20 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
         raise runtime.WorkerError("Local ComfyUI workflow timed out")
     except Exception as exc:
         with _OPENAPI_LOCK:
-            if task_id in _OPENAPI_TASKS:
+            if task_id in _OPENAPI_TASKS and _OPENAPI_TASKS[task_id]["status"] == "RUNNING":
                 _OPENAPI_TASKS[task_id].update({
                     "status": "FAILED",
                     "errorMessage": str(exc),
                     "failedReason": {"exception_message": str(exc)},
                 })
+    finally:
+        if client is not None:
+            client.close()
 
 
 def openapi_run_app(webapp_id: str, body: dict, *,
                     base_url: str = "http://127.0.0.1:8000",
-                    sync: bool = False) -> dict:
+                    sync: bool = False, production_policy=None) -> dict:
     """Self-hosted RunningHub-compatible POST /openapi/v2/run/ai-app/{webappId} & /workflow/{workflowId} handler."""
     global _OPENAPI_SEQ
     parsed = card_engine.parse_runninghub_curl_or_payload(body)
@@ -296,11 +318,15 @@ def openapi_run_app(webapp_id: str, body: dict, *,
     if not target_id:
         raise runtime.WorkerError("webappId or workflowId is required")
     card, raw_workflow = legacy._resolve_openapi_card_and_workflow(target_id)
+    # Permission is supplied by the authenticated caller, never by untrusted wire inputs.
+    policy = model_router.enforce_card_policy(card, production_policy)
+    direct = not card_engine.card_execution_profile(card)["requires_comfyui"]
     form_values = {
         f"{item['nodeId']}.{item['fieldName']}": item.get("fieldValue")
         for item in parsed["nodeInfoList"]
     }
-    node_info = card_engine.build_node_info(card, form_values)
+    node_info = (card_engine.validate_direct_card_values(card, form_values) if direct
+                 else card_engine.build_node_info(card, form_values))
     known_keys = {f"{item['nodeId']}.{item['fieldName']}" for item in node_info}
     for item in parsed["nodeInfoList"]:
         k = f"{item['nodeId']}.{item['fieldName']}"
@@ -311,7 +337,7 @@ def openapi_run_app(webapp_id: str, body: dict, *,
                 "fieldValue": str(item.get("fieldValue") if item.get("fieldValue") is not None else ""),
                 "description": item.get("description"),
             })
-    compiled_workflow = card_engine.inject_node_info_into_workflow(raw_workflow, node_info, card)
+    compiled_workflow = None if direct else card_engine.inject_node_info_into_workflow(raw_workflow, node_info, card)
     with _OPENAPI_LOCK:
         _OPENAPI_SEQ += 1
         task_id = f"{int(time.time() * 1000)}{_OPENAPI_SEQ}"
@@ -326,6 +352,7 @@ def openapi_run_app(webapp_id: str, body: dict, *,
             "results": [],
             "nodeInfoList": node_info,
             "compiled_workflow": compiled_workflow,
+            "production_policy": policy,
             "instanceType": parsed.get("instanceType", "default"),
             "usePersonalQueue": parsed.get("usePersonalQueue", "false"),
         }

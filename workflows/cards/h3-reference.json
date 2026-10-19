@@ -21,7 +21,10 @@
       "48.audio": "None",
       "14.audio": "None",
       "15.audio": "None"
-    }
+    },
+    "driver": "comfy_local",
+    "tier": "open_weights",
+    "requires_comfyui": true
   },
   "nodes": [
     {
