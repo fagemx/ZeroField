@@ -137,7 +137,8 @@ def _get(conn, kind, slug, resource_key):
 
 
 def authorize_scope(conn, me, slug, store, *, episode_id=None, write=False):
-    authorize(conn, me, slug, write=write)
+    # Shared project/episode memory reaches every user's prompts: only the showrunner curates it.
+    authorize(conn, me, slug, write=write, admin=write and store['scope_kind'] != 'user')
     scope, scope_id = store['scope_kind'], store['scope_id']
     if scope == 'user' and scope_id != str(me.actor_id):
         raise AgentError(404, 'Memory store not found.')

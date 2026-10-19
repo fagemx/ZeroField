@@ -146,8 +146,10 @@ class ConsoleStoreTests(unittest.TestCase):
             self.assert_denied(403, agents.save_agent, self.conn, me, self.slug, {'agent_key': 'custom'})
         fake = service.Identity(member.actor_id, member.name, 'admin')
         self.assert_denied(403, console.save_settings, self.conn, fake, self.slug, {'version': 1})
-        self.assert_denied(403, console.save_memory_entry, self.conn, viewer, self.slug,
-            {'store_key': 'style_rules', 'entry_key': 'rule', 'content_md': 'x', 'version': 0})
+        for me in (viewer, member):
+            self.assert_denied(403, console.save_memory_entry, self.conn, me, self.slug,
+                {'store_key': 'style_rules', 'entry_key': 'rule', 'content_md': 'x', 'version': 0})
+        self.assertEqual(console.memory_entries(self.conn, member, self.slug, 'style_rules'), [])
         store.set_member_enabled(self.conn, self.slug, member.actor_id, False, self.me.actor_id)
         self.assert_denied(403, console.list_resources, self.conn, member, self.slug, 'skill')
 
