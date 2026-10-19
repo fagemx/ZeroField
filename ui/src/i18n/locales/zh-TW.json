@@ -1231,7 +1231,8 @@
     "reviewRegenerationPipeline": "檢查重抽工作流",
     "requestAgentRevisions": "請代理修改",
     "status": "狀態",
-    "visibleRows": "{{v0}} 列"
+    "visibleRows": "{{v0}} 列",
+    "canvas": "畫布"
   },
   "surfaces": {
     "planning": "規劃中",
@@ -1924,7 +1925,10 @@
     "benchInput": "輸入",
     "benchControl": "控制通道",
     "benchOutput": "輸出",
-    "benchStrip": "本視圖的鏡頭"
+    "benchStrip": "本視圖的鏡頭",
+    "canvasScript": "劇本",
+    "canvasHint": "拖曳排列 · 滾輪縮放 · 滑過卡片追蹤上下游 · 雙擊鏡頭開啟工作台",
+    "canvasOpenHint": "雙擊開啟鏡頭工作台"
   },
   "studioPresets": {
     "arriAlexa65": "ARRI Alexa 65／35mm 變形寬銀幕 f/1.4",

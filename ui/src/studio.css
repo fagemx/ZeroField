@@ -3,13 +3,13 @@
    Grid: sidebar 232 + 1px rule; canvas gutter 24px; cards 16px radius on #000, controls are 32px pills. */
 
 /* ---------- Controls ---------- */
-:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip) button):not(:where(.review-stage-title, .media-compact)), button.ghost, button.primary, .story-nav button, .story-macro button,
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip, .react-flow__controls, .react-flow__minimap) button):not(:where(.review-stage-title, .media-compact)), button.ghost, button.primary, .story-nav button, .story-macro button,
   .story-batch button, .batch-bar button, .sheet-stage-actions button, .sheet-panel-actions button, .sheet-review > header button, .hub-create, .canvas-button) {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 14px;
   border: 1px solid var(--control); border-radius: var(--radius-control); background: transparent; color: var(--text);
   font: 500 13px/1 var(--font); white-space: nowrap; cursor: pointer; box-shadow: none;
 }
-:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip) button):not(:where(.review-stage-title, .media-compact)), button.ghost, .story-nav button, .story-macro button, .story-batch button,
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip, .react-flow__controls, .react-flow__minimap) button):not(:where(.review-stage-title, .media-compact)), button.ghost, .story-nav button, .story-macro button, .story-batch button,
   .batch-bar button, .sheet-stage-actions button, .sheet-panel-actions button, .sheet-review > header button, .canvas-button):hover:not(:disabled) {
   background: var(--hover-bg); border-color: #5a5a5a;
 }
@@ -326,3 +326,52 @@
 .workbench-app .shot-strip button[aria-current] .shot-strip-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 1100px) { .shot-bench { flex-direction: column; gap: 16px; } .bench-input { flex-basis: auto; } .bench-arrow { display: none; } }
 .shot-strip-thumb { width: 100%; }
+
+/* ---------- Story canvas (Meso): the production as a wall of real cards joined by lines ---------- */
+.story-canvas { position: relative; flex: 1 1 auto; min-height: 560px; height: 100%; background: #050505; }
+.story-canvas .react-flow { --xy-background-color: #050505; --xy-edge-stroke: #3a3a3a; --xy-edge-stroke-width: 1.5;
+  --xy-controls-button-background-color: var(--surface); --xy-controls-button-background-color-hover: var(--raised); --xy-controls-button-color: var(--text);
+  --xy-controls-button-border-color: var(--line); --xy-minimap-background-color: var(--surface); --xy-node-border-radius: 12px; }
+.story-canvas .react-flow__edge.is-lit path { stroke: var(--accent); stroke-width: 2; }
+.story-canvas .react-flow__edge.is-dim path { opacity: .18; }
+.story-canvas .react-flow__node { cursor: grab; }
+.story-canvas .react-flow__handle { width: 8px; height: 8px; min-width: 0; min-height: 0; background: #555; border: 2px solid #050505; }
+.story-canvas .react-flow__controls { border-radius: 10px; overflow: hidden; box-shadow: none; }
+.story-canvas .react-flow__minimap { border-radius: 10px; overflow: hidden; }
+.story-canvas-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); margin: 0; padding: 6px 12px; border-radius: var(--radius-control); background: rgba(17,17,17,.9); color: var(--faint); font-size: 12px; white-space: nowrap; pointer-events: none; }
+.sc-node { background: var(--surface); border-radius: 12px; color: var(--text); font: 400 12px/1.45 var(--font); transition: opacity .15s; }
+.sc-node.is-dim { opacity: .22; }
+.sc-node > header { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 8px; min-width: 0; }
+.sc-node > header b { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.sc-node > header span { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-media { width: 240px; }
+.sc-asset { width: 200px; }
+.sc-frame { aspect-ratio: 16 / 9; background: #000; overflow: hidden; border-radius: 0 0 12px 12px; display: grid; place-items: center; }
+.sc-frame :is(img, video) { display: block; width: 100%; height: 100%; object-fit: cover; }
+.sc-placeholder { color: var(--faint); }
+.sc-empty { margin: 0 10px 10px; border: 1px dashed #333; border-radius: 8px; background: transparent; gap: 8px; align-content: center; color: var(--faint); }
+.sc-actions { display: flex; gap: 6px; }
+.workbench-app .story-canvas .sc-actions button { height: 26px; padding: 0 10px; font-size: 12px; }
+.sc-script { width: 260px; padding-bottom: 12px; }
+.sc-script ol { margin: 0; padding: 0 14px 0 32px; }
+.sc-script li { padding: 6px 0; font-size: 13px; }
+.sc-script li small { display: block; color: var(--faint); font-size: 11px; }
+.sc-scene { width: 600px; padding-bottom: 6px; }
+.sc-scene table { width: 100%; border-collapse: collapse; table-layout: fixed; cursor: default; }
+.sc-scene th { padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 11px; font-weight: 500; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-scene th:first-child { width: 64px; }
+.sc-scene th:last-child { width: 118px; }
+.sc-scene td { position: relative; padding: 8px 10px; border-bottom: 1px solid #1c1c1c; vertical-align: top; font-size: 12px; cursor: text; }
+.sc-scene tr:last-child td { border-bottom: 0; }
+.sc-scene tr:hover td { background: #161616; }
+.sc-scene td > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sc-scene td.sc-shot { font-weight: 600; cursor: pointer; }
+.sc-scene td:last-child { cursor: default; }
+.sc-scene textarea { width: 100%; min-height: 64px; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 6px; background: var(--ground); color: var(--text); font: inherit; resize: vertical; }
+.sc-status { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: var(--radius-control); font-size: 11px; font-weight: 500; white-space: nowrap; background: var(--s-not-bg); color: var(--s-not-fg); }
+.sc-status.inprogress { background: var(--s-go-bg); color: var(--s-go-fg); }
+.sc-status.waiting { background: var(--s-wait-bg); color: var(--s-wait-fg); }
+.sc-status.stuck { background: var(--s-stuck-bg); color: var(--s-stuck-fg); }
+.sc-status.done { background: var(--s-done-bg); color: var(--s-done-fg); }
+.story-canvas .react-flow__controls-button { width: 30px; height: 30px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
+.story-canvas .react-flow__controls-button svg { fill: var(--text); max-width: 12px; max-height: 12px; }

@@ -21,6 +21,19 @@ export function benchGroup(label) {
   const role = stageRole(label);
   return role === 0 ? 'input' : role >= 4 ? 'output' : 'control';
 }
+// A shot's stages as bench columns and the links between them: one source fans out to every control pass,
+// several passes merge into the first output, and outputs chain (remaster -> split-screen).
+export function benchLinks(stages) {
+  const lane = { input: [], control: [], output: [] };
+  for (const stage of stages) lane[benchGroup(stage.label)].push(stage);
+  const order = ['input', 'control', 'output'].filter(key => lane[key].length), links = [];
+  order.slice(1).forEach((key, k) => {
+    const prev = lane[order[k]], targets = key === 'output' || prev.length > 1 ? [lane[key][0]] : lane[key];
+    for (const from of prev) for (const to of targets) links.push([from, to]);
+  });
+  if (order.at(-1) === 'output') lane.output.slice(1).forEach((stage, j) => links.push([lane.output[j], stage]));
+  return { lane, order, links };
+}
 export function mediaStages(parsed, row) {
   const types = parsed.table.attrs.column_types || [];
   const stages = parsed.headers.flatMap((label, column) => {
@@ -36,11 +49,13 @@ export function mediaStages(parsed, row) {
 export function buildAssetLookup(documents) {
   const lookup = {};
   for (const tab of documents) for (const table of tablesOf(tab.doc, tab.values || {})) for (const row of table.rows) {
-    const id = row.cells.map(cell => String(cell?.value || '').trim()).find(value => /^@?(?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?$/i.test(value));
-    if (!id) continue;
+    const values = row.cells.map(cell => String(cell?.value || '').trim());
+    const at = values.findIndex(value => /^@?(?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?$/i.test(value));
+    if (at < 0) continue;
+    const id = values[at], name = /^(!?\[|https?:|\/projects\/)/.test(values[at + 1] || '') ? '' : (values[at + 1] || '').slice(0, 60);
     const stage = mediaStages(table, row).find(item => item.media);
     const key = id.replace(/^@/, '').replace('#', ':').toUpperCase();
-    lookup[key] = {id:key, tabKey:tab.key, rowId:row.rid, ...(stage || {})};
+    lookup[key] = {id:key, name, tabKey:tab.key, rowId:row.rid, ...(stage || {})};
   }
   for (const [id, asset] of Object.entries(lookup)) {
     const base = lookup[id.split(':')[0]];

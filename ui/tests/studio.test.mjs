@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { META_CACHE, getMediaMeta } from '../src/mediaMeta.js';
-import { buildAssetLookup, assetReferences, mediaStages, presetsFor, presetLabel, applyPreset, studioRunInput, queueStudioRun } from '../src/studioModel.js';
+import { benchLinks, buildAssetLookup, assetReferences, mediaStages, presetsFor, presetLabel, applyPreset, studioRunInput, queueStudioRun } from '../src/studioModel.js';
 import { sheetViewModel } from '../src/sheetViews.js';
 import { flowToCanvas } from '../src/flowModel.js';
 import { setLocale } from '../src/i18n/index.js';
@@ -93,4 +93,13 @@ test('appended reference stages display before outputs while preserving action c
   assert.deepEqual(stages.map(stage=>stage.label),['Source Driving Video','Custom Image','First Frame','Motion Structure','Anchor Keyframe','Remastered Video','Split-Screen MP4','Other Image']);
   assert.deepEqual(stages.map(stage=>stage.column),[0,1,4,5,6,2,3,7]);
   assert.equal(stages.find(stage=>stage.label==='First Frame').type,'image');
+});
+
+test('canvas bench links fan footage out to every pass and merge passes into the remaster', () => {
+  const stage = label => ({ label });
+  const vfx = benchLinks(['Source Driving Video', 'First Frame', 'Motion Structure', 'Anchor Keyframe', 'Remastered Video', 'Split-Screen MP4'].map(stage));
+  assert.deepEqual(vfx.order, ['input', 'control', 'output']);
+  assert.deepEqual(vfx.links.map(([a, b]) => a.label + '>' + b.label), ['Source Driving Video>First Frame', 'Source Driving Video>Motion Structure', 'Source Driving Video>Anchor Keyframe',
+    'First Frame>Remastered Video', 'Motion Structure>Remastered Video', 'Anchor Keyframe>Remastered Video', 'Remastered Video>Split-Screen MP4']);
+  assert.deepEqual(benchLinks(['Keyframe', 'Cinema Shot'].map(stage)).links.map(([a, b]) => a.label + '>' + b.label), ['Keyframe>Cinema Shot']);
 });
