@@ -1,0 +1,375 @@
+{
+  "status": "paused-user-request-integration-engineering-gates-passed-independent-reviews-not-started",
+  "overallAcceptance": false,
+  "originalBase": "eaf87f19d3fa4b7959024fb1f0faaa65553ff77c",
+  "frozenProductRevision": "c3900b440e75c015ef9d6c686667ef8887daaea2",
+  "frozenProductGitTree": "a7161bc5ce62c3354a3b931577a22f14686b61bc",
+  "integrationScope": "Verification tooling/test and current docs only, including original approved AGENTS/HANDOFF/SPEC08. Product/service/UI/resources unchanged; all historical SPEC06/07 and failed scope/packaging receipts preserved. This receipt is not independent acceptance.",
+  "components": {
+    "resources": "e0bf2e5036fc05e72cd907b14ec3f38686269b0d",
+    "tools": "d437fdc1ed8804a0515da8d8f62548c0ede89de7",
+    "runtime": "409ba4da4523bff34ae1aa0bd3bae67d743123b4",
+    "router": "d7cb6031d16e53daa08959bf633e087db1548571",
+    "service": "8c3eb4a767aaca2694d48cb338147daa95e5838e",
+    "ui": "c3900b440e75c015ef9d6c686667ef8887daaea2"
+  },
+  "scope": {
+    "workspace": [
+      "dashboard",
+      "api_keys"
+    ],
+    "build": [
+      "playground",
+      "skills"
+    ],
+    "managed_agents": [
+      "quickstart",
+      "agents",
+      "sessions",
+      "deployments",
+      "environments",
+      "memory_store"
+    ],
+    "analytics": [
+      "usage_cost",
+      "spend_rate_limits"
+    ]
+  },
+  "runtimeResourceIdentity": {
+    "files": 151,
+    "migrations": 12,
+    "cards": 17,
+    "router_schemas": 7,
+    "sha256": "ffabdaf205ac752448e1ddacd7f353c4ed92f0f8c30b8ae195ca146dc985b376"
+  },
+  "runtimeResourceManifest": {
+    "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/runtime-resource-manifest.json",
+    "sha256": "7c7cd52aaef6b0ff1798f897953e6c8cb229254fa84ed0be7da6ee8d882ab58e"
+  },
+  "compiledAssets": {
+    "openbench_data/static/projects/assets/index-C5PBWqiF.css": "e5ab79f7da4cec3065cf2e307d6afc3c1961d43ae090ae678df81775ba4bfbdd",
+    "openbench_data/static/projects/assets/index-DBzgI4cN.js": "4ca459bb0beda35a8046c42c732135342141ddeca29f138de47f678c6a33fc6c",
+    "openbench_data/static/projects/index.html": "77975e13d56fca76738810bf7428c1b0c73dbda42949117c592f58b7086f58ec"
+  },
+  "RAN": [
+    {
+      "name": "backend",
+      "command": [
+        "C:\\Python313\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_*.py"
+      ],
+      "exit": 0,
+      "seconds": 519.092,
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\spec08-final-integration\\backend.log",
+      "evidence": {
+        "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/backend.log",
+        "sha256": "e995af3bdb1fa113c6a8c7b55c351a53386ec16bef1e0cff3190e28cd7c7c593"
+      },
+      "result": "passed",
+      "sourceProductRevision": "c3900b440e75c015ef9d6c686667ef8887daaea2",
+      "tests": 506,
+      "failures": 0,
+      "skips": 0,
+      "testSeconds": 517.684
+    },
+    {
+      "name": "frontend",
+      "command": [
+        "cmd",
+        "/c",
+        "npm",
+        "test",
+        "--prefix",
+        "ui"
+      ],
+      "exit": 0,
+      "seconds": 1.051,
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\spec08-final-integration\\frontend.log",
+      "evidence": {
+        "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/frontend.log",
+        "sha256": "840e46d564bb7cd9b17e39094aacfd88f2aeb7b19cb15c1b373455b3977a9cf4"
+      },
+      "result": "passed",
+      "sourceProductRevision": "c3900b440e75c015ef9d6c686667ef8887daaea2",
+      "tests": 119,
+      "failures": 0,
+      "skips": 0
+    },
+    {
+      "name": "build",
+      "command": [
+        "cmd",
+        "/c",
+        "npm",
+        "run",
+        "build",
+        "--prefix",
+        "ui"
+      ],
+      "exit": 0,
+      "seconds": 5.009,
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\spec08-final-integration\\build.log",
+      "evidence": {
+        "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/build.log",
+        "sha256": "dbe2b90a2fde2ae89a5c955b4324421c2fbdbc9ac7967e2cba0a1c1f2b909bfd"
+      },
+      "result": "passed",
+      "sourceProductRevision": "c3900b440e75c015ef9d6c686667ef8887daaea2",
+      "modules": 340,
+      "notice": "Existing >1200kB bundle warning retained, not suppressed."
+    }
+  ],
+  "packaging": {
+    "result": "passed",
+    "source": "git -c core.autocrlf=false archive c3900b440e75c015ef9d6c686667ef8887daaea2 extracted into clean owned TEMP canonical/frozen-source, not checkout/build; all151 raw bytes verified against git show product:path",
+    "command": "C:/Python313/python.exe -m pip wheel --no-deps --no-build-isolation --no-index <frozen-source> --wheel-dir <owned-temp>/wheels",
+    "firstAttemptExit": 0,
+    "wheel": {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/canonical/wheels/openbench-0.2.0-py3-none-any.whl",
+      "sha256": "f341e3dc798dd20282ae828eb2ae12e60ca5f9240afc66726c0c2afe67584411"
+    },
+    "buildLog": {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/canonical/wheel.log",
+      "sha256": "cc6b771f586ba07e0a2add5e60a232b0c763587958cda9e254a2477c29de24ac"
+    },
+    "originalFirstPipWheel": {
+      "exit": 0,
+      "log": {
+        "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/wheel-first.log",
+        "sha256": "c9a6dfe95bd3b3643a03ea97ce373fbbaaa4158897f79c578940d47f6a66381d"
+      },
+      "sha256": "2dd1a8b87546825dcc9fd27924e73cffb30c16040f1c38730453d5936b4a444f",
+      "disposition": "Preserved historical first success; export applied Windows CRLF conversion. Final canonical HEAD-byte wheel is separate, not a global config change."
+    },
+    "installCommand": "C:/Python313/python.exe -m pip install --no-deps --no-index --target <owned-temp>/installed <wheel>",
+    "verifyCommands": [
+      "python scripts/verify_wheel.py <wheel> --source <frozen-source>",
+      "python scripts/verify_wheel.py --installed-root <owned-temp>/installed --source <frozen-source>"
+    ],
+    "installedCwd": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/canonical",
+    "installedImports": 14,
+    "runtimeMigrationsRead": 12,
+    "runtimeCardsLoaded": 17,
+    "nativeSchemasParsedAndCompiled": 7,
+    "verified": "151 exact canonical frozen-source hashes match archive wheel AND installed target, including all SQL/prompts/modules/cards/schemas/samples/compiled UI. Actual resource_path/prompt/card/native-schema lookup runs outside checkout; -E -P ignores checkout PYTHONPATH/cwd but retains already installed user-site runtime dependencies. No networking, credential reads or provider calls.",
+    "finalLog": {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/canonical/installed-wheel.log",
+      "sha256": "8686d24d7d2df55da39afc6bf1cc9ea072548ffea37d4fd3993165e58329704f"
+    },
+    "newBuildToolInstallation": false,
+    "historicalDependency": "Router report retained status=ready/220 scoped tests and historical missing build.__main__/build+wheel failure; final mandatory dependency now resolved by first pip wheel, not by waiver or source rerun.",
+    "integrationCheckpoints": [
+      "Initial raw checkout/export comparison failed. Git archive applied core.autocrlf=true to export bytes, while current product HEAD/build assets are LF. Final fresh command-local core.autocrlf=false archive matches all151 raw HEAD blobs; rebuilt/installed wheel passes exact hashes without weakened normalization. Original attempt/log/wheel preserved.",
+      "Initial -I installed import hid existing user-site openpyxl; -E -P now ignores checkout paths but retains installed dependencies; no package installation needed.",
+      "Initial native packaging self-check omitted required LTX fields and correctly failed; final check compiles all7 shipped card forms through installed native validators."
+    ],
+    "toolchain": {
+      "python": "3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 14:47:33) [MSC v.1943 64 bit (AMD64)]",
+      "executable": "C:\\Python313\\python.exe",
+      "versions": {
+        "pip": "26.0.1",
+        "setuptools": "79.0.0",
+        "wheel": null,
+        "build": null,
+        "psycopg": "3.3.6",
+        "Pillow": "12.2.0",
+        "openpyxl": "3.1.5",
+        "python-docx": "1.2.0",
+        "pypdf": "6.10.2"
+      },
+      "installed_new_build_tools": false,
+      "ffmpeg": "ffmpeg version 8.1.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+      "ffprobe": "ffprobe version 8.1.1-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers",
+      "node": "24.14.0",
+      "npm": "11.9.0"
+    },
+    "toolingTests": {
+      "command": "python -m unittest discover -s tests -p test_wheel_resources.py -v",
+      "result": "passed",
+      "tests": 1,
+      "failures": 0,
+      "skips": 0,
+      "coverage": "Source-derived newly named SQL/native/card/schema/media/asset coverage; missing and corrupted schema/compiled asset refuse.",
+      "log": {
+        "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/packaging-tests-final.log",
+        "sha256": "b2edf2fa1eded0fd0fef63e5a185f46c5f24d845001e3374a0ecbc5c664dece4"
+      }
+    }
+  },
+  "READ": {
+    "componentReports": "Resources/tools/runtime/Router/service/UI reports read as component history, not integration reruns. Scope/pricing decisions and maintained requirements read with bounded offsets.",
+    "browser": {
+      "sourceProductRevision": "c3900b440e75c015ef9d6c686667ef8887daaea2",
+      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres OPENBENCH_UI_EVIDENCE_DIR=C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence python -X utf8 ui/tests/agentConsole.browser.py",
+      "tests": 4,
+      "testSeconds": 73.851,
+      "failures": 0,
+      "skips": 0,
+      "pageerrors": 0,
+      "disposition": "READ actual script, log first/error/tail and all11 named screenshots. Product/source/assets unchanged against product revision after required build; no browser rerun by integration and no relabeling as RAN.",
+      "script": {
+        "path": "C:/ai_project/ZeroField/ui/tests/agentConsole.browser.py",
+        "sha256": "97ca72443f1e22a42e6e240d8c1e6677a929bb237ec7229335ddd124cac02354"
+      },
+      "log": {
+        "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-browser.log",
+        "sha256": "603c1d1b057e88605588fc91a480cb612676225572daa2efe7b5b4e4df24bcf3"
+      },
+      "screenshotsInspected": [
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/quickstart-en.png",
+          "sha256": "148636788c1de11377ceeaa8f02c1abcb68ee5d21898b30c69c43a70a51f0c99"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/quickstart-zh.png",
+          "sha256": "b9733d1ba55ed1f08a1aec62ab7ef4b663ed577c44f1c8bca5fcbdf69889c006"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/quickstart-responsive.png",
+          "sha256": "5d4a1993027e8c0402b2111ab1f8dfe41175bb8b2fff952f9b2e3296e3df4d42"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/session-confirm-before-write.png",
+          "sha256": "7f75dac2dc8c9381d5619e2d2655fd43044b2aa103836caf9c29971ee04ec4c1"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/session-actual-grader-trace.png",
+          "sha256": "22ce6c4d587d1eee216d2d650920d8b648172664ff4513957f0dbf3c816b7432"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/router-hard-unlocked-quote.png",
+          "sha256": "c4d160eba4f2c4fc58fd0b3eea416a3cc683659392a817ab6f2411e45785fe0c"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/router-reviewed-tenth-allocation.png",
+          "sha256": "713404cddc851e70c8854811cd4e4e3630d8bb995044675fefabb75a8b287064"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/router-eleventh-denied.png",
+          "sha256": "cd6cf8b98b5b10c74d0e05814e6225ec5b49585c7a250c1183abf955afbbd12e"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/router-expired-metadata-fixture.png",
+          "sha256": "7069b8a239d9061811222aada08044a6cf59587ff9aa7aba3352c9fe6495e422"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/limits-soft-consent-default-off.png",
+          "sha256": "b436b67e1dc563b1ced45c5339e1f83f9f10693206bc865f29cd00e88d4c4c40"
+        },
+        {
+          "path": "C:/Users/fagem/AppData/Local/Temp/spec08-ui-evidence/deployment-real-manual-cron.png",
+          "sha256": "6bfa0395cbbc62951cb45b01a412cba98592fbd226440766a50e1e2b073d45f6"
+        }
+      ],
+      "fixtureLimits": "Actual authenticated local HTTP/PG/M8/Story/FFmpeg; text/native Router inference and price are declared deterministic loopback responses. Only expired-quote browser response metadata is intercepted. No quote cache/counter injection."
+    }
+  },
+  "sourceToConsumedToVisible": [
+    "Exact12 templates/blank/literal requirement -> real draft/config CAS and actual shared runtime -> browser version/conflict retained draft, mounted shotgen/35mm memory, Needs You no-write barrier, explicit owner confirmation, real Story update and isolated fixture grader95/trace/ledger. Not semantic grading proof.",
+    "Existing production page/shot/unsent overrides and actor/project-local draft -> full-screen navigation/hash/back/refresh/workspace change -> all4/12 pages and12 cards, EN/zh-TW/responsive presentation, restored prior production without auto submit.",
+    "Saved skill/memory versions and reviewed Retake source -> actual authorized mount/consolidation with source_digest -> current memory entry/history and actual consumed context; foreign private resources/admin-read expansion denied.",
+    "Allowlisted provider ENV reference/project default and current env -> actual supported compat/Responses effort transport, default inheritance/revocation/key rotation checks -> raw{} preservation, effective configured display and explicit read-only reachable probe; no global rewrites or plaintext key form.",
+    "Manual/cron timezone/prompt/env/budget configuration -> durable unique trigger through existing current-minute M8 producer and same worker -> actual owner session success/cancel; no second scheduler, no backfill, current creator/config/revoke and DST/replay checks.",
+    "Actual fresh native /estimate over HTTP -> current-source all-input preflight and frozen owner-bound allocation -> hard default no submit; explicit admin versioned soft save+review -> tenth real fixture generation/FFmpeg output or private tool M8 proposal; eleventh and9+batch2 refused before outbound. No manually prefilled quote cache, fake hard_bound or automatic paid replay.",
+    "Current isolated rubric/tool-free revisions and real generated video/frame sheet -> grader before guarded publication -> passing proposal or failed Needs You with no rerender; current cancellation/deadline/policy/lease/source/tool/resource checks still gate publication.",
+    "Actual ledger/reservations/rates/Judge -> combined aggregates/private diagnostics/footer -> unknown is not0, full reported overage separate from estimate and invoice. Official MCP only guarded discovery lifecycle, no tools/call/CLI; configured is not connected."
+  ],
+  "coverage": "Full source gate includes SPEC07 private principal, expanded v2 grants/live revocation, local SDK/facade/allocation/all-input preflight/frame-sheet/review/race/lease/cancel regressions plus new Console/grader/ledger/currency/rates/Judge/Router hard-soft/native HTTP protocol tests. All assertions preserved, zero skips.",
+  "NOT_RUN": [
+    "Independent security and journey reviews: pending with parent, not passed.",
+    "No real semantic model-quality/visual quality, entitlement, calibration/GPU performance/hardware cost, live credentialed catalog/pricing/MCP/inference, invoice settlement or remote termination observation.",
+    "No actual coding/ACP CLI agent launch, nested agent run, model/GPU download, private production data, global config/default change, push/PR/release/deploy. Legacy ACP tests use deterministic local protocol subprocess fixtures.",
+    "No integration browser rerun: exact unchanged product evidence was READ as allowed."
+  ],
+  "residualRisks": [
+    "Official /estimate is not a price lock, even exact. Explicit estimate-soft may overrun reservation; reports are not invoices. Unknown/ambiguous effects retain uncertainty, with no automatic refund/retry.",
+    "Quotes expire120s and are process-local; restart/source/credential changes require explicit fresh quote/review. Future Router references require reviewed persistence first.",
+    "Application controls are not an OS sandbox, hardware-cost or remote-cancellation guarantee. External operator workers have unobserved cost/compute; no new opaque commercial CLI launch.",
+    "Existing browser abort ConnectionAbortedError/duplicate error-write logging and existing >1200kB Vite bundle warning remain; no source rewrite was attempted.",
+    "Cron has no missed-slot backfill and DST fold runs once. Interrupt cancels, not resumable OS pause. Browser sessionStorage drafts are not cross-device durability or a secret vault.",
+    "Engineering and integrated journey fixture proof do not establish intended semantic/model/billing effects or overall acceptance."
+  ],
+  "cleanup": {
+    "cluster": "C:/Users/fagem/AppData/Local/Temp/zerofield-spec07-integration-scs2u4wk/data",
+    "port": 55447,
+    "postgresVersion": "16.4",
+    "sqlBeforeStop": [
+      55447,
+      0
+    ],
+    "stopExit": 0,
+    "finalStatus": 3,
+    "postmasterPidPresent": false,
+    "controlLog": "C:\\Users\\fagem\\AppData\\Local\\Temp\\spec08-final-integration\\pg-control.log",
+    "serverLog": "C:\\Users\\fagem\\AppData\\Local\\Temp\\spec08-final-integration\\pg-server.log",
+    "processes": "Full gate driver finished (gates.done). Test fixture HTTP/model/Router/MCP/FFmpeg/ACP-protocol subprocesses ended under passing teardown; no persistent product service launched.",
+    "writerRelease": "After final integration-only commit, in final native report; no push.",
+    "controlLogEvidence": {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec08-final-integration/pg-control.log",
+      "sha256": "10027f60453837200eb35fdddf0b1177dbf0a8619cd640d883155e172b3041b8"
+    },
+    "ownedGateDriver": {
+      "pid": 5080,
+      "present": false,
+      "WindowsQueryError": 87,
+      "gatesDone": true
+    },
+    "finalPauseRecheck": {
+      "pgStatus": 3,
+      "postmasterPidPresent": false
+    }
+  },
+  "verificationTooling": [
+    {
+      "path": "C:/ai_project/ZeroField/scripts/verify_wheel.py",
+      "sha256": "49fcccc56094e09c2f00a2a6fb92fac03f76e00c6c125bdd5bb84d71055b5dc3"
+    },
+    {
+      "path": "C:/ai_project/ZeroField/tests/test_wheel_resources.py",
+      "sha256": "e44892629dc087ae7eb7141d49bf2fcd50673d3d7098ed53c275f15d2f639c03"
+    }
+  ],
+  "assetIdentity": "Required full build produced the same three exact compiled asset/index bytes as raw frozen product HEAD. All151 archive resource bytes equal raw git show product:path, match wheel and installed target. Browser product/assets unchanged; prior browser evidence is READ only.",
+  "testEnvironment": {
+    "OPENBENCH_TEST_DB_URI": "postgresql://postgres@127.0.0.1:55447/postgres",
+    "PYTHONPATH": "C:/ai_project/ZeroField;C:/ai_project/ZeroField/tests",
+    "outbound": "Deterministic loopback protocol/provider fixtures only; no credentialed public provider pricing/MCP/inference",
+    "backendTimeoutSeconds": 900,
+    "frontendTimeoutSeconds": 120,
+    "buildTimeoutSeconds": 120
+  },
+  "stoppingReason": "USER_PAUSE_REQUESTED: integration engineering gates passed, but no automatic reviewers/next stage authorized. This is a safe checkpoint, not engineering failure or overall acceptance.",
+  "durableEvidence": {
+    "backend.log": {
+      "path": "docs/verification/spec08/backend.log",
+      "sha256": "e995af3bdb1fa113c6a8c7b55c351a53386ec16bef1e0cff3190e28cd7c7c593"
+    },
+    "frontend.log": {
+      "path": "docs/verification/spec08/frontend.log",
+      "sha256": "840e46d564bb7cd9b17e39094aacfd88f2aeb7b19cb15c1b373455b3977a9cf4"
+    },
+    "build.log": {
+      "path": "docs/verification/spec08/build.log",
+      "sha256": "dbe2b90a2fde2ae89a5c955b4324421c2fbdbc9ac7967e2cba0a1c1f2b909bfd"
+    },
+    "wheel.log": {
+      "path": "docs/verification/spec08/wheel.log",
+      "sha256": "cc6b771f586ba07e0a2add5e60a232b0c763587958cda9e254a2477c29de24ac"
+    },
+    "installed-wheel.log": {
+      "path": "docs/verification/spec08/installed-wheel.log",
+      "sha256": "8686d24d7d2df55da39afc6bf1cc9ea072548ffea37d4fd3993165e58329704f"
+    },
+    "packaging-tests.log": {
+      "path": "docs/verification/spec08/packaging-tests.log",
+      "sha256": "b2edf2fa1eded0fd0fef63e5a185f46c5f24d845001e3374a0ecbc5c664dece4"
+    }
+  },
+  "handoff": "docs/SPEC08_HANDOFF.md"
+}

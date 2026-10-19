@@ -1,0 +1,18 @@
+.................................................................................................................................................................................................{"task_id": "task", "error": "503"}
+.{"task_id": "task", "error": "Lease was lost"}
+..................................................{"task_id": "05b11976-233b-4dfb-928a-525fe3b28684", "status": "delivered"}
+...................................................project-assistant: turn 1570 stopped: AgentError; reconcile accepted requests before retry.
+......project-assistant: turn 1576 stopped: AdmissionError; reconcile accepted requests before retry.
+......{"task_id": "dbed1bd2-578b-4d4a-bbb1-54d408192fdd", "status": "delivered"}
+{"task_id": "b0d9db04-5eb9-4a55-a35a-5501296e702a", "status": "delivered"}
+{"task_id": "c7660215-3954-4528-b003-6e1e05ba4454", "status": "delivered"}
+{"task_id": "b86f071f-f7a5-4349-9363-4484f14e35e7", "status": "delivered"}
+{"task_id": "e6885c3d-cf51-4341-8d6b-0b0ed7deb501", "status": "delivered"}
+{"task_id": "52625de8-5b94-41f9-b33b-76212614001f", "status": "delivered"}
+................................................................................................................................{"task_id": "t", "error": "fixture ambiguous"}
+{"task_id": "t", "error": "fixture ambiguous"}
+.......................................................................
+----------------------------------------------------------------------
+Ran 506 tests in 517.684s
+
+OK

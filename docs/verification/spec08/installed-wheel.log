@@ -1,0 +1,10 @@
+COMMAND C:\Python313\python.exe C:/ai_project/ZeroField/scripts/verify_wheel.py C:\Users\fagem\AppData\Local\Temp\spec08-final-integration\canonical\wheels\openbench-0.2.0-py3-none-any.whl --source C:\Users\fagem\AppData\Local\Temp\spec08-final-integration\canonical\frozen-source
+Wheel source identity: {"cards": 17, "files": 151, "migrations": 12, "router_schemas": 7, "sha256": "ffabdaf205ac752448e1ddacd7f353c4ed92f0f8c30b8ae195ca146dc985b376"}
+Verified openbench-0.2.0-py3-none-any.whl: SQL, prompts, workflows, samples, frontend and CLI entry points
+COMMAND C:\Python313\python.exe -m pip install --no-deps --no-index --target C:\Users\fagem\AppData\Local\Temp\spec08-final-integration\canonical\installed C:\Users\fagem\AppData\Local\Temp\spec08-final-integration\canonical\wheels\openbench-0.2.0-py3-none-any.whl
+Processing .\wheels\openbench-0.2.0-py3-none-any.whl
+Installing collected packages: openbench
+Successfully installed openbench-0.2.0
+COMMAND C:\Python313\python.exe C:/ai_project/ZeroField/scripts/verify_wheel.py --installed-root C:\Users\fagem\AppData\Local\Temp\spec08-final-integration\canonical\installed --source C:\Users\fagem\AppData\Local\Temp\spec08-final-integration\canonical\frozen-source
+Installed imports: 14 migrations: 12 loaded cards: 17 native schemas: 7
+Installed source identity: {"cards": 17, "files": 151, "migrations": 12, "router_schemas": 7, "sha256": "ffabdaf205ac752448e1ddacd7f353c4ed92f0f8c30b8ae195ca146dc985b376"}

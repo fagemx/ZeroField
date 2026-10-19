@@ -1,0 +1,9 @@
+Processing C:\Users\fagem\AppData\Local\Temp\spec08-final-integration\canonical\frozen-source
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: openbench
+  Building wheel for openbench (pyproject.toml): started
+  Building wheel for openbench (pyproject.toml): finished with status 'done'
+  Created wheel for openbench: filename=openbench-0.2.0-py3-none-any.whl size=1752940 sha256=f341e3dc798dd20282ae828eb2ae12e60ca5f9240afc66726c0c2afe67584411
+  Stored in directory: c:\users\fagem\appdata\local\pip\cache\wheels\96\20\e3\2d7359b0b53caee19b005b941ad159b08cb86ea7bf050620bd
+Successfully built openbench
