@@ -1,0 +1,107 @@
+POST
+/webhooks/{webhookId}/deliveries/{deliveryId}/redeliveries
+复制
+手动重投
+
+对一条投递记录立即触发一次重新投递。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+webhookId	string	是	
+对外回调登记号。
+示例：wh_2Tq8Ln5
+
+deliveryId	string	是	
+对外投递记录号。
+示例：dl_4Kp9Qw2
+响应字段说明
+参数	类型	必填	说明
+deliveryId	string	是	
+投递记录号。
+
+eventId	string	是	
+关联的事件 id。
+
+eventType	string	是	
+事件类型。
+
+status	enum	是	
+本次重投后的投递状态：成功为 DELIVERED，失败则进入 PENDING 等待退避重试。
+可选值： PENDINGSENDINGDELIVEREDDEAD
+
+attempts	integer	是	
+已尝试投递次数。重投时归零重新计数，本次重投完成后为 1，并从退避表第一级重新开始退避。
+
+lastHttpStatus	integer	否	
+最近一次投递收到的 HTTP 状态码。
+
+lastError	string	否	
+最近一次投递失败的错误说明；成功时为 null。
+
+nextRetryAt	string	否	
+下次投递时间；status=PENDING 时非空，其余状态为 null。
+
+createdAt	string	是	
+事件产生时间。
+
+updatedAt	string	是	
+投递记录最近更新时间。
+
+注意
+
+不受 events 订阅过滤限制；webhookId 或 deliveryId 不存在、或不属于当前企业 Key，返回 404 DRAMA_NOT_FOUND。
+DELIVERED 与 DEAD 状态的投递都可以重投（语义是“再送一次”）；投递正在发送中（SENDING）时返回 409 DRAMA_OPERATION_NOT_ALLOWED，稍后再试。重投是同步执行的：响应返回时本次投递已完成，attempts 归零重计为 1，失败则按退避表重新开始自动重试。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/webhooks/wh_2Tq8Ln5/deliveries/dl_4Kp9Qw2/redeliveries"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("POST", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "deliveryId": "dl_4Kp9Qw2",
+    "eventId": "a1b2c3d4-5e6f-4a1b-9c2d-1234567890ab",
+    "eventType": "task.succeeded",
+    "status": "PENDING",
+    "attempts": 1,
+    "lastHttpStatus": 500,
+    "lastError": "connect timeout",
+    "nextRetryAt": "2026-09-16T10:06:12.000+08:00",
+    "createdAt": "2026-09-16T10:00:46.000+08:00",
+    "updatedAt": "2026-09-16T10:05:12.000+08:00"
+  }
+}

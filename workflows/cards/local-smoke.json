@@ -1,0 +1,43 @@
+{
+  "card_id": "local-smoke",
+  "label": "Local 4-Step SDXL Lightning Smoke Test",
+  "sublabel": "Zero Custom Nodes · Juggernaut-XL Lightning (32px Grid)",
+  "group_label": "Image",
+  "icon": "⚡",
+  "output_mode": "image",
+  "engine_key": "comfy-webapp/1",
+  "status": "active",
+  "sort_order": 2,
+  "engine_config": {
+    "webappId": "2105000000000000004",
+    "workflow": "workflows/local_smoke_sdxl_lightning.json",
+    "instance": "default",
+    "frame_rule": "none",
+    "grid_size": 32,
+    "timeout": 300,
+    "output_node": "9"
+  },
+  "nodes": [
+    {
+      "nodeId": "6",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "Shot / Keyframe Prompt",
+      "required": true,
+      "slot": "prompt",
+      "defaultValue": "Original fictional courier in a charcoal field jacket inside a midnight observatory, 35mm cinematic lighting."
+    },
+    {
+      "nodeId": "3",
+      "fieldName": "seed",
+      "fieldType": "INT",
+      "label": "Seed",
+      "required": false,
+      "slot": "seed",
+      "defaultValue": "48291",
+      "min": 0,
+      "max": 281474976710655,
+      "step": 1
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+GET
+/shots/{shotId}/videos
+复制
+镜头视频列表
+
+查询该镜头下的全部候选视频（不分页）。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+shotId	string	是	
+对外镜头号。
+示例：sh_7Qz3Rk9
+响应字段说明
+参数	类型	必填	说明
+videoId	string	是	
+对外视频号，vd_ 前缀。可作为 generate-shot-video 的 referenceSourceVideoId 使用。
+
+url	string	否	
+可访问地址；尚未生成完成时可能为 null。
+
+durationSeconds	number	否	
+视频时长（秒）。
+
+selected	boolean	是	
+是否为当前选中视频。
+
+status	string	是	
+生成状态，如 GENERATING / DONE / FAILED。
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/shots/sh_7Qz3Rk9/videos"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "videoId": "vd_4Wt6Ln",
+      "url": "https://cos.runninghub.cn/aivideo/shot-video/xxx.mp4?sign=...",
+      "durationSeconds": 5.2,
+      "selected": true,
+      "status": "DONE",
+      "createdAt": "2026-09-16T09:41:00.000+08:00"
+    }
+  ]
+}

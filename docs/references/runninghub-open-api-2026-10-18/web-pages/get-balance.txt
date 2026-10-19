@@ -1,0 +1,67 @@
+GET
+/balance
+复制
+余额查询
+
+查询当前可用于本 API 消费的钱包余额。
+
+响应字段说明
+参数	类型	必填	说明
+balance	number	否	
+可用余额，单位：元；读取失败或账户不存在时为 null，此时请看 message。
+
+currency	string	否	
+币种，国内站恒为 CNY；balance 为 null 时同为 null。
+
+message	string	否	
+仅 balance 为 null 时非空，说明读取失败或账户不存在的原因。
+
+注意
+
+企业 Key 挂团队时查团队钱包的可消费余额（受限来源已排除）；不挂团队（个人 / 企业主体）时查企业账户余额。两种口径都与提交任务时的余额门禁一致。
+本接口从不返回非 200 的余额相关错误码；读取异常一律降级为 balance=null + message 说明，请按 balance 是否为 null 判断成败，不要假设 HTTP 状态会变化。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/balance"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "balance": 128.5,
+    "currency": "CNY",
+    "message": null
+  }
+}

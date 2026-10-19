@@ -1,0 +1,96 @@
+PUT
+/shots/{shotId}/position
+复制
+移动镜头
+
+把镜头移动到另一个场次（或同场次内的另一个位置）。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+shotId	string	是	
+对外镜头号。
+示例：sh_7Qz3Rk9
+Body 参数
+参数	类型	必填	说明
+targetSceneId	string	是	
+目标场次号；传当前所在场次即为场内移动。
+
+afterShotId	string	否	
+落点锚点：移动到该镜头之后（须属于目标场次）；不传则移动到目标场次最前。
+响应字段说明
+参数	类型	必填	说明
+shotId	string	是	
+对外镜头号。
+
+sceneId	string	是	
+移动后所属的场次号。
+
+shotIndex	integer	是	
+移动后在目标场次内的序号（1 起）。
+
+(other fields)	object	是	
+其余字段同「查询镜头详情」（sceneIndex / description / dialogue / durationSeconds / selectedImageUrl / selectedVideoUrl / status）。
+
+注意
+
+targetSceneId / afterShotId 不属于当前 Key 或不合法都返回 404 DRAMA_NOT_FOUND；afterShotId 不属于 targetSceneId 时同样按 404 处理。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "targetSceneId": "sc_8Pr4Ty6"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/shots/sh_7Qz3Rk9/position"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("PUT", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "shotId": "sh_7Qz3Rk9",
+    "sceneId": "sc_8Pr4Ty6",
+    "shotIndex": 1,
+    "sceneIndex": 2,
+    "description": "雨中街道，林夏疾步奔跑，霓虹灯光倒映在积水中。",
+    "dialogue": "林夏（喘息）：不能再等了……",
+    "durationSeconds": 5,
+    "selectedImageUrl": null,
+    "selectedVideoUrl": null,
+    "status": "PENDING"
+  }
+}

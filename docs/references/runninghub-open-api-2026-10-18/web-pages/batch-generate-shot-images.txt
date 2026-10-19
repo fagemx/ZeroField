@@ -1,0 +1,101 @@
+POST
+/episodes/{episodeId}/shot-image-generations
+复制
+批量镜头生图
+
+对该集多个镜头批量提交生图任务，单镜失败不中断整批。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+episodeId	string	是	
+对外剧集号。
+示例：ep_4Rt7QxNp1
+Body 参数
+参数	类型	必填	说明
+appCode	string	是	
+生图应用码，取自 GET /catalog/apps（capability=IMAGE），要求同「镜头生图」（I2I 应用）。
+示例：NANO_PRO_G2_I2I_OFFICIAL
+
+aspectRatio	string	否	
+画幅比例；不受支持时回落默认档。
+
+shotIds	string[]	否	
+指定要生图的镜头号列表，最多 200 项（超出返回 422）；不传或空数组表示对该集全部镜头逐一生图。
+响应字段说明
+参数	类型	必填	说明
+groupId	string	是	
+本批次任务组号，用 GET /task-groups/{groupId} 一次性查询整批状态，无需对 taskIds 逐个轮询。
+
+taskIds	string[]	是	
+成功提交的任务号列表，与「镜头生图」返回的单任务号同构，可逐个用 GET /tasks/{taskNo} 轮询。
+
+skipped	object[]	是	
+被跳过的镜头列表，每项含 shotId、错误码 code、错误说明 message；不存在或不属于该集的 shotId 也会出现在这里（code=DRAMA_NOT_FOUND）。
+
+注意
+
+不支持 Idempotency-Key；每个镜头内部都是单独提交，等价于对每个镜头分别调用「镜头生图」，不做整批幂等。
+shotIds 不传时会先翻页读出该集全部镜头（可能有上百个），耗时随镜头数增长，请预留足够的请求超时时间。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "appCode": "NANO_PRO_G2_I2I_OFFICIAL",
+              "aspectRatio": "16:9"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/episodes/ep_4Rt7QxNp1/shot-image-generations"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "groupId": "gr_9Xq2Ld7",
+    "taskIds": [
+      "tk_8Zq6Ps3",
+      "tk_1Kf3Lm9"
+    ],
+    "skipped": [
+      {
+        "shotId": "sh_2Uw6Xy4",
+        "code": "DRAMA_STAGE_PRECONDITION",
+        "message": "镜头关联的角色 / 场景 / 道具尚无形象图"
+      }
+    ]
+  }
+}

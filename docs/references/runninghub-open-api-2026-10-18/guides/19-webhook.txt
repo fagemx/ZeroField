@@ -1,0 +1,192 @@
+Webhook
+
+Webhook 是任务终态与账单结算的推送通道，用于替代轮询 GET /tasks/{taskNo}。事件信封结构固定为 eventId / eventType / version / occurredAt / data，只加不改，客户端要容忍未知的 eventType 与信封新增字段。每个企业 Key 最多登记 5 条回调 URL，必须是可公网访问的 https 地址（内网 / 回环地址会被拒绝）；secret 由服务端生成，只在创建响应里明文返回一次，请立即保存——之后 GET /webhooks 只能看到脱敏值（前 8 位加四个星号），弄丢了只能删除重建。不想接 Webhook 也完全可以，轮询 GET /tasks/{taskNo} 或 GET /tasks 效果等价，只是有延迟。
+
+信封字段
+参数	类型	必填	说明
+eventId	string	是	
+事件唯一 id（UUID），用于客户端去重。
+
+eventType	string	是	
+事件类型，见下方事件列表；只增不删。
+
+version	integer	是	
+信封版本号，当前恒为 1。
+
+occurredAt	string	是	
+事件发生时间，ISO-8601（UTC）。
+示例：2026-09-16T02:00:00.000Z
+
+data	object	是	
+按 eventType 区分结构，见下方各事件的 payloadExample。
+签名算法
+
+签名请求头：X-RH-Signature
+
+HMAC-SHA256(secret, "{t}.{原始请求体字节}")，结果转十六进制小写字符串，头格式为 t=<投递时刻unix秒>,v1=<hex签名>。每次重试都会用新的 t 重新签名。同时会附带 X-RH-Event-Id / X-RH-Event-Type 两个头（信封里 eventId / eventType 的冗余，方便不解析 body 就能路由 / 去重）。校验时务必用原始请求体字节参与签名，不能先反序列化再序列化（JSON 字段顺序 / 空白可能改变导致签名对不上）。
+
+验签示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * JDK 17。rawBody 必须是原始请求体字节（不能先反序列化再序列化）。
+ */
+public final class RhWebhookVerifier {
+
+    private static final String HMAC_ALGO = "HmacSHA256";
+    private static final long MAX_SKEW_SECONDS = 300;
+
+    private RhWebhookVerifier() {}
+
+    public static boolean verify(String secret, String signatureHeader, byte[] rawBody) throws Exception {
+        Map<String, String> parts = java.util.Arrays.stream(signatureHeader.split(","))
+                .map(kv -> kv.split("=", 2))
+                .collect(Collectors.toMap(kv -> kv[0], kv -> kv[1]));
+        String t = parts.get("t");
+        String v1 = parts.get("v1");
+        if (t == null || v1 == null) {
+            throw new IllegalArgumentException("malformed signature header");
+        }
+
+        Mac mac = Mac.getInstance(HMAC_ALGO);
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGO));
+        mac.update((t + ".").getBytes(StandardCharsets.UTF_8));
+        byte[] raw = mac.doFinal(rawBody);
+        String expected = HexFormat.of().formatHex(raw);
+
+        // 常量时间比较，避免时序攻击泄露签名信息
+        boolean matches = MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8), v1.getBytes(StandardCharsets.UTF_8));
+        if (!matches) {
+            throw new IllegalStateException("signature mismatch");
+        }
+
+        long skewSeconds = Math.abs(System.currentTimeMillis() / 1000 - Long.parseLong(t));
+        if (skewSeconds > MAX_SKEW_SECONDS) {
+            throw new IllegalStateException("timestamp too old, possible replay");
+        }
+        return true;
+    }
+}
+
+事件列表
+
+TASK.SUCCEEDED 任务落到 SUCCEEDED 终态后触发，DATA 为完整的任务信封（同 GET /TASKS/{TASKNO} 返回体）。
+
+json
+复制
+{
+  "eventId": "3fa1c2b0-4d9e-4a7a-9c1b-0f2e6a7d8b91",
+  "eventType": "task.succeeded",
+  "version": 1,
+  "occurredAt": "2026-09-16T02:00:45.000Z",
+  "data": {
+    "taskId": "tk_1Xh6Bs4Q",
+    "type": "STORYBOARD_GENERATE",
+    "status": "SUCCEEDED",
+    "progress": null,
+    "result": {
+      "shotsCount": 42
+    },
+    "error": null,
+    "cost": null,
+    "createdAt": "2026-09-16T10:00:00.000+08:00",
+    "finishedAt": "2026-09-16T10:00:45.000+08:00"
+  }
+}
+
+TASK.FAILED 任务落到 FAILED 终态后触发，DATA 为完整的任务信封，ERROR 非空。
+
+json
+复制
+{
+  "eventId": "9b7c6d5e-1a2b-4c3d-8e9f-0a1b2c3d4e5f",
+  "eventType": "task.failed",
+  "version": 1,
+  "occurredAt": "2026-09-16T02:01:10.000Z",
+  "data": {
+    "taskId": "tk_2Yj7Ct5R",
+    "type": "SHOT_VIDEO_GENERATE",
+    "status": "FAILED",
+    "progress": null,
+    "result": null,
+    "error": {
+      "code": "DRAMA_REQUEST_FAILED",
+      "message": "模型返回超时"
+    },
+    "cost": null,
+    "createdAt": "2026-09-16T10:02:00.000+08:00",
+    "finishedAt": "2026-09-16T10:05:10.000+08:00"
+  }
+}
+
+TASK.CANCELED 任务落到 CANCELED 终态后触发（客户主动调用 POST /TASKS/{TASKNO}/CANCELLATIONS 成功后），DATA 为完整的任务信封。
+
+json
+复制
+{
+  "eventId": "c4d5e6f7-2b3c-4d5e-9f0a-1b2c3d4e5f6a",
+  "eventType": "task.canceled",
+  "version": 1,
+  "occurredAt": "2026-09-16T02:03:00.000Z",
+  "data": {
+    "taskId": "tk_3Zk8Du6S",
+    "type": "STORYBOARD_GENERATE",
+    "status": "CANCELED",
+    "progress": null,
+    "result": null,
+    "error": null,
+    "cost": null,
+    "createdAt": "2026-09-16T10:00:00.000+08:00",
+    "finishedAt": "2026-09-16T10:03:00.000+08:00"
+  }
+}
+
+BILL.CHARGED 仅在账单全额结算成功（状态变为 CHARGED）时触发。结算时扣款失败转为 ARREARS 的账单不会立即触发，待平台自动补扣成功、转 CHARGED 时才触发；CHARGED_PARTIAL_CANCELED（含经 ARREARS_PARTIAL_CANCELED 补扣转入的）与 NO_CHARGE_FAILED（失败不扣）不触发本事件。
+
+json
+复制
+{
+  "eventId": "d5e6f7a8-3c4d-4e5f-8a9b-2c3d4e5f6a7b",
+  "eventType": "bill.charged",
+  "version": 1,
+  "occurredAt": "2026-09-16T02:00:46.000Z",
+  "data": {
+    "billNo": "bl_3Cf8Rm7",
+    "taskId": "tk_1Xh6Bs4Q",
+    "amount": 3.42,
+    "currency": "USD",
+    "stage": "STORYBOARD_GENERATE",
+    "model": "platform"
+  }
+}
+
+WEBHOOK.TEST 调用 POST /WEBHOOKS/{WEBHOOKID}/TEST-DELIVERIES 时立即触发，DATA 固定为 { MESSAGE: "PING" }，用于验证签名校验与网络连通性。
+
+json
+复制
+{
+  "eventId": "e6f7a8b9-4d5e-4f6a-9b0c-3d4e5f6a7b8c",
+  "eventType": "webhook.test",
+  "version": 1,
+  "occurredAt": "2026-09-16T02:10:00.000Z",
+  "data": {
+    "message": "ping"
+  }
+}
+重试策略
+
+首次投递不等定时任务，落库后立即异步尝试一次。失败判定为 HTTP 非 2xx（含超时 / 连接失败），不校验响应体。失败后按退避表 60 / 300 / 1800 / 7200 / 43200 秒（1 分 / 5 分 / 30 分 / 2 小时 / 12 小时）重试，共 5 级退避；用满 5 级后第 6 次投递仍失败则状态转 DEAD，不再重试，不会自动恢复。DEAD 状态的事件不影响任务本身的状态，请以 GET /tasks/{taskNo} 或 GET /bills 的查询结果为准兜底。

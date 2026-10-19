@@ -1,0 +1,109 @@
+GET
+/task-groups/{groupId}
+复制
+查询批次任务组
+
+一次性查询「批量镜头生图 / 生视频」提交的整批任务状态，无需对 taskIds 逐个轮询。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+groupId	string	是	
+批量提交接口返回的任务组号。
+示例：gr_9Xq2Ld7
+响应字段说明
+参数	类型	必填	说明
+groupId	string	是	
+对外任务组号。
+
+total	integer	是	
+该批次任务总数。
+
+counts	object	是	
+按状态统计的任务数，QUEUED / RUNNING / SUCCEEDED / FAILED / CANCELED 五个键恒定存在；各值为 64 位整数，以数字字符串返回，可能为 "0"。
+
+items	object[]	是	
+批次内每个任务的完整任务对象，元素结构同「查询任务」的 data，顺序与提交时一致。
+
+注意
+
+items 内的每个任务与用 GET /tasks/{taskNo} 单独查询完全一致；本接口只是把整批状态一次性返回，省去对 taskIds 逐个轮询。
+groupId 不存在或不属于当前企业 Key 返回 404 DRAMA_NOT_FOUND。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/task-groups/gr_9Xq2Ld7"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "groupId": "gr_9Xq2Ld7",
+    "total": 2,
+    "counts": {
+      "QUEUED": "0",
+      "RUNNING": "1",
+      "SUCCEEDED": "1",
+      "FAILED": "0",
+      "CANCELED": "0"
+    },
+    "items": [
+      {
+        "taskId": "tk_8Zq6Ps3",
+        "type": "SHOT_IMAGE_GENERATE",
+        "status": "SUCCEEDED",
+        "progress": null,
+        "result": {
+          "imageUrl": "https://cos.runninghub.cn/aivideo/shot-image/xxx.png?sign=..."
+        },
+        "error": null,
+        "cost": null,
+        "createdAt": "2026-09-16T10:00:00.000+08:00",
+        "finishedAt": "2026-09-16T10:00:45.000+08:00"
+      },
+      {
+        "taskId": "tk_1Kf3Lm9",
+        "type": "SHOT_IMAGE_GENERATE",
+        "status": "RUNNING",
+        "progress": null,
+        "result": null,
+        "error": null,
+        "cost": null,
+        "createdAt": "2026-09-16T10:00:01.000+08:00",
+        "finishedAt": null
+      }
+    ]
+  }
+}

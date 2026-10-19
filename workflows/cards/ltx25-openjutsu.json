@@ -1,0 +1,70 @@
+{
+  "card_id": "ltx25-openjutsu",
+  "label": "LTX-2.5 OpenJutsu Motion & Structure Transfer",
+  "sublabel": "Driving Video · Anchor / Ingredients Sheet · Motion Structure (8n+1)",
+  "group_label": "Video",
+  "icon": "◈",
+  "output_mode": "video",
+  "engine_key": "comfy-webapp/1",
+  "status": "active",
+  "sort_order": 11,
+  "engine_config": {
+    "webappId": "2105000000000000001",
+    "workflow": "workflows/ltx25_openjutsu_v2v.json",
+    "instance": "default",
+    "frame_rule": "8n+1",
+    "grid_size": 32,
+    "timeout": 1800,
+    "output_node": "12"
+  },
+  "nodes": [
+    {
+      "nodeId": "1",
+      "fieldName": "video",
+      "fieldType": "VIDEO",
+      "label": "Source Driving Video",
+      "required": true,
+      "slot": "driving_video",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "2",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Anchor Keyframe / Ingredients Sheet",
+      "required": true,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "4",
+      "fieldName": "video",
+      "fieldType": "VIDEO",
+      "label": "Motion Structure Video",
+      "required": false,
+      "slot": "structure_video",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "6",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "Action & Jutsu Prompt",
+      "required": true,
+      "slot": "prompt",
+      "defaultValue": "Preserve the original movement and camera timing. Restyle the scene as an original midnight observatory with an amber work light."
+    },
+    {
+      "nodeId": "3",
+      "fieldName": "seed",
+      "fieldType": "INT",
+      "label": "Seed",
+      "required": false,
+      "slot": "seed",
+      "defaultValue": "48291",
+      "min": 0,
+      "max": 281474976710655,
+      "step": 1
+    }
+  ]
+}

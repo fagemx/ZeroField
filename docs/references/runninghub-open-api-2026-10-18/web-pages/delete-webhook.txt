@@ -1,0 +1,59 @@
+DELETE
+/webhooks/{webhookId}
+复制
+删除回调地址
+
+硬删除一条回调登记。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+webhookId	string	是	
+对外回调登记号。
+示例：wh_2Tq8Ln5
+
+注意
+
+硬删除后，已入队但还没投递成功的事件不会被清理，下一次尝试投递发现找不到 webhook 会直接判 DEAD，不影响任务 / 账单本身的状态。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/webhooks/wh_2Tq8Ln5"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("DELETE", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

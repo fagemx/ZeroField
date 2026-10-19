@@ -1,0 +1,115 @@
+统一约定
+响应结构
+
+成功响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "example": "业务数据，结构随接口而定"
+  }
+}
+
+错误响应示例
+
+json
+复制
+{
+  "code": "DRAMA_BALANCE_INSUFFICIENT",
+  "message": "余额不足，请充值后重试",
+  "requestId": "a1b2c3d4-5e6f-4a1b-9c2d-1234567890ab"
+}
+字段说明
+参数	类型	必填	说明
+code	integer	是	
+仅出现在成功响应中，固定为 0。失败响应改用下方“错误响应示例”的独立结构，code 字段此时是字符串错误码（如 DRAMA_NOT_FOUND），且 HTTP 状态码不是 200，两种响应体结构不通用。
+
+msg	string	是	
+仅出现在成功响应中，固定为 "success"。
+
+errorMessages	object	否	
+成功响应里的保留字段，本组接口恒为 null。请求参数校验失败（缺必填字段、类型不匹配、JSON 不合法）统一返回 422 DRAMA_VALIDATION_FAILED，message 里列出出错字段与原因。
+
+data	object	否	
+业务数据，结构随接口而定，见各接口的响应字段说明。
+
+message	string	否	
+仅出现在错误响应体中，人类可读的错误说明。
+
+requestId	string	否	
+仅出现在错误响应体中，用于排障的请求追踪 id，反馈问题时请附带。
+任务对象
+字段说明
+参数	类型	必填	说明
+taskId	string	是	
+对外任务号，tk_ 前缀。
+示例：tk_1Xh6Bs4Q
+
+type	string	是	
+任务类型，标识 result 内容的形状；只增不改。
+可选值： ASSET_EXTRACTSTORYBOARD_GENERATESHOTS_REBUILDSHOT_IMAGE_GENERATESHOT_VIDEO_GENERATEASSET_IMAGE_GENERATEFILM_EXPORTPROJECT_IMPORTPROJECT_GENERATESCRIPT_REFINESCENE_REFINEPROJECT_REEXTRACTASSET_IMAGE_EDIT
+
+status	enum	是	
+任务状态，固定五值。
+可选值： QUEUEDRUNNINGSUCCEEDEDFAILEDCANCELED
+
+progress	integer	否	
+进度百分比，一期没有细粒度进度来源，恒为 null；字段保留不删。
+
+result	object	否	
+仅 status=SUCCEEDED 时非空，内容按 type 区分（详见各提交接口的备注）。
+
+error	object	否	
+仅 status=FAILED 时非空，结构为 { code, message }：code 通常为本文档「错误码」中列出的 DRAMA_* 码（客户端请容忍未列出的新码），message 为中文说明。生图 / 生视频 / 导出成片等上游任务失败不会原样透传上游错误码，统一为 DRAMA_REQUEST_FAILED，上游原始错误码与信息附在 message 中；任务长期无进展被系统判定失败时为 DRAMA_TASK_STALE，关联对象已不存在时为 DRAMA_REF_MISSING。
+
+cost	object	否	
+计费信息占位字段，一期恒为 null；LLM 阶段计费请查 GET /bills，生图 / 生视频计费按 openapi 现有计价，不体现在这里。
+
+createdAt	string	是	
+ISO-8601 时间，任务创建时间。
+示例：2026-09-16T10:00:00.000+08:00
+
+finishedAt	string	否	
+仅终态（SUCCEEDED / FAILED / CANCELED）非空。
+
+任务状态
+
+参数	说明
+QUEUED	已提交，排队等待执行。
+RUNNING	执行中。
+SUCCEEDED	执行成功，result 非空。
+FAILED	执行失败，error 非空，不扣费。
+CANCELED	已取消，按实际已消耗量扣费。
+
+示例
+
+json
+复制
+{
+  "taskId": "tk_1Xh6Bs4Q",
+  "type": "SHOT_IMAGE_GENERATE",
+  "status": "SUCCEEDED",
+  "progress": null,
+  "result": {
+    "imageUrl": "https://cos.runninghub.cn/aivideo/shot-image/xxx.png?sign=..."
+  },
+  "error": null,
+  "cost": null,
+  "createdAt": "2026-09-16T10:00:00.000+08:00",
+  "finishedAt": "2026-09-16T10:00:45.000+08:00"
+}
+幂等键
+
+对写操作传入 Idempotency-Key 请求头可保证重复请求只执行一次，建议使用 UUID，同一 Key 24 小时内有效。
+
+游标分页
+
+列表接口统一使用 cursor 分页：首次请求不传 cursor，响应里的 nextCursor 非空时可作为下一页的 cursor 继续请求，为空表示已到最后一页。
+
+限流
+
+网关按企业 Key 令牌桶限流，默认每秒补充 20 个、桶容量 40（以 GET /quota 返回的 rateLimit 为准）。超出限制返回 429 DRAMA_RATE_LIMITED（标准错误体 code / message / requestId），同时每个响应都会带上 X-RateLimit-Remaining、X-RateLimit-Burst-Capacity、X-RateLimit-Replenish-Rate 三个响应头，请据此在客户端做退避重试。

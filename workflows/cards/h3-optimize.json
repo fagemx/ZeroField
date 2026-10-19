@@ -1,0 +1,166 @@
+{
+  "card_id": "h3-optimize",
+  "label": "② H3 Second-Pass 4K Restoration",
+  "sublabel": "Pass 1 Take · 1 Composite Sheet (Temporal Stabilization & Upscale)",
+  "group_label": "Video",
+  "icon": "✧",
+  "output_mode": "video",
+  "engine_key": "comfy-webapp/1",
+  "status": "active",
+  "sort_order": 22,
+  "engine_config": {
+    "workflow": "workflows/minimax_h3_ref2va.json",
+    "webappId": "2103540145878601731",
+    "instance": "default",
+    "frame_rule": "17n+5",
+    "grid_size": 32,
+    "timeout": 3600,
+    "locked_nodes": {
+      "252.megapixels": "1.0",
+      "283.value": "2.0",
+      "49.image": "None",
+      "50.image": "None",
+      "43.image": "None",
+      "19.image": "None",
+      "23.image": "None",
+      "48.audio": "None",
+      "14.audio": "None",
+      "15.audio": "None"
+    }
+  },
+  "nodes": [
+    {
+      "nodeId": "27",
+      "fieldName": "video",
+      "fieldType": "VIDEO",
+      "label": "Pass 1 Video to Optimize",
+      "required": true,
+      "slot": "driving_video",
+      "defaultValue": "@source"
+    },
+    {
+      "nodeId": "51",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Character & Scene Sheet",
+      "required": true,
+      "slot": "ref",
+      "defaultValue": "@source"
+    },
+    {
+      "nodeId": "49",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 1",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "50",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 2",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "43",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 3",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "19",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 4",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "23",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 5",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "48",
+      "fieldName": "audio",
+      "fieldType": "AUDIO",
+      "label": "Unused Audio 1",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "14",
+      "fieldName": "audio",
+      "fieldType": "AUDIO",
+      "label": "Unused Audio 2",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "15",
+      "fieldName": "audio",
+      "fieldType": "AUDIO",
+      "label": "Unused Audio 3",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "263",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "Restoration Prompt",
+      "required": true,
+      "slot": "prompt",
+      "defaultValue": "4K video restoration and upscale, strictly preserve original composition, subject identity, facial features, expression, pose, lighting and scene. Remove compression artifacts, noise, motion blur. Recover fine texture: hair, fabric and skin details. Natural sharp edges, accurate color correction, stable between frames, no flicker. Do not invent new elements, only enhance image quality.",
+      "projectDefaults": {
+        "default": "4K video restoration and upscale, strictly preserve original composition, subject identity, facial features, expression, pose, lighting and scene. Remove compression artifacts, noise, motion blur. Recover fine texture: hair, fabric and skin details. Natural sharp edges, accurate color correction, stable between frames, no flicker. Do not invent new elements, only enhance image quality."
+      }
+    },
+    {
+      "nodeId": "259",
+      "fieldName": "value",
+      "fieldType": "FLOAT",
+      "label": "Duration (Seconds)",
+      "required": true,
+      "slot": "duration",
+      "defaultValue": "5",
+      "min": 1,
+      "max": 15,
+      "step": 0.001
+    },
+    {
+      "nodeId": "252",
+      "fieldName": "aspect_ratio",
+      "fieldType": "LIST",
+      "label": "Aspect Ratio",
+      "required": true,
+      "slot": "aspect_ratio",
+      "defaultValue": "16:9 (Widescreen)",
+      "options": [
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)"
+      ]
+    }
+  ]
+}

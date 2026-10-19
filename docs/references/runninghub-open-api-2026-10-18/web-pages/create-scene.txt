@@ -1,0 +1,105 @@
+POST
+/episodes/{episodeId}/scenes
+复制
+创建场次
+
+在指定剧集下手动插入一个场次。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+episodeId	string	是	
+对外剧集号。
+示例：ep_4Rt7QxNp1
+Body 参数
+参数	类型	必填	说明
+title	string	是	
+场次标题。
+示例：场景二：便利店
+
+content	string	是	
+场次正文。
+
+afterSceneId	string	否	
+插入锚点：新场次紧跟该场次之后；不传则追加到剧集末尾。
+响应字段说明
+参数	类型	必填	说明
+sceneId	string	是	
+对外场次号。
+
+sceneIndex	integer	是	
+场次序号。
+
+title	string	否	
+场次标题。
+
+summary	string	否	
+场次摘要，手动创建时为 null。
+
+status	string	是	
+分镜生成状态，新建时为 IDLE。
+可选值： IDLEGENERATINGDONEFAILED
+
+content	string	是	
+场次正文。
+
+注意
+
+afterSceneId 不属于该集时返回 404 DRAMA_NOT_FOUND。
+不支持 Idempotency-Key，重复提交会创建多个场次。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "title": "场景二：便利店",
+              "content": "林夏走进便利店，货架上只剩最后一盏应急灯……"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/episodes/ep_4Rt7QxNp1/scenes"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "sceneId": "sc_8Pr4Ty6",
+    "sceneIndex": 2,
+    "title": "场景二：便利店",
+    "summary": null,
+    "status": "IDLE",
+    "content": "林夏走进便利店，货架上只剩最后一盏应急灯……"
+  }
+}

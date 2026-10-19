@@ -1,0 +1,71 @@
+PUT
+/assets/{assetId}/scenes
+复制
+设置资产出场场次
+
+整表替换该资产（场景 / 道具）的出场场次。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号。
+示例：as_5Ln9Vt2
+Body 参数
+参数	类型	必填	说明
+sceneIds	string[]	是	
+出场场次号列表，整表替换（不在列表里的旧关联会被移除）；最多 200 项，超出返回 422。
+
+注意
+
+只对 SCENE / PROP 类型资产有效；CHARACTER 资产的出场场次挂在变体绑定上，调用本接口对角色资产无意义。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "sceneIds": [
+                "sc_6Ym2Wq9"
+              ]
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/assets/as_5Ln9Vt2/scenes"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("PUT", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

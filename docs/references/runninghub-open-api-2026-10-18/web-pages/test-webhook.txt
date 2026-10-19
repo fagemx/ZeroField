@@ -1,0 +1,59 @@
+POST
+/webhooks/{webhookId}/test-deliveries
+复制
+发送测试事件
+
+立即投递一条 webhook.test 事件，用于验证签名校验与网络连通性。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+webhookId	string	是	
+对外回调登记号。
+示例：wh_2Tq8Ln5
+
+注意
+
+不受该 webhook 的 events 订阅过滤限制，即使只订阅了 bill.charged 也会收到这条测试事件。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/webhooks/wh_2Tq8Ln5/test-deliveries"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("POST", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

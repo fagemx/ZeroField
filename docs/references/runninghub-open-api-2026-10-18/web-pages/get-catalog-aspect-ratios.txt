@@ -1,0 +1,69 @@
+GET
+/catalog/aspect-ratios
+复制
+画幅比例目录
+
+查询平台支持的画幅比例常量，供 project-imports / project-generations 的 aspectRatio 字段取值。
+
+响应字段说明
+参数	类型	必填	说明
+value	string	是	
+画幅比例字符串。
+
+orientation	enum	是	
+对应的剧集取向。
+可选值： LANDSCAPEPORTRAIT
+
+注意
+
+当前恒为这两条固定值，不查库、不分页。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/catalog/aspect-ratios"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "value": "16:9",
+      "orientation": "LANDSCAPE"
+    },
+    {
+      "value": "9:16",
+      "orientation": "PORTRAIT"
+    }
+  ]
+}

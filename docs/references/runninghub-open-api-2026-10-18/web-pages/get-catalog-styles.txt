@@ -1,0 +1,64 @@
+GET
+/catalog/styles
+复制
+画风目录
+
+查询可用画风预设。
+
+响应字段说明
+参数	类型	必填	说明
+stylePresetId	string	是	
+画风预设内部 id 的原样字符串（不是 OpenIds 编码），传给 asset-extractions 的 stylePresetId 字段。
+
+name	string	是	
+画风名称。
+
+previewUrl	string	是	
+预览图 URL。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/catalog/styles"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "stylePresetId": "88123",
+      "name": "国风水墨",
+      "previewUrl": "https://cdn.runninghub.cn/style/88123.png"
+    }
+  ]
+}

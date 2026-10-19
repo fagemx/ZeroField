@@ -1,0 +1,110 @@
+开始使用
+下载 OpenAPI 规范（JSON）
+
+Base URL：国内站 https://www.runninghub.cn/aivideo/open/v1，海外站 https://www.runninghub.ai/aivideo/open/v1（企业 Key 归属哪一站由部署实例决定，不能跨站使用）。
+
+鉴权：所有请求都要带 Authorization: Bearer 加企业 API Key（必须是 Bearer <ApiKey> 格式，不带 Bearer 前缀返回 401 DRAMA_AUTH_INVALID；缺少 Authorization 头返回 401 DRAMA_AUTH_MISSING）。企业 Key 从 AI 漫剧「开放 API 接入页」的“我的 Key”面板获取，仅企业共享（SHARED）类型的 Key 可用，其他类型返回 403 DRAMA_AUTH_KEY_TYPE_FORBIDDEN。
+
+统一响应：所有成功响应固定外层结构 { code: 0, msg: "success", errorMessages: null, data: 业务数据 }。失败响应结构不同（{ code, message, requestId }，code 是字符串错误码），且 HTTP 状态码会随错误码变化（401 / 402 / 403 / 404 / 409 / 422 / 429 等），不是恒为 200，请按 HTTP 状态码判定成败，不要只看 body 里的 code。
+
+任务异步模型：所有会触发生成 / 重建的接口（提资产、生分镜、生图、生视频、导出成片等）都立即返回一个任务信封（QUEUED），真正的产出需要之后再查。两种方式：轮询 GET /tasks/{taskNo} 直到 status 变成 SUCCEEDED / FAILED / CANCELED；或者注册 Webhook（见“Webhook”分组），任务终态与账单结算会主动推送给你，省去轮询延迟。
+
+其余通用约定：创建类接口（POST 新建资源 / 提交生成任务）都支持 Idempotency-Key 请求头，按（企业 Key, Idempotency-Key）24 小时内去重，同一个 key 换了请求体内容会报 409 冲突；Idempotency-Key 长度不超过 128 字符，超长返回 422 DRAMA_VALIDATION_FAILED；所有列表接口统一用 cursor + limit 游标分页，不支持页码，limit 为 1~100、缺省 20、越界返回 422，把上一页响应里的 nextCursor 原样传给下一次请求的 cursor 即可，nextCursor 为空表示没有下一页；cursor 被改动或拼错（含拿别的接口的游标来用）返回 422 DRAMA_VALIDATION_FAILED（cursor 无效）。参数类型错误（如 limit=abc）、缺少必填 query 参数、枚举值非法同样返回 422 DRAMA_VALIDATION_FAILED，message 为中文。
+
+字符串字段均有长度上限（标题/名称类 255，提示词/描述类 5000，场次正文 20000，剧本全文 200000），超长返回 422；id 列表类参数的每个元素不能为空且不超过 255 字符，列表长度上限见各接口参数说明（批量类 200 项、参考图 10 项、webhook 事件 10 项、modelParams 50 项），超限返回 422。
+
+数据类型：64 位整数字段（文件 size、用量 taskCount / inputTokens / outputTokens、任务组 counts 的各值等）一律以数字字符串返回，避免 JavaScript 等语言的精度丢失，客户端请按字符串解析后再转数值。
+
+Base URL
+https://story.runninghub.ai/aivideo/open/v1
+公共请求头
+参数	类型	必填	说明
+Authorization	string	是	
+企业 API Key，格式为 Bearer 加空格加 Key 原文。Key 从接入页“我的 Key”获取，仅企业共享（SHARED）类型的 Key 可调用本组接口，其他类型返回 403。
+示例：Bearer sk_live_7GfQd2mZaK9pRw3x
+
+Content-Type	string	是	
+除 GET / DELETE 外统一为 application/json；唯一例外是文件上传接口 POST /files，用 multipart/form-data。
+示例：application/json
+鉴权说明
+
+请求头携带 Authorization: Bearer <企业 apiKey>
+
+还没有 API Key？前往下方 控制台 小节创建。
+
+快速开始
+cURL
+Python
+JavaScript
+Java
+拿 Key
+
+前往下方“控制台”小节创建企业 API Key。
+
+java
+复制
+static final String RH_API_KEY = "your-enterprise-api-key";
+验证连通性
+
+调用 GET /capabilities，确认 Key 有效、网络可达。
+
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/capabilities"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+创建项目
+
+用 POST /projects 创建你的第一个项目。
+
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "title": "霓虹都市",
+              "description": "赛博朋克短剧",
+              "scriptContent": "第一集\n场景一：雨夜街头……",
+              "scriptFileName": "ep01.txt"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/projects"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "create-project-20260916-0001")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}

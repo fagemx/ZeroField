@@ -1,0 +1,78 @@
+POST
+/tasks/{taskNo}/cancellations
+复制
+取消任务
+
+取消一个尚未完成的任务；LLM 任务与生图 / 生视频任务均可取消。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+taskNo	string	是	
+对外任务号。
+示例：tk_1Xh6Bs4Q
+响应字段说明
+参数	类型	必填	说明
+taskId	string	是	
+对外任务号。
+
+status	string	是	
+取消成功后为 CANCELED。
+
+注意
+
+LLM 阶段任务（提资产 / 生分镜 / 单场重建 / 单场润色 / 剧本润色 / 一键导入 / agent 生成 / 项目重提取，内部 refType=JOB）与生图 / 生视频 / 资产生图 / 资产改图任务（SHOT_IMAGE_GENERATE / SHOT_VIDEO_GENERATE / ASSET_IMAGE_GENERATE / ASSET_IMAGE_EDIT）均可取消。
+任务已落终态（SUCCEEDED / FAILED / CANCELED）后再次调用本接口返回 409 DRAMA_TASK_CANCEL_UNSUPPORTED，不是幂等成功。
+LLM 计费任务取消后按已消耗量结算账单（CHARGED_PARTIAL_CANCELED），不是全额免单：取消只停止后续处理，取消时仍在进行的模型调用照常计入，账单在任务实际停止后结算；生图 / 生视频任务取消不产生 GET /bills 账单（计费口径见对应生成接口备注）。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/tasks/tk_1Xh6Bs4Q/cancellations"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("POST", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "taskId": "tk_1Xh6Bs4Q",
+    "type": "STORYBOARD_GENERATE",
+    "status": "CANCELED",
+    "progress": null,
+    "result": null,
+    "error": null,
+    "cost": null,
+    "createdAt": "2026-09-16T10:00:00.000+08:00",
+    "finishedAt": "2026-09-16T10:01:20.000+08:00"
+  }
+}

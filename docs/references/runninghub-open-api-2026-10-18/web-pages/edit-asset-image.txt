@@ -1,0 +1,108 @@
+POST
+/assets/{assetId}/image-edits
+复制
+AI 改图
+
+用 I2I 模型基于当前形象图做局部修改，异步任务。
+
+请求参数说明
+
+Headers
+参数	类型	必填	说明
+Idempotency-Key	string	否	
+幂等键。
+Path 参数
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号。
+示例：as_5Ln9Vt2
+Body 参数
+参数	类型	必填	说明
+appCode	string	是	
+生图应用码，取自 GET /catalog/apps（capability=IMAGE），必须是 I2I 模型，否则返回 422 DRAMA_APP_NOT_AVAILABLE。
+示例：NANO_PRO_G2_I2I_OFFICIAL
+
+prompt	string	是	
+修改说明。
+示例：把上衣换成红色风衣
+
+referenceFileIds	string[]	否	
+额外参考图文件号列表（POST /files，purpose=IMAGE），追加在当前默认展示图之后一起参与改图；最多 10 项，超出返回 422。
+响应字段说明
+参数	类型	必填	说明
+taskId	string	是	
+任务号。
+
+type	string	是	
+固定为 ASSET_IMAGE_EDIT。
+
+status	string	是	
+提交时固定为 QUEUED。
+
+result	object	否	
+SUCCEEDED 后为新生成图片的可访问地址。
+
+注意
+
+前置条件：该资产必须已有默认变体且默认变体已有展示图，或本次请求带了 referenceFileIds，否则返回 409 DRAMA_STAGE_PRECONDITION——请先调用 POST /assets/(assetId)/images 或资产生图。
+生图费用按 openapi 现有计价结算，不经过 LLM 阶段的账单器，不会出现在 GET /bills 里。
+改图任务可通过 POST /tasks/(taskNo)/cancellations 取消；但不支持 POST /tasks/(taskNo)/retries 重试（重试仅限镜头生图 / 镜头生视频 / 资产生图）。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "appCode": "NANO_PRO_G2_I2I_OFFICIAL",
+              "prompt": "把上衣换成红色风衣"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/assets/as_5Ln9Vt2/image-edits"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "req-20260916-0001")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "taskId": "tk_4Ev8Gx1",
+    "type": "ASSET_IMAGE_EDIT",
+    "status": "QUEUED",
+    "progress": null,
+    "result": null,
+    "error": null,
+    "cost": null,
+    "createdAt": "2026-09-17T09:20:00.000+08:00",
+    "finishedAt": null
+  }
+}

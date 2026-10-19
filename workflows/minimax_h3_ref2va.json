@@ -1,0 +1,330 @@
+{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "159",
+        0
+      ],
+      "positive": [
+        "200",
+        0
+      ],
+      "negative": [
+        "200",
+        1
+      ],
+      "latent_image": [
+        "200",
+        2
+      ],
+      "seed": 48291,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "low quality, blurry, jittery, distorted, watermark, subtitle",
+      "clip": [
+        "22",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "16",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "audio": [
+        "17",
+        0
+      ],
+      "fps": 24
+    }
+  },
+  "12": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "11",
+        0
+      ],
+      "filename_prefix": "zerofield_h3_ref2va",
+      "format": {
+        "format": "mp4",
+        "codec": {
+          "codec": "h264"
+        }
+      }
+    }
+  },
+  "13": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "14": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "None"
+    }
+  },
+  "15": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "None"
+    }
+  },
+  "16": {
+    "class_type": "MiniMaxH3SeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "3",
+        0
+      ]
+    }
+  },
+  "17": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "16",
+        1
+      ],
+      "vae": [
+        "13",
+        0
+      ]
+    }
+  },
+  "18": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "19": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "None"
+    }
+  },
+  "22": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax_h3",
+      "device": "default"
+    }
+  },
+  "23": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "None"
+    }
+  },
+  "27": {
+    "class_type": "VHS_LoadVideo",
+    "inputs": {
+      "video": "source_video.mp4",
+      "force_rate": 24,
+      "custom_width": 1280,
+      "custom_height": 704,
+      "frame_load_cap": 124,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "H3"
+    }
+  },
+  "43": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "None"
+    }
+  },
+  "48": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "None"
+    }
+  },
+  "49": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "None"
+    }
+  },
+  "50": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "None"
+    }
+  },
+  "51": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "reference.png"
+    }
+  },
+  "159": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "18",
+        0
+      ],
+      "clip": [
+        "22",
+        0
+      ],
+      "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    }
+  },
+  "200": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "positive": [
+        "263",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ],
+      "audio_vae": [
+        "13",
+        0
+      ],
+      "reference_video": [
+        "27",
+        0
+      ],
+      "width": [
+        "252",
+        0
+      ],
+      "height": [
+        "252",
+        1
+      ],
+      "length": [
+        "250",
+        0
+      ],
+      "upscale_factor": [
+        "283",
+        0
+      ],
+      "ref_image_1": [
+        "51",
+        0
+      ],
+      "ref_image_2": [
+        "49",
+        0
+      ],
+      "ref_image_3": [
+        "50",
+        0
+      ],
+      "ref_image_4": [
+        "43",
+        0
+      ],
+      "ref_image_5": [
+        "19",
+        0
+      ],
+      "ref_image_6": [
+        "23",
+        0
+      ],
+      "ref_audio_1": [
+        "48",
+        0
+      ],
+      "ref_audio_2": [
+        "14",
+        0
+      ],
+      "ref_audio_3": [
+        "15",
+        0
+      ]
+    }
+  },
+  "250": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17",
+      "a": [
+        "259",
+        0
+      ]
+    }
+  },
+  "252": {
+    "class_type": "ResolutionSelector",
+    "inputs": {
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": 1.0
+    }
+  },
+  "259": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 5.0
+    }
+  },
+  "263": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "Use the character identity and scene environment from the reference images, and transfer the physical motion, timing, and camera trajectory from Reference Video 1.",
+      "clip": [
+        "159",
+        1
+      ]
+    }
+  },
+  "283": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 2.0
+    }
+  }
+}

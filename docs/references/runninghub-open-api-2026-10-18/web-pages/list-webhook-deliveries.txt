@@ -1,0 +1,120 @@
+GET
+/webhooks/{webhookId}/deliveries
+复制
+投递记录列表
+
+游标分页查询某个回调地址的历史投递记录。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+webhookId	string	是	
+对外回调登记号。
+示例：wh_2Tq8Ln5
+Query 参数
+参数	类型	必填	说明
+cursor	string	否	
+游标，取上一页响应的 nextCursor。
+
+limit	integer	否	
+每页条数，1~100，缺省 20，越界返回 422。
+响应字段说明
+参数	类型	必填	说明
+items	object[]	是	
+本页投递记录列表。
+
+items[].deliveryId	string	是	
+投递记录号，dl_ 前缀。
+
+items[].eventId	string	是	
+关联的事件 id，同信封字段 eventId。
+
+items[].eventType	string	是	
+事件类型。
+
+items[].status	enum	是	
+投递状态：PENDING 等待投递 / 等待退避重试，SENDING 正在发送，DELIVERED 已成功送达（收到 2xx），DEAD 重试用尽或永久性失败、不再自动重试。
+可选值： PENDINGSENDINGDELIVEREDDEAD
+
+items[].attempts	integer	是	
+已尝试投递次数；手动重投会把它归零后重新计数。
+
+items[].lastHttpStatus	integer	否	
+最近一次投递收到的 HTTP 状态码；从未投递过时为 null。
+
+items[].lastError	string	否	
+最近一次投递失败的错误说明；成功时为 null。
+
+items[].nextRetryAt	string	否	
+下次投递时间；status=PENDING 时非空，其余状态为 null。
+
+items[].createdAt	string	是	
+事件产生时间。
+
+items[].updatedAt	string	是	
+投递记录最近更新时间。
+
+nextCursor	string	否	
+下一页游标；为空表示没有下一页。
+
+注意
+
+DEAD 状态代表 5 级退避重试全部用完仍失败，或投递时发现 webhook 已被删除 / 签名密钥缺失等永久性错误，不会再自动重试；可用「手动重投」接口重新触发一次。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/webhooks/wh_2Tq8Ln5/deliveries?cursor=%3Ccursor%3E&limit=%3Climit%3E"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "items": [
+      {
+        "deliveryId": "dl_4Kp9Qw2",
+        "eventId": "a1b2c3d4-5e6f-4a1b-9c2d-1234567890ab",
+        "eventType": "task.succeeded",
+        "status": "DELIVERED",
+        "attempts": 1,
+        "lastHttpStatus": 200,
+        "lastError": null,
+        "nextRetryAt": null,
+        "createdAt": "2026-09-16T10:00:46.000+08:00",
+        "updatedAt": "2026-09-16T10:00:47.000+08:00"
+      }
+    ],
+    "nextCursor": null
+  }
+}

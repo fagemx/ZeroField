@@ -1,0 +1,102 @@
+POST
+/projects/{projectId}/episodes
+复制
+创建剧集
+
+在指定项目下创建一集。
+
+请求参数说明
+
+Headers
+参数	类型	必填	说明
+Idempotency-Key	string	否	
+幂等键，同「创建项目」。
+Path 参数
+参数	类型	必填	说明
+projectId	string	是	
+所属项目号。
+示例：pj_2V8rglMqiUk
+Body 参数
+参数	类型	必填	说明
+title	string	是	
+剧集标题。
+示例：第一集：雨夜
+响应字段说明
+参数	类型	必填	说明
+episodeId	string	是	
+对外剧集号，ep_ 前缀。
+
+projectId	string	是	
+所属项目号。
+
+title	string	是	
+剧集标题。
+
+episodeIndex	integer	是	
+集数序号，从 1 开始。
+
+status	string	是	
+剧集状态：DRAFT（生产未完成）或 COMPLETED（整集视频已导出）。
+可选值： DRAFTCOMPLETED
+
+stylePresetId	string	否	
+画风预设 id（GET /catalog/styles），由 asset-extractions 时传入的值写入；尚未提取资产时为 null。
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "title": "第一集：雨夜"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/projects/pj_2V8rglMqiUk/episodes"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "req-20260916-0001")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "episodeId": "ep_4Rt7QxNp1",
+    "projectId": "pj_2V8rglMqiUk",
+    "title": "第一集：雨夜",
+    "episodeIndex": 1,
+    "status": "DRAFT",
+    "stylePresetId": null,
+    "createdAt": "2026-09-16T09:05:00.000+08:00"
+  }
+}

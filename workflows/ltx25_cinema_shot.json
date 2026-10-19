@@ -208,5 +208,21 @@
         0
       ]
     }
+  },
+  "21": {
+    "class_type": "VHS_LoadVideo",
+    "inputs": {
+      "video": "motion_structure.mp4",
+      "force_rate": 24,
+      "custom_width": 1280,
+      "custom_height": 704,
+      "frame_load_cap": 97,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "LTXV"
+    },
+    "_meta": {
+      "title": "Optional layout/motion structure slot"
+    }
   }
 }

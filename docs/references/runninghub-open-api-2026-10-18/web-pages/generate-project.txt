@@ -1,0 +1,107 @@
+POST
+/project-generations
+复制
+AI 创意生成项目
+
+用一句创意想法一次性生成剧本、建项目、自动分集并规整剧本，异步任务。
+
+请求参数说明
+
+Headers
+参数	类型	必填	说明
+Idempotency-Key	string	否	
+幂等键，按（企业 Key，该值）24 小时内去重。
+Body 参数
+参数	类型	必填	说明
+idea	string	是	
+创意想法文本，AI 据此生成完整剧本。
+示例：一个赛博朋克都市里侦探与仿生人的悬疑故事
+
+aspectRatio	enum	否	
+画幅，写入自动创建的每一集的取向；不传则不设置。
+可选值： 16:99:16
+
+contentLanguage	string	否	
+当前只接收、不生效，同「导入剧本建项目」备注。
+
+stylePresetId	string	否	
+画风预设 id，取自 GET /catalog/styles 的 stylePresetId；非数字字符串返回 422 DRAMA_STYLE_NOT_FOUND（不校验是否真实存在）。
+
+title	string	否	
+项目标题覆盖；不传则按生成内容自动生成。
+响应字段说明
+参数	类型	必填	说明
+taskId	string	是	
+任务号。
+
+type	string	是	
+固定为 PROJECT_GENERATE。
+
+result	object	否	
+SUCCEEDED 后结构同「导入剧本建项目」：projectId（pj_ 前缀）、episodeId（ep_ 前缀）、episodeCount、episodes（[{episodeId, episodeIndex, title}]，episodeIndex 从 1 起）四个字段。
+
+注意
+
+idea 生成的耗时高于导入既有剧本（要先由 AI 编写完整剧本，再走同样的建项目 / 分集 / 规整剧本步骤）；agent 模式通常只产出一集，但不要假设 episodeCount 恒为 1。
+导入只做剧本规整 + 自动分集 + 建项目，不会拆分场次、不会提取资产。任务内还会提取标题、生成项目简介 / 人物介绍 / 各集概述，并把概述与人物介绍前置到第一集剧本开头；这些模型调用都计入本任务账单。任务 SUCCEEDED 后，取 result.episodes 中任意一集调用一次 POST /episodes/{episodeId}/asset-extractions 即可：首次提取为项目级，对整本剧本一次完成场次拆分与资产提取、覆盖全部剧集（与网页端「确认剧本」一致），之后才能生成分镜；按 ASSET_EXTRACT 单独计费。
+其余行为（result 结构、source 标记）同「导入剧本建项目」。
+计费：按任务内模型调用的实际费用（网关标价，不加价）在任务终态一次性结算——成功扣款，失败不扣，取消按已消耗量扣（含取消时仍在进行的调用，账单在任务实际停止后结算）；金额按分四舍五入；模型由平台统一配置，不可指定。提交时余额需大于 0（团队 Key 看团队钱包，非团队 Key 看企业账户余额），否则返回 402 DRAMA_BALANCE_INSUFFICIENT；结算可能把余额扣成负数，之后的计费任务会被拦截直到充值。结算时若因系统原因扣款失败，账单记为欠费（ARREARS / ARREARS_PARTIAL_CANCELED），由平台自动补扣，不影响继续提交。任务从提交到终态占用一个企业 Key 并发名额（GET /quota 的 concurrentLimit），已满返回 429 DRAMA_CONCURRENCY_LIMIT，稍后重试。可用 GET /bills 查账单。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "idea": "一个赛博朋克都市里侦探与仿生人的悬疑故事",
+              "aspectRatio": "9:16"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/project-generations"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "req-20260916-0001")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "taskId": "tk_3Dw1Rx2",
+    "type": "PROJECT_GENERATE",
+    "status": "QUEUED",
+    "progress": null,
+    "result": null,
+    "error": null,
+    "cost": null,
+    "createdAt": "2026-09-17T09:05:00.000+08:00",
+    "finishedAt": null
+  }
+}

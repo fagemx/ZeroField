@@ -1,0 +1,86 @@
+GET
+/catalog/apps
+复制
+应用目录
+
+查询生图 / 生视频可用应用。
+
+请求参数说明
+
+Query 参数
+参数	类型	必填	说明
+capability	enum	是	
+按能力维度筛选：生图或生视频。
+可选值： IMAGEVIDEO
+示例：IMAGE
+
+usageScope	enum	否	
+按用途范围进一步收窄（不传则只按 capability 加站点可见加 SKU 白名单过滤，不做图生图 / 文生图收窄）。网页端「仅会员可用」的模型不对开放 API 提供。
+可选值： CHARACTERSCENE_PROPSCENE_PROP_EDITFREE_CREATION_T2IFREE_CREATION_I2I
+响应字段说明
+参数	类型	必填	说明
+appCode	string	是	
+应用稳定码，传给生图 / 生视频接口的 appCode 字段。
+
+name	string	是	
+应用展示名。
+
+capability	enum	是	
+能力维度。
+可选值： IMAGEVIDEO
+
+imageMode	enum	是	
+图生图（I2I）还是文生图（T2I）。
+可选值： I2IT2I
+
+skuId	string	是	
+关联 SKU id；为避免精度丢失，数值以字符串形式返回。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/catalog/apps?capability=IMAGE&usageScope=%3CusageScope%3E"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "appCode": "NANO_PRO_G2_I2I_OFFICIAL",
+      "name": "Nano Pro G2（角色改图）",
+      "capability": "IMAGE",
+      "imageMode": "I2I",
+      "skuId": "10234"
+    }
+  ]
+}

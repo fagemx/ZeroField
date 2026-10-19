@@ -1,0 +1,83 @@
+GET
+/assets/{assetId}/images
+复制
+资产图片历史
+
+查询该资产默认变体的历史候选图（最多 50 条）。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号。
+示例：as_5Ln9Vt2
+响应字段说明
+参数	类型	必填	说明
+imageId	string	是	
+候选图号，im_ 前缀。
+
+url	string	是	
+图片可访问地址。
+
+selected	boolean	否	
+是否为当前生效展示图。
+
+status	string	否	
+图片来源标记（如上传 / AI 生成 / AI 改图），不是生成中 / 失败这类进度状态；具体取值以实际返回为准。
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+注意
+
+只返回真正生成成功的候选图（不含进行中 / 失败的生成尝试）。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/assets/as_5Ln9Vt2/images"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "imageId": "im_8Fw1Hy3",
+      "url": "https://cos.runninghub.cn/aivideo/asset-variant/xxx.png?sign=...",
+      "selected": true,
+      "status": "AI_GENERATED",
+      "createdAt": "2026-09-16T09:13:00.000+08:00"
+    }
+  ]
+}

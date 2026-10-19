@@ -1,0 +1,59 @@
+DELETE
+/styles/custom/{styleId}
+复制
+删除自定义画风
+
+删除一个自定义画风预设。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+styleId	string	是	
+对外自定义画风号。
+示例：st_7Gy5Tb3
+
+注意
+
+仍被某个项目引用，或正被某个生成中的镜头引用时，返回 409 DRAMA_OPERATION_NOT_ALLOWED，需先解除引用再删除。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/styles/custom/st_7Gy5Tb3"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("DELETE", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

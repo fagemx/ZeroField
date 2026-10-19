@@ -1,0 +1,80 @@
+GET
+/webhooks
+复制
+回调地址列表
+
+查询当前企业 Key 下登记的全部回调地址（不分页）。
+
+响应字段说明
+参数	类型	必填	说明
+webhookId	string	是	
+对外回调登记号。
+
+url	string	是	
+回调地址。
+
+events	string[]	是	
+订阅的事件类型。
+
+secret	string	是	
+脱敏后的签名密钥（前 8 位加四个星号），不是完整密钥；完整密钥只在创建响应里出现过一次。
+
+status	enum	是	
+状态。
+可选值： ENABLEDDISABLED
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/webhooks"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "webhookId": "wh_2Tq8Ln5",
+      "url": "https://api.example.com/webhooks/runninghub",
+      "events": [
+        "task.succeeded",
+        "task.failed"
+      ],
+      "secret": "3f9a1c7e****",
+      "status": "ENABLED",
+      "createdAt": "2026-09-16T09:00:00.000+08:00"
+    }
+  ]
+}

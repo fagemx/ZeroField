@@ -1,0 +1,109 @@
+POST
+/shots/{shotId}/video-generations
+复制
+镜头生视频
+
+为指定镜头生成视频，异步任务。
+
+请求参数说明
+
+Headers
+参数	类型	必填	说明
+Idempotency-Key	string	否	
+幂等键。
+Path 参数
+参数	类型	必填	说明
+shotId	string	是	
+对外镜头号。
+示例：sh_7Qz3Rk9
+Body 参数
+参数	类型	必填	说明
+appCode	string	是	
+生视频应用码，取自 GET /catalog/apps（capability=VIDEO）。
+示例：SEEDANCE_2_FAST_MULTIMODAL_VIDEO
+
+modelParams	object	否	
+模型参数覆盖，键对应应用 request_template 里的 fieldKey；最多 50 项，超出返回 422。
+
+promptOverride	string	否	
+自定义 prompt，非空时直发模型，跳过后端默认渲染。
+
+referenceSourceVideoId	string	否	
+续拍参考的同镜历史视频 id（vd_ 前缀），取自 GET /shots/{shotId}/videos 的 videoId。
+响应字段说明
+参数	类型	必填	说明
+taskId	string	是	
+任务号。
+
+type	string	是	
+固定为 SHOT_VIDEO_GENERATE。
+
+result	object	否	
+SUCCEEDED 后为该次生成的视频信息（videoId、url 等，具体字段以实际返回为准）。
+
+注意
+
+任务在远端视频真正出片后才进入 SUCCEEDED，result 里带 videoUrl；提交成功但仍在生成时状态是 RUNNING，请勿把 RUNNING 当作完成。
+新生成的视频会自动成为当前选中（完成时选中），体现为 GET /episodes/{episodeId}/shots 的 selectedVideoUrl；PUT /shots/{shotId}/selected-video 用于在多个候选视频间切换。
+该模型对本团队的在跑任务数已满时，任务以 FAILED 结束且 error.code 为 DRAMA_MODEL_CONCURRENCY_LIMIT（未受理、未扣费），建议退避后重试。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "appCode": "SEEDANCE_2_FAST_MULTIMODAL_VIDEO",
+              "modelParams": {
+                "motionStrength": 0.6
+              }
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/shots/sh_7Qz3Rk9/video-generations"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "req-20260916-0001")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "taskId": "tk_9As7Qt4",
+    "type": "SHOT_VIDEO_GENERATE",
+    "status": "QUEUED",
+    "progress": null,
+    "result": null,
+    "error": null,
+    "cost": null,
+    "createdAt": "2026-09-16T09:40:00.000+08:00",
+    "finishedAt": null
+  }
+}

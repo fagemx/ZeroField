@@ -1,0 +1,94 @@
+GET
+/episodes/{episodeId}/assets
+复制
+资产列表
+
+游标分页查询该集下的资产。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+episodeId	string	是	
+对外剧集号。
+示例：ep_4Rt7QxNp1
+Query 参数
+参数	类型	必填	说明
+cursor	string	否	
+游标，取上一页响应的 nextCursor。
+
+limit	integer	否	
+每页条数，1~100，缺省 20，越界返回 422。
+响应字段说明
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号，as_ 前缀。
+
+name	string	是	
+资产名称。
+
+type	enum	是	
+资产类型。
+可选值： CHARACTERSCENEPROP
+
+description	string	否	
+资产描述。
+
+imageUrl	string	否	
+当前默认形象图的可访问地址；取不到默认图时回退第一张非空形象图；尚未生图则为 null。
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/episodes/ep_4Rt7QxNp1/assets?cursor=%3Ccursor%3E&limit=%3Climit%3E"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "items": [
+      {
+        "assetId": "as_5Ln9Vt2",
+        "name": "林夏",
+        "type": "CHARACTER",
+        "description": "女主角，25岁，短发",
+        "imageUrl": "https://cos.runninghub.cn/aivideo/asset/xxx.png?sign=...",
+        "createdAt": "2026-09-16T09:12:00.000+08:00"
+      }
+    ],
+    "nextCursor": null
+  }
+}

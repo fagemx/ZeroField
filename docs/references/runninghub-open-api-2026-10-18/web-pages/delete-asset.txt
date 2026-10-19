@@ -1,0 +1,67 @@
+DELETE
+/assets/{assetId}
+复制
+删除资产
+
+删除资产整体，或只解除它与某一集的关联。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号。
+示例：as_5Ln9Vt2
+Query 参数
+参数	类型	必填	说明
+entire	boolean	否	
+true 表示整个资产本体一并删除；false（默认）只解除关联。
+示例：false
+
+episodeId	string	否	
+仅 entire=false 时生效，圈定解除关联的剧集范围；不传按解除全项目关联处理。
+
+注意
+
+entire=true 会真正删除资产本体（含全部变体与历史图片），已经绑定该资产的镜头 / 场次会一并解除绑定，请谨慎调用。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/assets/as_5Ln9Vt2?entire=false&episodeId=%3CepisodeId%3E"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("DELETE", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

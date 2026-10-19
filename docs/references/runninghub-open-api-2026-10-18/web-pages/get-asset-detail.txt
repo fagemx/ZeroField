@@ -1,0 +1,106 @@
+GET
+/assets/{assetId}
+复制
+查询资产详情
+
+按资产号查询详情，含变体摘要与出场场次。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号。
+示例：as_5Ln9Vt2
+响应字段说明
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号。
+
+name	string	是	
+资产名称。
+
+type	enum	是	
+资产类型。
+可选值： CHARACTERSCENEPROP
+
+description	string	否	
+资产描述。
+
+imageUrl	string	否	
+当前默认变体展示图的可访问地址，取不到默认图时回退第一张非空展示图，未生图则为 null。
+
+variants	object[]	是	
+变体摘要列表，字段同「变体列表」接口。
+
+appearingSceneIds	string[]	是	
+出场场次号列表（SCENE / PROP 资产才有意义，角色资产恒为空数组）。
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+注意
+
+不属于当前企业 Key 或 id 不合法都返回 404 DRAMA_NOT_FOUND。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/assets/as_5Ln9Vt2"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "assetId": "as_5Ln9Vt2",
+    "name": "林夏",
+    "type": "CHARACTER",
+    "description": "女主角，25岁，短发",
+    "imageUrl": "https://cos.runninghub.cn/aivideo/asset/xxx.png?sign=...",
+    "variants": [
+      {
+        "variantId": "vr_7Nq4Su2",
+        "kind": "OUTFIT",
+        "name": "日常装",
+        "description": "白色衬衫，牛仔裤",
+        "imageUrl": "https://cos.runninghub.cn/aivideo/asset-variant/xxx.png?sign=...",
+        "isDefault": true,
+        "sortOrder": 0
+      }
+    ],
+    "appearingSceneIds": [
+      "sc_6Ym2Wq9"
+    ],
+    "createdAt": "2026-09-16T09:12:00.000+08:00"
+  }
+}

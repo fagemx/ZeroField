@@ -1,0 +1,72 @@
+GET
+/catalog/director-styles
+复制
+导演风格目录
+
+查询内置分镜导演风格，key 用于剧集设置的 directorStyleKey。
+
+响应字段说明
+参数	类型	必填	说明
+key	string	是	
+风格 key，传给 PUT /episodes/(episodeId)/settings 的 directorStyleKey 字段。
+
+name	string	是	
+风格名称。
+
+description	string	否	
+风格简介。
+
+coverUrl	string	否	
+封面图可访问地址。
+
+注意
+
+按部署站点（国内 / 海外）过滤可见性，只返回启用且未删除的风格，按后台排序权重升序。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/catalog/director-styles"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "key": "CINEMATIC_WIDE",
+      "name": "电影感广角",
+      "description": "大量广角与全景，强调空间感与氛围。",
+      "coverUrl": "https://cdn.runninghub.cn/director-style/cinematic-wide.png"
+    }
+  ]
+}

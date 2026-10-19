@@ -1,0 +1,99 @@
+POST
+/shots/{shotId}/splits
+复制
+拆分镜头
+
+把一个镜头按子镜头段位置拆成两个。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+shotId	string	是	
+对外镜头号。
+示例：sh_7Qz3Rk9
+Body 参数
+参数	类型	必填	说明
+splitAt	integer	否	
+拆分位置：子镜头段索引（1 起），须小于该镜头子镜头段数，否则 422；省略则从中点拆分；单段镜头可省略。
+响应字段说明
+参数	类型	必填	说明
+(array item)	object	是	
+拆分后的两个镜头（原镜头 + 新镜头），字段结构同「查询镜头详情」，按场次顺序返回。
+
+注意
+
+拆分会重置两个镜头已生成的故事板图 / 视频关联（新的正文需要重新生成产出）。
+splitAt 不小于该镜头子镜头段数时返回 422。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "splitAt": 12
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/shots/sh_7Qz3Rk9/splits"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "shotId": "sh_7Qz3Rk9",
+      "sceneId": "sc_6Ym2Wq9",
+      "shotIndex": 1,
+      "sceneIndex": 1,
+      "description": "雨中街道，林夏疾步奔跑，",
+      "dialogue": "林夏（喘息）：不能再等了……",
+      "durationSeconds": 3,
+      "selectedImageUrl": null,
+      "selectedVideoUrl": null,
+      "status": "PENDING"
+    },
+    {
+      "shotId": "sh_2Uw6Xy4",
+      "sceneId": "sc_6Ym2Wq9",
+      "shotIndex": 2,
+      "sceneIndex": 1,
+      "description": "霓虹灯光倒映在积水中。",
+      "dialogue": null,
+      "durationSeconds": 2,
+      "selectedImageUrl": null,
+      "selectedVideoUrl": null,
+      "status": "PENDING"
+    }
+  ]
+}

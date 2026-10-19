@@ -1,0 +1,110 @@
+POST
+/assets/{assetId}/image-generations
+复制
+资产生图
+
+为指定资产生成形象图，异步任务。
+
+请求参数说明
+
+Headers
+参数	类型	必填	说明
+Idempotency-Key	string	否	
+幂等键。
+Path 参数
+参数	类型	必填	说明
+assetId	string	是	
+对外资产号。
+示例：as_5Ln9Vt2
+Body 参数
+参数	类型	必填	说明
+appCode	string	是	
+生图应用码，取自 GET /catalog/apps（capability=IMAGE）。资产首图没有参考图，建议用 NANO 系列 T2I（如 NANO_PRO_G2_T2I_OFFICIAL）；已有参考图的资产用对应 I2I。appCode 区分大小写；部分第三方应用对空 prompt / 画幅参数校验严格，此时任务以 FAILED 结束，error.code 为 DRAMA_REQUEST_FAILED，上游原始错误码与信息附在 error.message 中。
+示例：NANO_PRO_G2_T2I_OFFICIAL
+
+prompt	string	否	
+自定义提示词；不传则用后端默认拼装逻辑。
+
+aspectRatio	string	否	
+画幅比例，如 16:9；应用不支持时回落默认档。
+
+resolution	string	否	
+分辨率；应用不支持时回落默认档。
+响应字段说明
+参数	类型	必填	说明
+taskId	string	是	
+任务号。
+
+type	string	是	
+固定为 ASSET_IMAGE_GENERATE。
+
+status	string	是	
+提交时固定为 QUEUED。
+
+result	object	否	
+SUCCEEDED 后为 { imageUrl }。
+
+注意
+
+版式由后端按资产类型自动选择（场景走平面图、角色走三视图、道具无版式概念），当前不支持客户端指定单人像 / 全景等版式。
+生图费用按 openapi 现有计价结算，不经过 LLM 阶段的账单器，不会出现在 GET /bills 里。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "appCode": "NANO_PRO_G2_T2I_OFFICIAL",
+              "prompt": "",
+              "aspectRatio": "3:4"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/assets/as_5Ln9Vt2/image-generations"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "req-20260916-0001")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "taskId": "tk_4Vm2Ln8",
+    "type": "ASSET_IMAGE_GENERATE",
+    "status": "QUEUED",
+    "progress": null,
+    "result": null,
+    "error": null,
+    "cost": null,
+    "createdAt": "2026-09-16T09:15:00.000+08:00",
+    "finishedAt": null
+  }
+}

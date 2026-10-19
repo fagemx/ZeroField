@@ -14,6 +14,8 @@ ASSET = re.compile(r"^/projects/api/([a-z0-9][a-z0-9-]{0,40})/assets/(pa_[0-9a-f
 
 def handle(handler, parsed, method):
     """Return True only for owned routes; enforce member or worker identity independently."""
+    if parsed.path.startswith("/openapi/v2/"):
+        return _handle_openapi(handler, parsed, method)
     asset = ASSET.fullmatch(parsed.path)
     bearer = handler.headers.get("Authorization", "")
     if asset and method == "GET" and bearer.startswith("Bearer "):
@@ -172,3 +174,71 @@ def _worker_asset(handler, slug, asset_id, token):
     finally:
         conn.close()
     return True
+
+
+OPENAPI_RUN = re.compile(r"^/openapi/v2/run/(?:ai-app|workflow)/([A-Za-z0-9_-]{1,80})$")
+OPENAPI_MEDIA = re.compile(r"^/openapi/v2/media/(?:output|input)/([A-Za-z0-9._-]{1,120})$")
+
+
+def _handle_openapi(handler, parsed, method: str) -> bool:
+    """Self-hosted RunningHub OpenAPI v2 compatible endpoints."""
+    from project_docs import http, media
+    from project_assistant import limb_worker as worker
+    path = parsed.path
+    try:
+        media_match = OPENAPI_MEDIA.fullmatch(path)
+        if media_match and method == "GET":
+            found = worker.openapi_get_media(media_match.group(1))
+            if not found:
+                handler.send_json(404, {"code": 404, "msg": "Media not found"})
+                return True
+            raw_bytes, mime = found
+            handler.send_skillops_bytes(200, mime, raw_bytes, cache_control="private, max-age=3600")
+            return True
+        if path == "/openapi/v2/cards" and method == "GET":
+            handler.send_json(200, {"code": 0, "msg": "success", "cards": worker.openapi_list_cards()})
+            return True
+        if method != "POST":
+            handler.send_json(405, {"code": 405, "msg": "Method not allowed"})
+            return True
+        if path == "/openapi/v2/media/upload/binary":
+            try:
+                size = int(handler.headers.get("Content-Length") or "0")
+            except ValueError:
+                size = -1
+            if size <= 0 or size > media.MAX_BYTES:
+                handler.send_json(413 if size > 0 else 400, {"code": 400, "msg": "Invalid or oversized media body"})
+                return True
+            raw = handler.rfile.read(size)
+            handler._body_consumed = True
+            payload = worker.openapi_upload_binary(
+                raw,
+                handler.headers.get("Content-Type") or "",
+                handler.headers.get("X-File-Name") or "",
+            )
+            handler.send_json(200, payload)
+            return True
+        body, err = http._json_body(handler)
+        if err:
+            handler.send_json(err[0], {"code": err[0], "msg": err[1].get("error", "Invalid JSON")})
+            return True
+        if path == "/openapi/v2/cards/register":
+            handler.send_json(200, worker.openapi_register_card(body))
+            return True
+        if path == "/openapi/v2/query":
+            handler.send_json(200, worker.openapi_query_task(body))
+            return True
+        run_match = OPENAPI_RUN.fullmatch(path)
+        if run_match:
+            host = (handler.headers.get("Host") or "127.0.0.1:8000").strip()
+            base_url = f"http://{host}"
+            handler.send_json(200, worker.openapi_run_app(run_match.group(1), body, base_url=base_url))
+            return True
+        handler.send_json(404, {"code": 404, "msg": "OpenAPI v2 endpoint not found"})
+        return True
+    except worker.WorkerError as exc:
+        handler.send_json(400, {"code": 400, "msg": str(exc), "errorMessage": str(exc)})
+        return True
+    except Exception as exc:  # noqa: BLE001
+        handler.send_json(500, {"code": 500, "msg": str(exc), "errorMessage": str(exc)})
+        return True

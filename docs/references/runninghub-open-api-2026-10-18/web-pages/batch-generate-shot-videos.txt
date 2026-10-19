@@ -1,0 +1,95 @@
+POST
+/episodes/{episodeId}/shot-video-generations
+复制
+批量镜头生视频
+
+对该集多个镜头批量提交生视频任务，单镜失败不中断整批。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+episodeId	string	是	
+对外剧集号。
+示例：ep_4Rt7QxNp1
+Body 参数
+参数	类型	必填	说明
+appCode	string	是	
+生视频应用码，取自 GET /catalog/apps（capability=VIDEO）。
+示例：SEEDANCE_2_FAST_MULTIMODAL_VIDEO
+
+modelParams	object	否	
+模型参数覆盖，键对应应用 request_template 里的 fieldKey，应用到批次内每一个镜头；最多 50 项，超出返回 422。
+
+shotIds	string[]	否	
+指定要生视频的镜头号列表，最多 200 项（超出返回 422）；不传或空数组表示对该集全部镜头逐一生视频。
+响应字段说明
+参数	类型	必填	说明
+groupId	string	是	
+本批次任务组号，字段含义同「批量镜头生图」。
+
+taskIds	string[]	是	
+成功提交的任务号列表，与「镜头生视频」返回的单任务号同构。
+
+skipped	object[]	是	
+被跳过的镜头列表，字段结构同「批量镜头生图」。
+
+注意
+
+其余行为（无 Idempotency-Key、shotIds 为空时全量翻页）同「批量镜头生图」。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "appCode": "SEEDANCE_2_FAST_MULTIMODAL_VIDEO",
+              "modelParams": {
+                "motionStrength": 0.6
+              }
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/episodes/ep_4Rt7QxNp1/shot-video-generations"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("POST", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "groupId": "gr_9Xq2Ld7",
+    "taskIds": [
+      "tk_9As7Qt4"
+    ],
+    "skipped": []
+  }
+}

@@ -187,7 +187,8 @@ class ComfyTests(unittest.TestCase):
 
 class WorkflowTests(unittest.TestCase):
     def test_graphs_have_bound_nodes_existing_links_and_open_model_loaders(self):
-        for name, output in [('flux3_klein_soul_cast.json', '9'), ('ltx25_cinema_shot.json', '12'), ('ltx25_openjutsu_v2v.json', '12')]:
+        for name, output in [('flux3_klein_soul_cast.json', '9'), ('ltx25_cinema_shot.json', '12'),
+                             ('ltx25_openjutsu_v2v.json', '12'), ('local_smoke_sdxl_lightning.json', '9')]:
             with self.subTest(workflow=name):
                 graph = json.loads((ROOT / 'workflows' / name).read_text())
                 self.assertIn(output, graph)
@@ -198,6 +199,13 @@ class WorkflowTests(unittest.TestCase):
                     for value in node['inputs'].values():
                         if isinstance(value, list) and len(value) == 2 and isinstance(value[1], int):
                             self.assertIn(value[0], graph)
+        h3 = json.loads((ROOT / 'workflows/minimax_h3_ref2va.json').read_text())
+        self.assertIn('12', h3)
+        self.assertEqual(h3['200']['class_type'], 'MiniMaxH3ReferenceToVideo')
+        for node in h3.values():
+            for value in node['inputs'].values():
+                if isinstance(value, list) and len(value) == 2 and isinstance(value[1], int):
+                    self.assertIn(value[0], h3)
         v2v = json.loads((ROOT / 'workflows/ltx25_openjutsu_v2v.json').read_text())
         self.assertEqual(v2v['1']['class_type'], 'VHS_LoadVideo')
         self.assertEqual(v2v['1']['inputs']['frame_load_cap'], 97)
@@ -373,6 +381,516 @@ class ReferencePreparationTests(unittest.TestCase):
     def test_out_of_range_timestamp_fails_before_upload(self):
         with self.assertRaisesRegex(worker.WorkerError, 'timestamp'):
             self.prepare({'layout': 'extract_frame', 'timestamp_sec': 2})
+
+
+class Spec05StudioCardAndDualEngineTests(unittest.TestCase):
+    def test_suite1_declarative_cards_build_node_info_and_workflow_injection(self):
+        for card_id in ('h3-reference', 'h3-optimize', 'h3-short-video-v3', 'ltx25-openjutsu', 'ltx25-cinema', 'flux-soul-cast', 'local-smoke'):
+            with self.subTest(card_id=card_id):
+                card = worker.load_studio_card(card_id)
+                self.assertEqual(card['card_id'], card_id)
+                self.assertTrue(card['nodes'])
+
+        h3_card = worker.load_studio_card('h3-reference')
+        info = worker.build_node_info(h3_card, {
+            '27.video': 'driving.mp4',
+            '51.image': 'sheet.png',
+            '263.text': '',
+            '159.lora_name': 'none',
+            '252.megapixels': '999.0',
+        })
+        by_key = {f"{item['nodeId']}.{item['fieldName']}": item['fieldValue'] for item in info}
+        # Empty string must not fall back to defaultValue ('is None' rule).
+        self.assertEqual(by_key['263.text'], '')
+        # Locked nodes override external tampering.
+        self.assertEqual(by_key['252.megapixels'], '1.0')
+        self.assertEqual(by_key['283.value'], '2.0')
+        self.assertEqual(by_key['48.audio'], 'None')
+        # disabled_loras rule: 'none' substitutes valid filename and sets strength_model='0'.
+        self.assertEqual(by_key['159.lora_name'], 'minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors')
+        self.assertEqual(by_key['159.strength_model'], '0')
+
+        workflow = json.loads((ROOT / 'workflows' / 'minimax_h3_ref2va.json').read_text(encoding='utf-8'))
+        injected = worker.inject_node_info_into_workflow(copy.deepcopy(workflow), info, h3_card)
+        self.assertEqual(injected['27']['inputs']['video'], 'driving.mp4')
+        self.assertEqual(injected['51']['inputs']['image'], 'sheet.png')
+        self.assertEqual(injected['159']['inputs']['strength_model'], 0.0)
+        self.assertEqual(injected['252']['inputs']['megapixels'], 1.0)
+        self.assertEqual(injected['283']['inputs']['value'], 2.0)
+        # Optional 'None' image (49,50,43,19,23) and audio (48,14,15) nodes are unlinked and removed.
+        for unused_id in ('49', '50', '43', '19', '23', '48', '14', '15'):
+            self.assertNotIn(unused_id, injected)
+        for key in ('ref_image_2', 'ref_image_3', 'ref_image_4', 'ref_image_5', 'ref_image_6',
+                    'ref_audio_1', 'ref_audio_2', 'ref_audio_3'):
+            self.assertNotIn(key, injected['200']['inputs'])
+        self.assertIn('ref_image_1', injected['200']['inputs'])
+
+    def test_suite2_slot_plan_pictured_first_ranking_and_excluded_refs_guard(self):
+        task = studio_task()
+        task['input']['tabs'][1]['tables'][0]['rows'] = [
+            {'cells': ['PROP-01', 'TextProp', 'ancient brass compass without image', '']},
+            {'cells': ['CAST-01', 'Kael', 'courier in coat; seed 48291', ASSET(1)]},
+            {'cells': ['CAST-02', 'Vex', 'forbidden rival; seed 111', ASSET(2)]},
+            {'cells': ['SET-01', 'Observatory', 'rain on glass', ASSET(3)]},
+        ]
+        # Mention PROP-01 once, SET-01 twice, CAST-01 once, and exclude CAST-02 via !-@CAST-02.
+        task['input']['rows'][1]['cells'][3] = '@PROP-01 @CAST-01 enters @SET-01 and inspects @SET-01. !-@CAST-02'
+        ctx = worker.resolve_studio_context(task)
+        self.assertIn('CAST-02', ctx['excluded_refs'])
+        self.assertNotIn('CAST-02', [a['asset_id'] for a in ctx['resolved_assets']])
+        planned = ctx['slot_plan']
+        self.assertEqual(len(planned), 6)
+        # SET-01 appeared twice so it ranks ahead of CAST-01 (appeared once); PROP-01 has no image so it does not consume a slot.
+        self.assertEqual(planned[0]['asset_id'], 'SET-01')
+        self.assertEqual(planned[1]['asset_id'], 'CAST-01')
+        self.assertIsNone(planned[2])
+
+    def test_suite3_fingerprint_lock_and_role_separated_agent_prompt(self):
+        base_values = {'27.video': ASSET(5), '51.image': ASSET(1), '259.value': '4', '252.aspect_ratio': '16:9 (Widescreen)'}
+        fp1 = worker.compute_request_fingerprint('demo', 'shot-2', 'h3-reference', base_values)
+        fp2 = worker.compute_request_fingerprint('demo', 'shot-2', 'h3-reference', dict(base_values))
+        fp_changed_dur = worker.compute_request_fingerprint('demo', 'shot-2', 'h3-reference', dict(base_values, **{'259.value': '5'}))
+        fp_changed_img = worker.compute_request_fingerprint('demo', 'shot-2', 'h3-reference', dict(base_values, **{'51.image': ASSET(2)}))
+        self.assertEqual(fp1, fp2)
+        self.assertNotEqual(fp1, fp_changed_dur)
+        self.assertNotEqual(fp1, fp_changed_img)
+
+        prompt = worker.compile_h3_agent_instruction_prompt({
+            'pictures': [{'slot': 1, 'name': 'kael_sheet.png'}],
+            'values': base_values,
+            'directions': 'Keep full-body framing',
+        }, [0.25, 0.75, 1.25, 1.75, 2.25, 2.75, 3.25, 3.75])
+        self.assertIn('<Picture 1>', prompt)
+        self.assertIn('<Video 1>', prompt)
+        self.assertIn('圖片素材1', prompt)
+        self.assertIn('參考影片1', prompt)
+
+    def test_suite4_h3_context_ir_6_sections_and_ltx_ingredients_prompt(self):
+        task = studio_task()
+        ctx = worker.resolve_studio_context(task)
+        ir = ctx['h3_context_ir_prompt']
+        for section in ('subject_definitions:', 'summary:', 'retention_analysis:',
+                        'detailed_description:', 'overall_soundscape:', 'non_diegetic_music:'):
+            self.assertIn(section, ir)
+        self.assertIn('<Subject 1>', ir)
+        self.assertIn('<Picture 1>', ir)
+        self.assertIn('<Video 1>', ir)
+        self.assertRegex(ir, r'<d>\[English\].*</d>')
+
+        ltx_prompt = ctx['ltx_ingredients_prompt']
+        self.assertIn('Reference Sheet Layout:', ltx_prompt)
+        self.assertIn('[Left panel: CAST-01 (Kael)', ltx_prompt)
+        self.assertIn('[Right panel: SET-01 (Observatory)', ltx_prompt)
+
+    def test_suite5_spec_aligner_32px_grid_and_frame_formulas(self):
+        self.assertEqual(worker.snap_dimensions(1270, 710, 32), (1280, 704))
+        self.assertEqual(worker.snap_dimensions(20, 20, 32), (32, 32))
+        self.assertEqual(worker.snap_frame_count(96, 'none'), 96)
+        self.assertEqual(worker.snap_frame_count(96, '8n+1'), 97)
+        self.assertEqual(worker.snap_frame_count(97, '8n+1'), 97)
+        self.assertEqual(worker.snap_frame_count(96, '17n+5'), 107)
+        self.assertEqual(worker.snap_frame_count(22, '17n+5'), 22)
+        self.assertEqual(worker.snap_frame_count(5, '17n+5'), 5)
+        self.assertEqual(worker.aspect_for({'width': 1920, 'height': 1080},
+                                          ['1:1 (Square)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)']),
+                         '16:9 (Widescreen)')
+
+    def test_litegraph_ui_conversion_card_extraction_and_cascade_unlink(self):
+        # Simulate a RunningHub/ComfyUI LiteGraph UI workflow (like 短视频复刻-v3.json) with SetNode/GetNode and LayerUtility passthroughs
+        litegraph_ui = {
+            'nodes': [
+                {'id': 1, 'type': 'LoadImage', 'inputs': [{'name': 'image', 'widget': {'name': 'image'}}], 'widgets_values': ['ref1.png', 'image']},
+                {'id': 54, 'type': 'LayerUtility: ImageScaleByAspectRatio V2', 'inputs': [{'name': 'image', 'link': 50}], 'widgets_values': []},
+                {'id': 32, 'type': 'SetNode', 'inputs': [{'name': 'IMAGE', 'link': 51}], 'widgets_values': ['ref_image_1']},
+                {'id': 67, 'type': 'GetNode', 'inputs': [], 'widgets_values': ['ref_image_1']},
+                {'id': 61, 'type': 'LoadImage', 'inputs': [{'name': 'image', 'widget': {'name': 'image'}}], 'widgets_values': ['ref2.png', 'image']},
+                {'id': 62, 'type': 'LayerUtility: ImageScaleByAspectRatio V2', 'inputs': [{'name': 'image', 'link': 65}], 'widgets_values': []},
+                {'id': 63, 'type': 'SetNode', 'inputs': [{'name': 'IMAGE', 'link': 67}], 'widgets_values': ['ref_image_2']},
+                {'id': 64, 'type': 'GetNode', 'inputs': [], 'widgets_values': ['ref_image_2']},
+                {'id': 3, 'type': 'VHS_LoadVideo', 'inputs': [{'name': 'video', 'widget': {'name': 'video'}}], 'widgets_values': {'video': 'src.mp4', 'force_rate': 24, 'videopreview': {}}},
+                {'id': 57, 'type': 'JjkText', 'inputs': [{'name': 'text', 'widget': {'name': 'text'}}], 'widgets_values': ['initial prompt']},
+                {'id': 72, 'type': 'MathExpression|pysssss', 'inputs': [{'name': 'expression', 'widget': {'name': 'expression'}}], 'widgets_values': ['max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17']},
+                {'id': 26, 'type': 'MiniMaxH3ReferenceToVideo', 'inputs': [
+                    {'name': 'ref_images.ref_image_0', 'link': 72},
+                    {'name': 'ref_images.ref_image_1', 'link': 69},
+                    {'name': 'ref_videos.ref_video_0', 'link': 62},
+                    {'name': 'prompt', 'link': 52},
+                ], 'widgets_values': ['', 1344, 768, 124, 'match']},
+                {'id': 42, 'type': 'SelfLiftAvatarH3Sampler', 'inputs': [
+                    {'name': 'seed', 'widget': {'name': 'seed'}},
+                    {'name': 'cfg', 'widget': {'name': 'cfg'}},
+                ], 'widgets_values': [699183786914467, 'randomize', 1.0]},
+                {'id': 51, 'type': 'VHS_VideoCombine', 'inputs': [{'name': 'images', 'link': 45}], 'widgets_values': {'format': 'video/h264-mp4'}},
+            ],
+            'links': [
+                [50, 1, 0, 54, 0, 'IMAGE'],
+                [51, 54, 0, 32, 0, '*'],
+                [72, 67, 0, 26, 3, 'IMAGE'],
+                [65, 61, 0, 62, 0, 'IMAGE'],
+                [67, 62, 0, 63, 0, '*'],
+                [69, 64, 0, 26, 4, 'IMAGE'],
+                [62, 3, 0, 26, 6, 'IMAGE'],
+                [52, 57, 0, 26, 11, 'STRING'],
+                [45, 42, 0, 51, 0, 'IMAGE'],
+            ],
+        }
+        api_graph = worker.convert_litegraph_to_api(litegraph_ui)
+        self.assertNotIn('32', api_graph)
+        self.assertNotIn('67', api_graph)
+        self.assertEqual(api_graph['26']['inputs']['ref_images.ref_image_0'], ['54', 0])
+        self.assertEqual(api_graph['26']['inputs']['ref_images.ref_image_1'], ['62', 0])
+        self.assertEqual(api_graph['42']['inputs']['seed'], 699183786914467)
+        self.assertEqual(api_graph['42']['inputs']['cfg'], 1.0)
+
+        # Reverse-engineer a Studio Card directly from the LiteGraph UI workflow
+        extracted = worker.extract_studio_card_from_workflow(litegraph_ui, card_id='auto-v3', label='Auto Short Video v3')
+        self.assertEqual(extracted['output_mode'], 'video')
+        self.assertEqual(extracted['engine_config']['output_node'], '51')
+        self.assertEqual(extracted['engine_config']['frame_formula'], '17n+5')
+
+        # Inject with 2nd reference image set to 'None' and verify cascade unlinking of 61 -> 62 -> 26.ref_images.ref_image_1
+        node_info = worker.build_node_info(extracted, {
+            '3.video': 'driving.mp4',
+            '1.image': 'kael.png',
+            '61.image': 'None',
+            '57.text': 'compiled H3-Context-IR',
+        })
+        injected = worker.inject_node_info_into_workflow(litegraph_ui, node_info, extracted)
+        self.assertNotIn('61', injected)
+        self.assertNotIn('62', injected)
+        self.assertNotIn('ref_images.ref_image_1', injected['26']['inputs'])
+        self.assertEqual(injected['26']['inputs']['ref_images.ref_image_0'], ['54', 0])
+        self.assertEqual(injected['1']['inputs']['image'], 'kael.png')
+        self.assertEqual(injected['57']['inputs']['text'], 'compiled H3-Context-IR')
+
+        oom_msg = worker._normalize_comfy_error({'status': {'status_str': 'error', 'failedReason': {'exception_type': 'OutOfMemoryError'}}})
+        self.assertIn('OOM', oom_msg)
+        queue_msg = worker._normalize_comfy_error({'status': {'status_str': 'error', 'errorMessage': 'API 并发数已达上线 (queue limit)'}})
+        self.assertIn('queue limit', queue_msg)
+
+
+@unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg and FFprobe are required')
+class Spec05MediaAndLineWorldsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.folder = tempfile.TemporaryDirectory()
+        cls.source = Path(cls.folder.name) / 'source.mp4'
+        subprocess.run([
+            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+            '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=24:duration=1.5',
+            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1.5',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', str(cls.source)
+        ], check=True, capture_output=True)
+        cls.raw_video = cls.source.read_bytes()
+
+        cls.padded = Path(cls.folder.name) / 'padded.mp4'
+        subprocess.run([
+            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+            '-f', 'lavfi', '-i', 'testsrc2=size=64x48:rate=24:duration=2.5',
+            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2.5',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', str(cls.padded)
+        ], check=True, capture_output=True)
+        cls.raw_padded = cls.padded.read_bytes()
+
+        from PIL import Image
+        import io
+        cls.img1_bytes = io.BytesIO()
+        Image.new('RGB', (120, 160), (200, 40, 40)).save(cls.img1_bytes, format='PNG')
+        cls.img2_bytes = io.BytesIO()
+        Image.new('RGB', (140, 160), (40, 120, 220)).save(cls.img2_bytes, format='PNG')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.folder.cleanup()
+
+    def test_suite3_and_4_frame_sheet_and_ingredients_sheet_generation(self):
+        from PIL import Image
+        import io
+        task = studio_task()
+        task['input']['rows'][1]['cells'] = [ASSET(5), '@CAST-01 @SET-01']
+        task['input']['tabs'][0]['tables'][0]['headers'] = ['Source Video', 'Action Prompt']
+        head = Mock()
+        head.lease_lost.return_value = False
+        def asset_fetch(t, url):
+            if url == ASSET(5):
+                return self.raw_video, 'video/mp4'
+            if url == ASSET(1):
+                return self.img1_bytes.getvalue(), 'image/png'
+            return self.img2_bytes.getvalue(), 'image/png'
+        head.asset.side_effect = asset_fetch
+        uploaded = {}
+        def upload(t, raw, mime, filename=None):
+            uploaded.update(raw=raw, mime=mime, filename=filename)
+            return {'asset_url': ASSET(10), 'content_type': mime}
+        head.upload.side_effect = upload
+
+        # 8-frame timestamped contact sheet (1600x600)
+        res_sheet = worker.ffmpeg(task, {'mode': 'frame_sheet'}, head)
+        self.assertEqual(res_sheet['reference_role'], 'frame_sheet')
+        self.assertEqual(len(res_sheet['timestamps']), 8)
+        with Image.open(io.BytesIO(uploaded['raw'])) as img:
+            self.assertEqual(img.size, (1600, 600))
+
+        # Horizontal Ingredients Sheet (32px-aligned)
+        res_ing = worker.ffmpeg(task, {'mode': 'ingredients_sheet', 'height': 160, 'grid_size': 32}, head)
+        self.assertEqual(res_ing['reference_role'], 'ingredients_sheet')
+        self.assertIn('[Left panel: CAST-01', res_ing['ltx_ingredients_prompt'])
+        with Image.open(io.BytesIO(uploaded['raw'])) as img:
+            self.assertEqual(img.width % 32, 0)
+            self.assertEqual(img.height % 32, 0)
+
+    def test_suite6_ref05_and_lineworlds_with_and_without_source_video(self):
+        from PIL import Image
+        import io
+        task = studio_task()
+        task['input']['rows'][1]['cells'] = [ASSET(5), '@CAST-01']
+        task['input']['tabs'][0]['tables'][0]['headers'] = ['Source Video', 'Action Prompt']
+        head = Mock()
+        head.lease_lost.return_value = False
+        head.asset.return_value = (self.raw_video, 'video/mp4')
+        uploaded = {}
+        def upload(t, raw, mime, filename=None):
+            uploaded.update(raw=raw, mime=mime, filename=filename)
+            return {'asset_url': ASSET(11), 'content_type': mime}
+        head.upload.side_effect = upload
+
+        # Path A: De-textured ref05_edge and ref05_depth
+        for stype in ('ref05_edge', 'ref05_depth'):
+            with self.subTest(structure_type=stype):
+                res = worker.ffmpeg(task, {'mode': 'motion_structure', 'structure_type': stype}, head)
+                self.assertEqual(res['reference_role'], 'motion_structure_video')
+                out_path = Path(self.folder.name) / f'{stype}.mp4'
+                out_path.write_bytes(uploaded['raw'])
+                probed = worker._probe_video(out_path, {})
+                self.assertEqual(probed['frames'], 36)
+                self.assertTrue(probed['audio'])
+
+        # Path B1: line-worlds Extract & Re-Rig WITH source video
+        for stype in ('layout_silhouette', 'sparse_tracks'):
+            with self.subTest(lineworlds_with_video=stype):
+                res = worker.ffmpeg(task, {
+                    'mode': 'motion_structure', 'structure_type': stype,
+                    'controls': {'stride': 0.6, 'turn': 0.25, 'reach': 0.7, 'flare': 0.6}
+                }, head)
+                self.assertEqual(res['reference_role'], 'motion_structure_video')
+                out_path = Path(self.folder.name) / f'lw_{stype}.mp4'
+                out_path.write_bytes(uploaded['raw'])
+                probed = worker._probe_video(out_path, {})
+                self.assertEqual(probed['frames'], 36)
+                self.assertTrue(probed['audio'])
+
+        # Path B2: line-worlds Storyboard Rehearsal WITHOUT source video + time_strata PNG
+        task_no_vid = studio_task()
+        task_no_vid['input']['rows'][1]['cells'] = ['@CAST-01']
+        task_no_vid['input']['tabs'][0]['tables'][0]['headers'] = ['Action Prompt']
+        task_no_vid['input']['predecessor_tasks'] = []
+        res_rehearsal = worker.ffmpeg(task_no_vid, {
+            'mode': 'motion_structure', 'structure_type': 'layout_silhouette',
+            'width': 128, 'height': 96, 'fps': 12, 'duration_sec': 0.5, 'frame_rule': '8n+1'
+        }, head)
+        self.assertEqual(res_rehearsal['reference_role'], 'motion_structure_video')
+        rehearsal_path = Path(self.folder.name) / 'rehearsal.mp4'
+        rehearsal_path.write_bytes(uploaded['raw'])
+        probed_rehearsal = worker._probe_video(rehearsal_path, {})
+        self.assertEqual((probed_rehearsal['width'], probed_rehearsal['height']), (128, 96))
+        self.assertEqual(probed_rehearsal['frames'], 9)  # 6 frames snapped to 8n+1 -> 9
+
+        res_strata = worker.ffmpeg(task_no_vid, {
+            'mode': 'time_strata', 'width': 160, 'height': 128, 'controls': {'phases': 5, 'turn': 0.4}
+        }, head)
+        self.assertEqual(res_strata['reference_role'], 'time_strata')
+        with Image.open(io.BytesIO(uploaded['raw'])) as img:
+            self.assertEqual(img.size, (160, 128))
+
+    def test_suite7_bounded_mp4_trimming_and_pass2_source_chaining(self):
+        # Trim 2.5s (60 frames @ 24fps) padded render back to 1.5s (36 frames @ 24fps)
+        bounded_bytes = worker.bound_output_video_duration(self.raw_padded, 1.5, {})
+        bounded_path = Path(self.folder.name) / 'bounded_check.mp4'
+        bounded_path.write_bytes(bounded_bytes)
+        probed = worker._probe_video(bounded_path, {})
+        self.assertEqual(probed['frames'], 36)
+        self.assertAlmostEqual(probed['duration'], 1.5, delta=0.05)
+        self.assertTrue(probed['audio'])
+        self.assertLess(bounded_bytes.index(b'moov'), bounded_bytes.index(b'mdat'))
+
+        # Pass 2 @source resolution and card execution in comfyui()
+        task = studio_task()
+        task['capability'] = 'video_gen'
+        task['input']['rows'][1]['cells'] = [ASSET(5), ASSET(1), ASSET(7), '@CAST-01']
+        task['input']['tabs'][0]['tables'][0]['headers'] = ['Source Video', 'Ingredients Sheet', 'Remastered Video', 'Action Prompt']
+        head = Mock()
+        head.lease_lost.return_value = False
+        head.asset.side_effect = lambda t, url: (self.raw_video, 'video/mp4') if url in (ASSET(5), ASSET(7)) else (self.img1_bytes.getvalue(), 'image/png')
+        head.upload.side_effect = lambda t, raw, mime: {'asset_url': ASSET(12), 'content_type': mime}
+
+        config = {'card_id': 'h3-optimize', 'platform': 'local', 'base_url': 'http://comfy.test', 'max_duration_sec': 1.5, 'poll_seconds': 0}
+        with patch.object(worker, 'ComfyPlatformClient') as factory:
+            client = factory.return_value
+            client.upload_media.side_effect = lambda raw, mime, prefix: f'{prefix}.mp4' if mime.startswith('video/') else f'{prefix}.png'
+            client.submit_workflow.return_value = 'job-opt'
+            # Include a .zip side-output to verify NON_TAKE_KINDS archive filtering
+            client.fetch_history.return_value = {'job-opt': {'outputs': {'12': {'media': [
+                {'filename': 'debug_bundle.zip', 'outputType': 'zip'},
+                {'filename': 'restored.mp4', 'outputType': 'mp4'},
+            ]}}}}
+            client.download_output.return_value = (self.raw_padded, 'video/mp4')
+            result = worker.comfyui(task, config, head)
+            submitted = client.submit_workflow.call_args.args[0]
+            self.assertEqual(submitted['27']['inputs']['video'], 'source_video.mp4')
+            self.assertEqual(submitted['51']['inputs']['image'], 'reference.png')
+            self.assertAlmostEqual(submitted['259']['inputs']['value'], 1.5, places=2)
+            self.assertEqual(submitted['252']['inputs']['aspect_ratio'], '4:3 (Standard)')
+            self.assertEqual(client.download_output.call_args.args[0]['filename'], 'restored.mp4')
+            uploaded_bytes = head.upload.call_args.args[1]
+            verify_path = Path(self.folder.name) / 'comfy_bounded.mp4'
+            verify_path.write_bytes(uploaded_bytes)
+            self.assertEqual(worker._probe_video(verify_path, {})['frames'], 36)
+            self.assertEqual(result['reference_role'], 'output_video')
+
+    def test_suite8_runninghub_interoperability_and_self_hosted_openapi_v2(self):
+        import threading
+        import time
+        import urllib.request
+        import server
+
+        # 1. LiteGraph UI -> API conversion with mode=4 (bypassed nodes) and legacy widget names
+        litegraph_with_bypass = {
+            'nodes': [
+                {
+                    'id': 36,
+                    'type': 'DuckDecodeNode',
+                    'mode': 0,
+                    'inputs': [{'name': 'duck_image', 'type': 'IMAGE', 'link': None}],
+                    'outputs': [{'name': 'IMAGE', 'type': 'IMAGE', 'links': [10]}],
+                    'widgets_values': ['secret_pwd'],
+                },
+                {
+                    'id': 186,
+                    'type': 'DuckHideNode',
+                    'mode': 4,  # Bypassed node — must forward input link [36, 0] to downstream
+                    'inputs': [{'name': 'image', 'type': 'IMAGE', 'link': 10}],
+                    'outputs': [{'name': 'IMAGE', 'type': 'IMAGE', 'links': [11]}],
+                    'widgets_values': ['secret'],
+                },
+                {
+                    'id': 37,
+                    'type': 'SaveImage',
+                    'mode': 0,
+                    'inputs': [{'name': 'images', 'type': 'IMAGE', 'link': 11}],
+                    'outputs': [],
+                    'widgets_values': ['ComfyUI'],
+                },
+            ],
+            'links': [
+                [10, 36, 0, 186, 0, 'IMAGE'],
+                [11, 186, 0, 37, 0, 'IMAGE'],
+            ],
+        }
+        converted_api = worker.convert_litegraph_to_api(litegraph_with_bypass)
+        self.assertNotIn('186', converted_api)
+        self.assertEqual(converted_api['36']['inputs'], {'password': 'secret_pwd'})
+        self.assertEqual(converted_api['37']['inputs']['images'], ['36', 0])
+
+        # 2. Parse RunningHub curl for webappId 2109942725885075458 and extract exact 4 exposed slots
+        curl_cmd = (
+            "curl --location --request POST 'https://www.runninghub.ai/openapi/v2/run/ai-app/2109942725885075458' "
+            '--header "Content-Type: application/json" '
+            '--header "Authorization: Bearer ${RUNNINGHUB_API_KEY}" '
+            '--data-raw \'{"nodeInfoList":['
+            '{"nodeId":"1","fieldName":"image","fieldValue":"686c9017ad72e5a589768e34222942c4ddb7f8000251f3cb0dd8e0f8969df2a6.png","description":null},'
+            '{"nodeId":"61","fieldName":"image","fieldValue":"cc5ada5a568b0400e80cc6a8ac585cfc44de0f0984ab3f596dbafbc4568783db.png","description":null},'
+            '{"nodeId":"3","fieldName":"video","fieldValue":"5663418bd0e02c9104eb00cb4f4390f1dae2a0ac7b973cd6a232a36069c34f5a.mp4","description":null},'
+            '{"nodeId":"57","fieldName":"text","fieldValue":"subject_definitions:\\n<Subject 1> is the person represented by <Picture 1>.","description":null}'
+            '],"instanceType":"default","usePersonalQueue":"false"}\''
+        )
+        parsed_spec = worker.parse_runninghub_curl_or_payload(curl_cmd)
+        self.assertEqual(parsed_spec['webappId'], '2109942725885075458')
+        self.assertEqual(len(parsed_spec['nodeInfoList']), 4)
+
+        card_2109 = worker.load_studio_card('2109942725885075458')
+        self.assertEqual(card_2109['card_id'], 'h3-short-video-v3')
+        self.assertEqual(
+            [(n['nodeId'], n['fieldName'], n['fieldType'], n.get('slot')) for n in card_2109['nodes']],
+            [
+                ('1', 'image', 'IMAGE', 'ref'),
+                ('61', 'image', 'IMAGE', 'ref'),
+                ('3', 'video', 'VIDEO', 'driving_video'),
+                ('57', 'text', 'STRING', 'prompt'),
+            ],
+        )
+
+        # 3. End-to-end self-hosted OpenAPI v2 HTTP test (/openapi/v2/media/upload/binary -> /run/ai-app -> /query -> /media/output)
+        httpd = server.OpenBenchHTTPServer(('127.0.0.1', 0), server.OpenBenchHandler)
+        port = httpd.server_address[1]
+        base = f'http://127.0.0.1:{port}'
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            def post_json(path, obj):
+                req = urllib.request.Request(
+                    base + path,
+                    data=json.dumps(obj).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'},
+                    method='POST',
+                )
+                return json.loads(urllib.request.urlopen(req).read().decode('utf-8'))
+
+            def post_bin(path, raw, mime, fname):
+                req = urllib.request.Request(
+                    base + path,
+                    data=raw,
+                    headers={'Content-Type': mime, 'X-File-Name': fname},
+                    method='POST',
+                )
+                return json.loads(urllib.request.urlopen(req).read().decode('utf-8'))
+
+            up_img = post_bin('/openapi/v2/media/upload/binary', self.img1_bytes.getvalue(), 'image/png', 'ref1.png')
+            up_vid = post_bin('/openapi/v2/media/upload/binary', self.raw_video, 'video/mp4', 'drive.mp4')
+            self.assertEqual(up_img['code'], 0)
+            self.assertTrue(up_img['data']['fileName'].endswith('.png'))
+            self.assertTrue(up_vid['data']['fileName'].endswith('.mp4'))
+
+            with patch.object(worker.ComfyPlatformClient, 'upload_media', side_effect=lambda raw, mime, prefix='in': 'comfy_' + prefix), \
+                 patch.object(worker.ComfyPlatformClient, 'submit_workflow', return_value='prompt-v3-http'), \
+                 patch.object(worker.ComfyPlatformClient, 'fetch_history', return_value={
+                     'prompt-v3-http': {
+                         'status': {'completed': True},
+                         'outputs': {'51': {'gifs': [{'filename': 'AnimateDiff_00001.mp4', 'subfolder': '', 'type': 'output'}]}},
+                     }
+                 }), \
+                 patch.object(worker.ComfyPlatformClient, 'download_output', return_value=(self.raw_video, 'video/mp4')):
+                run_res = post_json('/openapi/v2/run/ai-app/2109942725885075458', {
+                    'nodeInfoList': [
+                        {'nodeId': '1', 'fieldName': 'image', 'fieldValue': up_img['data']['fileName'], 'description': None},
+                        {'nodeId': '61', 'fieldName': 'image', 'fieldValue': 'None', 'description': None},
+                        {'nodeId': '3', 'fieldName': 'video', 'fieldValue': up_vid['data']['fileName'], 'description': None},
+                        {'nodeId': '57', 'fieldName': 'text', 'fieldValue': 'subject_definitions:\n<Subject 1> is Kael from <Picture 1>.\n', 'description': None},
+                    ],
+                    'instanceType': 'default',
+                    'usePersonalQueue': 'false',
+                })
+                self.assertEqual(run_res['code'], 0)
+                self.assertEqual(run_res['status'], 'RUNNING')
+
+                for _ in range(20):
+                    q_res = post_json('/openapi/v2/query', {'taskId': run_res['taskId']})
+                    if q_res['status'] != 'RUNNING':
+                        break
+                    time.sleep(0.05)
+
+                self.assertEqual(q_res['status'], 'SUCCESS')
+                self.assertEqual(len(q_res['results']), 1)
+                self.assertEqual(q_res['results'][0]['outputType'], 'mp4')
+                self.assertEqual(q_res['results'][0]['nodeId'], '51')
+                # Verify optional Picture 2 (node 61 -> 62 -> 26.ref_images.ref_image_1) was cascade-unlinked
+                self.assertNotIn('ref_images.ref_image_1', q_res['compiledWorkflow']['26']['inputs'])
+                self.assertEqual(q_res['compiledWorkflow']['26']['inputs']['ref_images.ref_image_0'], ['54', 0])
+
+                with urllib.request.urlopen(q_res['results'][0]['url']) as resp:
+                    downloaded = resp.read()
+                self.assertEqual(downloaded, self.raw_video)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
 
 if __name__ == '__main__':

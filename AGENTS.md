@@ -7,11 +7,12 @@
 > **給接手的 AI 代理（Codex / Claude / Antigravity）**：
 > 本專案 **`ZeroField`**（位於 `C:\ai_project\ZeroField`）是專為參加 ComfyUI **「Open Source Higgsfield Challenge」**（截止日：2026-10-30 09:00 PT）獨立出來的參賽專用 Repo。
 >
-> **動工前請務必依序閱讀以下 4 份核心文件**：
-> 1. **[`docs/HANDOFF_4090_PC.md`](./docs/HANDOFF_4090_PC.md)**（**4090 電腦交接首頁**：目前 `SPEC_01`～`SPEC_04` 完成狀態、下一步 `SPEC_05` 任務、以及跨 Repo 參考清單 `fagemx/ad_growth_data` 與 `fagemx/guardian`）
-> 2. **[`docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md`](./docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)**（下一步主規格：自建 RunningHub 卡片引擎、`MiniMax H3 Ref2VA + H3-Context-IR`、`LTX-2.5 IC-LoRA + Ingredients Sheet` 與 `line-worlds` 結構產生器）
-> 3. **[`docs/DESIGN_AND_DEV_GUIDELINES.md`](./docs/DESIGN_AND_DEV_GUIDELINES.md)**（必讀！英文介面規範、`STATUSES` 白名單防呆、影片播放器、Open-Weights 與版權合規鐵律）
-> 4. **[`docs/ZEROFIELD_SPEC.md`](./docs/ZEROFIELD_SPEC.md)** 與 **[`docs/AGENT_ORCHESTRATION_SPEC.md`](./docs/AGENT_ORCHESTRATION_SPEC.md)**（參賽總體規格與多代理編排規格）
+> **動工前請務必依序閱讀以下 5 份核心文件**：
+> 1. **[`docs/HANDOFF_4090_PC.md`](./docs/HANDOFF_4090_PC.md)**（**電腦交接首頁**：目前 `SPEC_01`～`SPEC_05` 完成狀態、下一步 **`SPEC_06`** 任務、以及跨 Repo 參考清單）
+> 2. **[`docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md`](./docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md)**（**下一步主規格**：自建 RH STORY 漫劇工作台 `/aivideo/open/v1` 雙向 API 引擎、頂部五大入口、以及巨觀 ↔ 中觀 ↔ 微觀深度整合）
+> 3. **[`docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md`](./docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)**（已完成基底：自建 RunningHub `/openapi/v2` 卡片引擎、`MiniMax H3 Ref2VA + H3-Context-IR`、`LTX-2.5 IC-LoRA + Ingredients Sheet` 與 `line-worlds` 結構產生器）
+> 4. **[`docs/DESIGN_AND_DEV_GUIDELINES.md`](./docs/DESIGN_AND_DEV_GUIDELINES.md)**（必讀！英文介面規範、`STATUSES` 白名單防呆、影片播放器、Open-Weights 與版權合規鐵律）
+> 5. **[`docs/ZEROFIELD_SPEC.md`](./docs/ZEROFIELD_SPEC.md)** 與 **[`docs/AGENT_ORCHESTRATION_SPEC.md`](./docs/AGENT_ORCHESTRATION_SPEC.md)**（參賽總體規格與多代理編排規格）
 
 ---
 
@@ -78,3 +79,12 @@
    - **雙引擎多資產與規格對齊器（`32px` 網格 + `8n+1` / `17n+5` 幀）**：內建本地版 **`H3-Context-IR` 6 段式結構化 Prompt 編譯器**（供 `MiniMax H3`）與 **`mode="ingredients_sheet"` 多資產橫向拼圖器**（供 `LTX-2.5 Ingredients IC-LoRA`）。
    - **多密度動作結構與 `line-worlds` 參數化渲染器**：支援原片 `ref05_edge` / `ref05_depth` 半解析度去皺褶結構片，以及 `line-worlds`（2-Link IK + `stride/turn/reach/flare/camera_zoom` 旋鈕）渲染 **`layout_silhouette`**（色塊剪影片）、**`sparse_tracks`**（彩色錨點軌跡片）與 **`time_strata`**（單張時間摺層殘影圖）。
    - **收片 `.bounded.mp4` 幀數精準裁切與二階段 `@source` 交棒（`h3-reference` ➔ `h3-optimize`）**：自動將 `17n+5` / `8n+1` 多算的尾幀用 FFmpeg CRF 16 切回 `min(請求秒數, 原片秒數)` + `+faststart`，並支援 `@source` 一鍵帶入二階段 4K 修復卡。
+
+6. **[`docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md`](./docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md) — 自建 RH STORY 漫劇工作台（`/aivideo/open/v1/*`）與「巨觀 ↔ 中觀 ↔ 微觀」深度整合（Step 5，下一步執行目標）**：
+   - **負責檔案**：`project_docs/story_openapi.py`, `project_docs/runtime_http.py`, `project_assistant/limb_worker.py`, `ui/src/Surfaces.jsx`, `ui/src/App.jsx`, `ui/src/StoryWorkbenchModals.jsx`, `ui/src/SheetWorkspace.jsx`, `ui/src/SheetCards.jsx`, `ui/src/SheetReview.jsx`, `ui/src/studioModel.js`, `ui/src/sheetViews.js`, `ui/src/i18n/locales/en.json`, `ui/src/i18n/locales/zh-TW.json`, `tests/test_story_openapi.py`, `ui/tests/storyWorkbench.test.mjs`。
+   - **自建 `/aivideo/open/v1/*` 漫劇 OpenAPI 引擎（`project_docs/story_openapi.py`）**：對齊 `docs/references/runninghub-open-api-2026-10-18/` 規範（`{code: 0, msg: "success", data}` 信封、`Idempotency-Key` 24h 去重、64-bit 字串計數、`DRAMA_*` 錯誤碼與對應 HTTP 狀態碼），將 `PROJECT ➔ EPISODE ➔ SCRIPT ➔ ASSETS (含 Variants) ➔ SCENES ➔ STORYBOARD ➔ SHOTS ➔ FILM_EXPORT` 雙向映射至 ZeroField 的 5 張表並串聯底層 `/openapi/v2` ComfyUI 卡片。
+   - **頂部五大入口（對齊 RH STORY 導航）**：`Start Creating（開始創作：一鍵劇本導入拆集/提資產/拆鏡）`、`My Projects（我的項目：巨中微觀主工作台）`、`Asset Vault（資產庫：支援 @CAST-01:variant 服裝變體管理）`、`Toolbox（工具箱：檢視與匯入 ComfyUI .json + RunningHub curl 卡片與 nodeId）`、`Open API（開放 API 測試台）`。
+   - **巨觀 ↔ 中觀 ↔ 微觀全面升級**：
+     - **巨觀（Macro）**：「確認劇本」基線鎖提示列、批次指定 `appCode` 生圖生片、以及「導出整集成片（`POST /episodes/{id}/films` FFmpeg 無縫拼接）」。
+     - **中觀（Meso）**：按 `Scene`（場次）分組摺疊的分鏡畫廊、支援 `@CAST-01:night` 服裝變體解析與卡片上一鍵換裝膠囊。
+     - **微觀（Micro）**：單鏡多候選歷史條與一鍵挑片（`PUT /shots/{id}/selected-video`）、單鏡拆分（`POST /shots/{id}/splits`）、二階段 4K 修復交棒（`@source`）、以及 `nodeInfoList`（`nodeId` / `fieldName`）進階微調抽屜。

@@ -1,0 +1,59 @@
+DELETE
+/projects/{projectId}
+复制
+删除项目
+
+软删除一个项目。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+projectId	string	是	
+对外项目号。
+示例：pj_2V8rglMqiUk
+
+注意
+
+软删除，删除后再查询该项目返回 404 DRAMA_NOT_FOUND；请谨慎调用，当前没有恢复接口。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/projects/pj_2V8rglMqiUk"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("DELETE", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

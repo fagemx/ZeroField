@@ -16,7 +16,8 @@
 | **[`SPEC_02`](./specs/SPEC_02_MACRO_MESO_MICRO_WORKSPACE.md)** | ✅ Done | In-place **Macro (`Table`/`Board`) ↔ Meso (`Gallery` visual chain cards) ↔ Micro (`SheetReview` side-by-side inspector)** switching, `Studio Assistant` coexistence (never auto-closes `SheetReview`), `runInPlace` background execution, and `FlowSurface` pipeline manager. |
 | **[`SPEC_03`](./specs/SPEC_03_ASSET_BINDING_AND_COMFY_PLATFORM.md)** | ✅ Done | `resolve_studio_context()`, `prepare_reference_media()` (`extract_frame`, `motion_structure` with `edge_lineart`/`luma_depth`/`frame_diff`, `side_by_side`), `bind_external_workflow()`, `ComfyPlatformClient` (`local` + `comfy_sdk`), and initial `workflows/*.json`. |
 | **[`SPEC_04`](./specs/SPEC_04_SHOWCASE_SEED_AND_LAUNCHER.md)** | ✅ Done | One-command launcher `run_studio.py`, `seed_showcase_media()`, and pre-rendered CC0 showcase assets in `samples/`. |
-| **[`SPEC_05`](./specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)** | 📋 **Next on 4090 PC** | **Specification finalized and committed**. Ready for implementation and real GPU / ComfyUI verification on the RTX 4090 PC. |
+| **[`SPEC_05`](./specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)** | ✅ Done | Self-Hosted RunningHub `/openapi/v2` Card Engine (`workflows/cards/*.json`, `convert_litegraph_to_api`, `parse_runninghub_curl_or_payload`, `inject_node_info_into_workflow`), `H3-Context-IR`, `Ingredients Sheet`, `line-worlds`, and `.bounded.mp4` trimming. |
+| **[`SPEC_06`](./specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md)** | 📋 **Next to Execute** | **Self-Hosted RH STORY AI Drama Workbench (`/aivideo/open/v1/*`) & Macro ↔ Meso ↔ Micro Integration** (see [`docs/references/runninghub-open-api-2026-10-18/`](./references/runninghub-open-api-2026-10-18/README.md)). |
 
 ---
 
@@ -102,6 +103,6 @@ npm test --prefix ui
 python run_studio.py
 ```
 
-### Prompt for the Coding Agent on the 4090 PC
-When you open Codex / Claude on the 4090 PC, simply tell it:
-> **"Read `AGENTS.md`, `docs/HANDOFF_4090_PC.md`, and `docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md`, then implement `SPEC_05` and verify all unit tests."**
+### Prompt for the Next Coding Agent (`SPEC_06`)
+When you open the next coding agent session, simply tell it:
+> **"Read `AGENTS.md`, `docs/HANDOFF_4090_PC.md`, and `docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md`, then implement `SPEC_06` and verify all backend and frontend unit tests."**

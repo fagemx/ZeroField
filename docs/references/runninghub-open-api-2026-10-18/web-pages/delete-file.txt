@@ -1,0 +1,59 @@
+DELETE
+/files/{fileId}
+复制
+删除文件
+
+删除一个已上传文件及其存储对象。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+fileId	string	是	
+对外文件号。
+示例：up_3Fq8Nx2
+
+注意
+
+已被 project-imports 或资产改图引用过的文件仍可删除，不影响已生成的项目 / 图片，但已经用掉的 fileId 之后再引用会返回 404。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/files/up_3Fq8Nx2"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("DELETE", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

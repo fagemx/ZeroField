@@ -1,0 +1,61 @@
+{
+  "card_id": "ltx25-cinema",
+  "label": "LTX-2.5 Cinema Shot (I2V + Layout Guide)",
+  "sublabel": "Keyframe / Ingredients Sheet · Optional Layout Trajectory (8n+1)",
+  "group_label": "Video",
+  "icon": "▣",
+  "output_mode": "video",
+  "engine_key": "comfy-webapp/1",
+  "status": "active",
+  "sort_order": 12,
+  "engine_config": {
+    "webappId": "2105000000000000002",
+    "workflow": "workflows/ltx25_cinema_shot.json",
+    "instance": "default",
+    "frame_rule": "8n+1",
+    "grid_size": 32,
+    "timeout": 1800,
+    "output_node": "12"
+  },
+  "nodes": [
+    {
+      "nodeId": "2",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Keyframe / Ingredients Sheet",
+      "required": true,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "21",
+      "fieldName": "video",
+      "fieldType": "VIDEO",
+      "label": "Optional Layout / Structure Video",
+      "required": false,
+      "slot": "structure_video",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "6",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "Shot & Audio Prompt",
+      "required": true,
+      "slot": "prompt",
+      "defaultValue": "Use the provided start image as the first frame. A fictional courier crosses a quiet observatory. Slow dolly in, soft rain and footsteps."
+    },
+    {
+      "nodeId": "3",
+      "fieldName": "seed",
+      "fieldType": "INT",
+      "label": "Seed",
+      "required": false,
+      "slot": "seed",
+      "defaultValue": "48291",
+      "min": 0,
+      "max": 281474976710655,
+      "step": 1
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+GET
+/bills
+复制
+账单列表
+
+游标分页查询当前企业 Key 下的 LLM 阶段账单。
+
+请求参数说明
+
+Query 参数
+参数	类型	必填	说明
+cursor	string	否	
+游标，取上一页响应的 nextCursor。
+
+limit	integer	否	
+每页条数，1~100，缺省 20，越界返回 422。
+响应字段说明
+参数	类型	必填	说明
+billNo	string	是	
+对外账单号，bl_ 前缀。
+
+taskId	string	是	
+关联的对外任务号。
+
+stage	string	是	
+计费任务类型。
+可选值： ASSET_EXTRACTSTORYBOARD_GENERATESHOTS_REBUILDPROJECT_IMPORTPROJECT_GENERATESCRIPT_REFINESCENE_REFINEPROJECT_REEXTRACT
+
+model	string	是	
+固定为 platform：模型由平台按阶段配置，一个任务内可能用到多个模型，金额已含全部调用。
+
+inputTokens	string	否	
+输入 token 数；为避免精度丢失以数字字符串返回；结算前（ESTIMATED）为 null。
+
+outputTokens	string	否	
+输出 token 数；同上以数字字符串返回；结算前为 null。
+
+amount	number	否	
+结算金额（按分四舍五入，即实际扣款额；欠费状态为待补扣金额）；结算前为 null。
+
+currency	string	是	
+币种。
+
+status	enum	是	
+账单状态：ESTIMATED 任务已受理、尚未结算；CHARGED 已全额扣款；NO_CHARGE_FAILED 任务失败、不扣费；CHARGED_PARTIAL_CANCELED 任务取消、已按已消耗量扣款；ARREARS / ARREARS_PARTIAL_CANCELED 结算时因系统原因扣款失败、欠费待补扣，由平台自动补扣，成功后分别转 CHARGED / CHARGED_PARTIAL_CANCELED。
+可选值： ESTIMATEDCHARGEDNO_CHARGE_FAILEDCHARGED_PARTIAL_CANCELEDARREARSARREARS_PARTIAL_CANCELED
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+chargedAt	string	否	
+ISO-8601 结算时间；未结算为 null。
+
+注意
+
+生图 / 生视频不走本账单体系，按 openapi 现有计价结算，这里查不到。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/bills?cursor=%3Ccursor%3E&limit=%3Climit%3E"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "items": [
+      {
+        "billNo": "bl_3Cf8Rm7",
+        "taskId": "tk_1Xh6Bs4Q",
+        "stage": "ASSET_EXTRACT",
+        "model": "platform",
+        "inputTokens": "18320",
+        "outputTokens": "4210",
+        "amount": 0.68,
+        "currency": "USD",
+        "status": "CHARGED",
+        "createdAt": "2026-09-16T09:10:00.000+08:00",
+        "chargedAt": "2026-09-16T09:11:20.000+08:00"
+      }
+    ],
+    "nextCursor": null
+  }
+}

@@ -1,0 +1,113 @@
+PUT
+/episodes/{episodeId}/settings
+复制
+更新剧集设置
+
+更新画幅取向、分镜导演风格、时长模式、镜头节奏、故事板图渠道，字段为空不修改。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+episodeId	string	是	
+对外剧集号。
+示例：ep_4Rt7QxNp1
+Body 参数
+参数	类型	必填	说明
+orientation	enum	否	
+画幅取向，不传则不改；非法值返回 422 DRAMA_VALIDATION_FAILED。
+可选值： LANDSCAPEPORTRAIT
+
+directorStyleKey	string	否	
+内置分镜导演风格 key（GET /catalog/director-styles 的 key），不传则不改；设置后会清空该集已保存的自定义导演风格文档。
+
+durationMode	enum	否	
+分镜时长模式，不传则不改；非法值返回 422 DRAMA_VALIDATION_FAILED。
+可选值： standardadaptive
+
+pacingMode	enum	否	
+分镜镜头节奏：compact 紧凑（约 1.5–3.5 秒一镜）、balanced 适中、relaxed 舒缓（约 2.5–4.5 秒一镜）；不传则不改，传空字符串清除（自动规划）。对之后生成的分镜生效。
+可选值： compactbalancedrelaxed
+
+storyboardImageApp	string	否	
+故事板图渠道内部应用 id 的原样字符串，不传则不改；传空字符串表示恢复默认渠道。该设置只影响网页工作台的分镜生图；开放 API 的 image-generations 以请求里的 appCode 为准。
+响应字段说明
+参数	类型	必填	说明
+orientation	enum	是	
+画幅取向。
+可选值： LANDSCAPEPORTRAIT
+
+directorStyleKey	string	否	
+内置分镜导演风格 key，未设置为 null。
+
+durationMode	enum	否	
+分镜时长模式。
+可选值： standardadaptive
+
+pacingMode	enum	否	
+分镜镜头节奏，未设置为 null（自动规划）。
+可选值： compactbalancedrelaxed
+
+storyboardImageApp	string	否	
+故事板图渠道内部应用 id 的原样字符串，未设置为 null。
+
+注意
+
+directorStyleKey、durationMode、pacingMode 落在同一条内部配置上，只提交其中部分字段时其余沿用当前已保存的值，不会被顺带清空。
+pacingMode 传入不支持的值返回 422 DRAMA_VALIDATION_FAILED。
+storyboardImageApp 传入非数字字符串会返回 400 DRAMA_REQUEST_FAILED。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        String json = """
+            {
+              "orientation": "PORTRAIT",
+              "directorStyleKey": "CINEMATIC_WIDE",
+              "pacingMode": "compact"
+            }
+            """;
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/episodes/ep_4Rt7QxNp1/settings"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("PUT", HttpRequest.BodyPublishers.ofString(json))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "orientation": "PORTRAIT",
+    "directorStyleKey": "CINEMATIC_WIDE",
+    "durationMode": "standard",
+    "pacingMode": "compact",
+    "storyboardImageApp": null
+  }
+}

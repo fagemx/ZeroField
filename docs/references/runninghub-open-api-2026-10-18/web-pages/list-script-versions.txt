@@ -1,0 +1,89 @@
+GET
+/episodes/{episodeId}/script/versions
+复制
+剧本快照列表
+
+查询该集全部剧本快照（不含正文，不分页）。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+episodeId	string	是	
+对外剧集号。
+示例：ep_4Rt7QxNp1
+响应字段说明
+参数	类型	必填	说明
+versionId	string	是	
+对外快照号，sv_ 前缀。
+
+episodeId	string	是	
+所属剧集号。
+
+version	integer	是	
+快照版本号，同集内递增。
+
+source	enum	是	
+快照来源。
+可选值： RAW_INPUTAI_GENERATEDAI_REFINEDIMPORTEDAGGREGATED
+
+structureStatus	enum	是	
+AI 结构化状态：PENDING 已入库待处理、GENERATING 结构化中、DONE 已完成 / 无需结构化、FAILED 结构化失败（正文保留原文）。
+可选值： PENDINGGENERATINGDONEFAILED
+
+createdAt	string	是	
+ISO-8601 创建时间。
+
+注意
+
+按创建时间返回全部快照，不分页；数量随改写次数增长，客户端如需限制可自行按 createdAt 截取。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/episodes/ep_4Rt7QxNp1/script/versions"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": [
+    {
+      "versionId": "sv_5Ex2Qy8",
+      "episodeId": "ep_4Rt7QxNp1",
+      "version": 3,
+      "source": "AI_REFINED",
+      "structureStatus": "DONE",
+      "createdAt": "2026-09-17T09:15:40.000+08:00"
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "card_id": "h3-reference",
+  "label": "① H3 Reference Video Generation",
+  "sublabel": "Source Video · Multi-Ref Character & Scene (MiniMax H3 Ref2VA)",
+  "group_label": "Video",
+  "icon": "▷",
+  "output_mode": "video",
+  "engine_key": "comfy-webapp/1",
+  "status": "active",
+  "sort_order": 21,
+  "engine_config": {
+    "workflow": "workflows/minimax_h3_ref2va.json",
+    "webappId": "2103540145878601730",
+    "instance": "default",
+    "frame_rule": "17n+5",
+    "grid_size": 32,
+    "timeout": 3600,
+    "locked_nodes": {
+      "252.megapixels": "1.0",
+      "283.value": "2.0",
+      "48.audio": "None",
+      "14.audio": "None",
+      "15.audio": "None"
+    }
+  },
+  "nodes": [
+    {
+      "nodeId": "27",
+      "fieldName": "video",
+      "fieldType": "VIDEO",
+      "label": "Source Reference Video",
+      "required": true,
+      "slot": "driving_video",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "51",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Character & Scene Sheet",
+      "required": true,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "49",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 1",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "50",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 2",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "43",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 3",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "19",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 4",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "23",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Supplementary Ref 5",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "48",
+      "fieldName": "audio",
+      "fieldType": "AUDIO",
+      "label": "Unused Audio 1",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "14",
+      "fieldName": "audio",
+      "fieldType": "AUDIO",
+      "label": "Unused Audio 2",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "15",
+      "fieldName": "audio",
+      "fieldType": "AUDIO",
+      "label": "Unused Audio 3",
+      "required": false,
+      "hidden": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "263",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "Generation Instruction",
+      "required": true,
+      "slot": "prompt",
+      "defaultValue": "Use the character identity and scene environment from the reference images, and transfer the physical motion, timing, and camera trajectory from Reference Video 1.",
+      "projectDefaults": {
+        "default": "Cinematic 35mm film photography, natural skin texture, coherent directional lighting, clean silhouette separation, zero temporal flicker."
+      }
+    },
+    {
+      "nodeId": "259",
+      "fieldName": "value",
+      "fieldType": "FLOAT",
+      "label": "Duration (Seconds)",
+      "required": true,
+      "slot": "duration",
+      "defaultValue": "5",
+      "min": 1,
+      "max": 15,
+      "step": 0.001
+    },
+    {
+      "nodeId": "252",
+      "fieldName": "aspect_ratio",
+      "fieldType": "LIST",
+      "label": "Aspect Ratio",
+      "required": true,
+      "slot": "aspect_ratio",
+      "defaultValue": "16:9 (Widescreen)",
+      "options": [
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)"
+      ]
+    },
+    {
+      "nodeId": "159",
+      "fieldName": "lora_name",
+      "fieldType": "LIST",
+      "label": "Acceleration / Style LoRA",
+      "required": false,
+      "defaultValue": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+      "options": [
+        "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        "none"
+      ],
+      "optionLabels": [
+        "4-Step Turbo LoRA",
+        "Disabled"
+      ]
+    },
+    {
+      "nodeId": "159",
+      "fieldName": "strength_model",
+      "fieldType": "FLOAT",
+      "label": "LoRA Strength",
+      "required": false,
+      "defaultValue": "1.0",
+      "min": 0,
+      "max": 1.5,
+      "step": 0.05
+    }
+  ]
+}

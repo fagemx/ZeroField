@@ -1,0 +1,59 @@
+DELETE
+/shots/{shotId}
+复制
+删除镜头
+
+软删除一个镜头。
+
+请求参数说明
+
+Path 参数
+参数	类型	必填	说明
+shotId	string	是	
+对外镜头号。
+示例：sh_7Qz3Rk9
+
+注意
+
+软删除，删除后无法恢复；已生成的故事板图 / 视频不会被清理，只是不再通过镜头列表看到。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/shots/sh_7Qz3Rk9"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("DELETE", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": null
+}

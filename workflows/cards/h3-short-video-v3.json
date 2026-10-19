@@ -1,0 +1,58 @@
+{
+  "card_id": "h3-short-video-v3",
+  "label": "MiniMax H3 Short Video Replication v3",
+  "sublabel": "Driving Video · 2 Reference Images · SelfLiftAvatarH3Sampler",
+  "group_label": "Video",
+  "icon": "▷",
+  "output_mode": "video",
+  "engine_key": "comfy-webapp/1",
+  "engine_config": {
+    "webappId": "2109942725885075458",
+    "workflow": "workflows/minimax_h3_short_video_v3.json",
+    "output_node": "51",
+    "frame_formula": "17n+5",
+    "grid_size": 32,
+    "instance": "default",
+    "timeout": 7200
+  },
+  "status": "active",
+  "sort_order": 23,
+  "nodes": [
+    {
+      "nodeId": "1",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 1 (<Picture 1>)",
+      "slot": "ref",
+      "required": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "61",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 2 (<Picture 2>)",
+      "slot": "ref",
+      "required": false,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "3",
+      "fieldName": "video",
+      "fieldType": "VIDEO",
+      "label": "Source Driving Video (<Video 1>)",
+      "slot": "driving_video",
+      "required": true,
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "57",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "H3-Context-IR Structured Prompt",
+      "slot": "prompt",
+      "required": true,
+      "defaultValue": "subject_definitions:\n<Subject 1> is the primary subject represented by <Picture 1>.\n<Video 1> supplies the original video to be edited.\nsummary:\n[video editing + reference generation] Replace each bound source role in <Video 1> with its corresponding identity <Subject 1>.\nretention_analysis:\n<Subject 1>: fully_preserved for the supplied identity attributes only. <Video 1>: partially_preserved; preserve source action, orientation, camera, scene, lighting, visual style and timing.\ndetailed_description:\n[Shot 1] At 00:00.000, <Subject 1> performs the choreography from <Video 1>.\noverall_soundscape:\nCoherent room tone aligned with <Video 1>.\nnon_diegetic_music:\nN/A\n"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+GET
+/projects
+复制
+项目列表
+
+游标分页查询当前企业 Key 下的项目。
+
+请求参数说明
+
+Query 参数
+参数	类型	必填	说明
+cursor	string	否	
+游标，取上一页响应的 nextCursor；首页不传。
+
+limit	integer	否	
+每页条数，1~100，缺省 20，越界返回 422。
+示例：20
+响应字段说明
+参数	类型	必填	说明
+items	object[]	是	
+本页项目列表，元素结构同「查询项目」的 data。
+
+nextCursor	string	否	
+下一页游标；为空表示没有下一页。
+
+请求示例
+
+cURL
+Python
+JavaScript
+Java
+java
+复制
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class Example {
+    static final String RH_API_KEY = "";
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://story.runninghub.ai/aivideo/open/v1/projects?cursor=%3Ccursor%3E&limit=20"))
+            .header("Authorization", "Bearer " + RH_API_KEY)
+            .header("Content-Type", "application/json")
+            .method("GET", HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
+    }
+}
+
+响应示例
+
+json
+复制
+{
+  "code": 0,
+  "msg": "success",
+  "errorMessages": null,
+  "data": {
+    "items": [
+      {
+        "projectId": "pj_2V8rglMqiUk",
+        "title": "霓虹都市",
+        "description": "赛博朋克短剧",
+        "status": "DRAFT",
+        "createdAt": "2026-09-16T09:00:00.000+08:00",
+        "updatedAt": "2026-09-16T09:00:00.000+08:00"
+      }
+    ],
+    "nextCursor": null
+  }
+}

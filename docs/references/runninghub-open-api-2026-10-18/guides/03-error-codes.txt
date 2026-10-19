@@ -1,0 +1,30 @@
+错误码
+错误码	HTTP 状态码	说明
+DRAMA_AUTH_MISSING	401	缺少 Authorization 头（网关内部换成 RH-TOKEN 头透传）。
+DRAMA_AUTH_INVALID	401	企业 API Key 无效，或 Authorization 不是 Bearer <ApiKey> 格式（不带 Bearer 前缀）。
+DRAMA_AUTH_KEY_TYPE_FORBIDDEN	403	仅企业共享（SHARED）Key 可调用开放 API，其他类型 Key 一律拒绝。
+DRAMA_NOT_FOUND	404	资源不存在，或对外 id 不属于当前 Key、或 id 格式非法（两种情况返回同一错误，不泄露差异）。
+DRAMA_IDEMPOTENCY_CONFLICT	409	同一个 Idempotency-Key 被用于内容不同的请求。
+DRAMA_TASK_CANCEL_UNSUPPORTED	409	该任务当前不支持取消：已到终态，或底层取消失败。
+DRAMA_DISABLED	404	开放 API 未启用。
+DRAMA_REQUEST_FAILED	400	请求处理失败的通用兜底错误（如 webhook 登记数量超限、内部处理异常兜底）；也是生图 / 生视频 / 导出成片等上游任务失败时任务 error.code 的统一取值，上游原始错误码与信息附在 message 中。
+DRAMA_BALANCE_INSUFFICIENT	402	余额不足（团队 Key 看团队钱包，非团队 Key 看企业账户余额；余额需大于 0 才能提交计费任务）。
+DRAMA_RATE_LIMITED	429	请求过于频繁，请稍后重试。由网关按 Key 限速触发，响应体同样是 { code, message, requestId }，并附 X-RateLimit-* 响应头。
+DRAMA_CONCURRENCY_LIMIT	429	LLM 计费任务（提资产 / 生分镜 / 单场重建 / 一键导入 / 项目生成 / 剧本润色 / 场次改写 / 项目重提取）在跑数量已达企业 Key 并发上限（GET /quota 的 concurrentLimit），任务终态后释放名额，稍后重试。
+DRAMA_STAGE_INPUT_EMPTY	422	该阶段缺少输入（剧本 / 场次 / 镜头为空）。
+DRAMA_STAGE_PRECONDITION	409	前置阶段尚未完成（如未提资产就发起分镜生成、没有镜头视频就导出成片），或剧本已修改但尚未重新确认场次（先调用 POST /episodes/{episodeId}/asset-extractions），message 会说明具体原因。
+DRAMA_STYLE_NOT_FOUND	422	画风预设不存在（stylePresetId 传了但查无记录或已删除）。
+DRAMA_APP_NOT_AVAILABLE	422	应用当前不可用（appCode 未启用 / 不在当前站点可见 / 能力不匹配）。
+DRAMA_FILE_NOT_READY	409	文件尚未生成（如成片还在导出中）。
+DRAMA_VALIDATION_FAILED	422	请求参数校验失败：缺少必填字段或必填 query 参数、类型不匹配（如 limit=abc）、枚举值非法、字符串超长、列表项数超限、cursor 无效或请求体不是合法 JSON，message（中文）里给出字段与原因。
+DRAMA_FILE_UNSUPPORTED	415	上传文件类型不在白名单内（剧本 txt/md/docx/xlsx/pdf，图片 png/jpg/jpeg/webp，音频 mp3/wav/m4a，按 purpose 区分）。
+DRAMA_FILE_TOO_LARGE	413	上传文件超过大小上限（20MB）。
+DRAMA_FILE_PARSE_FAILED	422	purpose=SCRIPT 的文件内容解析失败（docx / xlsx / pdf 用 Apache Tika 提取文本，解析异常时返回本错误）。
+DRAMA_SCRIPT_INVALID	422	剧本内容不合法或为空（scriptContent 为空白，或引用的 fileId 不是已成功解析出文本的 purpose=SCRIPT 文件）。
+DRAMA_OPERATION_NOT_ALLOWED	409	当前状态不允许该操作（如删除仍被项目 / 生成中镜头引用的自定义画风、同一集已有其他场次的 AI 改写 / 分镜重建在进行、同一项目已有另一集的资产提取在进行）。
+DRAMA_MODEL_CONCURRENCY_LIMIT	429	任务级错误码（出现在任务 error.code）：该视频模型对本团队的在跑任务数已满，任务未受理、未扣费，可稍后调用 POST /tasks/{taskNo}/retries 重试。
+DRAMA_TASK_STALE	—	任务级错误码（出现在任务 error.code，不对应 HTTP 状态）：任务长期无进展，被系统判定为 FAILED。
+DRAMA_REF_MISSING	—	任务级错误码（出现在任务 error.code，不对应 HTTP 状态）：任务关联的内部对象已不存在，任务按 FAILED 收口。
+DRAMA_METHOD_NOT_ALLOWED	405	该路径不支持此请求方法（如对只读接口发 POST）。
+DRAMA_UNSUPPORTED_MEDIA_TYPE	415	请求的 Content-Type 不支持：带请求体的接口须为 application/json，POST /files 须为 multipart/form-data。
+DRAMA_INTERNAL_ERROR	500	服务端内部错误，请稍后重试；持续出现请携带响应里的 requestId 联系平台。
