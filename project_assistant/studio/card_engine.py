@@ -42,6 +42,7 @@ __all__ = [
     'parse_runninghub_curl_or_payload',
     'extract_studio_card_from_workflow',
     'ComfyPlatformClient',
+    'comfy_platform',
     '_build_card_form_values',
     '_normalize_comfy_error',
     'comfyui',
@@ -65,7 +66,7 @@ def card_execution_profile(card: dict) -> dict:
     config = card.get("engine_config") or {}
     driver = config.get("driver") or ("comfy_local" if card.get("engine", "comfyui") == "comfyui" else "vendor_api")
     tiers = {"comfy_local": "open_weights", "comfy_partner": "closed_hybrid",
-             "vendor_api": "closed_hero", "runninghub_cloud": "cloud_burst"}
+             "vendor_api": "closed_hero", "runninghub_cloud": "cloud_burst", "comfy_router": "cloud_burst"}
     if not isinstance(driver, str) or driver not in tiers:
         raise runtime.WorkerError("Unsupported Studio card driver")
     tier = config.get("tier", tiers[driver])
@@ -130,9 +131,12 @@ def validate_studio_card(card: dict) -> dict:
     if not isinstance(engine_config, dict):
         raise runtime.WorkerError("Studio card engine_config must be an object")
     engine_config = dict(engine_config, **card_execution_profile(card))
-    direct = engine_config["driver"] in ("vendor_api", "runninghub_cloud")
+    direct = engine_config["driver"] in ("vendor_api", "runninghub_cloud", "comfy_router")
     if direct and any(engine_config.get(k) for k in ("locked_nodes", "disabled_loras")):
         raise runtime.WorkerError("Direct cards cannot configure graph node mutations")
+    if engine_config["driver"] == "comfy_router":
+        from .comfy_router import validate_config
+        validate_config(engine_config, output_mode)
     raw_nodes = card.get("nodes")
     if not isinstance(raw_nodes, (list, tuple)) or not raw_nodes:
         raise runtime.WorkerError("Studio card nodes must be a non-empty list")
@@ -147,7 +151,7 @@ def validate_studio_card(card: dict) -> dict:
         node_label = str(raw.get("label") or "").strip()
         if not node_id or not field_name or not node_label:
             raise runtime.WorkerError(f"nodes[{idx}] requires nodeId, fieldName and label")
-        if engine_config["driver"] == "vendor_api":
+        if engine_config["driver"] in ("vendor_api", "comfy_router"):
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", node_id) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", field_name):
                 raise runtime.WorkerError("Vendor card requires named semantic input identifiers, not graph node IDs")
             if any(n["fieldName"] == field_name for n in normalized_nodes):
@@ -1084,18 +1088,25 @@ def extract_studio_card_from_workflow(workflow_or_path: dict | str | Path, *,
     })
 
 
+def comfy_platform(config):
+    explicit=config.get('platform') or os.environ.get('COMFY_PLATFORM')
+    return explicit or ('local' if config.get('driver')=='comfy_local' or not os.environ.get('COMFY_API_KEY') else 'comfy_sdk')
+
+
 class ComfyPlatformClient:
     """Local ComfyUI v1 or official Comfy SDK API v2 execution."""
     def __init__(self, config):
         self.config = config
-        self.platform = config.get("platform") or os.environ.get("COMFY_PLATFORM") or ("comfy_sdk" if os.environ.get("COMFY_API_KEY") else "local")
-        if self.platform == "comfy_router" or config.get("router_url") or os.environ.get("COMFY_ROUTER_URL"):
+        self.platform = comfy_platform(config)
+        if config.get('driver') == 'comfy_router' or self.platform == "comfy_router" or config.get("router_url") or os.environ.get("COMFY_ROUTER_URL"):
             raise runtime.WorkerError("Comfy Router does not execute workflow graphs; use platform=comfy_sdk and COMFY_BASE_URL")
         if self.platform not in ("local", "comfy_sdk"):
             raise runtime.WorkerError("Comfy platform must be local or comfy_sdk")
         default_base = "https://cloud.comfy.org" if self.platform == "comfy_sdk" else "http://127.0.0.1:8188"
         self.base_url = (config.get("base_url") or os.environ.get("COMFY_BASE_URL") or default_base).rstrip("/")
-        self.token = runtime.configured_token(config) or os.environ.get("COMFY_API_KEY") or os.environ.get("COMFY_ROUTER_TOKEN")
+        self.token = runtime.configured_token(config)
+        if config.get('driver')!='comfy_local' or self.platform!='local':
+            self.token = self.token or os.environ.get('COMFY_API_KEY') or os.environ.get('COMFY_ROUTER_TOKEN')
         self.sdk = None
         if self.platform == "comfy_sdk":
             try:

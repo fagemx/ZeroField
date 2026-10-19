@@ -13,6 +13,10 @@ def options(conn, slug, body, *, local_comfy_online=None):
     policy = story.production_policy(conn, slug)
     if body.get("productionPolicy", policy) != policy:
         story.invalid("Select the project production policy explicitly before planning.")
+    if local_comfy_online is None and body.get('appCode'):
+        selected=story.resolve_app(body['appCode'],'video',policy)
+        if selected['engine_config']['driver']=='comfy_router':
+            local_comfy_online=False  # Official model requests never need local graph health.
     return {"budget_mode": body.get("budgetMode", "hybrid_balanced"), "production_policy": policy,
             "time_pressure": body.get("timePressure", "normal"),
             "local_comfy_online": worker.probe_local_comfy_status()["online"] if local_comfy_online is None else local_comfy_online}
@@ -232,7 +236,8 @@ def apply_batch(conn, me, ep, items, kind, body, actions):
     context = governance.media_context(me, ep['slug'], episode_id=ep['episodeId'], accounting_session_key=saved['allocationId'])
     for allocation in saved['plan']['allocations']:
         for operation in governance.allocation_operations(allocation, saved['allocationId'] + ':' + allocation['shot_id'], saved['cards']):
-            governance.prepare_operation(conn, context, **operation)
+            if operation['card']['engine_config']['driver'] != 'comfy_router':
+                governance.prepare_operation(conn, context, **operation)
     tasks = []
     for allocation in saved["plan"]["allocations"]:
         tasks.append(story.generation(conn, me, allocation["shot_id"], "video",

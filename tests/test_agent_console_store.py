@@ -45,7 +45,10 @@ class ConsoleStoreTests(unittest.TestCase):
     def test_seeds_idempotent_and_custom_values_preserved(self):
         skills = console.list_resources(self.conn, self.me, self.slug, 'skill')
         self.assertEqual({s['skill_key'] for s in skills}, {s[0] for s in BUILTIN_SKILLS})
-        self.assertEqual(len(console.list_resources(self.conn, self.me, self.slug, 'environment')), 3)
+        self.assertEqual(len(console.list_resources(self.conn, self.me, self.slug, 'environment')), 4)
+        router = console.get_resource(self.conn,self.me,self.slug,'environment','env_comfy_router')
+        self.assertFalse(router['enabled'])
+        self.assertEqual(router['config']['vault_keys'],[])
         self.assertEqual(len(console.list_resources(self.conn, self.me, self.slug, 'memory_store')), 3)
         changed = console.save_resource(self.conn, self.me, self.slug, 'skill',
             {'skill_key': 'shotgen', 'version': 1, 'instructions_md': 'Custom directions'})

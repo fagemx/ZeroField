@@ -81,6 +81,12 @@ def enqueue(conn, me, slug, identifier, allocation, sources, actions, *, frozen_
     accounting = governance.media_context(me, slug, agent_key=execution_agent_key, episode_id=episode_id, accounting_session_key=accounting_session_key, budget_cap_usd=budget_cap_usd)
     operations = governance.allocation_operations(allocation, prefix, frozen_cards)
     for operation in operations:
+        if operation['card']['engine_config']['driver'] == 'comfy_router':
+            branches = allocation.get('race_plans') or [allocation]
+            stages = [s for b in branches for s in b['stages'] if s['kind'] == 'generate' and s['card_id'] == operation['card']['card_id']]
+            if any(s.get('inputs') for s in stages):
+                raise governance.AdmissionError('Future generated Router references cannot be prequoted; quote the reviewed source first.')
+            operation['router_request'] = {'task': {'input': story.snapshot(conn, slug, row), 'production_policy': story.production_policy(conn,slug)}, 'values': {}}
         governance.prepare_operation(conn, accounting, **operation)
     operation_keys = {o['request_key'].removeprefix(prefix + ':'): o['request_key'] for o in operations}
     from project_assistant import agent_registry

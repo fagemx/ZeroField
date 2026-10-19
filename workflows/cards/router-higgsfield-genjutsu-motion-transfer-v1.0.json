@@ -1,0 +1,87 @@
+{
+  "card_id": "router-higgsfield-genjutsu-motion-transfer-v1.0",
+  "label": "Comfy Router \u00b7 higgsfield/higgsfield-genjutsu-motion-transfer-v1.0",
+  "output_mode": "video",
+  "engine_config": {
+    "driver": "comfy_router",
+    "model": "higgsfield/higgsfield-genjutsu-motion-transfer-v1.0",
+    "api_key_env": "COMFY_API_KEY",
+    "media_origins": [],
+    "timeout": 600
+  },
+  "nodes": [
+    {
+      "nodeId": "input",
+      "fieldName": "prompt",
+      "fieldType": "STRING",
+      "label": "Prompt",
+      "defaultValue": "Describe the shot",
+      "slot": "prompt",
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "resolution",
+      "fieldType": "LIST",
+      "label": "Resolution",
+      "defaultValue": "720p",
+      "options": [
+        "480p",
+        "720p",
+        "1080p"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_1",
+      "fieldType": "IMAGE",
+      "label": "Image 1",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_2",
+      "fieldType": "IMAGE",
+      "label": "Image 2",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_3",
+      "fieldType": "IMAGE",
+      "label": "Image 3",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_4",
+      "fieldType": "IMAGE",
+      "label": "Image 4",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_5",
+      "fieldType": "IMAGE",
+      "label": "Image 5",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "video_url",
+      "fieldType": "VIDEO",
+      "label": "Video Url",
+      "defaultValue": "None",
+      "slot": "driving_video",
+      "required": true
+    }
+  ],
+  "group_label": "Official hosted Router \u00b7 explicit hybrid",
+  "sublabel": "Estimate only; configure output origins and project soft-budget consent. Not local open weights.",
+  "sort_order": 110
+}

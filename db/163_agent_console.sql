@@ -286,3 +286,12 @@ ALTER TABLE projectops.agent_usage_ledger
  ALTER COLUMN estimated_saved_usd DROP NOT NULL,
  ALTER COLUMN estimated_saved_usd SET DEFAULT NULL;
 ALTER TABLE projectops.agent_usage_reservation ADD COLUMN IF NOT EXISTS session_cap_usd NUMERIC(10,4) CHECK(session_cap_usd>=0 AND session_cap_usd<1000000);
+
+-- Official Router estimates are not price locks; opt-in is project/admin-only.
+ALTER TABLE projectops.agent_console_settings ADD COLUMN IF NOT EXISTS comfy_router_budget_mode TEXT NOT NULL DEFAULT 'hard' CHECK(comfy_router_budget_mode IN ('hard','estimate_soft'));
+ALTER TABLE projectops.agent_usage_reservation
+ ADD COLUMN IF NOT EXISTS provider_input_digest TEXT,
+ ADD COLUMN IF NOT EXISTS quote_hard_bound BOOLEAN NOT NULL DEFAULT TRUE,
+ ADD COLUMN IF NOT EXISTS reported_cost_usd NUMERIC(18,8) CHECK(reported_cost_usd>=0);
+ALTER TABLE projectops.agent_usage_reservation ADD COLUMN IF NOT EXISTS provider_submitted_at TIMESTAMPTZ;
+ALTER TABLE projectops.agent_usage_ledger ADD COLUMN IF NOT EXISTS reported_cost_usd NUMERIC(18,8) CHECK(reported_cost_usd>=0);

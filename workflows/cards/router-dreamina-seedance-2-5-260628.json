@@ -1,0 +1,103 @@
+{
+  "card_id": "router-dreamina-seedance-2-5-260628",
+  "label": "Comfy Router \u00b7 byteplus/dreamina-seedance-2-5-260628",
+  "output_mode": "video",
+  "engine_config": {
+    "driver": "comfy_router",
+    "model": "byteplus/dreamina-seedance-2-5-260628",
+    "api_key_env": "COMFY_API_KEY",
+    "media_origins": [],
+    "timeout": 600
+  },
+  "nodes": [
+    {
+      "nodeId": "input",
+      "fieldName": "prompt",
+      "fieldType": "STRING",
+      "label": "Prompt",
+      "defaultValue": "Describe the shot",
+      "slot": "prompt",
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "duration",
+      "fieldType": "INT",
+      "label": "Duration",
+      "defaultValue": "5",
+      "slot": "duration",
+      "min": 4,
+      "max": 30,
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "resolution",
+      "fieldType": "LIST",
+      "label": "Resolution",
+      "defaultValue": "720p",
+      "options": [
+        "480p",
+        "720p",
+        "1080p"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "ratio",
+      "fieldType": "LIST",
+      "label": "Ratio",
+      "defaultValue": "adaptive",
+      "options": [
+        "adaptive",
+        "16:9",
+        "9:16",
+        "1:1"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "generate_audio",
+      "fieldType": "LIST",
+      "label": "Generate Audio",
+      "defaultValue": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "first_frame",
+      "fieldType": "IMAGE",
+      "label": "First Frame",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "reference_image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "reference_video",
+      "fieldType": "VIDEO",
+      "label": "Reference Video",
+      "defaultValue": "None",
+      "slot": "driving_video"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "reference_audio",
+      "fieldType": "AUDIO",
+      "label": "Reference Audio",
+      "defaultValue": "None"
+    }
+  ],
+  "group_label": "Official hosted Router \u00b7 explicit hybrid",
+  "sublabel": "Estimate only; configure output origins and project soft-budget consent. Not local open weights.",
+  "sort_order": 109
+}

@@ -1,5 +1,7 @@
 """Remote execution routes, isolated from the document HTTP dispatcher."""
 import re
+import time
+from datetime import timedelta
 from urllib.parse import parse_qs
 
 from project_assistant import flow_runner as flows, limbs
@@ -179,7 +181,7 @@ def _worker_asset(handler, slug, asset_id, token):
     return True
 
 
-OPENAPI_RUN = re.compile(r"^/openapi/v2/run/(?:ai-app|workflow)/([A-Za-z0-9_-]{1,80})$")
+OPENAPI_RUN = re.compile(r"^/openapi/v2/run/(?:ai-app|workflow)/([A-Za-z0-9_.-]{1,80})$")
 OPENAPI_MEDIA = re.compile(r"^/openapi/v2/media/(?:output|input)/([A-Za-z0-9._-]{1,120})$")
 
 
@@ -188,6 +190,17 @@ def _v2_authority(actor_id, slug):
     from project_assistant.studio.openapi_v2_hub import _OpenAPIAuthority
 
     class Authority(_OpenAPIAuthority):
+        def context(self, card):
+            from project_assistant import execution_governance as governance
+            self.accounting_context = governance.media_context(service.Identity(actor_id, 'Media API', 'member'), slug)
+            self.accounting_destination = governance.media_destination(card)
+            from project_docs import http
+            with http.open_connection() as conn:
+                binding=governance.live(conn,self.accounting_context,destination=self.accounting_destination)
+                self.accounting_context.operation_deadline_at=(governance.cp.now()+timedelta(seconds=binding['environment']['config'].get('timeout_seconds',300))).isoformat()
+                governance.media_credentials(conn,self.accounting_context,card)
+            return self.accounting_context
+
         def prepare(self, card, inputs, key):
             from project_assistant import execution_governance as governance
             from project_docs import http, story_openapi as story
@@ -195,7 +208,8 @@ def _v2_authority(actor_id, slug):
                 accounting_session_key='v2:' + key)
             with http.open_connection() as conn:
                 governance.prepare_operation(conn, ctx, request_key='v2:' + key, card=card,
-                    operation_digest=story.digest(inputs))
+                    operation_digest=story.digest(inputs), router_request={'task':{'production_policy':story.production_policy(conn,slug)},
+                    'values':{f"{n['nodeId']}.{n['fieldName']}":n['fieldValue'] for n in inputs[2]}} if card['engine_config']['driver']=='comfy_router' else None)
             self.accounting_context = ctx
             self.accounting_destination = governance.media_destination(card)
             return ctx, 'v2:' + key
@@ -328,19 +342,78 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
                 grant("media", item["url"].rsplit("/", 1)[-1], saved.get("slug"))
             handler.send_json(200, result)
             return True
+        quote_match = re.fullmatch(r'/openapi/v2/quote/ai-app/([A-Za-z0-9_.-]{1,80})',path)
+        if quote_match:
+            from project_assistant.studio import openapi_v2_hub as hub, comfy_router
+            if set(body)-{'nodeInfoList'}:
+                raise story.StoryError(422,'DRAMA_VALIDATION_FAILED','Quote accepts native card inputs only.')
+            slug=handler.headers.get('X-Project-Slug','')
+            with http.open_connection() as conn:
+                http._ensure_schema(conn)
+                story.authorize(conn,me,slug,write=True)
+                policy=story.production_policy(conn,slug)
+            card, graph, nodes, policy, _, references=hub._prepare_openapi_inputs(quote_match[1],body,policy)
+            if card['engine_config']['driver']!='comfy_router':
+                raise story.StoryError(422,'DRAMA_VALIDATION_FAILED','Select an official Router card.')
+            authority=_v2_authority(me.actor_id,slug)
+            ctx=authority.context(card)
+            authority.check(card,references)
+            class QuoteHead:
+                def lease_lost(self):
+                    try:
+                        authority.check(card,references)
+                        return False
+                    except (ValueError,worker.WorkerError):
+                        return True
+                def outbound_check(self,url):
+                    authority.check_destination(url)
+                def outbound_timeout(self,seconds):
+                    from project_assistant import execution_governance as governance
+                    return governance.remaining(ctx,seconds)
+                def asset(self,task,reference):
+                    authority.check(card,references)
+                    if reference not in references:
+                        raise worker.WorkerError('Reference is outside the expanded quote inputs.')
+                    found=worker.openapi_get_media(reference)
+                    if found is None:
+                        raise worker.WorkerError('Reference unavailable.')
+                    return found
+            result=comfy_router.quote(ctx,{'production_policy':policy},card,{f"{n['nodeId']}.{n['fieldName']}":n['fieldValue'] for n in nodes},QuoteHead())
+            handler.send_json(200,{'code':0,'msg':'success','data':result})
+            return True
         run_match = OPENAPI_RUN.fullmatch(path)
         if run_match:
             host = (handler.headers.get("Host") or "127.0.0.1:8000").strip()
             base_url = f"http://{host}"
             slug = handler.headers.get("X-Project-Slug", "")
+            actions=[]
             with http.open_connection() as conn:
                 http._ensure_schema(conn)
                 story.authorize(conn, me, slug, write=True)
                 policy = story.production_policy(conn, slug)
-            # The dispatcher expands/freezes once, then checks every consumed default/override.
-            result = worker.openapi_run_app(run_match.group(1), body, base_url=base_url, production_policy=policy,
-                                           _authority=_v2_authority(me.actor_id, slug))
-            grant("task", result["taskId"], slug)
+                key=handler.headers.get('Idempotency-Key')
+                identifier=None
+                fingerprint=story.digest(body)
+                if key is not None:
+                    if not 1<=len(key)<=128:
+                        raise story.StoryError(422,'DRAMA_VALIDATION_FAILED','Idempotency-Key must contain 1–128 characters.')
+                    identifier='v2ik_'+story.digest([me.actor_id,slug,path,story.digest(handler.headers.get('Authorization','cookie')),key])
+                    with conn.cursor() as cur:
+                        cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))',(identifier,))
+                    saved=story.record(conn,identifier,required=False)
+                    if saved and saved['expires']>time.time():
+                        if saved['hash']!=fingerprint:
+                            raise story.StoryError(409,'DRAMA_IDEMPOTENCY_CONFLICT','Idempotency-Key was already used with different inputs.')
+                        handler.send_json(200,saved['response'])
+                        return True
+                # Freeze/grant/persist before any executor launch; replay is never paid resubmission.
+                result=worker.openapi_run_app(run_match.group(1),body,base_url=base_url,production_policy=policy,
+                    _authority=_v2_authority(me.actor_id,slug),_post_commit_actions=actions)
+                story.store(conn,'v2_'+story.digest([me.actor_id,'task',result['taskId']]),'v2_grant',{'value':result['taskId'],'slug':slug},slug,me.actor_id)
+                if identifier:
+                    story.store(conn,identifier,'v2_idempotency',{'hash':fingerprint,'response':result,'expires':time.time()+86400},slug,me.actor_id)
+            for action in actions:
+                action()
             handler.send_json(200, result)
             return True
         handler.send_json(404, {"code": 404, "msg": "OpenAPI v2 endpoint not found"})

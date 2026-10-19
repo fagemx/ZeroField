@@ -103,6 +103,9 @@ class ModelRouter:
         card = card_engine.validate_studio_card(card)
         enforce_card_policy(card, task.get("production_policy"))
         driver = card["engine_config"]["driver"]
+        if driver == "comfy_router":
+            from .comfy_router import execute
+            return execute(task, card, values, head)
         if driver == "vendor_api":
             return legacy.execute_vendor_card(task, card, values, head)
         if driver == "runninghub_cloud":
@@ -159,6 +162,9 @@ def _provider_config(card):
 def provider_configuration_status(card):
     """Safe no-network preflight for allocator/catalog; not proof of provider health."""
     profile = card_engine.card_execution_profile(card)
+    if profile["driver"] == "comfy_router":
+        from .comfy_router import configuration_status
+        return configuration_status(card)
     if profile["requires_comfyui"]:
         return {"configured": True, "requires_comfyui": True}
     try:
@@ -303,6 +309,10 @@ def _execute_remote(task, card, values, head, driver):
         raw, mime = legacy.fetch(item["url"], timeout=request_timeout, limit=legacy.MAX_MEDIA)
     except runtime.TransientWorkerError:
         raise runtime.WorkerError("Provider output unavailable; reconcile before explicit retry") from None
+    return _persist_output(task, card, head, raw, mime, requested, source_duration, config)
+
+
+def _persist_output(task, card, head, raw, mime, requested, source_duration, config):
     if not raw or len(raw) > legacy.MAX_MEDIA or not mime.startswith(card["output_mode"] + "/"):
         raise runtime.WorkerError("Provider returned unsupported or oversized output media")
     _check_lease(head)

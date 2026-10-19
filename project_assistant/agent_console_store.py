@@ -38,7 +38,7 @@ DEFAULTS = {
 }
 SETTINGS = {
     'spend_limit_monthly_usd': 100, 'spend_limit_session_usd': 5, 'spend_limit_episode_usd': 15,
-    'on_spend_limit': 'downgrade_open_weights', 'model_pricing': {},
+    'on_spend_limit': 'downgrade_open_weights', 'model_pricing': {}, 'comfy_router_budget_mode': 'hard',
     'judge_trial_mode': False, 'judge_trial_cap_runs': 10,
     'rate_limits': {'rpm_per_agent': 30, 'max_concurrent_renders': 2, 'max_concurrent_llm': 4},
     'retention_policy': {'session_logs_days': 90, 'temp_media_days': 14, 'zero_data_retention_notice': True},
@@ -203,10 +203,11 @@ def _validate(conn, me, slug, kind, value):
                 bad('Packages must be names or pinned versions, not commands, URLs or scripts.')
         strings(value['packages'], check=package)
         cfg = value['config']
-        if not isinstance(cfg, dict) or set(cfg) - {'comfy_url', 'worker_id', 'vault_keys', 'timeout_seconds', 'max_memory_mb', 'max_cpu_seconds'}:
+        if not isinstance(cfg, dict) or set(cfg) - {'comfy_url', 'comfy_proxy_url', 'router_url', 'comfy_mcp_url', 'worker_id', 'vault_keys', 'timeout_seconds', 'max_memory_mb', 'max_cpu_seconds'}:
             bad('Unsupported environment configuration; executable commands and secrets are forbidden.')
-        if 'comfy_url' in cfg:
-            endpoint(cfg['comfy_url'])
+        for name in ('comfy_url', 'comfy_proxy_url', 'router_url', 'comfy_mcp_url'):
+            if name in cfg:
+                endpoint(cfg[name])
         if 'worker_id' in cfg:
             _limb(conn, slug, cfg['worker_id'])
         for n in ('timeout_seconds', 'max_memory_mb', 'max_cpu_seconds'):
@@ -358,10 +359,19 @@ def ensure_defaults(conn, slug):
     for env_key, name, kind, enabled in (
         ('env_local_4090', 'Local 4090', 'local_sandbox', True),
         ('env_hybrid_cloud', 'Hybrid Cloud Pool', 'hybrid_cloud', False),
+        ('env_comfy_router', 'Comfy Router & Cloud', 'hybrid_cloud', False),
         ('env_acp_local', 'Local ACP CLI', 'acp_cli', False),
     ):
-        db.execute(conn, '''INSERT INTO projectops.agent_environment(project_slug,env_key,display_name,env_kind,enabled)
-            VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING''', (slug, env_key, name, kind, enabled))
+        config = ({'comfy_url':'http://127.0.0.1:8188','comfy_proxy_url':'http://127.0.0.1:8189'} if env_key == 'env_local_4090' else
+                  {'router_url':'https://api.comfy.org','comfy_url':'https://cloud.comfy.org','comfy_mcp_url':'https://cloud.comfy.org/mcp','vault_keys':[]} if env_key == 'env_comfy_router' else {})
+        db.execute(conn, '''INSERT INTO projectops.agent_environment(project_slug,env_key,display_name,env_kind,enabled,config,network_access,allowed_hosts)
+            VALUES(%s,%s,%s,%s,%s,%s::jsonb,%s,%s::jsonb) ON CONFLICT DO NOTHING''',
+            (slug, env_key, name, kind, enabled,json.dumps(config),'allowlist' if env_key=='env_comfy_router' else 'restricted',json.dumps(['api.comfy.org','cloud.comfy.org'] if env_key=='env_comfy_router' else [])))
+    # Upgrade only untouched seeds, never customized environments.
+    db.execute(conn, '''UPDATE projectops.agent_environment SET config='{"comfy_url":"http://127.0.0.1:8188","comfy_proxy_url":"http://127.0.0.1:8189"}'::jsonb
+        WHERE project_slug=%s AND env_key='env_local_4090' AND config='{}'::jsonb AND version=1 AND network_access='restricted' AND allowed_hosts='[]'::jsonb AND packages='[]'::jsonb AND display_name='Local 4090' AND env_kind='local_sandbox' AND enabled=TRUE''', (slug,))
+    db.execute(conn, '''UPDATE projectops.agent_environment SET config='{"router_url":"https://api.comfy.org","comfy_url":"https://cloud.comfy.org","comfy_mcp_url":"https://cloud.comfy.org/mcp","vault_keys":[]}'::jsonb, network_access='allowlist',allowed_hosts='["api.comfy.org","cloud.comfy.org"]'::jsonb
+        WHERE project_slug=%s AND env_key='env_comfy_router' AND config='{}'::jsonb AND version=1 AND display_name='Comfy Router & Cloud' AND env_kind='hybrid_cloud' AND enabled=FALSE AND network_access='restricted' AND allowed_hosts='[]'::jsonb AND packages='[]'::jsonb''', (slug,))
     for store_key, name in (('style_rules', 'Style Rules'), ('continuity_bible', 'Continuity Bible'), ('retake_learnings', 'Retake Learnings')):
         db.execute(conn, '''INSERT INTO projectops.agent_memory_store(project_slug,store_key,display_name)
             VALUES(%s,%s,%s) ON CONFLICT DO NOTHING''', (slug, store_key, name))
@@ -384,6 +394,8 @@ def save_settings(conn, me, slug, body):
         values[n] = money(values[n])
         if values[n].as_tuple().exponent < -2:
             bad('Spend limits permit cents only.')
+    if values['comfy_router_budget_mode'] not in ('hard', 'estimate_soft'):
+        bad('Router budget mode must be hard or explicit estimate_soft; estimates are not billing caps.')
     if values['on_spend_limit'] not in ('pause', 'downgrade_open_weights'):
         bad('Invalid spend policy.')
     if type(values['judge_trial_mode']) is not bool:
@@ -519,7 +531,7 @@ def analytics(conn, me, slug, *, days=30):
         'uncertain_events',count(*) FILTER (WHERE meta->>'outcome'='unknown'),
         'canceled_events',count(*) FILTER (WHERE meta->>'outcome'='canceled'),'cache_hits',count(*) FILTER (WHERE cache_hit),
         'estimated_cost_usd',sum(estimated_cost_usd),'estimated_saved_usd',sum(estimated_saved_usd),
-        'observed_cost_usd',sum(observed_cost_usd),'unknown_price_events',count(*) FILTER (WHERE estimated_cost_usd IS NULL),
+        'observed_cost_usd',sum(observed_cost_usd),'reported_cost_usd',sum(reported_cost_usd),'unknown_price_events',count(*) FILTER (WHERE estimated_cost_usd IS NULL),
         'pricing_provenance',pricing_provenance)
         FROM projectops.agent_usage_ledger WHERE project_slug=%s AND created_at>=NOW()-(%s * INTERVAL '1 day')
         GROUP BY created_at::date,agent_key,provider_name,model_name,usage_kind,pricing_provenance ORDER BY created_at::date''', (slug, days))
@@ -590,4 +602,5 @@ def budget_summary(conn, me, slug):
         'judge_trial_mode':settings['judge_trial_mode'],'judge_trial_cap_runs':settings['judge_trial_cap_runs'],
         'judge_trial_used_runs':settings['judge_trial_used_runs'],
         'judge_trial_remaining_runs':max(0,settings['judge_trial_cap_runs']-settings['judge_trial_used_runs']),
-        'cost_basis':'Reserved ceilings and configured estimates; unknown pricing is not zero. Observed billing is reported separately.'}
+        'comfy_router_budget_mode':settings['comfy_router_budget_mode'],
+        'cost_basis':'Reserved ceilings and configured estimates; Router estimate_soft is not a guaranteed billing cap. Unknown pricing is not zero. Reported price is not settled billing.'}

@@ -22,7 +22,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -506,7 +506,7 @@ def register_card(conn, me, body):
     card = worker.extract_studio_card_from_workflow(body["workflow"], card_id=body.get("card_id"), label=body.get("label"),
         runninghub_spec=body.get("curl") or body.get("nodeInfoList"), webapp_id=body.get("webappId"))
     builtins = [worker.load_studio_card(path) for path in worker.CARDS_DIR.glob("*.json")]
-    reserved = {c["card_id"] for c in builtins} | {str(c["engine_config"].get("webappId")) for c in builtins}
+    reserved = {c["card_id"] for c in builtins} | {str(c["engine_config"]["webappId"]) for c in builtins if c["engine_config"].get("webappId")}
     if card["card_id"] in reserved or str(card["engine_config"].get("webappId")) in reserved:
         invalid("Imported cards cannot replace a built-in card or webappId.")
     card["engine_config"]["webappId"] = str(card["engine_config"].get("webappId") or card["card_id"])
@@ -568,6 +568,10 @@ def queue_task(conn, me, slug, kind, job, actions):
         else:
             operations = [dict(request_key=identifier + ':generate', card=job['card'], operation_digest=governance.cp.digest(job))]
         for operation in operations:
+            if operation['card']['engine_config']['driver'] == 'comfy_router':
+                if job.get('allocation') and any(s.get('inputs') for s in job['allocation']['stages'] if s['kind'] == 'generate'):
+                    raise governance.AdmissionError('Future generated Router references cannot be prequoted; review and quote the completed source first.')
+                operation['router_request'] = {'task': {'input': job['input'], 'production_policy': job['production_policy']}, 'values': job['values']}
             governance.prepare_operation(conn, context, **operation)
         if not job.get('allocation'):
             job['_accounting_keys'] = {o['request_key'].split(':')[-1]: o['request_key'] for o in operations}
@@ -641,6 +645,55 @@ def generation(conn, me, identifier, kind, body, actions):
     return queue_task(conn, me, slug, ("SHOT_" if identifier.startswith("sh_") else "ASSET_") + kind.upper() + "_GENERATE", job, actions)
 
 
+def router_quote(me, identifier, body):
+    """Quote a native Story job outside transactions; this never queues generation."""
+    from project_docs import http
+    from project_assistant import execution_governance as governance
+    from project_assistant.studio import comfy_router
+    allowed = {'appCode','kind','modelParams','promptOverride','referenceSourceVideoId','budgetMode','engineTier','productionPolicy'}
+    if set(body)-allowed or body.get('kind','video') not in ('image','video'):
+        invalid('Invalid Router quote fields.')
+    with http.open_connection() as conn:
+        slug, job = generation_job(conn, me, identifier, body.get('kind','video'), body)
+        if job['card']['engine_config']['driver'] != 'comfy_router':
+            invalid('Select an official Router card for this quote.')
+        ctx = governance.media_context(me,slug)
+        binding=governance.live(conn,ctx,destination=governance.media_destination(job['card']))
+        ctx.operation_deadline_at=(governance.cp.now()+timedelta(seconds=binding['environment']['config'].get('timeout_seconds',300))).isoformat()
+        governance.media_credentials(conn,ctx,job['card'])
+        source = digest(job['input'])
+    task = {'input':job['input'], 'production_policy':job['production_policy']}
+    class QuoteHead:
+        def lease_lost(self):
+            try:
+                with http.open_connection() as conn:
+                    governance.live(conn,ctx)
+                    governance.media_credentials(conn,ctx,job['card'])
+                    authorize_card(conn,slug,job['card'])
+                    _, current = find_row(conn,identifier,'shot' if identifier.startswith('sh_') else 'asset')
+                    if digest(snapshot(conn,slug,current)) != source or production_policy(conn,slug) != job['production_policy']:
+                        return True
+                return False
+            except (ValueError,worker.WorkerError):
+                return True
+        def outbound_check(self,url):
+            governance.check_destination(ctx,url)
+        def outbound_timeout(self,seconds):
+            return governance.remaining(ctx,seconds)
+        def asset(self,task,url):
+            if self.lease_lost():
+                raise worker.WorkerError('Quote source or authority changed.')
+            match=re.fullmatch(r'/projects/api/'+re.escape(slug)+r'/assets/(pa_[0-9a-f]{32})',url)
+            if not match:
+                raise worker.WorkerError('Router references must be authorized production assets.')
+            with http.open_connection() as conn:
+                found=repo.get_asset(conn,slug,match[1])
+            if not found:
+                raise worker.WorkerError('Router reference is unavailable.')
+            return found[1],found[0]
+    return comfy_router.quote(ctx,task,job['card'],job['values'],QuoteHead())
+
+
 class StoryHead:
     def __init__(self, task):
         self.task = task
@@ -659,6 +712,11 @@ class StoryHead:
         card = current['_job'].get('card')
         if card:
             authorize_card(conn, self.task['_slug'], card)
+            if card['engine_config']['driver'] == 'comfy_router':
+                job=current['_job']
+                _,row=find_row(conn,job['entityId'],'shot' if job['entityId'].startswith('sh_') else 'asset')
+                if digest(snapshot(conn,self.task['_slug'],row)) != digest(job['input']):
+                    raise worker.WorkerError('Router source changed before outbound work; obtain a new reviewed quote.')
 
     def outbound_check(self, url):
         from project_assistant import execution_governance as governance
@@ -1442,6 +1500,11 @@ def handle(handler, parsed, method):
                 raise StoryError(400, "DRAMA_REQUEST_FAILED", error[1]["error"])
         if any(key.startswith('_') for key in body):
             invalid('Reserved internal request fields are not accepted.')
+        quote_match = re.fullmatch(r'/(?:shots|assets)/([A-Za-z0-9_-]+)/router-quotes', path)
+        if quote_match and method == 'POST':
+            data = router_quote(me, quote_match[1], body)
+            handler.send_json(200, {'code':0,'msg':'success','errorMessages':None,'data':data})
+            return True
         conn = http.open_connection()
         http._ensure_schema(conn)
         restore_cards(conn)

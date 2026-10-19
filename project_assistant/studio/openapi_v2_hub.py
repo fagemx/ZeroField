@@ -308,8 +308,12 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                     saved = openapi_upload_binary(raw, mime)["data"]["fileName"]
                     return {"asset_url": f"{base_url.rstrip('/')}/openapi/v2/media/output/{saved}", "content_type": mime}
 
+            media_head = MediaHead()
+            if accounting is not None:
+                media_head.accounting_context = accounting[0]
+                accounting[0].active_operation_key = accounting[1]
             output = legacy.execute_story_card({"id": task_id, "production_policy": policy}, card,
-                {f"{n['nodeId']}.{n['fieldName']}": n["fieldValue"] for n in node_info}, MediaHead())
+                {f"{n['nodeId']}.{n['fieldName']}": n["fieldValue"] for n in node_info}, media_head)
             checkpoint()
             with _OPENAPI_LOCK:
                 if _OPENAPI_TASKS[task_id]["status"] == "RUNNING":
@@ -414,17 +418,7 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                     raise  # Keep standalone diagnostics; HTTP cleanup must not leak provider details.
 
 
-def openapi_run_app(webapp_id: str, body: dict, *,
-                    base_url: str = "http://127.0.0.1:8000",
-                    sync: bool = False, production_policy=None, _authority=None) -> dict:
-    """Freeze one execution plan. HTTP passes a server-minted _authority, never body callbacks.
-
-    Without _authority this remains the trusted standalone Python API. HTTP always
-    supplies a live actor/project binding; task status/policy snapshots cannot grant it.
-    """
-    global _OPENAPI_SEQ
-    if _authority is not None and not isinstance(_authority, _OpenAPIAuthority):
-        raise runtime.WorkerError("Invalid in-process media execution authority")
+def _prepare_openapi_inputs(webapp_id, body, production_policy):
     parsed = card_engine.parse_runninghub_curl_or_payload(body)
     target_id = str(webapp_id or parsed.get("webappId") or "").strip()
     if not target_id:
@@ -451,6 +445,22 @@ def openapi_run_app(webapp_id: str, body: dict, *,
             })
     compiled_workflow = None if direct else card_engine.inject_node_info_into_workflow(raw_workflow, node_info, card)
     references = tuple(sorted({value for _, _, value in _media_slots(card, compiled_workflow, node_info)}))
+    return card, compiled_workflow, node_info, policy, target_id, references
+
+
+def openapi_run_app(webapp_id: str, body: dict, *,
+                    base_url: str = "http://127.0.0.1:8000",
+                    sync: bool = False, production_policy=None, _authority=None, _post_commit_actions=None) -> dict:
+    """Freeze one execution plan. HTTP passes a server-minted _authority, never body callbacks.
+
+    Without _authority this remains the trusted standalone Python API. HTTP always
+    supplies a live actor/project binding; task status/policy snapshots cannot grant it.
+    """
+    global _OPENAPI_SEQ
+    if _authority is not None and not isinstance(_authority, _OpenAPIAuthority):
+        raise runtime.WorkerError("Invalid in-process media execution authority")
+    parsed = card_engine.parse_runninghub_curl_or_payload(body)
+    card, compiled_workflow, node_info, policy, target_id, references = _prepare_openapi_inputs(webapp_id, body, production_policy)
     if _authority is not None:
         _authority.check(card, references)
     frozen = copy.deepcopy((card, compiled_workflow, node_info))
@@ -477,12 +487,13 @@ def openapi_run_app(webapp_id: str, body: dict, *,
     if sync:
         _execute_openapi_task(task_id, card, compiled_workflow, node_info, base_url)
     else:
-        t = threading.Thread(
-            target=_execute_openapi_task,
-            args=(task_id, card, compiled_workflow, node_info, base_url),
-            daemon=True,
-        )
-        t.start()
+        def start():
+            threading.Thread(target=_execute_openapi_task,
+                args=(task_id, card, compiled_workflow, node_info, base_url), daemon=True).start()
+        if _post_commit_actions is None:
+            start()
+        else:
+            _post_commit_actions.append(start)
     return {
         "code": 0,
         "msg": "success",

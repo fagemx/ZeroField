@@ -2,7 +2,8 @@
 
 Reservations are application accounting, not a provider billing guarantee or OS
 sandbox. Unknown local pricing stays unknown. Commercial adapters without a hard
-request bound must pause, not infer a free call or reroute a reviewed allocation.
+request bound pause by default. Only official Router estimates have an explicit
+admin estimate-soft exception; neither mode silently reroutes reviewed allocations.
 """
 from __future__ import annotations
 
@@ -170,17 +171,18 @@ def finalize(conn, slug, request_key, *, outcome, usage=None, estimated_cost=Non
         observed_cost = resources.money(observed_cost)
     uncertain = outcome != 'succeeded' and not known_terminated and row['state'] in ('dispatched', 'uncertain')
     released = outcome != 'succeeded' and row['state'] in ('queued', 'reserved')
-    cost = (None if released else row['ceiling_cost_usd'] if uncertain else
-            observed_cost if observed_cost is not None else estimated_cost if estimated_cost is not None else row['ceiling_cost_usd'])
+    reported = Decimal(str(row['reported_cost_usd'])) if row.get('reported_cost_usd') is not None else None
+    cost = (None if released else max(Decimal(str(row['ceiling_cost_usd'] or 0)), reported or Decimal(0)) if uncertain and reported is not None else row['ceiling_cost_usd'] if uncertain else
+            observed_cost if observed_cost is not None else reported if reported is not None else estimated_cost if estimated_cost is not None else row['ceiling_cost_usd'])
     state = 'released' if released else 'uncertain' if uncertain else 'finalized'
     db.execute(conn, 'UPDATE projectops.agent_usage_reservation SET state=%s,accounted_cost_usd=%s WHERE project_slug=%s AND request_key=%s', (state, cost, slug, request_key))
     db.execute(conn, '''INSERT INTO projectops.agent_usage_ledger
         (project_slug,event_key,session_key,episode_id,run_id,owner_id,agent_key,usage_kind,provider_name,model_name,tier,
-         input_tokens,output_tokens,cached_tokens,estimated_cost_usd,observed_cost_usd,pricing_provenance,meta,fingerprint)
-        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s) ON CONFLICT(project_slug,event_key) DO NOTHING''',
+         input_tokens,output_tokens,cached_tokens,estimated_cost_usd,observed_cost_usd,pricing_provenance,meta,fingerprint,reported_cost_usd)
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s) ON CONFLICT(project_slug,event_key) DO NOTHING''',
         (slug, request_key, row['session_key'], row['episode_id'], row['run_id'], row['owner_id'], row['agent_key'], row['usage_kind'], row['provider_name'], row['model_name'], row['tier'],
-         values['input_tokens'], values['output_tokens'], values['cached_tokens'], cost, observed_cost, row['pricing_provenance'],
-         json.dumps({'estimated': observed_cost is None, 'reservation_key': request_key, 'outcome': 'unknown' if uncertain else outcome, 'metrics_reported': bool(usage)}), fingerprint))
+         values['input_tokens'], values['output_tokens'], values['cached_tokens'], row['ceiling_cost_usd'] if reported is not None else cost, observed_cost, row['pricing_provenance'],
+         json.dumps({'estimated': observed_cost is None, 'reservation_key': request_key, 'outcome': 'unknown' if uncertain else outcome, 'metrics_reported': bool(usage), 'quote_hard_bound': row['quote_hard_bound'], 'reported_cost_usd': str(reported) if reported is not None else None, 'reported_cost_is_invoice': False}), fingerprint, reported))
     return db.one(conn, 'SELECT to_jsonb(r) FROM projectops.agent_usage_reservation r WHERE project_slug=%s AND request_key=%s', (slug, request_key))
 
 
@@ -302,6 +304,12 @@ def execution_guard(ctx, conn, kind, payload):
     if kind == 'media_dispatch':
         for allocation in payload['plan']['allocations']:
             for operation in allocation_operations(allocation, payload['allocationId'] + ':' + allocation['shot_id'], payload['cards']):
+                if operation['card']['engine_config']['driver'] == 'comfy_router':
+                    from project_docs import story_openapi as story
+                    if any(s.get('inputs') for b in allocation.get('race_plans') or [allocation] for s in b['stages'] if s['kind']=='generate' and s['card_id']==operation['card']['card_id']):
+                        raise AdmissionError('Future generated Router references cannot be prequoted; review the source first.')
+                    _,row=story.find_row(conn,allocation['shot_id'],'shot')
+                    operation['router_request']={'task':{'input':story.snapshot(conn,ctx.slug,row),'production_policy':story.production_policy(conn,ctx.slug)},'values':{}}
                 prepare_operation(conn, ctx, **operation)
     elif kind != 'film_export':
         raise AdmissionError('Unsupported execution admission.')
@@ -336,7 +344,7 @@ def trusted_quote(*, amount_usd, operation_digest, expires_at, provenance, hard_
 def register_quote_provider(driver, resolver):
     """Trusted resolver(card,digest)->TrustedQuote|None; no DB/network under locks.
 
-    Obtain /price outside transactions, cache against exact frozen inputs, and
+    Obtain verified pricing (Router /estimate) outside transactions, cache exact inputs, and
     return a still-current bound. This is deployment code, never a request field.
     """
     _QUOTE_PROVIDERS[driver] = resolver
@@ -347,8 +355,11 @@ def media_destination(card):
     config = card['engine_config']
     driver = limb_worker.card_execution_profile(card)['driver']
     if driver in ('comfy_local', 'comfy_partner'):
-        platform = config.get('platform') or os.environ.get('COMFY_PLATFORM') or ('comfy_sdk' if os.environ.get('COMFY_API_KEY') else 'local')
+        platform = limb_worker.comfy_platform(config)
         return config.get('base_url') or os.environ.get('COMFY_BASE_URL') or ('http://127.0.0.1:8188' if platform == 'local' else 'https://cloud.comfy.org')
+    if driver == 'comfy_router':
+        from project_assistant.studio.comfy_router import base_url
+        return base_url()
     return os.environ.get(config.get('base_url_env', ''), '')
 
 
@@ -403,7 +414,7 @@ def allocation_operations(allocation, prefix, cards=None):
     return result
 
 
-def prepare_operation(conn, ctx, *, request_key, card, operation_digest):
+def prepare_operation(conn, ctx, *, request_key, card, operation_digest, router_request=None):
     """Reserve frozen generation currency and Judge admission before scheduling."""
     from project_assistant import limb_worker
     from project_docs import story_openapi as story
@@ -417,11 +428,21 @@ def prepare_operation(conn, ctx, *, request_key, card, operation_digest):
         if old['operation_digest'] != operation_digest or old['owner_id'] != str(ctx.me.actor_id):
             raise AdmissionError('Media reservation identity changed.')
         return
-    quote = _QUOTE_PROVIDERS.get(profile['driver'], lambda *_:None)(card, operation_digest)
+    router_entry = None
+    if profile['driver'] == 'comfy_router':
+        from project_assistant.studio import comfy_router
+        if router_request is None:
+            raise AdmissionError('Router requires a quoted frozen input plan; future generated references cannot be prequoted.')
+        router_entry = comfy_router.prepared(ctx, router_request['task'], card, router_request.get('values', {}))
+        quote = trusted_quote(amount_usd=router_entry['amount'], operation_digest=operation_digest,
+            expires_at=router_entry['expires_at'], provenance='comfy_router_estimate_' + router_entry['source'], hard_bound=False)
+    else:
+        quote = _QUOTE_PROVIDERS.get(profile['driver'], lambda *_:None)(card, operation_digest)
     if quote is not None and (not isinstance(quote, TrustedQuote) or quote._proof is not _QUOTE_PROOF or quote.operation_digest != operation_digest or quote.expires_at <= cp.now()):
         raise AdmissionError('Media quote expired or does not match the frozen operation.')
     commercial = profile['driver'] != 'comfy_local' or not local_url(destination)
-    if commercial and (quote is None or not quote.hard_bound):
+    soft_router = (profile['driver'] == 'comfy_router' and resources.get_settings(conn, ctx.me, ctx.slug)['comfy_router_budget_mode'] == 'estimate_soft')
+    if commercial and (quote is None or (not quote.hard_bound and not soft_router)):
         raise AdmissionError('Needs You: configure a verified fixed/max-charge media quote before commercial dispatch. No reviewed allocation was silently downgraded.')
     reserve(conn, ctx, request_key=request_key, agent_key=ctx.agent_key, usage_kind=card['output_mode']+'_gen',
         provider_name=profile['driver'], model_name=card['card_id'], ceiling=quote.amount_usd if quote else None,
@@ -429,6 +450,8 @@ def prepare_operation(conn, ctx, *, request_key, card, operation_digest):
         commercial=commercial, destination=destination, queued=True, operation_digest=operation_digest)
     if quote:
         db.execute(conn, 'UPDATE projectops.agent_usage_reservation SET quote_expires_at=%s WHERE project_slug=%s AND request_key=%s', (quote.expires_at,ctx.slug,request_key))
+    if router_entry:
+        db.execute(conn, 'UPDATE projectops.agent_usage_reservation SET provider_input_digest=%s,quote_hard_bound=FALSE WHERE project_slug=%s AND request_key=%s', (router_entry['payload_digest'],ctx.slug,request_key))
     generation_admit(conn, ctx, [(request_key,operation_digest)])
 
 
@@ -449,6 +472,8 @@ def begin_operation(conn, ctx, request_key, *, card=None):
         story.authorize_card(conn, ctx.slug, card)
         media_credentials(conn, ctx, card)
     settings = resources.get_settings(conn, ctx.me, ctx.slug)
+    if not row['quote_hard_bound'] and (row['provider_name'] != 'comfy_router' or settings['comfy_router_budget_mode'] != 'estimate_soft'):
+        raise AdmissionError('Router estimate-only permission was revoked; hard mode cannot submit an unlocked quote.')
     if settings['judge_trial_mode'] and card:
         queued = db.many(conn, "SELECT jsonb_build_array(request_key,operation_digest) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND session_key=%s AND state='queued' AND operation_digest IS NOT NULL", (ctx.slug,row['session_key']))
         generation_admit(conn,ctx,queued or [(request_key,row['operation_digest'])])
@@ -476,6 +501,46 @@ def begin_operation(conn, ctx, request_key, *, card=None):
     db.execute(conn, "UPDATE projectops.agent_usage_reservation SET state='dispatched',started_at=NOW(),lease_until=%s WHERE project_slug=%s AND request_key=%s", (cp.now()+dt.timedelta(minutes=30),ctx.slug,request_key))
 
 
+def router_submission(conn, ctx, request_key, card, payload_digest):
+    """Actual paid boundary: wire identity and current soft permission, never JSON."""
+    cp.lock_project(conn, ctx.slug)
+    binding=live(conn, ctx, destination=media_destination(card))
+    media_credentials(conn, ctx, card)
+    from project_docs import story_openapi as story
+    story.authorize_card(conn, ctx.slug, card)
+    row = db.one(conn, 'SELECT to_jsonb(r) FROM projectops.agent_usage_reservation r WHERE project_slug=%s AND request_key=%s', (ctx.slug,request_key))
+    if not row or row['state'] != 'dispatched' or row['owner_id'] != str(ctx.me.actor_id) or row['provider_name'] != 'comfy_router' or row['agent_key'] != ctx.agent_key or row['model_name'] != card['card_id'] or row['provider_input_digest'] != payload_digest:
+        raise AdmissionError('Router native payload is outside its frozen reservation.')
+    if cp.instant(row['lease_until']) <= cp.now() or not row['quote_expires_at'] or cp.instant(row['quote_expires_at']) <= cp.now():
+        raise AdmissionError('Router quote expired before paid submission.')
+    settings=resources.get_settings(conn,ctx.me,ctx.slug)
+    if settings['comfy_router_budget_mode'] != 'estimate_soft':
+        raise AdmissionError('Router hard mode forbids an estimate-only submission.')
+    for clause, params, cap in (("(COALESCE(started_at,created_at)>=date_trunc('month',NOW()) OR state IN ('queued','reserved','dispatched','uncertain'))",[],settings['spend_limit_monthly_usd']),
+        ('session_key=%s',[row['session_key']],min(Decimal(str(settings['spend_limit_session_usd'])),Decimal(str(row['session_cap_usd'])) if row['session_cap_usd'] is not None else Decimal('Infinity'))),
+        ('episode_id=%s',[row['episode_id']],settings['spend_limit_episode_usd'])):
+        total=db.one(conn,"SELECT COALESCE(sum(accounted_cost_usd),0) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND state<>'released' AND "+clause,[ctx.slug]+params)
+        if Decimal(str(total))>Decimal(str(cap)):
+            raise AdmissionError('Current currency cap denies Router submission; soft estimates are not billing guarantees.')
+    active=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category='render' AND state IN ('dispatched','uncertain')",(ctx.slug,))
+    per_agent=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('dispatched','uncertain')",(ctx.slug,row['agent_key']))
+    recent=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND started_at>NOW()-INTERVAL '1 minute'",(ctx.slug,row['agent_key']))
+    if active>settings['rate_limits']['max_concurrent_renders'] or per_agent>binding['profile']['max_concurrency'] or recent>settings['rate_limits']['rpm_per_agent']:
+        raise AdmissionError('Current render concurrency/rate denies Router submission.')
+    generation_admit(conn,ctx,[(request_key,row['operation_digest'])])
+    if db.one(conn, 'UPDATE projectops.agent_usage_reservation SET provider_submitted_at=NOW() WHERE project_slug=%s AND request_key=%s AND provider_submitted_at IS NULL RETURNING request_key', (ctx.slug,request_key)) is None:
+        raise AdmissionError('Router submission was already attempted; reconcile rather than retry.')
+
+
+def router_reported_cost(conn, ctx, request_key, amount):
+    # The official header is a reported price, not a settled invoice.
+    amount = Decimal(str(amount))
+    if not amount.is_finite() or amount < 0:
+        raise AdmissionError('Invalid Router reported cost.')
+    cp.lock_project(conn,ctx.slug)
+    db.execute(conn, "UPDATE projectops.agent_usage_reservation SET reported_cost_usd=%s,accounted_cost_usd=GREATEST(accounted_cost_usd,%s) WHERE project_slug=%s AND request_key=%s AND owner_id=%s AND provider_name='comfy_router' AND state='dispatched'", (amount,amount,ctx.slug,request_key,ctx.me.actor_id))
+
+
 def media_context(me, slug, *, agent_key='coordinator', **fields):
     from project_docs import http
     return SimpleNamespace(connection_factory=http.open_connection, me=me, slug=slug, agent_key=agent_key, **fields)
@@ -501,6 +566,7 @@ def run_operation(ctx, request_key, action, *, card=None, model_name='ffmpeg', f
         ctx.operation_deadline_at = None
         raise
     try:
+        ctx.active_operation_key = request_key
         result = action()
         transaction(ctx, lambda conn: live(conn, ctx, destination=media_destination(card) if card else None))
     except Exception:
@@ -516,12 +582,13 @@ def media_credentials(conn, ctx, card):
     config = card['engine_config']
     if any(config.get(n) for n in ('api_key', 'token', 'authorization')):
         raise AdmissionError('Governed media accepts allowlisted credential references only.')
+    from project_assistant.studio.card_engine import comfy_platform
+    platform=comfy_platform(config)
     names = [config.get('api_key_env')]
-    if config.get('driver') in ('comfy_local', 'comfy_partner'):
+    if config.get('driver') in ('comfy_local', 'comfy_partner') and not (config.get('driver')=='comfy_local' and platform=='local'):
         names += [name for name in ('COMFY_API_KEY','COMFY_ROUTER_TOKEN') if os.environ.get(name)]
     allowed = {n.strip() for n in os.environ.get('OPENBENCH_AGENT_KEY_ENVS','').split(',') if n.strip()}
     environment = live(conn, ctx)['environment']
-    platform = config.get('platform') or os.environ.get('COMFY_PLATFORM') or ('comfy_sdk' if os.environ.get('COMFY_API_KEY') else 'local')
     if config.get('driver') in ('comfy_local','comfy_partner') and platform == 'comfy_sdk' and environment['network_access'] != 'full':
         raise AdmissionError('SDK internal output networking requires an explicitly full-network environment; host-restricted deployments must use a bounded HTTP adapter.')
     for name in filter(None,names):

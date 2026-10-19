@@ -1,0 +1,110 @@
+{
+  "card_id": "router-flux-3-video",
+  "label": "Comfy Router \u00b7 bfl/flux-3-video",
+  "output_mode": "video",
+  "engine_config": {
+    "driver": "comfy_router",
+    "model": "bfl/flux-3-video",
+    "api_key_env": "COMFY_API_KEY",
+    "media_origins": [],
+    "timeout": 600
+  },
+  "nodes": [
+    {
+      "nodeId": "input",
+      "fieldName": "prompt",
+      "fieldType": "STRING",
+      "label": "Prompt",
+      "defaultValue": "Describe the shot",
+      "slot": "prompt",
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "mode",
+      "fieldType": "LIST",
+      "label": "Mode",
+      "defaultValue": "t2v",
+      "options": [
+        "t2v",
+        "i2v",
+        "v2v"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "duration",
+      "fieldType": "INT",
+      "label": "Duration",
+      "defaultValue": "5",
+      "slot": "duration",
+      "min": 5,
+      "max": 20,
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "resolution",
+      "fieldType": "LIST",
+      "label": "Resolution",
+      "defaultValue": "hd",
+      "options": [
+        "hd",
+        "fhd"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "aspect_ratio",
+      "fieldType": "LIST",
+      "label": "Aspect Ratio",
+      "defaultValue": "16:9",
+      "options": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "generate_audio",
+      "fieldType": "LIST",
+      "label": "Generate Audio",
+      "defaultValue": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_1",
+      "fieldType": "IMAGE",
+      "label": "Image 1",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_2",
+      "fieldType": "IMAGE",
+      "label": "Image 2",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "start_video",
+      "fieldType": "VIDEO",
+      "label": "Start Video",
+      "defaultValue": "None",
+      "slot": "driving_video"
+    }
+  ],
+  "group_label": "Official hosted Router \u00b7 explicit hybrid",
+  "sublabel": "Estimate only; configure output origins and project soft-budget consent. Not local open weights.",
+  "sort_order": 107
+}

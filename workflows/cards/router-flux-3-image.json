@@ -1,0 +1,106 @@
+{
+  "card_id": "router-flux-3-image",
+  "label": "Comfy Router \u00b7 bfl/flux-3-image",
+  "output_mode": "image",
+  "engine_config": {
+    "driver": "comfy_router",
+    "model": "bfl/flux-3-image",
+    "api_key_env": "COMFY_API_KEY",
+    "media_origins": [],
+    "timeout": 600
+  },
+  "nodes": [
+    {
+      "nodeId": "input",
+      "fieldName": "prompt",
+      "fieldType": "STRING",
+      "label": "Prompt",
+      "defaultValue": "Describe the shot",
+      "slot": "prompt",
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "resolution",
+      "fieldType": "LIST",
+      "label": "Resolution",
+      "defaultValue": "1k",
+      "options": [
+        "768sq",
+        "1k",
+        "1.5k",
+        "2k",
+        "4k"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "aspect_ratio",
+      "fieldType": "LIST",
+      "label": "Aspect Ratio",
+      "defaultValue": "16:9",
+      "options": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "grounding",
+      "fieldType": "LIST",
+      "label": "Grounding",
+      "defaultValue": "false",
+      "options": [
+        "false",
+        "true"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_1",
+      "fieldType": "IMAGE",
+      "label": "Image 1",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_2",
+      "fieldType": "IMAGE",
+      "label": "Image 2",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_3",
+      "fieldType": "IMAGE",
+      "label": "Image 3",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_4",
+      "fieldType": "IMAGE",
+      "label": "Image 4",
+      "defaultValue": "None",
+      "slot": "ref"
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "image_5",
+      "fieldType": "IMAGE",
+      "label": "Image 5",
+      "defaultValue": "None",
+      "slot": "ref"
+    }
+  ],
+  "group_label": "Official hosted Router \u00b7 explicit hybrid",
+  "sublabel": "Estimate only; configure output origins and project soft-budget consent. Not local open weights.",
+  "sort_order": 106
+}

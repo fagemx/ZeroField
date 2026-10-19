@@ -1,6 +1,7 @@
 # SPEC_08 execution envelope (lean runtime component)
 
-This component adds no Console routes/pages and no Router protocol implementation.
+The retained runtime component adds no Console routes/pages. The later official
+Router integration and explicit estimate-soft opt-in are documented in [COMFY_ROUTER.md](COMFY_ROUTER.md).
 The existing Story/M8 state machines, private media principal, guarded proposals,
 allocation preflight and project production policy remain authoritative.
 
@@ -110,10 +111,15 @@ allocation rather than changing a frozen source/card/grant behind the crew's bac
 An already permitted unpriced local/dry-run path remains usable. Local hardware
 cost is unknown, not certified free; no 50% batch savings are assumed.
 
-## Trusted quote seam for the next official Router owner
+## Trusted quote seam and official Router
 
-No `/price`, Router inference, MCP authentication or operator-credential call was
-made by this component. The next owner must verify the official protocol first.
+The runtime did not call `/price`, Router inference, MCP authentication or operator
+credentials. The later Router component verified public OpenAPI1.0: the actual
+price endpoint is `/estimate`, not `/price`; even exact quotes are not price locks.
+Default hard admission remains unchanged. The admin-only, versioned
+`comfy_router_budget_mode=estimate_soft` exception is scoped only to that driver,
+keeps `TrustedQuote.hard_bound=False`, and never enables itself for a project.
+See [COMFY_ROUTER.md](COMFY_ROUTER.md) for connected interfaces, provenance and risks.
 
 1. Obtain a quote **outside** DB transactions. Bind it to the exact frozen operation
    / canonical provider input identity, model, credential/environment and current
@@ -127,7 +133,8 @@ made by this component. The next owner must verify the official protocol first.
    hard_bound=...)` using a semantic provenance ID, not an error or URL. Only attest
    `hard_bound=True` when a verified fixed-price / max-charge provider contract
    actually bounds the call. An estimate without that guarantee cannot enforce a
-   hard currency cap and must pause, not be promoted to a free/guaranteed quote.
+   hard currency cap and must pause in hard mode, never be promoted to a free or
+   guaranteed quote. Explicit Router estimate-soft consent does not change this fact.
 4. `prepare_operation(conn, ctx, request_key, card, operation_digest)` checks current
    Story policy, environment/credentials, quote freshness, currency and Judge
    admission before queueing. Allocation operation identities bind the frozen

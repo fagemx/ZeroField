@@ -466,12 +466,13 @@ class RouterTests(unittest.TestCase):
             worker.execute_story_card(self.task, self.card, {}, self.head)
         self.assertEqual(len([r for r in self.requests if r[0] == "/vendor/run"]), 1)
 
-    def test_catalog_ten_driver_profiles_and_named_vendor_inputs(self):
+    def test_catalog_seventeen_driver_profiles_and_named_vendor_inputs(self):
         cards = [worker.load_studio_card(p) for p in worker.CARDS_DIR.glob("*.json")]
-        self.assertEqual(len(cards), 10)
+        self.assertEqual(len(cards), 17)
+        self.assertEqual(sum(c['engine_config']['driver']=='comfy_router' for c in cards),7)
         for card in cards:
             config = card["engine_config"]
-            self.assertIn(config["driver"], ("comfy_local", "vendor_api", "runninghub_cloud"))
+            self.assertIn(config["driver"], ("comfy_local", "vendor_api", "runninghub_cloud", "comfy_router"))
             if config["driver"] == "comfy_local":
                 self.assertTrue(config["requires_comfyui"])
                 self.assertEqual(config["tier"], "open_weights")

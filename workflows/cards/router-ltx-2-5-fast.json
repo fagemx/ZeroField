@@ -1,0 +1,78 @@
+{
+  "card_id": "router-ltx-2-5-fast",
+  "label": "Comfy Router \u00b7 ltx/ltx-2-5-fast",
+  "output_mode": "video",
+  "engine_config": {
+    "driver": "comfy_router",
+    "model": "ltx/ltx-2-5-fast",
+    "api_key_env": "COMFY_API_KEY",
+    "media_origins": [],
+    "timeout": 600
+  },
+  "nodes": [
+    {
+      "nodeId": "input",
+      "fieldName": "prompt",
+      "fieldType": "STRING",
+      "label": "Prompt",
+      "defaultValue": "Describe the shot",
+      "slot": "prompt",
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "duration",
+      "fieldType": "INT",
+      "label": "Duration",
+      "defaultValue": "5",
+      "slot": "duration",
+      "min": 2,
+      "max": 20,
+      "required": true
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "resolution",
+      "fieldType": "LIST",
+      "label": "Resolution",
+      "defaultValue": "1280x720",
+      "options": [
+        "1280x720",
+        "720x1280",
+        "1920x1080",
+        "1080x1920",
+        "2560x1440",
+        "1440x2560",
+        "3840x2160",
+        "2160x3840"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "fps",
+      "fieldType": "LIST",
+      "label": "Fps",
+      "defaultValue": "24",
+      "options": [
+        "24",
+        "25",
+        "48",
+        "50"
+      ]
+    },
+    {
+      "nodeId": "input",
+      "fieldName": "generate_audio",
+      "fieldType": "LIST",
+      "label": "Generate Audio",
+      "defaultValue": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    }
+  ],
+  "group_label": "Official hosted Router \u00b7 explicit hybrid",
+  "sublabel": "Estimate only; configure output origins and project soft-budget consent. Not local open weights.",
+  "sort_order": 105
+}
