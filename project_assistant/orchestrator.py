@@ -337,6 +337,8 @@ def spawn_dispatch(conn,slug,task_id,*,agent_key,slot_key,caller_dispatch_id=Non
         story_media_adapter.verify_task(conn,task)
     previous=db.one(conn,'''SELECT to_jsonb(d) FROM projectops.orchestration_dispatch d
         WHERE task_id=%s AND slot_key=%s ORDER BY attempt_no DESC LIMIT 1 FOR UPDATE''',(task_id,slot_key))
+    if previous and previous['profile_snapshot'].get('provider_binding') != profile.get('provider_binding'):
+        raise OrchestrationError(409, 'Project default provider changed; create a new reviewed assignment rather than resuming this request.', 'PROVIDER_CHANGED')
     if previous and previous['status'] in ('queued','running','awaiting_gate','succeeded') and continuation is None:
         return {**previous,'handle':handle(previous)}
     caller_id=caller_dispatch_id or task.get('parent_dispatch_id')

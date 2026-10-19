@@ -42,8 +42,9 @@ def provider_for(profile,env=None):
         key=env.get(config['api_key_env'],'')
     kind=config.get('kind',base.kind)
     if kind=='codex': kind='codex_cli'
+    effort = profile.get('effort') if profile.get('effort_configured', 'effort' in profile) else None
     return providers.ProviderConfig(kind,config.get('base_url',base.base_url),key,
-                                    config.get('model',base.model))
+                                    config.get('model',base.model), config.get('effort',effort))
 
 
 def run_cli(settings,host,prompt):
@@ -149,7 +150,7 @@ def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on
             from project_assistant.worker import settings_from_env
             settings=settings_from_env()
         from dataclasses import replace
-        selected=replace(settings,model=config.model,effort=(profile.get('provider_config') or {}).get('effort',settings.effort),timeout=timeout)
+        selected=replace(settings,model=config.model,effort=config.effort or settings.effort,timeout=timeout)
         host=ToolHost(ctx,on_call=on_tool)
         try:
             return run_cli(selected,host,instructions+'\n'+turn_text)
@@ -166,7 +167,7 @@ def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on
             result=providers.run_openai_compat_turn(config=config,**common)
         else:
             result=model_client.run_turn(model=config.model,
-                effort=(profile.get('provider_config') or {}).get('effort',getattr(settings,'effort','medium')),
+                effort=config.effort or getattr(settings,'effort','medium'),
                 cache_key=f'pa-{ctx.slug}-{ctx.me.actor_id}-{profile["agent_key"]}',**common)
     except DecisionPending:
         return Outcome('awaiting_gate',answer='需要你的決定，問題已列在待你裁決。',version=config.kind,model=config.model)
@@ -183,6 +184,7 @@ def run_agent(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on_tool=
     """
     started = time.monotonic()
     graded = False
+    ctx.profile = profile
     if hasattr(ctx, 'connection_factory'):
         from project_assistant import execution_governance as governance
         governance.install(ctx)

@@ -311,8 +311,9 @@ def poll_once(connection_factory, settings: Settings, worker_id: str, submit, bu
     projects=_with_conn(connection_factory,lambda c:db.many(c,'''SELECT slug FROM projectops.project ORDER BY slug'''))
     for slug in projects:
         from project_assistant.orchestration_flow import sync_project
+        from project_assistant.console_deployments import produce_due
         _with_conn(connection_factory,lambda c:(store.set_setting(c,slug,'builtin_worker_seen_at',cp.now().isoformat()),
-            sync_project(c,slug),cp.sweep(c,slug),cp.schedule_ready(c,slug)))
+            produce_due(c,slug),sync_project(c,slug),cp.sweep(c,slug),cp.schedule_ready(c,slug)))
     def claim_background(c):
         projects=db.many(c,'SELECT slug FROM projectops.project ORDER BY slug')
         keys=db.many(c,"SELECT DISTINCT agent_key FROM projectops.agent_profile WHERE enabled AND role_kind<>'observer' AND runtime_kind='builtin_llm'")
@@ -338,6 +339,7 @@ def poll_once(connection_factory, settings: Settings, worker_id: str, submit, bu
 
 def execute_dispatch(connection_factory,claim,settings,worker_id):
     from project_assistant import orchestrator as cp,orchestration_store as db
+    task=None
     stop=threading.Event()
     lost=threading.Event()
     def heartbeat():
@@ -358,6 +360,8 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
             agent_key=claim['agent_key'],dispatch_id=claim['id'],admission_no=claim['admission_no'],lease_token=claim['lease_token'],
             write_mode=task['write_mode'],scope=task['request_scope'],worker_id=worker_id,run_id=claim['run_id'],deadline_at=claim['deadline_at'])
         ctx.original_objective=task['spec']
+        from project_assistant.console_deployments import bind_context
+        bind_context(ctx,task)
         ctx.scope=_with_conn(connection_factory,lambda c:cp.effective_scope(c,claim,task))
         system,knowledge=prompting.load_agent(profile)
         instructions=system+'\n'+knowledge
@@ -386,8 +390,23 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
             except Exception:
                 pass
         remaining=max(.1,(cp.instant(claim['deadline_at'])-cp.now()).total_seconds())
+        images=()
+        console_context=task['input_snapshot'].get('console')
+        if console_context:
+            from project_assistant.agent_console_service import media_images
+            images=_with_conn(connection_factory,lambda c:media_images(c,ctx,console_context.get('media',[])))
         outcome=agent_runtime.run_agent(profile=profile,ctx=ctx,instructions=instructions,turn_text=turn,
-            timeout=min(settings.timeout,remaining),on_tool=record,settings=settings)
+            timeout=min(settings.timeout,remaining),on_tool=record,settings=settings,images=images)
+        if console_context:
+            def save_consumed(c):
+                current=db.get_task(c,ctx.slug,task['id'])
+                current['input_snapshot']['console']['consumed_context']={
+                    'instructions':instructions+'\n'+getattr(ctx,'mounted_context',''), 'turn_text':turn,
+                    'tools':sorted(getattr(ctx,'allowed_tools',[])), 'media_asset_ids':console_context.get('media',[]),
+                    'model':outcome.model, 'usage':outcome.usage, 'scorecard':outcome.scorecard}
+                db.execute(c,'UPDATE projectops.orchestration_task SET input_snapshot=%s::jsonb WHERE id=%s',
+                    (json.dumps(current['input_snapshot'],ensure_ascii=False),task['id']))
+            _with_conn(connection_factory,save_consumed)
         if lost.is_set():
             return 'lost'
         try:
@@ -409,7 +428,14 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
                 db.many(c,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s ORDER BY id',(claim['id'],)))
             return cp.complete_dispatch(c,worker_id,claim['handle'],claim['lease_token'],outcome=state,output=output,proposal_ids=proposals)
         return _with_conn(connection_factory,complete)['status']
-    except cp.OrchestrationError:
+    except cp.OrchestrationError as exc:
+        if task and task['input_snapshot'].get('console') and exc.code != 'STALE_DISPATCH':
+            try:
+                _with_conn(connection_factory,lambda c:cp.complete_dispatch(c,worker_id,claim['handle'],claim['lease_token'],
+                    outcome='failed',output={'error':'Current execution permission or configuration changed; review before a new request.','retryable':False},proposal_ids=[]))
+                return 'failed'
+            except cp.OrchestrationError:
+                pass  # Revoked leases may not publish even a failure; M8 expiry owns cleanup.
         return 'lost'
     except Exception as exc:
         from project_assistant.execution_governance import AdmissionError

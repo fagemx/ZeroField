@@ -66,7 +66,7 @@ def isolated_turn(ctx, profile, instructions, payload, timeout, *, kind, images=
         timeout=timeout, tool_specs=[], images=images, admission=admission)
     if config.kind == 'openai_compat':
         return providers.run_openai_compat_turn(config=config, **common)
-    return model_client.run_turn(model=config.model, effort=profile.get('effort', 'medium'),
+    return model_client.run_turn(model=config.model, effort=config.effort or 'medium',
         cache_key='outcome-' + profile['agent_key'], **common)
 
 

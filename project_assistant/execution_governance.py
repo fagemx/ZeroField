@@ -55,6 +55,11 @@ def live(conn, ctx, agent_key=None, destination=None):
         raise AdmissionError('The turn deadline expired.')
     if callable(getattr(ctx, 'authority_check', None)):
         ctx.authority_check(conn)
+    if origin is ctx and getattr(ctx, 'profile', None) and ctx.profile.get('agent_key') == ctx.agent_key:
+        from project_assistant.agent_registry import get_agent
+        current = get_agent(conn, ctx.slug, ctx.agent_key)
+        if not current or current.get('provider_binding') != ctx.profile.get('provider_binding'):
+            raise AdmissionError('Project default provider changed; create a new reviewed request before continuing or publishing.')
     key = agent_key or ctx.agent_key
     binding = resources.execution_resources(conn, ctx.me, ctx.slug, key, destination=destination)
     if getattr(ctx, 'episode_id', None):
@@ -252,6 +257,8 @@ class ProviderAdmission:
             self.response_limit = min(2*1024*1024, binding['environment']['config'].get('max_memory_mb', 2)*1024*1024)
             if len(json.dumps(payload, ensure_ascii=False).encode()) > self.response_limit:
                 raise AdmissionError('Request exceeds the configured environment memory/transport limit.')
+            if current.get('provider_binding') != self.profile.get('provider_binding'):
+                raise AdmissionError('Project default provider changed; start a new explicitly reviewed turn.')
             actual = provider_for(current)
             credential_binding(conn, self.ctx, current, actual, binding['environment'])
             if actual != self.config:
@@ -282,7 +289,14 @@ class ProviderAdmission:
         transaction(self.ctx, lambda conn: finalize(conn, self.ctx.slug, self.active, outcome=outcome, usage=usage, estimated_cost=cost))
         self.active = None
         if outcome == 'succeeded':
-            transaction(self.ctx, lambda conn: live(conn, self.ctx, self.profile['agent_key'], self.destination))
+            def revalidate(conn):
+                from project_assistant.agent_runtime import provider_for
+                binding = live(conn, self.ctx, self.profile['agent_key'], self.destination)
+                actual = provider_for(binding['profile'])
+                credential_binding(conn, self.ctx, binding['profile'], actual, binding['environment'])
+                if actual != self.config:
+                    raise AdmissionError('Provider or credential changed; the late result cannot be published.')
+            transaction(self.ctx, revalidate)
 
 
 def install(ctx):
@@ -388,7 +402,7 @@ def generation_admit(conn, ctx, operations):
     settings = resources.get_settings(conn, ctx.me, ctx.slug)
     protected = settings['judge_trial_mode']
     needed = len(new) + len(upgrades)
-    if protected and settings['judge_trial_used_runs'] + needed > settings['judge_trial_cap_runs']:
+    if protected and settings['judge_trial_used_runs'] + needed > resources.effective_judge_cap(settings):
         raise AdmissionError('Needs You: Judge Live-Link generation cap reached; no batch item was submitted.')
     for key, digest in new:
         db.execute(conn, 'INSERT INTO projectops.agent_generation_admission(project_slug,operation_key,owner_id,operation_digest,protected) VALUES(%s,%s,%s,%s,%s)', (ctx.slug,key,ctx.me.actor_id,digest,protected))

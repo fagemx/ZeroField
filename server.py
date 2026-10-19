@@ -211,7 +211,8 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
 
     def _story_mutation(self, method):
         parsed = urlparse(self.path)
-        if not (parsed.path == "/aivideo/open/v1" or parsed.path.startswith("/aivideo/open/v1/")):
+        from project_docs.console_http import ROUTE as console_route
+        if not (parsed.path == "/aivideo/open/v1" or parsed.path.startswith("/aivideo/open/v1/") or console_route.fullmatch(parsed.path)):
             self.send_json(405, {"error": "Unsupported operation."})
             return
         projects_http.handle_projects(self, parsed, method)

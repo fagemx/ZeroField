@@ -40,7 +40,7 @@ def unrestricted(ctx, conn):
 
 def source_stamp(ctx, conn):
     profile = agent_registry.get_agent(conn, ctx.slug, ctx.agent_key)
-    return {'profile_version': profile['version'], 'policy': story.production_policy(conn, ctx.slug),
+    return {'profile_version': profile['version'], 'provider_binding': profile.get('provider_binding'), 'policy': story.production_policy(conn, ctx.slug),
             'privacy': privacy.mode(conn, ctx.slug),
             'tabs': {t['key']: cp.digest(cp.freeze_tab(conn, ctx.slug, t['key'])) for t in repo.list_tabs(conn, ctx.slug)}}
 

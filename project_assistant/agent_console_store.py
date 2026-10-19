@@ -23,7 +23,7 @@ STUDIO_TOOLS = {'studio_ingest_script', 'studio_manage_asset', 'studio_plan_allo
 RESOURCES = {
     'skill': ('agent_skill', 'skill_key', {'display_name', 'category', 'summary', 'instructions_md', 'recommended_tools', 'enabled'}),
     'environment': ('agent_environment', 'env_key', {'display_name', 'env_kind', 'config', 'network_access', 'allowed_hosts', 'packages', 'enabled'}),
-    'memory_store': ('agent_memory_store', 'store_key', {'display_name', 'scope_kind', 'scope_id', 'description'}),
+    'memory_store': ('agent_memory_store', 'store_key', {'display_name', 'scope_kind', 'scope_id', 'description', 'archived'}),
     'vault': ('agent_vault_reference', 'vault_key', {'display_name', 'provider_config', 'allowed_agent_keys', 'enabled'}),
     'service_account': ('agent_service_account', 'account_key', {'display_name', 'limb_id', 'enabled'}),
 }
@@ -32,7 +32,7 @@ JSON_FIELDS = {'recommended_tools', 'config', 'allowed_hosts', 'packages', 'prov
 DEFAULTS = {
     'skill': dict(category='custom', summary='', instructions_md='', recommended_tools=[], enabled=True),
     'environment': dict(env_kind='local_sandbox', config={}, network_access='restricted', allowed_hosts=[], packages=[], enabled=True),
-    'memory_store': dict(scope_kind='project', scope_id='', description=''),
+    'memory_store': dict(scope_kind='project', scope_id='', description='', archived=False),
     'vault': dict(provider_config={}, allowed_agent_keys=[], enabled=True),
     'service_account': dict(enabled=True),
 }
@@ -173,9 +173,9 @@ def list_resources(conn, me, slug, kind, *, episode_id=None):
     table, column, _ = _spec(kind)
     rows = db.many(conn, f'SELECT to_jsonb(r) FROM projectops.{table} r WHERE project_slug=%s ORDER BY {column} LIMIT 500', (slug,))
     if kind == 'memory_store':
-        rows = [r for r in rows if r['scope_kind'] == 'project' or
+        rows = [r for r in rows if not r['archived'] and (r['scope_kind'] == 'project' or
                 (r['scope_kind'] == 'user' and r['scope_id'] == str(me.actor_id)) or
-                (r['scope_kind'] == 'episode' and r['scope_id'] == episode_id)]
+                (r['scope_kind'] == 'episode' and r['scope_id'] == episode_id))]
         for row in rows:
             authorize_scope(conn, me, slug, row, episode_id=episode_id)
     return rows
@@ -218,6 +218,8 @@ def _validate(conn, me, slug, kind, value):
             if any(not _get(conn, 'vault', slug, k) for k in cfg['vault_keys']):
                 bad('Unknown vault reference.')
     elif kind == 'memory_store':
+        if type(value['archived']) is not bool:
+            bad('archived must be boolean.')
         text(value['description'], 2000)
         if value['scope_kind'] not in ('project', 'episode', 'user'):
             bad('Invalid memory scope.')
@@ -298,8 +300,8 @@ def authorize_mount(conn, me, slug, profile, store_key, *, write=False, episode_
     if not mount or (write and mount['access'] != 'read_write'):
         raise AgentError(403, 'Memory mount does not permit this operation.')
     store = get_resource(conn, me, slug, 'memory_store', store_key, episode_id=episode_id)
-    if not store:
-        raise AgentError(404, 'Memory store not found.')
+    if not store or store.get('archived'):
+        raise AgentError(404, 'Memory store not found or archived.')
     return authorize_scope(conn, me, slug, store, episode_id=episode_id, write=write)
 
 
@@ -309,11 +311,11 @@ def memory_entries(conn, me, slug, store_key, *, episode_id=None, profile=None):
     if not found:
         raise AgentError(404, 'Memory store not found.')
     return db.many(conn, '''SELECT to_jsonb(e) FROM projectops.agent_memory_entry e
-        WHERE project_slug=%s AND store_key=%s ORDER BY entry_key LIMIT 500''', (slug, store_key))
+        WHERE project_slug=%s AND store_key=%s AND NOT archived ORDER BY entry_key LIMIT 500''', (slug, store_key))
 
 
 def save_memory_entry(conn, me, slug, body, *, episode_id=None, profile=None):
-    fields = {'store_key', 'entry_key', 'title', 'content_md', 'tags', 'version'}
+    fields = {'store_key', 'entry_key', 'title', 'content_md', 'tags', 'version', 'archived'}
     if not isinstance(body, dict) or set(body) - fields or not {'store_key', 'entry_key', 'version'} <= set(body):
         bad('Invalid memory entry.')
     store_key, entry_key = key(body['store_key']), key(body['entry_key'])
@@ -327,9 +329,11 @@ def save_memory_entry(conn, me, slug, body, *, episode_id=None, profile=None):
     _lock(conn, slug)
     existing = db.one(conn, '''SELECT to_jsonb(e) FROM projectops.agent_memory_entry e
         WHERE project_slug=%s AND store_key=%s AND entry_key=%s''', (slug, store_key, entry_key))
-    values = {'store_key': store_key, 'entry_key': entry_key, 'title': entry_key, 'content_md': '', 'tags': [],
-              **({n: existing[n] for n in ('title', 'content_md', 'tags')} if existing else {}),
-              **{n: body[n] for n in ('title', 'content_md', 'tags') if n in body}, 'updated_by': str(me.actor_id)}
+    values = {'store_key': store_key, 'entry_key': entry_key, 'title': entry_key, 'content_md': '', 'tags': [], 'archived': False,
+              **({n: existing[n] for n in ('title', 'content_md', 'tags', 'archived')} if existing else {}),
+              **{n: body[n] for n in ('title', 'content_md', 'tags', 'archived') if n in body}, 'updated_by': str(me.actor_id)}
+    if type(values['archived']) is not bool:
+        bad('archived must be boolean.')
     text(values['title'], 200, required=True)
     text(values['content_md'], 30000)
     strings(values['tags'], 32, check=key)
@@ -587,6 +591,11 @@ def set_judge_protection(conn, me, slug, *, enabled, version):
     return save_settings(conn, me, slug, {'version': version, 'judge_trial_mode': enabled, 'judge_trial_cap_runs': 10})
 
 
+def effective_judge_cap(settings):
+    """Historical configurable caps cannot expand the project-wide Judge10 preset."""
+    return min(10, settings['judge_trial_cap_runs'])
+
+
 def budget_summary(conn, me, slug):
     """Project aggregates only; never return session/owner IDs, prompts or traces."""
     settings=get_settings(conn,me,slug)
@@ -599,8 +608,10 @@ def budget_summary(conn, me, slug):
         FROM projectops.agent_usage_reservation WHERE project_slug=%s AND state<>'released'
         AND (COALESCE(started_at,created_at)>=date_trunc('month',NOW()) OR state IN ('queued','reserved','dispatched','uncertain'))""", (slug,))
     return {**totals, 'spend_limit_monthly_usd':settings['spend_limit_monthly_usd'],
-        'judge_trial_mode':settings['judge_trial_mode'],'judge_trial_cap_runs':settings['judge_trial_cap_runs'],
+        'judge_trial_mode':settings['judge_trial_mode'],'judge_trial_cap_runs':effective_judge_cap(settings),
+        'judge_trial_effective_cap_runs':effective_judge_cap(settings),
+        'judge_trial_configured_cap_runs':settings['judge_trial_cap_runs'],
         'judge_trial_used_runs':settings['judge_trial_used_runs'],
-        'judge_trial_remaining_runs':max(0,settings['judge_trial_cap_runs']-settings['judge_trial_used_runs']),
+        'judge_trial_remaining_runs':max(0,effective_judge_cap(settings)-settings['judge_trial_used_runs']),
         'comfy_router_budget_mode':settings['comfy_router_budget_mode'],
         'cost_basis':'Reserved ceilings and configured estimates; Router estimate_soft is not a guaranteed billing cap. Unknown pricing is not zero. Reported price is not settled billing.'}

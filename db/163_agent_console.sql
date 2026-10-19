@@ -295,3 +295,28 @@ ALTER TABLE projectops.agent_usage_reservation
  ADD COLUMN IF NOT EXISTS reported_cost_usd NUMERIC(18,8) CHECK(reported_cost_usd>=0);
 ALTER TABLE projectops.agent_usage_reservation ADD COLUMN IF NOT EXISTS provider_submitted_at TIMESTAMPTZ;
 ALTER TABLE projectops.agent_usage_ledger ADD COLUMN IF NOT EXISTS reported_cost_usd NUMERIC(18,8) CHECK(reported_cost_usd>=0);
+
+-- Thin Console producer: claims create existing M8 tasks, never another executor.
+ALTER TABLE projectops.agent_deployment
+ ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1,
+ ADD COLUMN IF NOT EXISTS playbook TEXT NOT NULL DEFAULT '';
+DROP TRIGGER IF EXISTS console_version ON projectops.agent_deployment;
+CREATE TRIGGER console_version BEFORE UPDATE ON projectops.agent_deployment
+ FOR EACH ROW EXECUTE FUNCTION projectops.console_version();
+CREATE TABLE IF NOT EXISTS projectops.agent_deployment_trigger (
+ project_slug TEXT NOT NULL REFERENCES projectops.project(slug) ON DELETE CASCADE,
+ deployment_id UUID NOT NULL REFERENCES projectops.agent_deployment(id) ON DELETE CASCADE,
+ slot_key TEXT NOT NULL,
+ request_digest TEXT NOT NULL,
+ run_id UUID REFERENCES projectops.orchestration_run(id) ON DELETE SET NULL,
+ state TEXT NOT NULL CHECK(state IN ('queued','blocked')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY(deployment_id,slot_key)
+);
+
+-- Explicit user archive preserves private scope and immutable history for restore.
+ALTER TABLE projectops.agent_memory_store ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE projectops.agent_memory_entry ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- SQL's historical medium default is not opt-in to a new provider wire parameter.
+ALTER TABLE projectops.agent_profile ADD COLUMN IF NOT EXISTS effort_configured BOOLEAN NOT NULL DEFAULT FALSE;

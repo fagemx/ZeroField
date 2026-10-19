@@ -31,6 +31,9 @@ def authorize_tool(ctx, conn, name, args):
     profile = agent_registry.get_agent(conn, ctx.slug, getattr(ctx,'agent_key','coordinator'))
     if not profile or not profile['enabled'] or name not in {s['name'] for s in tool_specs_for(profile)}:
         raise ToolError("POLICY_DENIED: This agent cannot use this tool.")
+    origin_profile = getattr(ctx, 'profile', None)
+    if origin_profile and origin_profile.get('agent_key') == ctx.agent_key and origin_profile.get('provider_binding') != profile.get('provider_binding'):
+        raise ToolError('POLICY_DENIED: Project default provider changed; create a new reviewed request.')
     frozen=getattr(ctx,'allowed_tools',None)
     if frozen is not None and name not in frozen:
         raise ToolError("POLICY_DENIED: This tool is not granted for this turn.")

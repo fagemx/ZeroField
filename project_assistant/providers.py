@@ -25,6 +25,11 @@ class ProviderConfig:
     base_url: str
     api_key: str
     model: str
+    effort: str | None = None
+
+    def __post_init__(self):
+        if self.effort not in (None, 'low', 'medium', 'high'):
+            raise ValueError('Invalid model reasoning effort.')
 
 
 def provider_from_env(env=None) -> ProviderConfig:
@@ -94,6 +99,7 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
             payload = {
                 "model": config.model,
                 "messages": messages,
+                **({'reasoning_effort': config.effort} if config.effort is not None else {}),
                 **({'tools':available_tools} if available_tools else {}),
                 **({'tool_choice': 'none' if round_no == model_client.MAX_ROUNDS else 'auto'} if available_tools else {}),
             }

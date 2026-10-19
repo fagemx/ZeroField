@@ -16,6 +16,9 @@ ASSET = re.compile(r"^/projects/api/([a-z0-9][a-z0-9-]{0,40})/assets/(pa_[0-9a-f
 
 def handle(handler, parsed, method):
     """Return True only for owned routes; enforce member or worker identity independently."""
+    from project_docs import console_http
+    if console_http.handle(handler, parsed, method):
+        return True
     if parsed.path == "/aivideo/open/v1" or parsed.path.startswith("/aivideo/open/v1/"):
         from project_docs import story_openapi
         return story_openapi.handle(handler, parsed, method)

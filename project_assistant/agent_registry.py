@@ -91,8 +91,8 @@ def ensure_default_agents(conn, slug):
                 (slug,key,name,icon,role,prompt,json.dumps(['llm','orchestrate'] if role=='primary' else ['llm']),json.dumps({'domain':domain}),
                  json.dumps(default_tools(key)),json.dumps(mounted['skill_keys']),json.dumps(mounted['multiagent_config']),json.dumps(mounted['memory_mounts'])))
             # Match the entire pristine seed, not just the prompt; never rewrite customization.
-            profile = get_agent(conn, slug, key)
-            pristine = (profile['created_by'] is None and profile['system_prompt'] in (LEGACY_SEED_PROMPTS[key], prompt) and
+            profile = get_agent(conn, slug, key, effective=False)
+            pristine = (profile['created_by'] is None and not profile.get('effort_configured') and profile['system_prompt'] in (LEGACY_SEED_PROMPTS[key], prompt) and
                 profile['allowed_tools'] in (LEGACY_SEED_TOOLS[key], [t for t in LEGACY_SEED_TOOLS[key] if t not in tool_specs.DELEGATION_TOOLS], default_tools(key, False)) and
                 all(profile.get(k)==v for k,v in CONSOLE_DEFAULTS.items()) and
                 all(profile.get(k)==v for k,v in dict(display_name=name,icon=icon,role_kind=role,runtime_kind='builtin_llm',description='',
@@ -106,17 +106,41 @@ def ensure_default_agents(conn, slug):
     ensure_defaults(conn, slug)
 
 
-def get_agent(conn, slug, key):
+def effective_profile(conn, profile):
+    """Resolve only empty built-in settings; never materialize inheritance on save."""
+    if not profile or profile['runtime_kind'] != 'builtin_llm' or profile['provider_config'] != {}:
+        return profile
+    from project_assistant import store, orchestration_store as db, orchestrator as cp
+    saved = store.get_setting(conn, profile['project_slug'], 'console_default_provider')
+    if not saved:
+        return profile
+    default = json.loads(saved)
+    if default['vault_key'] is None:
+        return {**profile, 'provider_binding': cp.digest(default)}
+    reference = db.one(conn, 'SELECT to_jsonb(v) FROM projectops.agent_vault_reference v WHERE project_slug=%s AND vault_key=%s',
+                       (profile['project_slug'], default['vault_key']))
+    if not reference or not reference['enabled'] or profile['agent_key'] not in reference['allowed_agent_keys']:
+        raise AgentError(409, 'Project default provider was revoked; configure a current LLM reference.', 'PROVIDER_CHANGED')
+    config = validate_provider(reference['provider_config'])
+    if config.get('kind', 'openai_compat') != 'openai_compat' or not config.get('model') or not config.get('base_url'):
+        raise AgentError(409, 'Project default is not a configured LLM reference.', 'PROVIDER_CHANGED')
+    return {**profile, 'provider_config': config, 'provider_binding': cp.digest([default, reference['version'], config])}
+
+
+def get_agent(conn, slug, key, *, effective=True):
     with conn.cursor() as cur:
         cur.execute('SELECT to_jsonb(p) FROM projectops.agent_profile p WHERE project_slug=%s AND agent_key=%s', (slug, key))
         row = cur.fetchone()
-        return row[0] if row else None
+    profile = row[0] if row else None
+    return effective_profile(conn, profile) if effective else profile
 
 
-def list_agents(conn, slug, *, capability=None, labels=None):
+def list_agents(conn, slug, *, capability=None, labels=None, effective=False):
     with conn.cursor() as cur:
         cur.execute('SELECT to_jsonb(p) FROM projectops.agent_profile p WHERE project_slug=%s ORDER BY created_at,agent_key', (slug,))
         rows = [r[0] for r in cur.fetchall()]
+    if effective:
+        rows = [effective_profile(conn, p) for p in rows]
     return [p for p in rows if (not capability or capability in p['capabilities'])
             and all(p['labels'].get(k) == v for k, v in (labels or {}).items())]
 
@@ -166,7 +190,7 @@ def save_agent(conn, me, slug, body):
         raise AgentError(400, "Agent configuration contains unsupported fields.")
     key = body['agent_key']
     _lock(conn, slug)
-    existing = get_agent(conn, slug, key)
+    existing = get_agent(conn, slug, key, effective=False)
     if 'version' in body and (type(body['version']) is not int or body['version'] != (existing['version'] if existing else 0)):
         raise AgentError(409, "Agent version changed; reload before saving.", 'VERSION_CONFLICT')
     profile = existing or dict(display_name=key, icon='🤖', role_kind='worker', runtime_kind='builtin_llm',
@@ -199,7 +223,8 @@ def save_agent(conn, me, slug, body):
             raise AgentError(400, "This worker does not exist, is disabled, or cannot access this production.")
     if profile['runtime_kind'] != 'builtin_llm' and not profile['bound_limb_id']:
         raise AgentError(400, "External runtimes must be bound to a worker in this production.")
-    columns = sorted(fields)
+    profile['effort_configured'] = 'effort' in body or profile.get('effort_configured', False)
+    columns = sorted(fields | {'effort_configured'})
     encoded = {'capabilities','labels','allowed_tools','provider_config','skill_keys','tool_policies','multiagent_config','outcome_grader','memory_mounts'}
     values = [json.dumps(profile[n],ensure_ascii=False) if n in encoded else profile[n] for n in columns]
     placeholders = [('%s::jsonb' if n in encoded else '%s') for n in columns]
@@ -209,7 +234,7 @@ def save_agent(conn, me, slug, body):
                     ','.join(n+'=EXCLUDED.'+n for n in columns) + ',updated_at=NOW()', [slug,key]+values+[me.actor_id])
     repo.add_audit(conn,slug,action='agent_profile',actor_id=me.actor_id,target=key,
                    detail={'fields':sorted(set(body)-{'system_prompt','knowledge_pack','provider_config'})})
-    return get_agent(conn,slug,key)
+    return get_agent(conn,slug,key,effective=False)
 
 
 def resolve_mention(conn, slug, text, explicit_key=None):
@@ -285,7 +310,7 @@ def validate_console_fields(conn, me, slug, agent_key, profile):
     advisor = multi['advisor_agent_key']
     if advisor is not None:
         console.key(advisor)
-        if advisor == agent_key or not get_agent(conn, slug, advisor):
+        if advisor == agent_key or not get_agent(conn, slug, advisor, effective=False):
             raise AgentError(400, 'Advisor must be another project agent.')
     grader = profile['outcome_grader']
     if not isinstance(grader, dict) or set(grader) != set(CONSOLE_DEFAULTS['outcome_grader']) or type(grader['enabled']) is not bool:
@@ -293,7 +318,7 @@ def validate_console_fields(conn, me, slug, agent_key, profile):
     console.text(grader['criteria'], 4000)
     console.integer(grader['max_revisions'], 0, 3)
     console.key(grader['grader_agent_key'])
-    if grader['enabled'] and (grader['grader_agent_key'] == agent_key or not get_agent(conn, slug, grader['grader_agent_key'])):
+    if grader['enabled'] and (grader['grader_agent_key'] == agent_key or not get_agent(conn, slug, grader['grader_agent_key'], effective=False)):
         raise AgentError(400, 'Enabled grader must be a separate project agent.')
     mounts = profile['memory_mounts']
     if not isinstance(mounts, list) or len(mounts) > 32:
@@ -318,5 +343,5 @@ def validate_console_fields(conn, me, slug, agent_key, profile):
 def console_profiles(conn, slug):
     """Display-only descriptors: never use this accessor for admission/claims."""
     from project_assistant import story_media_adapter as media
-    return [dict(p, read_only=False) for p in list_agents(conn, slug)] + [
+    return [dict(p, read_only=False) for p in list_agents(conn, slug, effective=False)] + [
         dict(media.profile(k), read_only=True, project_slug=slug) for k in media.KEYS]
