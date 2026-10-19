@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { t } from './i18n/index.js';
 
 export const STORY_BASE = '/aivideo/open/v1';
 export const episodeId = (slug, index = 1) => `ep_${slug}_${String(index).padStart(2, '0')}`;
@@ -53,4 +54,11 @@ export function sceneKey(parsed, row) {
   const column = parsed.headers.findIndex(label => /^scene(?:\s*id)?$/i.test(label.trim()));
   if (column >= 0 && row.cells[column]?.value) return String(row.cells[column].value);
   return String(row.cells[0]?.value || '').match(/^(SC\d+)(?:[-_ ]|$)/i)?.[1].toUpperCase() || '';
+}
+
+export const allocationPath = (slug, ep) => `/projects/pj_${slug}/episodes/${ep}/shots:plan-allocation`;
+export const escalationPath = (slug, ep, shot) => `/projects/pj_${slug}/episodes/${ep}/shots/${shot}:escalate`;
+export function allocationDispatchBody(allocation, budgetMode, productionPolicy) {
+  if (!allocation?.ready || !allocation.allocationId || !allocation.allocations?.length) throw new Error(t('allocation.preflightRequired'));
+  return {allocationId:allocation.allocationId,shotIds:allocation.allocations.map(item=>item.shotId),budgetMode,productionPolicy};
 }

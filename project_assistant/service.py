@@ -345,6 +345,14 @@ def apply_proposal(conn, me, slug, proposal_id, body,*,_race_task_id=None):
         return problem
     if proposal.get('race_group_task_id') and proposal['race_group_task_id']!=_race_task_id:
         return _error(409,"Select a version through candidate comparison; candidates cannot be applied individually.")
+    if proposal.get('dispatch_id'):
+        from project_assistant import orchestration_store,story_media_adapter
+        dispatch=orchestration_store.get_dispatch(conn,slug,proposal['dispatch_id'])
+        if dispatch and dispatch['profile_snapshot'].get('runtime_kind')=='server_media':
+            try:
+                story_media_adapter.verify_task(conn,orchestration_store.get_task(conn,slug,dispatch['task_id']))
+            except ValueError:
+                return _error(409,"The media source or production policy changed; create a new allocation.")
     content, notes = proposal["content"], []
     if "content" in body:
         edited = str(body.get("content") or "").strip()

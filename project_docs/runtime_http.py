@@ -185,12 +185,36 @@ OPENAPI_MEDIA = re.compile(r"^/openapi/v2/media/(?:output|input)/([A-Za-z0-9._-]
 
 def _handle_openapi(handler, parsed, method: str) -> bool:
     """Self-hosted RunningHub OpenAPI v2 compatible endpoints."""
-    from project_docs import http, media
+    from project_docs import http, media, story_openapi as story
     from project_assistant import limb_worker as worker
     path = parsed.path
     try:
+        identity, problem = handler.project_docs_identity()
+        me = service.identity_from(identity) if not problem else None
+        if not me:
+            handler.send_json(401, {"code": 401, "msg": "Sign in with an active crew account."})
+            return True
+        if method != "GET":
+            if not me.can_write or (not handler.headers.get("Authorization", "").startswith("Bearer ") and http._write_allowed(handler)):
+                handler.send_json(403, {"code": 403, "msg": "Write access and a same-origin write header are required."})
+                return True
+        from project_docs import story_openapi as story
+        def grant(kind, value, slug=None):
+            with http.open_connection() as conn:
+                http._ensure_schema(conn)
+                story.store(conn, "v2_" + story.digest([me.actor_id, kind, value]), "v2_grant", {"value": value, "slug": slug}, slug, me.actor_id)
+        def require(kind, value):
+            with http.open_connection() as conn:
+                http._ensure_schema(conn)
+                saved = story.record(conn, "v2_" + story.digest([me.actor_id, kind, value]), required=False)
+                if not saved:
+                    raise story.StoryError(404, "DRAMA_NOT_FOUND", "Media or task does not belong to this account.")
+                if saved.get("slug"):
+                    story.authorize(conn, me, saved["slug"], write=method != "GET")
+                return saved
         media_match = OPENAPI_MEDIA.fullmatch(path)
         if media_match and method == "GET":
+            require("media", media_match.group(1))
             found = worker.openapi_get_media(media_match.group(1))
             if not found:
                 handler.send_json(404, {"code": 404, "msg": "Media not found"})
@@ -209,6 +233,10 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
             handler.send_json(405, {"code": 405, "msg": "Method not allowed"})
             return True
         if path == "/openapi/v2/media/upload/binary":
+            slug = handler.headers.get("X-Project-Slug", "")
+            with http.open_connection() as conn:
+                http._ensure_schema(conn)
+                story.authorize(conn, me, slug, write=True)
             try:
                 size = int(handler.headers.get("Content-Length") or "0")
             except ValueError:
@@ -223,6 +251,7 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
                 handler.headers.get("Content-Type") or "",
                 handler.headers.get("X-File-Name") or "",
             )
+            grant("media", payload["data"]["fileName"], slug)
             handler.send_json(200, payload)
             return True
         body, err = http._json_body(handler)
@@ -251,19 +280,41 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
             handler.send_json(200, result)
             return True
         if path == "/openapi/v2/query":
-            handler.send_json(200, worker.openapi_query_task(body))
+            saved = require("task", str(body.get("taskId", "")))
+            result = worker.openapi_query_task(body)
+            for item in result.get("results", []):
+                grant("media", item["url"].rsplit("/", 1)[-1], saved.get("slug"))
+            handler.send_json(200, result)
             return True
         run_match = OPENAPI_RUN.fullmatch(path)
         if run_match:
             host = (handler.headers.get("Host") or "127.0.0.1:8000").strip()
             base_url = f"http://{host}"
-            handler.send_json(200, worker.openapi_run_app(run_match.group(1), body, base_url=base_url))
+            slug = handler.headers.get("X-Project-Slug", "")
+            with http.open_connection() as conn:
+                http._ensure_schema(conn)
+                story.authorize(conn, me, slug, write=True)
+                policy = story.production_policy(conn, slug)
+                card, _ = worker._resolve_openapi_card_and_workflow(run_match.group(1))
+                story.authorize_card(conn, slug, card)
+            for item in body.get("nodeInfoList", []):
+                value = str(item.get("fieldValue", ""))
+                if worker.openapi_get_media(value) is not None:
+                    saved = require("media", value.rsplit("/", 1)[-1])
+                    if saved.get("slug") != slug:
+                        raise story.StoryError(403, "DRAMA_OPERATION_NOT_ALLOWED", "Reference media belongs to another production.")
+            result = worker.openapi_run_app(run_match.group(1), body, base_url=base_url, production_policy=policy)
+            grant("task", result["taskId"], slug)
+            handler.send_json(200, result)
             return True
         handler.send_json(404, {"code": 404, "msg": "OpenAPI v2 endpoint not found"})
+        return True
+    except story.StoryError as exc:
+        handler.send_json(exc.status, {"code": exc.code, "msg": str(exc)})
         return True
     except worker.WorkerError as exc:
         handler.send_json(400, {"code": 400, "msg": str(exc), "errorMessage": str(exc)})
         return True
     except Exception as exc:  # noqa: BLE001
-        handler.send_json(500, {"code": 500, "msg": str(exc), "errorMessage": str(exc)})
+        handler.send_json(500, {"code": 500, "msg": "Media API unavailable; check deployment configuration."})
         return True

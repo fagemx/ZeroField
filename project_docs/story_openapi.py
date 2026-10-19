@@ -34,7 +34,7 @@ from project_assistant.table_edits import _cell, cell_value, validate_value
 BASE = "/aivideo/open/v1"
 STAGES = ["PROJECT", "EPISODE", "SCRIPT", "ASSETS", "SCENES", "STORYBOARD", "SHOTS", "FILM_EXPORT"]
 ALIASES = {"H3_SHORT_VIDEO_V3": "h3-short-video-v3", "H3_REF2VA_PASS1": "h3-reference",
-           "SEEDANCE_2_FAST_MULTIMODAL_VIDEO": "h3-reference", "H3_OPTIMIZE_4K": "h3-optimize",
+           "SEEDANCE_2_FAST_MULTIMODAL_VIDEO": "seedance-20-pro", "H3_OPTIMIZE_4K": "h3-optimize",
            "LTX25_OPENJUTSU_V2V": "ltx25-openjutsu", "LTX25_CINEMA_SHOT": "ltx25-cinema",
            "FLUX3_SOUL_CAST": "flux-soul-cast", "NANO_PRO_G2_I2I_OFFICIAL": "flux-soul-cast",
            "LOCAL_SDXL_SMOKE": "local-smoke"}
@@ -116,12 +116,35 @@ def text(body, key, default="", maximum=10000):
     return value
 
 
+def production_policy(conn, slug):
+    saved = record(conn, "policy_" + slug, required=False) or {}
+    return worker.effective_production_policy(saved.get("productionPolicy"))
+
+
+def authorize(conn, me, slug, *, write=False):
+    from project_assistant import orchestrator
+    try:
+        orchestrator.actor(conn, slug, me, write=write)
+    except orchestrator.OrchestrationError as exc:
+        raise StoryError(exc.status, "DRAMA_OPERATION_NOT_ALLOWED", str(exc)) from None
+
+
+def authorize_card(conn, slug, card):
+    from project_assistant import orchestrator
+    orchestrator.lock_project(conn, slug)
+    worker.enforce_card_policy(card, production_policy(conn, slug))
+    from project_assistant import privacy
+    if privacy.mode(conn, slug) == "mask_numbers" and worker.card_execution_profile(card)["driver"] != "comfy_local":
+        raise StoryError(403, "DRAMA_OPERATION_NOT_ALLOWED", "Original media and prompts are not exported to commercial providers in numeric masking mode.")
+
+
 def project(conn, identifier):
     slug = identifier[3:] if identifier.startswith("pj_") else identifier
     found = repo.get_project(conn, slug)
     if not found:
         raise StoryError(404, "DRAMA_NOT_FOUND", "Production not found.")
-    return {**found, "projectId": "pj_" + slug, "description": found["summary"]}
+    return {**found, "projectId": "pj_" + slug, "description": found["summary"],
+            "productionPolicy": production_policy(conn, slug)}
 
 
 def episodes(conn, slug):
@@ -326,7 +349,9 @@ def shot_view(conn, slug, row):
             "description": next((v for k, v in fields.items() if re.search("prompt", k, re.I)), ""),
             "opticalRig": next((v for k, v in fields.items() if re.search(r"optical|rig", k, re.I)), ""),
             "cameraMotion": next((v for k, v in fields.items() if re.search(r"camera.*motion", k, re.I)), ""),
-            "assets": refs, "status": mapped.get(status, "PENDING"), "selectedImageUrl": output("image"), "selectedVideoUrl": output("video")}
+            "assets": refs, "status": mapped.get(status, "PENDING"), "reviewStatus": status,
+            "complexity": worker.evaluate_shot_complexity({**fields, "reviewStatus": status}),
+            "selectedImageUrl": output("image"), "selectedVideoUrl": output("video")}
 
 
 def shots(conn, ep):
@@ -499,14 +524,19 @@ def catalog():
         item = {"appCode": code, "card_id": card["card_id"], "name": card["label"], "capability": card["output_mode"].upper(),
                 "webappId": str(ec.get("webappId", card["card_id"])), "skuId": str(ec.get("webappId", "0")),
                 "imageMode": "T2I" if card["card_id"] == "local-smoke" else "I2I", "nodes": card["nodes"],
-                "frameRule": ec.get("frame_rule", ec.get("frame_formula", "none"))}
+                "frameRule": ec.get("frame_rule", ec.get("frame_formula", "none")),
+                **worker.card_execution_profile(card), "configuration": worker.provider_configuration_status(card)}
         result.append(item)
         result.extend(dict(item, appCode=alias) for alias, cid in ALIASES.items() if cid == card["card_id"] and alias != code)
     return result
 
 
-def resolve_app(code, kind):
+def resolve_app(code, kind, policy=None):
     card_id = ALIASES.get(code, code)
+    if code == "SEEDANCE_2_FAST_MULTIMODAL_VIDEO":
+        seedance = worker.load_studio_card("seedance-20-pro")
+        if worker.effective_production_policy(policy) == "open_weights_only" or not worker.provider_configuration_status(seedance)["configured"]:
+            card_id = "h3-reference"
     card = next((c for c in worker.openapi_list_cards() if card_id in (c["card_id"], str(c.get("engine_config", {}).get("webappId")))), None)
     if not card or card["output_mode"] != kind:
         invalid("Select a registered appCode matching the output capability.")
@@ -537,7 +567,20 @@ def queue_task(conn, me, slug, kind, job, actions):
 
 def generation(conn, me, identifier, kind, body, actions):
     slug, row = find_row(conn, identifier, "shot" if identifier.startswith("sh_") else "asset")
-    card = resolve_app(text(body, "appCode"), kind)
+    authorize(conn, me, slug, write=True)
+    policy = production_policy(conn, slug)
+    if "productionPolicy" in body and body["productionPolicy"] != policy:
+        invalid("Change the production policy explicitly before generation.")
+    frozen = body.get("_frozenCard")
+    card = frozen[0] if frozen else resolve_app(text(body, "appCode"), kind, policy)
+    authorize_card(conn, slug, card)
+    tier = body.get("engineTier")
+    if tier is not None and tier != worker.card_execution_profile(card)["tier"]:
+        invalid("engineTier does not match the selected card.")
+    if body.get("budgetMode") == "lab_economical" and worker.card_execution_profile(card)["tier"] != "open_weights":
+        invalid("Lab mode cannot dispatch commercial cards.")
+    if body.get("budgetMode", "hybrid_balanced") not in ("lab_economical", "hybrid_balanced", "deadline_rush"):
+        invalid("Invalid budgetMode.")
     params = body.get("modelParams", {})
     if not isinstance(params, dict) or len(params) > 50:
         invalid("modelParams must contain at most 50 inputs.")
@@ -558,9 +601,14 @@ def generation(conn, me, identifier, kind, body, actions):
             invalid("referenceSourceVideoId must be a video candidate from this shot.")
         values.update({f"{n['nodeId']}.{n['fieldName']}": chosen["url"] for n in card["nodes"] if n.get("slot") == "driving_video"})
     column = media_column(row, kind)
-    _, workflow = worker._resolve_openapi_card_and_workflow(card["card_id"])
+    workflow = frozen[1] if frozen else worker._resolve_openapi_card_and_workflow(card["card_id"])[1]
     job = {"entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
-           "card": card, "workflow": workflow, "values": values, "column": column}
+           "card": card, "workflow": workflow, "values": values, "column": column, "production_policy": policy}
+    if body.get("_allocation"):
+        job["allocation"] = copy.deepcopy(body["_allocation"])
+        for step in job["allocation"]["stages"]:
+            if step["kind"] == "generate":
+                step["card"], step["workflow"] = (card, workflow) if step["card_id"] == card["card_id"] else worker._resolve_openapi_card_and_workflow(step["card_id"])
     return queue_task(conn, me, slug, ("SHOT_" if identifier.startswith("sh_") else "ASSET_") + kind.upper() + "_GENERATE", job, actions)
 
 
@@ -568,14 +616,41 @@ class StoryHead:
     def __init__(self, task):
         self.task = task
 
+    @property
+    def paid_request_submitted(self):
+        return getattr(self, "_paid_submitted", False)
+
+    @paid_request_submitted.setter
+    def paid_request_submitted(self, value):
+        self._paid_submitted = bool(value)
+        if value and self.task.get("taskId"):
+            from project_docs import http
+            with http.open_connection() as conn:
+                current = record(conn, self.task["taskId"], lock=True)
+                if current["status"] != "RUNNING":
+                    raise worker.WorkerError("Task ended before paid submission.")
+                current["_paid_ambiguous"] = True
+                store(conn, current["taskId"], "task", current)
+
     def lease_lost(self):
         from project_docs import http
-        with http.open_connection() as conn:
-            current = record(conn, self.task["taskId"], required=False)
-            return not current or current["status"] == "CANCELED"
+        try:
+            with http.open_connection() as conn:
+                current = record(conn, self.task["taskId"], required=False)
+                if not current or current["status"] != "RUNNING":
+                    return True
+                authorize(conn, service.Identity(self.task["_actor"], "Story worker", "member"), self.task["_slug"], write=True)
+                card = current["_job"].get("card")
+                if card:
+                    authorize_card(conn, self.task["_slug"], card)
+                return False
+        except (ValueError, worker.WorkerError):
+            return True
 
     def asset(self, task, url):
         from project_docs import http
+        if self.lease_lost():
+            raise worker.WorkerError("Media execution was canceled or its authority changed.")
         match = re.fullmatch(r"/projects/api/([a-z0-9-]+)/assets/(pa_[0-9a-f]{32})", url)
         if not match or match[1] != self.task["_slug"]:
             raise worker.WorkerError("Only media from this production may be used as references.")
@@ -585,9 +660,11 @@ class StoryHead:
             raise worker.WorkerError("Reference media no longer exists.")
         return found[1], found[0]
 
-    def upload(self, task, data, mime):
+    def upload(self, task, data, mime, filename=None):
         from project_docs import http
         mime = media.validate(data, mime)
+        if self.lease_lost():
+            raise worker.WorkerError("Media execution was canceled before upload.")
         with http.open_connection() as conn:
             identifier = repo.put_asset(conn, self.task["_slug"], data=data, content_type=mime, actor_id=self.task["_actor"])
         return {"asset_id": identifier, "asset_url": f"/projects/api/{self.task['_slug']}/assets/{identifier}", "content_type": mime}
@@ -617,16 +694,27 @@ def execute_task(identifier):
             output = worker.ffmpeg({"id": identifier, "input": {"rows": [{"row_id": str(i), "cells": [url]} for i, url in enumerate(job["urls"])]}},
                                    job["config"], head)
         else:
-            output = worker.execute_story_card({"id": identifier, "capability": job["kind"] + "_gen", "input": job["input"], "workflow": job["workflow"]},
-                                               job["card"], job["values"], head)
+            with http.open_connection() as conn:
+                authorize(conn, me, slug, write=True)
+                authorize_card(conn, slug, job["card"])
+            execution = {"id": identifier, "capability": job["kind"] + "_gen", "input": job["input"],
+                         "workflow": job["workflow"], "production_policy": job.get("production_policy")}
+            if job.get("allocation"):
+                from project_docs import story_allocation
+                output = story_allocation.execute_steps(execution, job["allocation"]["stages"], head, job["values"])
+            else:
+                output = worker.execute_story_card(execution, job["card"], job["values"], head)
         with http.open_connection() as conn:
             current = record(conn, identifier, lock=True)
-            if current["status"] == "CANCELED":
+            if current["status"] != "RUNNING":
                 return
             member = next((m for m in repo.active_members(conn) if m["actor_id"] == me.actor_id), None)
             if not member or member.get("role") == "viewer":
                 raise worker.WorkerError("The requesting crew member no longer has write access.")
             me = service.Identity(me.actor_id, me.name, member["role"])
+            authorize(conn, me, slug, write=True)
+            if job.get("card"):
+                authorize_card(conn, slug, job["card"])
             if task["type"] == "SCRIPT_REFINE":
                 ep = episode(conn, job["episodeId"])
                 repo.get_tab_for_update(conn, slug, ep["tabKey"])
@@ -660,6 +748,7 @@ def execute_task(identifier):
                 if not current or current["status"] == "CANCELED":
                     return
                 message = str(exc) if isinstance(exc, (StoryError, worker.WorkerError)) else "Execution failed; check worker deployment and media inputs."
+                current["_paid_ambiguous"] = bool(getattr(exc, "no_retry", False) or getattr(locals().get("head"), "paid_request_submitted", False))
                 current.update(status="FAILED", error={"code": "DRAMA_REQUEST_FAILED", "message": message[:500]}, finishedAt=now())
                 store(conn, identifier, "task", current)
             notify(current["_actor"], public_task(current))
@@ -794,6 +883,12 @@ def dispatch(conn, me, method, path, body, query, actions):
     if method != "GET" and not me.can_write:
         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
     parts = path.strip("/").split("/")
+    if any(k.startswith("_") for k in body):
+        invalid("Private execution inputs cannot be supplied by clients.")
+    from project_docs import story_allocation
+    integrated = story_allocation.dispatch(conn, me, method, parts, body, actions)
+    if integrated is not None:
+        return integrated
     if method != "GET":
         target = parts[1] if len(parts) > 1 else str(body.get("slug", "new-production"))
         match = re.match(r"(?:pj_|ep_|as_|sh_|sc_)([a-z0-9-]+)(?:_|$)", target)
@@ -864,6 +959,7 @@ def dispatch(conn, me, method, path, body, query, actions):
             return project(conn, slug)
     if parts[0] == "projects" and len(parts) >= 2:
         p = project(conn, parts[1]); slug = p["slug"]
+        authorize(conn, me, slug, write=method != "GET")
         if len(parts) == 2:
             if method == "GET":
                 return p
@@ -896,6 +992,7 @@ def dispatch(conn, me, method, path, body, query, actions):
                 return store(conn, ep["episodeId"], "episode", ep, slug)
     if parts[0] == "episodes" and len(parts) >= 2:
         ep = episode(conn, parts[1]); slug = ep["slug"]
+        authorize(conn, me, slug, write=method != "GET")
         tail = "/".join(parts[2:])
         if not tail:
             if method == "GET":
@@ -967,7 +1064,10 @@ def dispatch(conn, me, method, path, body, query, actions):
             if not chosen or len(chosen) > 200:
                 invalid("Select between 1 and 200 shots.")
             kind = "image" if tail == "shot-image-generations" else "video"
-            tasks = [generation(conn, me, s["shotId"], kind, body, actions) for s in chosen]
+            if body.get("allocationId"):
+                tasks = story_allocation.apply_batch(conn, me, ep, chosen, kind, body, actions)
+            else:
+                tasks = [generation(conn, me, s["shotId"], kind, body, actions) for s in chosen]
             identifier = "tg_" + uuid.uuid4().hex
             group = {"taskGroupId": identifier, "taskIds": [t["taskId"] for t in tasks]}
             return store(conn, identifier, "taskGroup", group, slug, me.actor_id)
@@ -983,6 +1083,7 @@ def dispatch(conn, me, method, path, body, query, actions):
     if parts[0] in ("assets", "shots") and len(parts) >= 2:
         identifier = parts[1]; entity = "asset" if parts[0] == "assets" else "shot"
         slug, row = find_row(conn, identifier, entity); tail = "/".join(parts[2:])
+        authorize(conn, me, slug, write=method != "GET")
         view = lambda: asset_view(slug, find_row(conn, identifier, entity)[1]) if entity == "asset" else shot_view(conn, slug, find_row(conn, identifier, entity)[1])
         if not tail:
             if method == "GET":
@@ -1146,6 +1247,9 @@ def dispatch(conn, me, method, path, body, query, actions):
                 if parts[2] == "retries":
                     if task["status"] not in ("FAILED", "CANCELED") or not task.get("_job"):
                         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Only failed or canceled execution tasks can be retried.")
+                    if task.get("_paid_ambiguous") and body.get("confirmPaidResubmit") is not True:
+                        raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Reconcile the provider job and explicitly confirm paid resubmission.")
+                    authorize(conn, me, task["_slug"], write=True)
                     return queue_task(conn, me, task["_slug"], task["type"], task["_job"], actions)
     if parts[0] == "task-groups" and len(parts) == 2 and method == "GET":
         group = owned(conn, me, parts[1], "taskGroup")
@@ -1302,7 +1406,7 @@ def handle(handler, parsed, method):
             conn.rollback()
         if isinstance(exc, StoryError):
             status, code, message = exc.status, exc.code, str(exc)
-        elif isinstance(exc, (ValueError, TypeError, KeyError, media.MediaError, blocks.OpsError)):
+        elif isinstance(exc, (ValueError, TypeError, KeyError, worker.WorkerError, media.MediaError, blocks.OpsError)):
             status, code, message = 422, "DRAMA_VALIDATION_FAILED", "Invalid request or incompatible production sheet."
         else:
             status, code, message = 500, "DRAMA_REQUEST_FAILED", "Story service unavailable; check server deployment."

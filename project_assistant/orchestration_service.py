@@ -276,6 +276,8 @@ def retry_task_request(conn,me,slug,task_id,body):
             return prior
         if run['status']=='canceled' or task['status'] not in ('failed','canceled'):
             raise cp.OrchestrationError(409,"Canceled batches and tasks that have not failed cannot be retried here. Create a new assignment.")
+        if task['input_snapshot'].get('story_media'):
+            raise cp.OrchestrationError(409,"Reconcile any provider job, then create a new reviewed media allocation; internal media is never automatically resubmitted.")
         if task.get('flow_task_id'):
             raise cp.OrchestrationError(409,"Retry this step from pipeline history to preserve dependency order.")
         latest=[d for d in db.dispatches(conn,slug,task_id) if not d['superseded_by'] and d['status'] in ('failed','timeout','canceled')]

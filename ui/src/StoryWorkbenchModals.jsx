@@ -5,6 +5,9 @@ import { api } from './api.js';
 import { SheetDialog } from './SheetDialog.jsx';
 import { MediaCell } from './MediaCell.jsx';
 import { episodeId, shotId, selectedTake, storyList, storyRequest, waitStoryTask } from './storyModel.js';
+import { normalizeStatus, statusLabel } from './format.js';
+import { ProposalRaceView } from './assistant/ProposalRaceView.jsx';
+import { allocationPath, escalationPath, allocationDispatchBody } from './storyModel.js';
 import './story-workbench.css';
 
 function useStoryAction(onChanged) {
@@ -188,16 +191,28 @@ function OpenApiModal({slug, epId, onClose}) {
 
 export function StoryBatchBar({slug, epId = episodeId(slug), rowIds, writable, disabled, onChanged, beforeRun}) {
   useLocale();
-  const [apps, setApps] = useState([]), [app, setApp] = useState('LTX25_CINEMA_SHOT');
+  const [apps, setApps] = useState([]), [app, setApp] = useState('automatic');
+  const [mode, setMode] = useState('lab_economical'), [policy, setPolicy] = useState('open_weights_only'), [ceiling, setCeiling] = useState('open_weights_only'), [allocation, setAllocation] = useState(null);
   const action = useStoryAction(onChanged);
+  useEffect(() => {let alive=true; storyRequest(`/projects/pj_${slug}/production-policy`).then(data=>{if(alive){setPolicy(data.productionPolicy);setCeiling(data.deploymentPolicy);setMode(data.productionPolicy==='hybrid_studio'?'hybrid_balanced':'lab_economical');}}).catch(()=>{}); return()=>{alive=false;};}, [slug]);
+  useEffect(() => {setAllocation(null);}, [epId, rowIds.join('|'), mode, policy, app]);
   useEffect(() => {let alive = true; Promise.all(['IMAGE','VIDEO'].map(capability => storyList('/catalog/apps?capability=' + capability))).then(lists => {if (alive) setApps(lists.flat());}).catch(() => {}); return () => {alive = false;};}, []);
   const selected = apps.find(a => a.appCode === app);
   return <div className="story-batch">
-    <label>{t('story.appCode')} <select aria-label={t('story.appCode')} value={app} disabled={action.busy || disabled} onChange={e => setApp(e.target.value)}>{apps.map(a => <option key={a.appCode} value={a.appCode}>{a.name} · {a.webappId}</option>)}</select></label>
-    <button disabled={!writable || disabled || action.busy || !rowIds.length || !selected} onClick={() => action.run(async wait => {
+    <span className="story-policy-badge">{t(policy === 'open_weights_only' ? 'allocation.openBadge' : 'allocation.hybridBadge')}</span>
+    <label>{t('allocation.policy')} <select aria-label={t('allocation.policy')} value={policy} disabled={!writable || disabled || action.busy} onChange={e=>{const next=e.target.value; action.run(async()=>{const saved=await storyRequest(`/projects/pj_${slug}/production-policy`,'PUT',{productionPolicy:next});setPolicy(saved.productionPolicy);setMode(saved.productionPolicy==='hybrid_studio'?'hybrid_balanced':'lab_economical');});}}><option value="open_weights_only">{t('allocation.openPolicy')}</option><option value="hybrid_studio" disabled={ceiling==='open_weights_only'}>{t('allocation.hybridPolicy')}</option></select></label>
+    <label className="story-resource-pill">{t('allocation.resourceMode')} <select value={mode} disabled={disabled || action.busy} onChange={e=>setMode(e.target.value)}>{['lab_economical','hybrid_balanced','deadline_rush'].map(value=><option key={value} value={value}>{t('allocation.mode_'+value)}</option>)}</select></label>
+    <label>{t('story.appCode')} <select aria-label={t('story.appCode')} value={app} disabled={action.busy || disabled} onChange={e => setApp(e.target.value)}><option value="automatic">{t('allocation.automatic')}</option>{apps.map(a => <option key={a.appCode} value={a.appCode}>{a.name} · {a.webappId}</option>)}</select></label>
+    <button disabled={!writable || disabled || action.busy || !rowIds.length || selected?.capability === 'IMAGE'} onClick={()=>action.run(async()=>{
+      if(beforeRun?.()===false)return;
+      setAllocation(await storyRequest(allocationPath(slug,epId),'POST',{budgetMode:mode,productionPolicy:policy,shotIds:rowIds.map(rid=>shotId(slug,rid)),...(app!=='automatic'?{appCode:app}:{})}));
+    })}>{t('allocation.preflight')}</button>
+    {allocation && <section className="story-allocation" aria-label={t('allocation.summary')}><p>{t('allocation.counts',{open:allocation.summary.openWeightsShotCount,closed:allocation.summary.closedHeroShotCount,cloud:allocation.summary.cloudBurstShotCount})}</p><p>{t('allocation.estimateCaution')}</p><ul>{allocation.allocations.map(item=><li key={item.shotId}>{item.shotId} · {t('allocation.complexity_'+item.complexityTier)} · {item.assignedCardId} · {t('allocation.tier_'+item.tier)}{!item.ready&&<strong> · {t('allocation.blocked')}: {item.configuration_blockers.join(', ')}</strong>}</li>)}</ul></section>}
+    <button disabled={!writable || disabled || action.busy || !rowIds.length || (selected?.capability !== 'IMAGE' && !allocation?.ready)} onClick={() => action.run(async wait => {
       if (beforeRun?.() === false) return;
-      const group = await storyRequest(`/episodes/${epId}/shot-${selected.capability === 'IMAGE' ? 'image' : 'video'}-generations`, 'POST',
-        {appCode:app, shotIds:rowIds.map(rid => shotId(slug, rid))});
+      const group = await storyRequest(`/episodes/${epId}/shot-${selected?.capability === 'IMAGE' ? 'image' : 'video'}-generations`, 'POST',
+        selected?.capability === 'IMAGE' ? {appCode:app, shotIds:rowIds.map(rid => shotId(slug, rid)),budgetMode:mode} : allocationDispatchBody(allocation,mode,policy));
+      setAllocation(null);
       const results = await Promise.allSettled(group.taskIds.map(taskId => wait({taskId, status:'QUEUED'})));
       const failures = results.filter(result => result.status === 'rejected');
       if (failures.length) {await onChanged?.(); throw new Error(t('story.batchFailed',{count:failures.length}) + ' ' + failures[0].reason.message);}
@@ -214,12 +229,12 @@ export function ShotProduction({slug, rid, writable, disabled, onChanged, before
   useLocale();
   const id = shotId(slug, rid);
   const [takes, setTakes] = useState({images:[], videos:[]}), [apps, setApps] = useState([]), [app, setApp] = useState('LTX25_CINEMA_SHOT');
-  const [values, setValues] = useState({}), [loaded, setLoaded] = useState(0), [error, setError] = useState('');
+  const [values, setValues] = useState({}), [loaded, setLoaded] = useState(0), [error, setError] = useState(''), [shot, setShot] = useState(null), [mediaRun, setMediaRun] = useState(null);
   const action = useStoryAction(async () => {setLoaded(n => n + 1); await onChanged?.();});
   useEffect(() => {
     let alive = true;
-    Promise.all([storyList('/shots/' + id + '/images'), storyList('/shots/' + id + '/videos'), ...['IMAGE','VIDEO'].map(capability => storyList('/catalog/apps?capability=' + capability))]).then(([images,videos,...lists]) => {
-      if (alive) {setTakes({images,videos}); setApps(lists.flat()); setError('');}
+    Promise.all([storyList('/shots/' + id + '/images'), storyList('/shots/' + id + '/videos'), storyRequest('/shots/' + id), ...['IMAGE','VIDEO'].map(capability => storyList('/catalog/apps?capability=' + capability))]).then(([images,videos,view,...lists]) => {
+      if (alive) {setTakes({images,videos}); setShot(view); setMediaRun(view.mediaRunId || null); setApps(lists.flat()); setError('');}
     }).catch(e => {if (alive) setError(e.message);});
     return () => {alive = false;};
   }, [id, loaded]);
@@ -228,6 +243,12 @@ export function ShotProduction({slug, rid, writable, disabled, onChanged, before
   const perform = fn => action.run(async wait => {if (beforeRun?.() === false) return; return fn(wait);});
   return <section className="story-shot-tools">
     <h3>{t('story.candidateTakes')}</h3>
+    {shot && <p>{statusLabel(shot.reviewStatus)} · {t('allocation.complexity_' + shot.complexity.complexity_tier)}</p>}
+    {shot && ['Retake','Pending Review','Approved'].includes(normalizeStatus(shot.reviewStatus)) && <div className="story-escalation" aria-label={t('allocation.escalation')}>
+      {['closed_hero','open_structural_lock','ab_race','closed_to_open_4k'].map(strategy=><button key={strategy} disabled={!writable || disabled || action.busy} onClick={()=>perform(async()=>{const result=await storyRequest(escalationPath(slug,shot.episodeId || episodeId(slug),id),'POST',{strategy});setMediaRun(result.runId);})}>{t('allocation.strategy_'+strategy)}</button>)}
+      <button disabled={!writable || disabled || action.busy || normalizeStatus(shot.reviewStatus)!=='Approved' || !takes.videos.some(v=>v.selected)} onClick={()=>perform(async()=>{const result=await storyRequest(escalationPath(slug,shot.episodeId || episodeId(slug),id),'POST',{chainMode:'open_previz_to_closed_hero',referenceSourceVideoId:takes.videos.find(v=>v.selected).videoId});setMediaRun(result.runId);})}>{t('allocation.approvedHero')}</button>
+    </div>}
+    {mediaRun && <MediaRunReview slug={slug} runId={mediaRun} writable={writable} onChanged={async()=>{setLoaded(n=>n+1);await onChanged?.();}}/>}
     {['images','videos'].map(kind => <div className="story-takes" key={kind}>{takes[kind].map(take => <figure key={take.imageId || take.videoId}>
       <MediaCell compact type={kind === 'images' ? 'image' : 'video'} value={take.url} label={take.imageId || take.videoId}/>
       <figcaption><button disabled={!writable || disabled || action.busy || take.selected} aria-pressed={take.selected} onClick={() => perform(async () => {
@@ -251,5 +272,20 @@ export function ShotProduction({slug, rid, writable, disabled, onChanged, before
       })}>{t('story.reshootWithInputs')}</button>
     </details>
     {error && <p role="alert">{error}</p>}<ActionState action={action}/>
+  </section>;
+}
+
+function MediaRunReview({slug, runId, writable, onChanged}) {
+  const [gate,setGate]=useState(null),[opened,setOpened]=useState(false),[error,setError]=useState(''),[runStatus,setRunStatus]=useState('active');
+  useEffect(()=>{
+    let alive=true;
+    const load=()=>Promise.all([api.get(`/projects/api/${slug}/orchestration/board`),api.get(`/projects/api/${slug}/orchestration/runs/${runId}`)]).then(([data,detail])=>{if(alive){setGate(data.needs_you?.find(item=>item.run_id===runId && item.proposals?.length)||null);setRunStatus(detail.run.status);}}).catch(e=>{if(alive)setError(e.message);});
+    load();const timer=setInterval(load,1500);return()=>{alive=false;clearInterval(timer);};
+  },[slug,runId]);
+  return <section className="story-media-review"><p role="status">{t('allocation.run_'+runStatus)}</p><p>{t('allocation.reviewRequired')}</p>
+    {gate && <button disabled={!writable} onClick={()=>setOpened(true)}>{t('allocation.reviewCandidates')}</button>}
+    <button disabled={!writable || ['failed','succeeded','canceled'].includes(runStatus)} onClick={async()=>{try{await api.post(`/projects/api/${slug}/orchestration/runs/${runId}/cancel`,{client_request_id:crypto.randomUUID()});setGate(null);await onChanged?.();}catch(e){setError(e.message);}}}>{t('story.cancelTask')}</button>
+    {error&&<p role="alert">{error}</p>}
+    {opened&&gate&&<ProposalRaceView gate={gate} onClose={()=>setOpened(false)} onSelect={async body=>{await api.post(`/projects/api/${slug}/orchestration/gates/${gate.gate_id}/resolve`,body);setGate(null);await onChanged?.();}}/>}
   </section>;
 }

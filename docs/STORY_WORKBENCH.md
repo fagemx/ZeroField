@@ -1,5 +1,7 @@
 # Story Workbench (SPEC_06)
 
+> SPEC_07 extends this baseline with explicit production policy, graphless routing, allocation preflight and M8-reviewed media chains. Use the [current routing/allocation guide](SPEC07_STUDIO_ROUTING.md) and [separate verification receipt](spec07-verification.json); the historical SPEC_06 receipt is unchanged.
+
 The production header now exposes **Start Creating**, **My Projects**, **Asset Vault**, **Toolbox**, and **Open API**. English is the default; Traditional Chinese is selectable without changing saved IDs, prompts or card inputs.
 
 ## Daily workflow
@@ -30,7 +32,7 @@ Scene 02: The Signal
 - POST idempotency keys are persisted for 24 hours and scoped by actor, credential and endpoint. Lists accept cursor pagination and limits of 1–100. Large integer counters and file sizes are strings.
 - Scripts, asset rows, variants and shot cells remain in collaborative tabs. Migration `162_story_workbench.sql` stores API metadata, task snapshots, candidate references, imports and upload bytes. File metadata queries do not retrieve upload blobs.
 - Imported cards require a signed-in writable crew member and workflow JSON, not a server filesystem path. They persist in PostgreSQL and are restored at server startup. Built-in card IDs cannot be replaced. Never paste credentials in imported curl snippets; only the workflow/node contract is retained.
-- The registered cards, their IDs/webappIds and the documented RH aliases all resolve to local cards. An RH alias is **not** a request to the RunningHub cloud. Provider credentials and Comfy deployment settings remain server configuration.
+- Card IDs/webappIds and RH aliases resolve through the configured catalog. Since SPEC_07, the Seedance alias can select a graphless provider only under explicit effective hybrid permission and configured adapter; it otherwise resolves to local H3 before submission. Cloud cards are explicit choices. Provider credentials and Comfy deployment settings remain server configuration.
 - Webhooks require public HTTPS/443 destinations, pin the validated IP, reject redirects/private addresses, and sign exact request bytes using `X-RH-Signature`. Secrets are masked after creation. Failed deliveries retry after 60/300/1800/7200/43200 seconds, then become `DEAD`; pending deliveries resume on startup.
 
 ## Execution limits and safeguards

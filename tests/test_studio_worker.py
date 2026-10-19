@@ -747,6 +747,7 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
             self.assertEqual(worker._probe_video(verify_path, {})['frames'], 36)
             self.assertEqual(result['reference_role'], 'output_video')
 
+    @unittest.skipUnless(os.environ.get('OPENBENCH_TEST_DB_URI'), 'authenticated v2 HTTP requires dedicated PostgreSQL')
     def test_suite8_runninghub_interoperability_and_self_hosted_openapi_v2(self):
         import threading
         import time
@@ -820,16 +821,18 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
         )
 
         # 3. End-to-end self-hosted OpenAPI v2 HTTP test (/openapi/v2/media/upload/binary -> /run/ai-app -> /query -> /media/output)
-        httpd = server.OpenBenchHTTPServer(('127.0.0.1', 0), server.OpenBenchHandler)
-        port = httpd.server_address[1]
+        import test_product_http
+        http_fixture = test_product_http.ProductHTTPTests()
+        http_fixture.setUp()
+        port = http_fixture.server.server_port
         base = f'http://127.0.0.1:{port}'
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        auth_headers = {'Authorization': 'Bearer ' + http_fixture.member_token, 'X-Requested-With': 'projects', 'X-Project-Slug': http_fixture.slug}
         try:
             def post_json(path, obj):
                 req = urllib.request.Request(
                     base + path,
                     data=json.dumps(obj).encode('utf-8'),
-                    headers={'Content-Type': 'application/json'},
+                    headers={**auth_headers, 'Content-Type': 'application/json'},
                     method='POST',
                 )
                 return json.loads(urllib.request.urlopen(req).read().decode('utf-8'))
@@ -838,7 +841,7 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
                 req = urllib.request.Request(
                     base + path,
                     data=raw,
-                    headers={'Content-Type': mime, 'X-File-Name': fname},
+                    headers={**auth_headers, 'Content-Type': mime, 'X-File-Name': fname},
                     method='POST',
                 )
                 return json.loads(urllib.request.urlopen(req).read().decode('utf-8'))
@@ -885,12 +888,15 @@ class Spec05MediaAndLineWorldsTests(unittest.TestCase):
                 self.assertNotIn('ref_images.ref_image_1', q_res['compiledWorkflow']['26']['inputs'])
                 self.assertEqual(q_res['compiledWorkflow']['26']['inputs']['ref_images.ref_image_0'], ['54', 0])
 
-                with urllib.request.urlopen(q_res['results'][0]['url']) as resp:
+                with urllib.request.urlopen(urllib.request.Request(q_res['results'][0]['url'], headers=auth_headers)) as resp:
                     downloaded = resp.read()
                 self.assertEqual(downloaded, self.raw_video)
         finally:
-            httpd.shutdown()
-            httpd.server_close()
+            http_fixture.conn.rollback()
+            with http_fixture.conn.cursor() as cur:
+                cur.execute('DELETE FROM projectops.story_record WHERE owner_id=%s', (http_fixture.actor,))
+            http_fixture.conn.commit()
+            http_fixture.tearDown()
 
 
 if __name__ == '__main__':

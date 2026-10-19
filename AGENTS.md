@@ -1,5 +1,7 @@
 # ZeroField Studio — Agent Instructions & Guardrails (`AGENTS.md`)
 
+> **2026-10-19 SPEC_07 integration:** Studio extraction, graphless routing, allocation-backed Story dispatch, explicit project policy, structural preparation and M8-reviewed media races/chains are implemented. See [`docs/SPEC07_STUDIO_ROUTING.md`](./docs/SPEC07_STUDIO_ROUTING.md) and [`docs/spec07-verification.json`](./docs/spec07-verification.json) for current contracts/evidence. Open weights remain the default; hybrid requires an explicit authorized choice. Synthetic provider/local inference tests do not establish real model quality. The approved SPEC_07 requirements below remain intact; historical “next” wording is not a request to redo completed components.
+
 > **2026-10-19 SPEC_06 implementation:** The RH STORY facade, five-entry workbench, script baseline lock, variants, scene grouping, candidate history, split/merge, card overrides, batches and FFmpeg film export are implemented. See [`docs/STORY_WORKBENCH.md`](./docs/STORY_WORKBENCH.md) and [`docs/story-workbench-verification.json`](./docs/story-workbench-verification.json). Backend 306 / frontend 108 tests and the UI build pass. Migration `162_story_workbench.sql` persists API metadata and uploads; collaborative tabs remain authoritative. GPU/provider inference and external webhook networking were not exercised. The older “SPEC_06 next” descriptions below are historical scope, not a request to implement it again.
 
 > **2026-10-18 bilingual interface update (user-approved batches 1–2):** English is the first-run default and fallback; users may explicitly select Traditional Chinese. All new product UI must use semantic keys in `ui/src/i18n/locales/en.json` and `zh-TW.json`. Keep wire values, M8 / ACP keys, user content and custom names independent of display language. Use `normalizeStatus()` for logic and `statusLabel()` for display. Translated templates, project / AI language settings and video development remain later work. See [`docs/bilingual-baseline.json`](./docs/bilingual-baseline.json).
@@ -10,9 +12,9 @@
 > 本專案 **`ZeroField`**（位於 `C:\ai_project\ZeroField`）是專為參加 ComfyUI **「Open Source Higgsfield Challenge」**（截止日：2026-10-30 09:00 PT）獨立出來的參賽專用 Repo。
 >
 > **動工前請務必依序閱讀以下 5 份核心文件**：
-> 1. **[`docs/HANDOFF_4090_PC.md`](./docs/HANDOFF_4090_PC.md)**（**電腦交接首頁**：目前 `SPEC_01`～`SPEC_05` 完成狀態、下一步 **`SPEC_06`** 任務、以及跨 Repo 參考清單）
-> 2. **[`docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md`](./docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md)**（**下一步主規格**：自建 RH STORY 漫劇工作台 `/aivideo/open/v1` 雙向 API 引擎、頂部五大入口、以及巨觀 ↔ 中觀 ↔ 微觀深度整合）
-> 3. **[`docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md`](./docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)**（已完成基底：自建 RunningHub `/openapi/v2` 卡片引擎、`MiniMax H3 Ref2VA + H3-Context-IR`、`LTX-2.5 IC-LoRA + Ingredients Sheet` 與 `line-worlds` 結構產生器）
+> 1. **[`docs/HANDOFF_4090_PC.md`](./docs/HANDOFF_4090_PC.md)**（**電腦交接首頁**：目前 `SPEC_01`～`SPEC_06` 完成狀態、下一步 **`SPEC_07`** 任務）
+> 2. **[`docs/specs/SPEC_07_STUDIO_MODULARIZATION_AND_HYBRID_MODEL_ROUTER.md`](./docs/specs/SPEC_07_STUDIO_MODULARIZATION_AND_HYBRID_MODEL_ROUTER.md)**（**下一步主規格**：`limb_worker.py` 減重拆解為 `project_assistant/studio/` 套件、免開 ComfyUI 閉源模型直連路由器 `ModelRouter`、以及代理資源分層調度 `agent_allocator.py`）
+> 3. **[`docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md`](./docs/specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md)**（已完成基底：自建 RH STORY 漫劇工作台 `/aivideo/open/v1` 雙向 API 引擎、頂部五大入口、以及巨觀 ↔ 中觀 ↔ 微觀深度整合）
 > 4. **[`docs/DESIGN_AND_DEV_GUIDELINES.md`](./docs/DESIGN_AND_DEV_GUIDELINES.md)**（必讀！英文介面規範、`STATUSES` 白名單防呆、影片播放器、Open-Weights 與版權合規鐵律）
 > 5. **[`docs/ZEROFIELD_SPEC.md`](./docs/ZEROFIELD_SPEC.md)** 與 **[`docs/AGENT_ORCHESTRATION_SPEC.md`](./docs/AGENT_ORCHESTRATION_SPEC.md)**（參賽總體規格與多代理編排規格）
 

@@ -171,7 +171,7 @@ def _advance_dependent_sources(conn,completed_task,source_before):
 
 
 def create_task(conn,me,slug,run_id,*,objective,agent_key=None,label_selector=None,scope=None,target=None,
-                depends_on=(),strategy='single',write_mode='proposal',parent_dispatch_id=None):
+                depends_on=(),strategy='single',write_mode='proposal',parent_dispatch_id=None,_media_principal=None,_media_job=None):
     lock_project(conn,slug)
     run=own_run(conn,me,slug,run_id,lock=True)
     if run['status'] not in ACTIVE_RUNS:
@@ -200,7 +200,13 @@ def create_task(conn,me,slug,run_id,*,objective,agent_key=None,label_selector=No
         if not candidates:
             raise OrchestrationError(400,"No available agent matches these labels.")
         agent_key=sorted(candidates,key=lambda p:p['agent_key'])[0]['agent_key'] if selector else 'coordinator'
-    profile=agent_registry.get_agent(conn,slug,agent_key)
+    if agent_key.startswith('studio:'):
+        from project_assistant import story_media_adapter as media_adapter
+        if not media_adapter.is_principal(_media_principal) or not isinstance(_media_job,dict):
+            raise OrchestrationError(403,"Internal media bindings cannot be requested by clients.",'POLICY_DENIED')
+        profile=media_adapter.profile(agent_key)
+    else:
+        profile=agent_registry.get_agent(conn,slug,agent_key)
     if agent_key.startswith('limb:'):
         from project_assistant import limbs
         limb=next((w for w in limbs.enabled_workers(conn,slug) if 'limb:'+w['id']==agent_key),None)
@@ -274,7 +280,7 @@ def create_task(conn,me,slug,run_id,*,objective,agent_key=None,label_selector=No
         request_scope,target,depends_on,input_snapshot,target_snapshot,parent_dispatch_id,write_mode,status)
         VALUES(%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s,%s)''',
         (identifier,run_id,slug,objective[:160],objective,strategy,agent_key,json.dumps(selector),json.dumps(scope),json.dumps(target),
-         json.dumps(dependency_ids),json.dumps({'tabs':snapshots}),json.dumps(target_snapshot),parent_dispatch_id,write_mode,status))
+         json.dumps(dependency_ids),json.dumps({'tabs':snapshots,**({'story_media':_media_job} if _media_job is not None else {})}),json.dumps(target_snapshot),parent_dispatch_id,write_mode,status))
     return db.get_task(conn,slug,identifier)
 
 
@@ -298,6 +304,9 @@ def principal(identity):
 
 
 def runtime_profile(conn,slug,key):
+    if key.startswith('studio:'):
+        from project_assistant import story_media_adapter
+        return story_media_adapter.profile(key)
     if key.startswith('limb:'):
         from project_assistant import limbs
         limb=next((w for w in limbs.enabled_workers(conn,slug) if 'limb:'+w['id']==key),None)
@@ -323,6 +332,9 @@ def spawn_dispatch(conn,slug,task_id,*,agent_key,slot_key,caller_dispatch_id=Non
     if not isinstance(slot_key,str) or not 1<=len(slot_key)<=150:
         raise OrchestrationError(400,"Invalid dispatch slot.")
     profile=runtime_profile(conn,slug,agent_key)
+    if profile['runtime_kind']=='server_media':
+        from project_assistant import story_media_adapter
+        story_media_adapter.verify_task(conn,task)
     previous=db.one(conn,'''SELECT to_jsonb(d) FROM projectops.orchestration_dispatch d
         WHERE task_id=%s AND slot_key=%s ORDER BY attempt_no DESC LIMIT 1 FOR UPDATE''',(task_id,slot_key))
     if previous and previous['status'] in ('queued','running','awaiting_gate','succeeded') and continuation is None:
@@ -392,7 +404,15 @@ def claim_dispatch(conn,worker_id,supported_agent_keys,*,allowed_projects,lease_
                 actor(conn,slug,Identity(run['created_by'],'','member'))
             except OrchestrationError:
                 continue
-            if isinstance(worker_id,dict):
+            if profile['runtime_kind']=='server_media':
+                from project_assistant import story_media_adapter
+                if not story_media_adapter.is_principal(worker_id):
+                    continue
+                try:
+                    story_media_adapter.verify_task(conn,db.get_task(conn,slug,candidate['task_id']))
+                except OrchestrationError:
+                    continue
+            elif isinstance(worker_id,dict):
                 if slug not in worker_id.get('allowed_projects',[]) or profile.get('bound_limb_id')!=worker_id['id']:
                     continue
                 if not set(profile['capabilities']).intersection(worker_id.get('capabilities',[])):
@@ -435,6 +455,11 @@ def leased_dispatch(conn,identity,dispatch_handle,token):
         raise OrchestrationError(409,"The dispatch was canceled, expired, or reassigned.",'STALE_DISPATCH')
     runtime_profile(conn,dispatch['project_slug'],dispatch['agent_key'])
     task=db.get_task(conn,dispatch['project_slug'],dispatch['task_id'])
+    if dispatch['profile_snapshot']['runtime_kind']=='server_media':
+        from project_assistant import story_media_adapter
+        if not story_media_adapter.is_principal(identity):
+            raise OrchestrationError(403,"Internal media identity required.",'POLICY_DENIED')
+        story_media_adapter.verify_task(conn,task)
     if task.get('flow_task_id'):
         from project_assistant import flow_runner
         flow_id=db.one(conn,'SELECT run_id::text FROM projectops.limb_task WHERE id=%s',(task['flow_task_id'],))
@@ -668,7 +693,7 @@ def sweep(conn,project_slug=None):
                                (status,'任務逾時' if expired else 'Worker 租約失效',dispatch['id']))
                     _dismiss_outputs(conn,dispatch)
                     db.event(conn,dispatch,'worker_done','任務逾時或租約失效',{'outcome':status})
-                    if abandoned and not expired and dispatch['retry_count']+1<dispatch['max_attempts']:
+                    if abandoned and not expired and dispatch['retry_count']+1<dispatch['max_attempts'] and dispatch['profile_snapshot'].get('runtime_kind')!='server_media':
                         spawn_dispatch(conn,slug,dispatch['task_id'],agent_key=dispatch['agent_key'],slot_key=dispatch['slot_key'])
                     changed+=1
             refresh_run(conn,slug,run['id'])

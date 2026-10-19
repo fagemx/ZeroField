@@ -3,6 +3,8 @@
 **Handoff Date**: 2026-10-18  
 **Target Machine**: RTX 4090 Development PC (Local ComfyUI + GPU deployment validation)
 
+**2026-10-19 SPEC_07 integration handoff**: Modular Studio, graphless ModelRouter, pure allocator and authorized Story/UI integration are implemented. Read [routing/allocation operation and limits](./SPEC07_STUDIO_ROUTING.md) and the separate [SPEC_07 verification receipt](./spec07-verification.json). Default policy remains open-only; an existing admin must explicitly authorize project hybrid use, subject to the deployment ceiling. Internal M8 media profiles do not alter existing crew/provider settings. Live commercial adapters/cloud WebApp mappings, model weights/quality, GPU throughput, billing and remote cancellation still need operator verification. Earlier SPEC_06 receipts are unchanged. The historical next-agent prompt/table below is retained as provenance, not a request to repeat completed extraction/router/allocator work.
+
 **2026-10-19 update**: SPEC_06 is implemented. See [Story Workbench usage and limits](./STORY_WORKBENCH.md) and [verification receipt](./story-workbench-verification.json). Backend 306 / frontend 108 tests and the UI build pass; GPU/provider inference and public webhook delivery remain deployment checks, not claimed live validation.
 **Main Repository**: `https://github.com/fagemx/ZeroField.git` (Branch: `main`)
 
@@ -20,6 +22,7 @@
 | **[`SPEC_04`](./specs/SPEC_04_SHOWCASE_SEED_AND_LAUNCHER.md)** | ✅ Done | One-command launcher `run_studio.py`, `seed_showcase_media()`, and pre-rendered CC0 showcase assets in `samples/`. |
 | **[`SPEC_05`](./specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md)** | ✅ Done | Self-Hosted RunningHub `/openapi/v2` Card Engine (`workflows/cards/*.json`, `convert_litegraph_to_api`, `parse_runninghub_curl_or_payload`, `inject_node_info_into_workflow`), `H3-Context-IR`, `Ingredients Sheet`, `line-worlds`, and `.bounded.mp4` trimming. |
 | **[`SPEC_06`](./specs/SPEC_06_RH_STORY_WORKBENCH_AND_MACRO_MESO_MICRO.md)** | ✅ Implemented | **Self-Hosted RH STORY AI Drama Workbench (`/aivideo/open/v1/*`) & Macro ↔ Meso ↔ Micro Integration** (see [`docs/references/runninghub-open-api-2026-10-18/`](./references/runninghub-open-api-2026-10-18/README.md)). |
+| **[`SPEC_07`](./specs/SPEC_07_STUDIO_MODULARIZATION_AND_HYBRID_MODEL_ROUTER.md)** | 📋 **Next to Execute** | **`limb_worker.py` De-bloating (`project_assistant/studio/`) & Hybrid Closed-Source / Open-Weights Model Router (`ModelRouter` + `agent_allocator.py`)** — zero ComfyUI dependency for closed-source APIs, tiered shot complexity routing, and Retake escalation. |
 
 ---
 
@@ -109,6 +112,6 @@ npm test --prefix ui
 python run_studio.py
 ```
 
-### Prompt for the Next Coding Agent (`SPEC_06`)
+### Prompt for the Next Coding Agent (`SPEC_07`)
 When you open the next coding agent session, simply tell it:
-> **"Read `AGENTS.md`, `docs/HANDOFF_4090_PC.md`, and `docs/STORY_WORKBENCH.md`. SPEC_06 is implemented; do not rebuild it from scratch. Review `docs/story-workbench-verification.json`, preserve existing data, and obtain the current task before starting further development or resource-consuming generation."**
+> **"Read `AGENTS.md`, `docs/HANDOFF_4090_PC.md`, and `docs/specs/SPEC_07_STUDIO_MODULARIZATION_AND_HYBRID_MODEL_ROUTER.md`, then implement `SPEC_07` (`project_assistant/studio/` modularization, ComfyUI-free closed-source `ModelRouter`, and `agent_allocator.py`) on top of commit `34d2991` and verify all backend and frontend unit tests."**

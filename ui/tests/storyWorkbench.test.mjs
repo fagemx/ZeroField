@@ -46,3 +46,13 @@ test('Micro take selection is immutable and leaves exactly one active candidate'
   assert.equal(episodeId('demo',2),'ep_demo_02');
   assert.equal(shotId('demo','brow1'),'sh_demo_brow1');
 });
+
+test('allocation preflight wire paths and dispatch use the reviewed immutable assignment IDs', async () => {
+  const {allocationPath, escalationPath, allocationDispatchBody} = await import('../src/storyModel.js');
+  assert.equal(allocationPath('demo','ep_demo_02'),'/projects/pj_demo/episodes/ep_demo_02/shots:plan-allocation');
+  assert.equal(escalationPath('demo','ep_demo_02','sh_demo_b1'),'/projects/pj_demo/episodes/ep_demo_02/shots/sh_demo_b1:escalate');
+  assert.throws(()=>allocationDispatchBody({ready:false},'deadline_rush','hybrid_studio'));
+  const plan={ready:true,allocationId:'al_one',allocations:[{shotId:'sh_demo_b1',assignedCardId:'custom-card'}]};
+  assert.deepEqual(allocationDispatchBody(plan,'deadline_rush','hybrid_studio'),{allocationId:'al_one',shotIds:['sh_demo_b1'],budgetMode:'deadline_rush',productionPolicy:'hybrid_studio'});
+  assert.equal(plan.allocations[0].assignedCardId,'custom-card');
+});

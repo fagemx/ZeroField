@@ -1,0 +1,124 @@
+{
+  "date": "2026-10-19",
+  "scope": "SPEC_07 integration on the completed modularization/router/allocator components; independent read-only acceptance review remains separate.",
+  "base": "34d2991",
+  "componentCommits": [
+    "e68ae4496fe6ac0ccdaaaae449080a5c045dd4d8",
+    "c82acdda28b4a55de764e22b8505ccda6a0411c7",
+    "3f103572bdd9dffdd15b3ae77ca92632f93bdef1"
+  ],
+  "integrationRevision": "The commit containing this receipt; its frozen full SHA is recorded in the managed integration-recovered.json handoff.",
+  "result": "checked locally: backend 361 / frontend 109 tests pass, zero failures and zero skips; production build, browser and installed-wheel checks pass",
+  "commandsRan": [
+    {
+      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -m unittest discover -s tests -p \"test_*.py\"",
+      "result": "passed",
+      "tests": 361,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 168.663,
+      "log": "logs/backend-final-361.log"
+    },
+    {
+      "command": "npm test --prefix ui",
+      "result": "passed",
+      "tests": 109,
+      "failures": 0,
+      "skips": 0,
+      "log": "logs/ui-final.log"
+    },
+    {
+      "command": "npm run build --prefix ui",
+      "result": "passed",
+      "summary": "333 modules; current static/projects assets rebuilt. Non-failing chunk-size warning: JS approximately 1.48 MB before gzip; no warning threshold weakened.",
+      "log": "logs/ui-build-final-2.log"
+    },
+    {
+      "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> PYTHONPATH=tests python -X utf8 -m unittest test_story_hybrid_integration -q",
+      "result": "passed",
+      "summary": "12 integration tests passed before the final added open-previz chain case; that case passed separately, and all 13 subsequently passed in full discovery.",
+      "log": "logs/integration-12-final.log; logs/open-chain-check.log"
+    },
+    {
+      "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> python -X utf8 -u <owned-temp>/browser_check.py",
+      "result": "passed",
+      "summary": "Playwright Chromium headless 1440x1000: five navigation entries, policy/resource controls, Gallery complexity badges, allocation preview, Micro Retake actions, EN/zh-TW switching; zero page errors and zero generation POSTs. Screenshots manually inspected; allocation contrast corrected before final rebuild/check.",
+      "log": "logs/browser-final-2.log"
+    },
+    {
+      "command": "python -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir <owned-temp>/wheel .",
+      "result": "passed",
+      "sha256": "cca75caa15a5117a70237d676c42d948ec949e4e29c3d285068ad94ee21f58e6",
+      "log": "logs/wheel-build.log"
+    },
+    {
+      "command": "python -m pip install --no-deps --no-index --target <owned-temp>/wheel-installed <owned-temp>/wheel/openbench-0.2.0-py3-none-any.whl; python -I -X utf8 <owned-temp>/wheel_check.py",
+      "result": "passed",
+      "summary": "Installed outside checkout; new integration modules, router/allocator/facade, shared registries, all 10 cards/workflows and current compiled assets resolve. Facade remains 244 lines. Existing explicit Studio package-list fix preserved.",
+      "log": "logs/wheel-install.log; logs/wheel-check.log"
+    },
+    {
+      "command": "pg_ctl.exe -D <owned-temp>/data -m fast -w -t 12 stop",
+      "result": "passed",
+      "summary": "Same PG16 toolchain, binary file-backed stdout/stderr, stdin DEVNULL, subprocess timeout 18s; exit 0. postmaster.pid absent and postgres.log records clean shutdown at 12:37:47.697 CST.",
+      "log": "control-stop.log; postgres.log"
+    },
+    {
+      "command": "git diff --check; git diff --exit-code -- docs/story-workbench-verification.json docs/studio-verification.json docs/bilingual-baseline.json docs/english-baseline.json",
+      "result": "passed",
+      "summary": "No whitespace errors or historical receipt changes. Git emitted only configured LF/CRLF conversion notices."
+    },
+    {
+      "command": "git diff --cached --check",
+      "result": "failed",
+      "summary": "Generated minified JS line 197 retains an upstream renderMarkdown template literal ending with two spaces. Confirmed identical literal in predecessor index-J3oWdeB9.js; preserving its Markdown hard-break semantics rather than editing the production build."
+    },
+    {
+      "command": "git diff --cached --check -- . ':!static/projects/assets/*'",
+      "result": "passed",
+      "summary": "All source/documentation/test diffs are whitespace-clean. Generated upstream Markdown literal is the only full staged whitespace-check exception."
+    }
+  ],
+  "integrationCoverage": [
+    "Actual Story HTTP -> configured loopback vendor and RunningHub-style cloud -> real FFmpeg normalization -> PostgreSQL candidate/guarded writeback; Comfy client/executor configured to fail if touched in these graphless cases.",
+    "Default policy denial, explicit admin project choice and deployment ceiling; viewers/crew policy restrictions; numeric masking denies commercial export; alias fallback before submit.",
+    "Exact nested project/episode/shot IDs, foreign candidates, other-actor v2 media grants, authenticated v2 task/query/output boundaries and server-derived commercial policy.",
+    "Allocator-selected cards actually dispatched; consumed source/policy-bound preflight, honest null billing/GPU estimates, custom video card choice and immutable preflight/queued graphs.",
+    "Real persisted layout/frame-sheet preparation, existing M8 object-principal admissions/leases/proposals, A/B winner-only writeback, generic-apply bypass denial, stale-source rejection, lease expiry without automatic resubmission.",
+    "Closed -> reviewed source -> real ingredients -> local optimize review; open previz -> review -> real frame extraction -> vendor final; existing approved image skips draft. Pending/READY is not accepted as director approval.",
+    "Canceled running chain late outputs cannot create a proposal or overwrite the reviewed take. All original facade/local graph/SDK/media/stale-output tests retained.",
+    "Legacy v2 HTTP test retains its compiler/media assertions but now uses an actual token/project PostgreSQL fixture, required auth/CSRF/project headers and grant cleanup rather than unauthenticated access. Dedicated-URI full discovery skips none."
+  ],
+  "readEvidenceNotNewExecution": [
+    "Approved AGENTS.md, maintained handoff, complete SPEC_07, SPEC_06, design guidelines, ZEROFIELD_SPEC and AGENT_ORCHESTRATION_SPEC; remaining previously truncated source instructions reread with bounded offsets.",
+    "Exact predecessor managed handoffs and unchanged component implementations/evidence; predecessor milestones are not represented as new integration work.",
+    "Supervisor explicitly authorized the narrow server-managed M8 adapter/lifecycle seam without existing agent config writes, admin impersonation or relaxed remote-worker binding."
+  ],
+  "historicalRedAndRecovery": [
+    "Original blocked integration.json is preserved. Initial localized PG16 subprocess output failed UTF-8 decoding; the one approved binary-pipe recovery then timed out. Those attempts remain failed, not retrospectively passed.",
+    "Parent recovered the same preserved cluster/toolchain using a real control log file, verified pg_ctl exit 0 and SELECT ('postgres','55447',1), then transferred ownership. No re-init/createdb or alternate executor/model was used in this revival.",
+    "Initial UI test RED: nested locale values violated the existing two-level dictionary contract; flattened semantic keys, retaining the old test.",
+    "Initial integration REDs: policy WorkerError envelope classification and omitted prepared frame-sheet forwarding fixed; cloud fixture supplied its required source video. Legacy HTTP auth fixture/grant cleanup updated without removing old assertions.",
+    "First full discovery: 356 tests with one legacy unauthenticated-v2 fixture error. Its newly authenticated route lacked the test connection factory and attempted the default DB connection, which timed out before access; the fixture was corrected to the dedicated token/project DB context. Later 359, 360 and final 361 tests passed with no skips. First browser selector targeted a non-Retake demo row; corrected fixture selector and subsequent checks passed.",
+    "Owned postgres.log contains a non-failing Windows child shared-memory reservation warning (error 487) at 12:35:36; final full discovery still returned OK. Shutdown was clean."
+  ],
+  "ownedTemp": "C:/Users/fagem/AppData/Local/Temp/zerofield-spec07-integration-scs2u4wk",
+  "screenshots": [
+    "browser-en-allocation.png",
+    "browser-zh-review.png"
+  ],
+  "services": "Only the adopted dedicated 127.0.0.1:55447 PG16 cluster was used/stopped; HTTP fixtures and Playwright browsers were closed by their owned cleanup. No real project database was accessed.",
+  "substitutionsAndNotRun": [
+    "Commercial inference is deterministic loopback substitution, not Seedance/Kling/RunningHub model execution or an official vendor protocol validation.",
+    "Structural/race/chain tests additionally substitute local inference; real PostgreSQL, HTTP, FFmpeg preparation/normalization, M8 reviews and writeback are exercised.",
+    "NOT RUN: real paid APIs/credentials/private media, model downloads, GPU generation/benchmarks, real visual or model-weight verification, live billing/quota/remote cancellation checks, public webhooks, push/release/deployment.",
+    "No Codex/external coding-agent CLI, agent/provider config rewrite, dependency addition or global model/config change."
+  ],
+  "residualRisks": [
+    "Commercial adapter contracts and cloud WebApp field mappings require operator validation; no live provider quality/pricing/throughput promise.",
+    "Cancellation cannot guarantee provider-side termination or prevent charges. Ambiguous/interrupted paid jobs need reconciliation and an explicit new reviewed request; internal media is never automatically retried.",
+    "Lower-level registry/media/task storage remains process-local; an interrupted in-process M8 worker is not an exactly-once provider transaction. Persistent Story candidates remain database-backed.",
+    "GPU seconds/billed credits are uncalibrated; catalog policy labels do not independently certify imported graph/model weights or contest eligibility."
+  ]
+}
