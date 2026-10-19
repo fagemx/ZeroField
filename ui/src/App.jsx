@@ -4,6 +4,8 @@ import { t as uiText } from './i18n/index.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "./api.js";
+import { AgentConsoleApp } from './agentConsole/AgentConsoleApp.jsx';
+import { consoleHash, consoleRoute } from './agentConsole/model.js';
 import { AnnotationPanel, LinkIcon, NoteIcon, PenIcon, VIEW_LABEL, ViewMenu, todoCount } from "./Annotations.jsx";
 import { anchorsOf } from "./docText.js";
 import { DocSurface } from "./DocSurface.jsx";
@@ -74,7 +76,11 @@ function ProjectPage({ slug }) {
   const locale = useLocale();
   const [data, setData] = useState(null);
   const [fatal, setFatal] = useState(null);
-  const [tabKey, setTabKey] = useState(() => parseLocation(window.location.pathname, window.location.hash).tab);
+  const rememberedHash = () => {try {return sessionStorage.getItem('zf.production:'+slug) || '';} catch {return '';}};
+  const [consoleView, setConsoleView] = useState(() => consoleRoute(window.location.hash));
+  const [tabKey, setTabKey] = useState(() => parseLocation(window.location.pathname, consoleRoute(window.location.hash) ? rememberedHash() : window.location.hash).tab);
+  const productionHash = useRef(consoleRoute(window.location.hash) ? rememberedHash() : window.location.hash);
+  const productionReturnFocus = useRef(null);
   const [docs, setDocs] = useState({});
   const [focusId, setFocusId] = useState(null);
   const [focusRequest, setFocusRequest] = useState(null);
@@ -94,6 +100,8 @@ function ProjectPage({ slug }) {
   const [versionsFor, setVersionsFor] = useState(null); // 左邊「⋯ → 找回以前的內容…」：換到那一頁後打開版本紀錄
   const [docModeTabs, setDocModeTabs] = useState({});
   const [storyEpisode, setStoryEpisode] = useState(`ep_${slug}_01`);
+  const [paMode, setPaMode] = useState('off');
+  const [paDraft, setPaDraft] = useState('');
   const versionsShown = useCallback(() => setVersionsFor(null), []);
   const annSeq = useRef(0);
   const pendingFocus = useRef((() => {
@@ -153,7 +161,7 @@ function ProjectPage({ slug }) {
       const first = keys[0];
       if (first) {
         setTabKey(first);
-        window.history.replaceState(null, "", tabHash(first));
+        if (!consoleRoute(window.location.hash)) window.history.replaceState(null, "", tabHash(first));
       }
     }
   }, [data, tabKey]);
@@ -206,6 +214,17 @@ function ProjectPage({ slug }) {
 
   useEffect(() => {
     const onHash = async () => {
+      const consoleNext = consoleRoute(window.location.hash);
+      if (consoleNext) {
+        if (!consoleView && surfaceControl.current && !(await surfaceControl.current.flush())) {window.history.replaceState(null, '', productionHash.current || tabHash(tabKey));return;}
+        if (!consoleView && data?.me?.actor_id) try {sessionStorage.setItem('zf.production:'+slug,productionHash.current || tabHash(tabKey));sessionStorage.setItem('zf.productionContext:'+slug+':'+data.me.actor_id,JSON.stringify({episodeId:storyEpisode,focus:surfaceControl.current?.consoleContext?.(),chatDraft:paDraft,dockMode:paMode}));} catch { /* Keep mounted context. */ }
+        setConsoleView(consoleNext);
+        return;
+      }
+      setConsoleView(null);
+      requestAnimationFrame(() => (productionReturnFocus.current?.isConnected ? productionReturnFocus.current : document.querySelector('.workbench-app .top button'))?.focus());
+      productionHash.current = window.location.hash;
+      try {sessionStorage.setItem('zf.production:'+slug, window.location.hash);} catch { /* Keep mounted context. */ }
       const next = parseLocation(window.location.pathname, window.location.hash);
       if (next.thread && /^a\d+$/.test(next.thread)) pendingFocus.current = next.thread.slice(1);
       if (next.tab && next.tab !== tabKey) {
@@ -217,12 +236,17 @@ function ProjectPage({ slug }) {
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, [tabKey]);
+  }, [tabKey, consoleView, slug, data?.me?.actor_id, storyEpisode, paDraft, paMode]);
+
+  useEffect(() => {
+    if (!consoleView) return;
+    document.querySelectorAll('.workbench-app video, .workbench-app audio').forEach(media => media.pause());
+  }, [Boolean(consoleView)]);
 
   // 每 20 秒抓一次：別人的標註、狀態、鎖、內文（視窗在前景才抓）
   useEffect(() => {
     const timer = setInterval(async () => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible" || consoleRoute(window.location.hash)) return;
       const payload = await loadProject();
       if (!payload || !tabKey) return;
       const meta = payload.tabs.find((t) => t.key === tabKey);
@@ -237,6 +261,7 @@ function ProjectPage({ slug }) {
     if (key === tabKey) return true;
     if (surfaceControl.current && !(await surfaceControl.current.flush())) return false;
     window.history.pushState(null, "", tabHash(key));
+    productionHash.current = tabHash(key);
     setFocusId(null);
     setTabKey(key);
     window.scrollTo(0, 0);
@@ -361,11 +386,13 @@ function ProjectPage({ slug }) {
   }, [data, docs]);
 
   const narrow = () => window.matchMedia("(max-width: 860px)").matches;
-  const [paMode, setPaMode] = useState("off");    // off｜side｜full；需要協助時再展開，先留空間閱讀內容
   const [paView, setPaView] = useState("chat");   // chat｜manage（管理者才有）
   const [paFocus, setPaFocus] = useState(null);
-  const [paDraft, setPaDraft] = useState("");
   const [sheetFocus, setSheetFocus] = useState(null);
+  useEffect(() => {
+    if (!data?.me?.actor_id || !consoleRoute(window.location.hash)) return;
+    try {const saved=JSON.parse(sessionStorage.getItem('zf.productionContext:'+slug+':'+data.me.actor_id));if(saved){setPaDraft(saved.chatDraft || '');if(['off','side','full'].includes(saved.dockMode))setPaMode(saved.dockMode);if(saved.episodeId)setStoryEpisode(saved.episodeId);if(saved.focus)setSheetFocus({...saved.focus,nonce:Date.now()});}} catch { /* Ignore unavailable or obsolete local context. */ }
+  }, [slug,data?.me?.actor_id]);
   const paInput = useRef(null);
   const paEnabled = Boolean(data && data.assistant && data.assistant.enabled);
   const onApplied = useCallback((proposal, notes) => {
@@ -484,6 +511,14 @@ function ProjectPage({ slug }) {
     loadProject();
   }, [loadTab, loadProject]);
   const flushSurface = useCallback(async () => (surfaceControl.current ? surfaceControl.current.flush() : true), []);
+  const openConsole = async () => {
+    if (!(await flushSurface())) return;
+    productionReturnFocus.current = document.activeElement;
+    productionHash.current = consoleRoute(window.location.hash) ? productionHash.current : window.location.hash;
+    try {sessionStorage.setItem('zf.production:'+slug, productionHash.current || tabHash(tabKey));sessionStorage.setItem('zf.productionContext:'+slug+':'+data.me.actor_id,JSON.stringify({episodeId:storyEpisode,focus:surfaceControl.current?.consoleContext?.(),chatDraft:paDraft,dockMode:paMode}));} catch { /* Mounted production stays intact. */ }
+    window.location.hash = consoleHash();
+  };
+  const returnProduction = () => {window.location.hash = productionHash.current || tabHash(tabKey);};
 
   if (fatal) {
     return (
@@ -501,7 +536,9 @@ function ProjectPage({ slug }) {
   const todo = todoCount(data.annotations, me);
   const openCount = (key) => data.annotations.filter((a) => a.tab_key === key && isOpen(a) && !a.orphaned_at).length;
   return (
-    <div className={"app workbench-app surface-" + (tab?.surface_type || "doc") + (railHidden ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
+    <>
+    {consoleView && <AgentConsoleApp key={slug+':'+me.actor_id} slug={slug} me={me} project={data.project} route={consoleView} episodeId={storyEpisode} onReturn={returnProduction}/>}
+    <div data-console-hidden={Boolean(consoleView)} inert={consoleView ? true : undefined} aria-hidden={consoleView ? true : undefined} className={"app workbench-app surface-" + (tab?.surface_type || "doc") + (railHidden ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
       <header className="top">
         <button type="button" className="icon-btn" onClick={() => (window.innerWidth <= 860 ? setRailOpen(!railOpen) : setRailHidden(!railHidden))}
@@ -537,6 +574,7 @@ function ProjectPage({ slug }) {
         <button type="button" className="icon-btn" onClick={copyLink} title={uiText("app.copyALinkToThisPageOrAnnotation")} aria-label={uiText("app.copyLink")}>
           <LinkIcon /><span className="label">{uiText("app.copyLink")}</span>
         </button>
+        <button type="button" className="icon-btn" onClick={openConsole}>{uiText('console.entry')}</button>
         <LanguageSwitch /><WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
         <IdentityBadge me={me} members={data.members} />
       </header>
@@ -557,7 +595,7 @@ function ProjectPage({ slug }) {
           onError={onError} onToast={showToast} />
         <main className="main">
           {tabs.some(item => item.key === 'cinema-studio') && <StudioModeBar slug={slug} tab={tab} me={me} activeEpisode={storyEpisode}
-            onEpisode={setStoryEpisode} version={tab?.updated_at} flush={flushSurface} onNavigate={navigate}
+            onEpisode={setStoryEpisode} version={tab?.updated_at} flush={flushSurface} onNavigate={navigate} onConsole={openConsole}
             onReload={async () => {await loadProject(); if(tabKey)await loadTab(tabKey,true);}}/>}
           <div className="doc-host">
           {!tab && <div className="center-note">{uiText("app.loading")}</div>}
@@ -633,17 +671,18 @@ function ProjectPage({ slug }) {
             <AssistantWorkspace assistant={assistant} me={me} tabs={tabs} slug={slug} focus={paFocus} onFocus={setPaFocus}
               draft={paDraft} onDraft={setPaDraft} inputRef={paInput} view={paView} onView={setPaView}
               onCollapse={() => setPaMode(narrow() ? "off" : "side")} onOpenTab={openFromAssistant} onStarter={starter}
-              onError={onError} onToast={showToast} />
+              onError={onError} onToast={showToast} onConsole={openConsole} />
           )}
         </main>
       </div>
       {paEnabled && paMode === "side" && (
         <AssistantSide assistant={assistant} me={me} tabs={tabs} slug={slug} focus={paFocus} draft={paDraft}
           onDraft={setPaDraft} inputRef={paInput} view={paView} onView={setPaView} onExpand={() => setPaMode("full")}
-          onClose={() => setPaMode("off")} onOpenTab={openFromAssistant} onStarter={starter} onError={onError} onToast={showToast} />
+          onClose={() => setPaMode("off")} onConsole={openConsole} onOpenTab={openFromAssistant} onStarter={starter} onError={onError} onToast={showToast} />
       )}
       {railOpen && <div className="rail-scrim" onClick={() => setRailOpen(false)} />}
       {toast && <div className={"toast " + toast.kind} role="status">{toast.message}</div>}
     </div>
+    </>
   );
 }

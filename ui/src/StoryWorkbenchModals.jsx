@@ -35,7 +35,7 @@ function ActionState({action}) {
   return <>{action.error && <p role="alert" className="canvas-error">{action.error}</p>}{action.busy && <p role="status">{t('story.working')}{action.task && <> · {action.task.taskId}</>}</p>}</>;
 }
 
-export function StoryWorkbench({slug, tab, me, version, onReload, onNavigate, flush, activeEpisode, onEpisode}) {
+export function StoryWorkbench({slug, tab, me, version, onReload, onNavigate, flush, activeEpisode, onEpisode, onConsole}) {
   useLocale();
   const [modal, setModal] = useState(null), [episodes, setEpisodes] = useState([]), [ep, setEp] = useState(null), [error, setError] = useState('');
   const [film, setFilm] = useState(null);
@@ -62,6 +62,7 @@ export function StoryWorkbench({slug, tab, me, version, onReload, onNavigate, fl
       <button onClick={() => open('assets')}>❖ {t('story.assetVault')}</button>
       <button onClick={() => open('toolbox')}>🧰 {t('story.toolbox')}</button>
       <button onClick={() => open('api')}>⚡ {t('story.openApi')}</button>
+      <button onClick={onConsole}>⌘ {t('console.entry')}</button>
       {episodes.length > 0 && <label>{t('story.episode')} <select value={epId} disabled={action.busy} onChange={async event => {const next=event.target.value;if(await flush?.()===false)return;onEpisode?.(next);setFilm(null);}}>{episodes.map(item => <option key={item.episodeId} value={item.episodeId}>{item.title}</option>)}</select></label>}
     </nav>
     {error && <p role="alert">{error}</p>}
@@ -225,11 +226,13 @@ export function StoryBatchBar({slug, epId = episodeId(slug), rowIds, writable, d
   </div>;
 }
 
-export function ShotProduction({slug, rid, source, writable, disabled, onChanged, beforeRun}) {
+export function ShotProduction({slug, actorId, rid, source, writable, disabled, onChanged, beforeRun}) {
   useLocale();
   const id = shotId(slug, rid);
-  const [takes, setTakes] = useState({images:[], videos:[]}), [apps, setApps] = useState([]), [app, setApp] = useState('LTX25_CINEMA_SHOT');
-  const [values, setValues] = useState({}), [loaded, setLoaded] = useState(0), [error, setError] = useState(''), [shot, setShot] = useState(null), [mediaRun, setMediaRun] = useState(null);
+  const draftKey=actorId ? `zf.shot:${slug}:${actorId}:${rid}` : null;
+  const [draft]=useState(()=>{try{return draftKey ? JSON.parse(sessionStorage.getItem(draftKey)) || {}:{};}catch{return {};}});
+  const [takes, setTakes] = useState({images:[], videos:[]}), [apps, setApps] = useState([]), [app, setApp] = useState(draft.app || 'LTX25_CINEMA_SHOT');
+  const [values, setValues] = useState(draft.values || {}), [loaded, setLoaded] = useState(0), [error, setError] = useState(''), [shot, setShot] = useState(null), [mediaRun, setMediaRun] = useState(null);
   const action = useStoryAction(async () => {setLoaded(n => n + 1); await onChanged?.();});
   const mediaVersion = JSON.stringify([id,source?.mediaVersion]);
   const [takesVersion,setTakesVersion] = useState(null);
@@ -243,7 +246,7 @@ export function ShotProduction({slug, rid, source, writable, disabled, onChanged
     }).catch(e => {if (alive) setError(e.message);});
     return () => {alive = false;};
   }, [id, loaded, source?.revision, source?.status, mediaVersion]);
-  useEffect(() => {setValues({});}, [id, app]);
+  useEffect(() => {if(draftKey)try{sessionStorage.setItem(draftKey,JSON.stringify({app,values}));}catch{/* Mounted overrides remain available. */}}, [draftKey,app,values]);
   const selected = apps.find(a => a.appCode === app);
   const perform = fn => action.run(async wait => {if (beforeRun?.() === false) return; return fn(wait);});
   return <section className="story-shot-tools">
@@ -265,8 +268,8 @@ export function ShotProduction({slug, rid, source, writable, disabled, onChanged
       <button disabled={!writable || disabled || action.busy || !currentTakes.videos.some(v => v.selected)} onClick={() => perform(async wait => {
         await wait(await storyRequest(`/shots/${id}/video-generations`, 'POST', {appCode:'H3_OPTIMIZE_4K', referenceSourceVideoId:currentTakes.videos.find(v => v.selected).videoId}));
       })}>{t('story.restore4k')}</button></div>
-    <details><summary>{t('story.nodeInspector')}</summary>
-      <label className="modal-field">{t('story.appCode')}<select value={app} disabled={action.busy} onChange={e => setApp(e.target.value)}>{apps.map(a => <option key={a.appCode} value={a.appCode}>{a.name}</option>)}</select></label>
+    <details open={Object.keys(draft.values || {}).length ? true:undefined}><summary>{t('story.nodeInspector')}</summary>
+      <label className="modal-field">{t('story.appCode')}<select value={app} disabled={action.busy} onChange={e => {setApp(e.target.value);setValues({});}}>{apps.map(a => <option key={a.appCode} value={a.appCode}>{a.name}</option>)}</select></label>
       <code>{selected?.webappId}</code>
       {selected?.nodes.filter(n => !n.hidden).map(node => {
         const key = node.nodeId + '.' + node.fieldName;

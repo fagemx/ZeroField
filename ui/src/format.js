@@ -14,7 +14,8 @@ export function agentLabel(agent) {
   return entry && agent.display_name === entry[0] ? t(entry[1]) : agent?.display_name || '';
 }
 const STATUS_KEYS = {"Queued":"queued", "In Progress":"inProgress", "Rendering Image":"renderingImage", "Rendering Video":"renderingVideo", "Pending Review":"pendingReview", "Retake":"retake", "Blocked":"blocked", "Approved":"approved"};
-export function statusLabel(value) { const normalized = normalizeStatus(value); return Object.hasOwn(STATUS_KEYS, normalized) ? t('status.' + STATUS_KEYS[normalized]) : value; }
+const CONSOLE_STATUSES = new Set(['queued','running','awaiting_gate','succeeded','failed','canceled','expired','active','resolved','open']);
+export function statusLabel(value) { const normalized = normalizeStatus(value); return Object.hasOwn(STATUS_KEYS, normalized) ? t('status.' + STATUS_KEYS[normalized]) : CONSOLE_STATUSES.has(normalized) ? t('consoleStatus.' + normalized) : value; }
 
 const PALETTE = [
   ["#e9e2d4", "#5b4a2c"], ["#dbeafe", "#1e40af"], ["#fce7f3", "#9d174d"], ["#dcfce7", "#166534"],

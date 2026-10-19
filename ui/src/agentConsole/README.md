@@ -1,0 +1,101 @@
+# Lean Agent Console UI contract
+
+This component consumes service `8c3eb4a767aaca2694d48cb338147daa95e5838e`.
+It adds no backend service, scheduler, CLI launcher or authority principal.
+`model.js` is the exact four-group/twelve-page and twelve-template wire-ID map.
+
+## Routes and state
+
+- `/projects/{slug}/#/agent-console[/page[/resource]]` opens the full-screen Console.
+  Hash back/forward retains page/resource selection. The Studio top entry and daily
+  dock jump use the existing production flush guard before entering.
+- Production remains mounted, hidden and inert. Existing media is paused; ordinary
+  production refresh polling is suppressed. Return restores the prior production
+  hash and keyboard focus. The active shot/episode and unsent shot overrides also
+  survive a Console refresh; they are never automatically submitted.
+- Local Console drafts and shot overrides use **sessionStorage**, separated by
+  project and current actor (memory-entry drafts additionally by store). This is
+  browser-local draft recovery, not SQL storage, a credential vault or permission.
+  Do not paste secrets. Production cell/document drafts retain their existing flush
+  guard; entering Console does not discard them. Reload/replace of a saved version
+  is explicit and confirms replacement of unsaved local edits.
+- Page/resource requests and session long polls abort on unmount/project changes.
+  Mutation requests abort on route changes, not as a promise of server/provider
+  cancellation. No operation is automatically retried. Overview/budget refreshes
+  every five seconds; terminal sessions stop polling.
+
+## Page -> actual consumed API -> visible result
+
+Base `C = /projects/api/{slug}/agent-console`. Browser writes include same-origin
+credentials and `X-Requested-With: projects`; POSTs have a fresh idempotency header.
+Current actor, membership, scope, admin and version authority always remain server-side.
+
+| Wire page | Actual APIs | Visible result |
+| --- | --- | --- |
+| dashboard | GET C/dashboard | Current-owner counts/recent sessions, heartbeat metadata, aggregate usage, budget/Judge admissions |
+| api_keys | GET C/api-keys, /providers; POST /providers, /api-keys/default, /connections/health; GET /providers/{key}/history | Versioned references/default, server allowlist, explicit read-only probe result, not canned connectivity |
+| playground | POST C/playground mode=dry_run or live | Real compiled instructions/tools/payload (no inference in dry-run); explicit saved live or raw Save-and-Run queues an existing M8 session |
+| skills | GET/POST C/skills; GET /skills/{key}/history | Versioned Markdown instructions and recommended tool IDs; no permission grant |
+| quickstart | GET C/quickstart; POST C/quickstart/draft | Exact twelve localized cards, blank or literal natural-language instruction draft; nothing saved/launched implicitly |
+| agents | GET/POST C/agents; GET /agents/{key}/history | Form/raw writable fields, skills/tool policies/multiagent/grader/memory/env; stored and effective provider kept separate; immutable studio:* descriptors |
+| sessions | GET C/sessions, /sessions/{id}/events?cursor&wait; POST /sessions/{id}/resume, /interrupt, /cancel | Existing private M8 messages/tasks/dispatches, consumed context, isolated grader scorecards; selection alone cannot confirm a gate |
+| deployments | GET/POST C/deployments; POST /deployments/{key}/trigger | Durable trigger/session receipt, manual or numeric cron/IANA timezone configuration; existing worker owns due execution |
+| environments | GET/POST C/environments | Versioned URL/reference/host/package metadata; local8188/proxy8189, Router/SDK/MCP/CLI supported states, no arbitrary launch |
+| memory_store | GET/POST C/memory-stores?episode_id; GET /{key}/entries; POST C/memory-entries, /memory-stores/consolidate; GET /memory-entries/{uuid}/history | Scoped versioned stores/entries/mounts, reviewed source-digest consolidation and history; foreign private stores remain unavailable |
+| usage_cost | GET C/usage-cost?days | Anonymous aggregates and owner-private ledger/cache/fingerprint/log diagnostics; estimate/report/unknown distinctions |
+| spend_rate_limits | GET/POST C/spend-rate-limits | Current versioned spend/rate/model-pricing controls, strict effective Judge10, explicit admin-only estimate-soft consent |
+
+### Session gates and Router
+
+Question gates send the actual offered option ID only after **Confirm and resume**.
+Proposal/race gates load the current owner's existing
+`/projects/api/{slug}/orchestration/board` and reuse `ProposalRaceView` and existing
+resolve authority; they do not grant access to another owner's proposals.
+
+`POST C/sessions/{id}/router-quotes` receives either one exact native shot/card/form
+or an owner-bound `allocation_id`. Quotes display exact source/input identity,
+expiry, provenance and `hard_bound:false`. There is no fake `/price` or price lock.
+
+The optional allocation preview uses existing Story
+`POST /aivideo/open/v1/projects/pj_{slug}/episodes/{id}/shots:plan-allocation` and
+current project production policy. It accepts only shot/card IDs because this API
+uses **server card defaults**. Explicit `modelParams`/reference overrides instead
+use the exact-form quote/dispatch path; they are never silently dropped into an
+allocation. Existing Story preflight validates every assignment before dispatch.
+
+After explicit review, **direct native** dispatch uses the identical form on the
+existing Story image/video generation endpoint, or consumes the reviewed
+`allocationId` through existing episode generation. Task polling shows actual
+persisted output via the house `MediaCell`; it is distinct from managed-agent
+M8 candidate/review gates. The agent-tool path continues through existing
+`studio_dispatch_shot` confirmation and M8 review, without another scheduler.
+
+Hard mode disables unlocked Router dispatch in the UI and the backend rechecks
+current policy at the real boundary. Only an admin's explicit versioned save with
+`estimate_soft_consent:true` can enable estimate-based admission. A checkbox or
+quote alone cannot grant it. Estimates are not billing caps; provider reports are
+not invoices; unknown local/cloud cost is not free. Judge used counts include
+protected admissions/reservations and uncertainty, not just successful videos.
+No automatic refund, paid replay or provider/model fallback is implemented here.
+
+## Focused engineering checks
+
+- `node --test ui/tests/agentConsole.test.mjs ui/tests/i18n.test.mjs ui/tests/storyWorkbench.test.mjs ui/tests/orchestration.test.mjs ui/tests/sheetWorkspace.test.mjs ui/tests/studio-ui.test.mjs ui/tests/assistant.test.mjs`
+- `npm run build --prefix ui` (required; serves `static/projects`, not source).
+- With only the owned PG16 cluster running on55447:
+  `OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -X utf8 ui/tests/agentConsole.browser.py`
+  Optional `OPENBENCH_UI_EVIDENCE_DIR` retains screenshots outside the checkout.
+
+The browser harness uses real authenticated local API/PG, shared M8 runtime,
+actual Story writes and FFmpeg. **LLM inference and native Router responses are
+explicit deterministic loopback fixtures**, not real quality/billing observations.
+The sole intercepted browser response changes quote expiry metadata to test the
+expired-quote UI; normal quotes, hard-default refusal, explicit soft consent,
+allocation, tenth submission/output and eleventh denial are real application paths.
+
+The final repository/full backend/frontend and installed-wheel gate belong to
+integration. The inherited Router packaging-tooling dependency is not waived.
+Aborted browser reads can produce existing server ConnectionAbortedError/duplicate
+error-write log noise; this UI does not rewrite backend transport handling.
+Application controls are not an OS sandbox, calibrated hardware-cost guarantee,
+remote termination guarantee, model-quality assessment or overall acceptance.

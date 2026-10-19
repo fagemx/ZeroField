@@ -5,7 +5,6 @@ import { ACTION_LABEL, statusLabel, normalizeStatus } from "../format.js";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { shortTime } from "../format.js";
-import { ManagerPanel } from "./ManagerPanel.jsx";
 import { TableProposalReview } from "./TableProposalReview.jsx";
 import { AgentSelector } from './AgentSelector.jsx';
 import { AgentBoard, OrchestrationCounters } from './AgentBoard.jsx';
@@ -605,7 +604,7 @@ function Seg({ view, onView }) {
 }
 
 export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft, inputRef, view, onView, onExpand, onClose,
-  onOpenTab, onStarter, onError, onToast }) {
+  onOpenTab, onStarter, onError, onToast, onConsole }) {
   const locale = useLocale();
   const [info, setInfo] = useState(false);
   const [history, setHistory] = useState(false);
@@ -626,17 +625,18 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
   // 10/15 負責人：上面太亂 → 標題列只留名字、ⓘ 和視窗按鈕；下面一列分頁（跟「標註」清單同一套）＋「＋ 新對話」
   return (
     <aside className="pa" aria-label={uiText("assistantViews.studioAssistant2")}>
-      <ResizeEdge />
+
       <div className="pa-top">
         <span className="t"><span className="spark">✦</span>{uiText("assistantViews.studioAssistant2")}</span>
         <button type="button" className={"info" + (info ? " on" : "")} title={uiText("assistantViews.whatTheAgentCanRead")} aria-label={uiText("assistantViews.whatTheAgentCanRead")}
           aria-expanded={info} onClick={() => setInfo(!info)}>ⓘ</button>
         <span className="grow" />
+        <button type="button" className="icon-btn" onClick={onConsole} title={uiText('console.entry')} aria-label={uiText('console.entry')}>⌘</button>
         <button type="button" className="icon-btn" title={uiText("assistantViews.expandWorkspace")} aria-label={uiText("assistantViews.expandWorkspace")} onClick={onExpand}>⤢</button>
         <button type="button" className="icon-btn x" title={uiText("assistantViews.collapse")} aria-label={uiText("assistantViews.collapse")} onClick={onClose}>✕</button>
       </div>
       <div className="pop-tabs" role="tablist" aria-label={uiText("assistantViews.studioAssistantTabs")}>
-        {paneTabs(manager, forwardsOpen).map((t) => (
+        {paneTabs(manager, forwardsOpen).filter(t => t.key !== 'manage').map((t) => (
           <button type="button" key={t.key} role="tab" aria-selected={tab === t.key} className={tab === t.key ? "on" : undefined}
             title={t.count ? uiText("assistantViews.thereArePrivateQuestionsAwaitingYourReply", {v0: (t.count)}) : undefined} onClick={() => pick(t.key)}>
             {t.label}{t.count > 0 && <span className="n hot">{t.count}</span>}
@@ -648,7 +648,7 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
       <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => pick('agents')} />
       <div className={"pa-info" + (info ? " on" : "")}>{INFO(assistant.privacyMode)}</div>
       {tab === 'agents' ? <AgentBoard assistant={assistant} me={me} onOpenTarget={onOpenTab} /> : tab === "manage" ? (
-        <div className="kai-side"><ManagerPanel slug={slug} onError={onError} onToast={onToast} /></div>
+        <button onClick={onConsole}>{uiText('console.entry')}</button>
       ) : tab === "history" ? (
         <div className="pa-chat"><HistoryView assistant={assistant} tabs={tabs} onOpenTab={onOpenTab} onClose={() => setHistory(false)} /></div>
       ) : (
@@ -663,7 +663,7 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
 }
 
 export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, draft, onDraft, inputRef, view, onView,
-  onCollapse, onOpenTab, onStarter, onError, onToast }) {
+  onCollapse, onOpenTab, onStarter, onError, onToast, onConsole }) {
   const locale = useLocale();
   const [mtab, setMtab] = useState("chat");
   const [history, setHistory] = useState(false);
@@ -704,7 +704,7 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
         <button type="button" className="btn" onClick={onCollapse}><span className="lg">{uiText("assistantViews.returnToSidebar")}</span><span className="sm">{uiText("assistantViews.backToProduction")}</span></button>
       </div>
       {view === 'agents' ? <AgentBoard assistant={assistant} me={me} onOpenTarget={onOpenTab} /> : view === "manage" ? (
-        <div className="kai-full"><ManagerPanel slug={slug} onError={onError} onToast={onToast} /></div>
+        <button onClick={onConsole}>{uiText('console.entry')}</button>
       ) : (
         <>
           {help && (
