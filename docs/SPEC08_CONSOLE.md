@@ -1,7 +1,7 @@
 # Lean Agent Console: use, authority and evidence
 
 **Independent review complete (OK with notes):** security and journey review fixes are in product
-`bbcb51537d1dd6441bb6b6f18ace9549013f5103`; see [review record](SPEC08_REVIEW.md). The candidate,
+`5cd83d72f4ee5652626fb5ede27d3a70fefd9172`; see [review record](SPEC08_REVIEW.md). The candidate,
 receipt and counts below describe the earlier `c3900b4` integration and remain historical.
 
 Product candidate: **`c3900b440e75c015ef9d6c686667ef8887daaea2`**, on service

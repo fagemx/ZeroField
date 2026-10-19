@@ -2,7 +2,7 @@
 
 > **Superseded 2026-10-19:** the user explicitly handed control to a new owner, who completed the
 > independent security and journey reviews and fixed the findings in
-> `bbcb51537d1dd6441bb6b6f18ace9549013f5103`. See [SPEC08_REVIEW.md](SPEC08_REVIEW.md). The record
+> `5cd83d72f4ee5652626fb5ede27d3a70fefd9172`. See [SPEC08_REVIEW.md](SPEC08_REVIEW.md). The record
 > below is the historical pause state.
 
 ## Stop and authority

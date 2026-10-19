@@ -1,18 +1,18 @@
 .................................................................................................................................................................................................{"task_id": "task", "error": "503"}
 .{"task_id": "task", "error": "Lease was lost"}
-..................................................{"task_id": "42842732-bba3-4753-8423-1774d49634b0", "status": "delivered"}
-...................................................project-assistant: turn 1657 stopped: AgentError; reconcile accepted requests before retry.
-......project-assistant: turn 1663 stopped: AdmissionError; reconcile accepted requests before retry.
-......{"task_id": "1caaac79-7301-4a89-b403-d76e7e497fe4", "status": "delivered"}
-{"task_id": "e552c4f6-325c-48ba-903b-29e1d8078980", "status": "delivered"}
-{"task_id": "2980b660-1f91-4c9a-a562-feff9e2ed03f", "status": "delivered"}
-{"task_id": "94d196ee-9020-43c3-88b9-1ddb07056f74", "status": "delivered"}
-{"task_id": "b76cf697-e767-440e-b306-c9f8e550c891", "status": "delivered"}
-{"task_id": "a3ffb6b0-d8c2-462e-bce4-a95bf7a9420c", "status": "delivered"}
+..................................................{"task_id": "cb4668d0-82dd-400e-a406-422dbf97337e", "status": "delivered"}
+...................................................project-assistant: turn 1744 stopped: AgentError; reconcile accepted requests before retry.
+......project-assistant: turn 1750 stopped: AdmissionError; reconcile accepted requests before retry.
+......{"task_id": "afefd907-7e24-4185-ad60-fde5af6e1ffb", "status": "delivered"}
+{"task_id": "8ec09c47-e986-4176-a2c4-30fb35901b2c", "status": "delivered"}
+{"task_id": "0855af76-20f6-4754-948d-5ca7896a84c7", "status": "delivered"}
+{"task_id": "b6259af9-8d74-4c8e-bd21-a9394de43334", "status": "delivered"}
+{"task_id": "ef4f6611-972c-46da-88fd-354a812b28b0", "status": "delivered"}
+{"task_id": "8a2d61c8-9592-44d1-a1bd-1e4bd719e7be", "status": "delivered"}
 ................................................................................................................................{"task_id": "t", "error": "fixture ambiguous"}
 {"task_id": "t", "error": "fixture ambiguous"}
 .......................................................................
 ----------------------------------------------------------------------
-Ran 506 tests in 532.346s
+Ran 506 tests in 540.293s
 
 OK

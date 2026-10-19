@@ -1,71 +1,6 @@
 test_navigation_templates_keyboard_locale_and_production_context (__main__.ConsoleInteractions.test_navigation_templates_keyboard_locale_and_production_context) ... Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 55409)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
-    if console_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
-    handler.send_json(status, {'error': message, 'code': code})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Console service failure: ConnectionAbortedError
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 62318)
+Exception occurred during processing of request from ('127.0.0.1', 54849)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -130,7 +65,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 62710)
+Exception occurred during processing of request from ('127.0.0.1', 49982)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -195,7 +130,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 64262)
+Exception occurred during processing of request from ('127.0.0.1', 64416)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -260,7 +195,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 58666)
+Exception occurred during processing of request from ('127.0.0.1', 54070)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -325,7 +260,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 58674)
+Exception occurred during processing of request from ('127.0.0.1', 59720)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -390,7 +325,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 53032)
+Exception occurred during processing of request from ('127.0.0.1', 65170)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -455,7 +390,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 59570)
+Exception occurred during processing of request from ('127.0.0.1', 56499)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -520,7 +455,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 53758)
+Exception occurred during processing of request from ('127.0.0.1', 52882)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -585,7 +520,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 50365)
+Exception occurred during processing of request from ('127.0.0.1', 62123)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -650,7 +585,72 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 61088)
+Exception occurred during processing of request from ('127.0.0.1', 60939)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
+    if console_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
+    handler.send_json(status, {'error': message, 'code': code})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+Console service failure: ConnectionAbortedError
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 53898)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -714,7 +714,173 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 63195)
+Exception occurred during processing of request from ('127.0.0.1', 52380)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
+    return story_openapi.handle(handler, parsed, method)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
+    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 53730)
+Traceback (most recent call last):
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 53193)
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 566, in handle_projects
+    _api(handler, parsed, method)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 548, in _api
+    handler.send_json(status, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
+    return story_openapi.handle(handler, parsed, method)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
+    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------------
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+Exception occurred during processing of request from ('127.0.0.1', 58734)
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
 Traceback (most recent call last):
   File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
     self.finish_request(request, client_address)
@@ -752,7 +918,7 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 55441)
+Exception occurred during processing of request from ('127.0.0.1', 60593)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
     handler.send_json(200, payload)
@@ -816,7 +982,7 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 65416)
+Exception occurred during processing of request from ('127.0.0.1', 51710)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
     handler.send_json(200, payload)
@@ -880,7 +1046,199 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 54411)
+Exception occurred during processing of request from ('127.0.0.1', 64686)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
+    return story_openapi.handle(handler, parsed, method)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
+    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 49629)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
+    return story_openapi.handle(handler, parsed, method)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
+    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 61196)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
+    return story_openapi.handle(handler, parsed, method)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
+    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 62866)
 Traceback (most recent call last):
   File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
     self.finish_request(request, client_address)
@@ -918,7 +1276,7 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 52681)
+Exception occurred during processing of request from ('127.0.0.1', 54665)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
     handler.send_json(200, payload)
@@ -982,7 +1340,71 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 51336)
+Exception occurred during processing of request from ('127.0.0.1', 62709)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
+    return story_openapi.handle(handler, parsed, method)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
+    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 51958)
 Traceback (most recent call last):
   File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
     self.finish_request(request, client_address)
@@ -1020,263 +1442,7 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 62573)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
-    return story_openapi.handle(handler, parsed, method)
-           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
-    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 59999)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
-    return story_openapi.handle(handler, parsed, method)
-           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
-    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 59822)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
-    return story_openapi.handle(handler, parsed, method)
-           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
-    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 56874)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
-    return story_openapi.handle(handler, parsed, method)
-           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
-    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 57089)
+Exception occurred during processing of request from ('127.0.0.1', 49880)
 Traceback (most recent call last):
   File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
     self.finish_request(request, client_address)
@@ -1314,7 +1480,83 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 64131)
+Exception occurred during processing of request from ('127.0.0.1', 51317)
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 566, in handle_projects
+    _api(handler, parsed, method)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 548, in _api
+    handler.send_json(status, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 55502)
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 566, in handle_projects
+    _api(handler, parsed, method)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 548, in _api
+    handler.send_json(status, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 56063)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
     handler.send_json(200, payload)
@@ -1378,287 +1620,7 @@ Traceback (most recent call last):
 ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
 ----------------------------------------
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 54043)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
-    return story_openapi.handle(handler, parsed, method)
-           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
-    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 63154)
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 566, in handle_projects
-    _api(handler, parsed, method)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 548, in _api
-    handler.send_json(status, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 49802)
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 566, in handle_projects
-    _api(handler, parsed, method)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 548, in _api
-    handler.send_json(status, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 57269)
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 566, in handle_projects
-    _api(handler, parsed, method)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 548, in _api
-    handler.send_json(status, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 52216)
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 566, in handle_projects
-    _api(handler, parsed, method)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 548, in _api
-    handler.send_json(status, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 54212)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 24, in handle
-    return story_openapi.handle(handler, parsed, method)
-           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1556, in handle
-    handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 64476)
+Exception occurred during processing of request from ('127.0.0.1', 50378)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\story_openapi.py", line 1544, in handle
     handler.send_json(200, payload)
@@ -1723,7 +1685,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 55427)
+Exception occurred during processing of request from ('127.0.0.1', 50987)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -1788,7 +1750,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 55440)
+Exception occurred during processing of request from ('127.0.0.1', 62189)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -1853,137 +1815,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 52440)
-Traceback (most recent call last):
-  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-Console service failure: ConnectionAbortedError
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 50360)
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
-    if console_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
-    handler.send_json(status, {'error': message, 'code': code})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-Traceback (most recent call last):
-----------------------------------------
-  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
-    handler.send_json(200, payload)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
-    self.wfile.write(data)
-    ~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
-    self.finish_request(request, client_address)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
-    self.RequestHandlerClass(request, client_address, self)
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
-    self.handle()
-    ~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 436, in handle
-    self.handle_one_request()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
-    method()
-    ~~~~~~^^
-  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
-    if projects_http.handle_projects(self, parsed, "GET"):
-       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
-    if runtime_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
-    if console_http.handle(handler, parsed, method):
-       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
-    handler.send_json(status, {'error': message, 'code': code})
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
-    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
-    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
-    self.end_headers()
-    ~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
-    self.flush_headers()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
-    self.wfile.write(b"".join(self._headers_buffer))
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\socketserver.py", line 845, in write
-    self._sock.sendall(b)
-    ~~~~~~~~~~~~~~~~~~^^^
-ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
-----------------------------------------
-Console service failure: ConnectionAbortedError
-----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 57563)
+Exception occurred during processing of request from ('127.0.0.1', 50594)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2048,7 +1880,202 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 50592)
+Exception occurred during processing of request from ('127.0.0.1', 51306)
+Console service failure: ConnectionAbortedError
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 61678)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+
+During handling of the above exception, another exception occurred:
+
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
+    if console_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
+    handler.send_json(status, {'error': message, 'code': code})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------------
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
+    if console_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
+    handler.send_json(status, {'error': message, 'code': code})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+Console service failure: ConnectionAbortedError
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 65156)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
+    if console_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
+    handler.send_json(status, {'error': message, 'code': code})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+Console service failure: ConnectionAbortedError
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 59316)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2114,7 +2141,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ok
 test_real_draft_save_conflict_mounted_gate_grader_trace_cancel_and_controls (__main__.ConsoleInteractions.test_real_draft_save_conflict_mounted_gate_grader_trace_cancel_and_controls) ... Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 50360)
+Exception occurred during processing of request from ('127.0.0.1', 52018)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2180,7 +2207,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ok
 test_versioned_skill_memory_provider_environment_and_manual_cron_forms (__main__.ConsoleInteractions.test_versioned_skill_memory_provider_environment_and_manual_cron_forms) ... Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 63349)
+Exception occurred during processing of request from ('127.0.0.1', 58898)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2245,7 +2272,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 55424)
+Exception occurred during processing of request from ('127.0.0.1', 62406)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2310,7 +2337,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 57575)
+Exception occurred during processing of request from ('127.0.0.1', 52525)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2375,7 +2402,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 56390)
+Exception occurred during processing of request from ('127.0.0.1', 52595)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2440,7 +2467,72 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 54918)
+Exception occurred during processing of request from ('127.0.0.1', 52115)
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
+    handler.send_json(200, payload)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 164, in send_skillops_bytes
+    self.wfile.write(data)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 424, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\ai_project\ZeroField\server.py", line 199, in do_GET
+    if projects_http.handle_projects(self, parsed, "GET"):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\http.py", line 556, in handle_projects
+    if runtime_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\runtime_http.py", line 20, in handle
+    if console_http.handle(handler, parsed, method):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\project_docs\console_http.py", line 176, in handle
+    handler.send_json(status, {'error': message, 'code': code})
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 133, in send_json
+    self.send_skillops_bytes(status, "application/json; charset=utf-8", data, cache_control="no-store")
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ai_project\ZeroField\server.py", line 163, in send_skillops_bytes
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止。
+----------------------------------------
+Console service failure: ConnectionAbortedError
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 63155)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2505,7 +2597,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ----------------------------------------
 projects: assistant_state failed: AgentError: Project default provider was revoked; configure a current LLM reference.
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 58912)
+Exception occurred during processing of request from ('127.0.0.1', 55108)
 Traceback (most recent call last):
   File "C:\Python313\Lib\socketserver.py", line 697, in process_request_thread
     self.finish_request(request, client_address)
@@ -2545,7 +2637,7 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ok
 test_native_quote_hard_default_soft_consent_preflight_tenth_eleventh_and_expiry (__main__.ConsoleRouterInteractions.test_native_quote_hard_default_soft_consent_preflight_tenth_eleventh_and_expiry) ... Console service failure: ConnectionAbortedError
 ----------------------------------------
-Exception occurred during processing of request from ('127.0.0.1', 49581)
+Exception occurred during processing of request from ('127.0.0.1', 56689)
 Traceback (most recent call last):
   File "C:\ai_project\ZeroField\project_docs\console_http.py", line 160, in handle
     handler.send_json(200, payload)
@@ -2611,6 +2703,6 @@ ConnectionAbortedError: [WinError 10053] 連線已被您主機上的軟體中止
 ok
 
 ----------------------------------------------------------------------
-Ran 4 tests in 78.796s
+Ran 4 tests in 79.859s
 
 OK
