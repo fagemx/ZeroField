@@ -12,6 +12,12 @@ from project_assistant import tool_specs
 
 AGENT_KEY = re.compile(r'^[a-z][a-z0-9_-]{0,63}$')
 QA_ACTIONS = ('在段落加標註', '寫進那一題的討論', '留言問負責人')
+CONSOLE_DEFAULTS = {
+    'effort': 'medium', 'skill_keys': [], 'tool_policies': {},
+    'multiagent_config': {'allow_subagents': False, 'allow_workflows': False, 'advisor_agent_key': None},
+    'outcome_grader': {'enabled': False, 'criteria': '', 'grader_agent_key': 'qa_critic', 'max_revisions': 1},
+    'memory_mounts': [], 'default_environment_key': 'env_local_4090',
+}
 ROSTER = (
     ('coordinator', 'Showrunner', '🧭', 'primary', 'general'),
     ('doc_writer', 'Screenwriter', '✍️', 'worker', 'writing'),
@@ -71,9 +77,17 @@ def ensure_default_agents(conn, slug):
                 VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb) ON CONFLICT DO NOTHING''',
                 (slug, key, name, icon, role, prompt, json.dumps(['llm','orchestrate'] if role=='primary' else ['llm']),
                  json.dumps({'domain': domain}), json.dumps(default_tools(key))))
-            cur.execute('''UPDATE projectops.agent_profile SET allowed_tools=%s::jsonb,updated_at=NOW()
-                WHERE project_slug=%s AND agent_key=%s AND allowed_tools=%s::jsonb''',
-                (json.dumps(default_tools(key)),slug,key,json.dumps(default_tools(key,False))))
+            cur.execute('''UPDATE projectops.agent_profile SET allowed_tools=%s::jsonb
+                WHERE project_slug=%s AND agent_key=%s AND allowed_tools=%s::jsonb
+                AND system_prompt=%s AND provider_config='{}'::jsonb AND role_kind=%s
+                AND runtime_kind='builtin_llm' AND display_name=%s AND created_by IS NULL
+                AND version=1 AND enabled AND knowledge_pack='' AND bound_limb_id IS NULL
+                AND icon=%s AND description='' AND max_concurrency=2
+                AND labels=%s::jsonb AND capabilities=%s::jsonb''',
+                (json.dumps(default_tools(key)), slug, key, json.dumps(default_tools(key, False)), prompt, role, name,
+                 icon, json.dumps({'domain': domain}), json.dumps(['llm','orchestrate'] if role=='primary' else ['llm'])))
+    from project_assistant.agent_console_store import ensure_defaults
+    ensure_defaults(conn, slug)
 
 
 def get_agent(conn, slug, key):
@@ -97,15 +111,25 @@ def validate_provider(value):
         raise AgentError(400, "Model settings support kind/base_url/api_key_env/model/effort only. Do not store credentials here.")
     if value.get('kind', 'openai_compat') not in ('openai_compat', 'responses', 'codex_cli'):
         raise AgentError(400, "Unsupported model runtime.")
-    if any(len(v) > 2000 for v in value.values()):
-        raise AgentError(400, "Model configuration is too long.")
+    if any(len(v) > 2000 or '\x00' in v for v in value.values()):
+        raise AgentError(400, "Model configuration is too long or malformed.")
+    if value.get('effort', 'medium') not in ('low', 'medium', 'high'):
+        raise AgentError(400, "Invalid model effort.")
+    if any(re.search(r'(?i)(?:\bbearer\s+|\bsk-[a-z0-9_-]{8,})', v) for v in value.values()):
+        raise AgentError(400, "Provider settings must not contain credential values.")
     if value.get('base_url'):
-        url = urlsplit(value['base_url'])
+        if any(c.isspace() or ord(c) < 32 for c in value['base_url']):
+            raise AgentError(400, "Model endpoints cannot contain whitespace or control characters.")
+        try:
+            url = urlsplit(value['base_url'])
+            url.port
+        except ValueError:
+            raise AgentError(400, "Invalid model endpoint.") from None
         if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password or url.query or url.fragment:
             raise AgentError(400, "The model endpoint must be an HTTP(S) URL without embedded credentials.")
     if value.get('api_key_env') not in (None, ''):
         permitted = {n.strip() for n in os.environ.get('OPENBENCH_AGENT_KEY_ENVS', '').split(',') if n.strip()}
-        if value['api_key_env'] not in permitted:
+        if not re.fullmatch(r'[A-Z_][A-Z0-9_]{0,127}', value['api_key_env']) or value['api_key_env'] not in permitted:
             raise AgentError(400, "This credential reference is not allowed by the deployment.")
     if value.get('kind') in ('responses', 'codex_cli') and (value.get('base_url') or value.get('api_key_env')):
         raise AgentError(400, "This runtime uses local credentials and does not accept a custom endpoint or api_key_env.")
@@ -115,28 +139,35 @@ def validate_provider(value):
 def save_agent(conn, me, slug, body):
     if not me.can_edit:
         raise AgentError(403, "Only the showrunner can configure agents.")
-    if not repo.get_project(conn, slug):
-        raise AgentError(404, "Production not found.")
+    from project_assistant.agent_console_store import authorize, _lock, STUDIO_TOOLS
+    authorize(conn, me, slug, admin=True)
     if not isinstance(body, dict) or not isinstance(body.get('agent_key'), str) or not AGENT_KEY.fullmatch(body['agent_key']):
         raise AgentError(400, "Invalid agent key.")
     fields = {'display_name','icon','role_kind','runtime_kind','description','system_prompt','knowledge_pack',
               'capabilities','labels','allowed_tools','provider_config','bound_limb_id','max_concurrency','enabled'}
-    if set(body) - fields - {'agent_key'}:
+    fields |= set(CONSOLE_DEFAULTS)
+    if set(body) - fields - {'agent_key', 'version'}:
         raise AgentError(400, "Agent configuration contains unsupported fields.")
     key = body['agent_key']
-    profile = get_agent(conn, slug, key) or dict(display_name=key, icon='🤖', role_kind='worker', runtime_kind='builtin_llm',
+    _lock(conn, slug)
+    existing = get_agent(conn, slug, key)
+    if 'version' in body and (type(body['version']) is not int or body['version'] != (existing['version'] if existing else 0)):
+        raise AgentError(409, "Agent version changed; reload before saving.", 'VERSION_CONFLICT')
+    profile = existing or dict(display_name=key, icon='🤖', role_kind='worker', runtime_kind='builtin_llm',
         description='', system_prompt='', knowledge_pack='', capabilities=['llm'], labels={}, allowed_tools=[],
         provider_config={}, bound_limb_id=None, max_concurrency=2, enabled=True)
+    profile = {**CONSOLE_DEFAULTS, **profile}
     profile.update({k: v for k, v in body.items() if k in fields})
+    validate_console_fields(conn, me, slug, key, profile)
     if profile['role_kind'] not in ('primary','worker','observer') or profile['runtime_kind'] not in ('builtin_llm','acp_stdio','remote_limb'):
         raise AgentError(400, "Invalid agent role or runtime.")
     if type(profile['max_concurrency']) is not int or not 1 <= profile['max_concurrency'] <= 32 or type(profile['enabled']) is not bool:
         raise AgentError(400, "Concurrency must be an integer from 1 to 32; enabled must be a boolean.")
     for name, maximum in [('display_name',120),('icon',20),('description',2000),('system_prompt',30000),('knowledge_pack',50000)]:
-        if not isinstance(profile[name], str) or len(profile[name]) > maximum or (name == 'display_name' and not profile[name].strip()):
+        if not isinstance(profile[name], str) or len(profile[name]) > maximum or '\x00' in profile[name] or (name == 'display_name' and not profile[name].strip()):
             raise AgentError(400, f"Invalid format or length for {name}.")
     allowed = profile['allowed_tools']
-    if not isinstance(allowed, list) or any(not isinstance(n, str) or n not in tool_specs.TOOL_NAMES for n in allowed):
+    if not isinstance(allowed, list) or len(allowed) > 128 or any(not isinstance(n, str) or n not in tool_specs.TOOL_NAMES | STUDIO_TOOLS for n in allowed):
         raise AgentError(400, "The tool list contains an unknown tool.")
     caps, labels = profile['capabilities'], profile['labels']
     if not isinstance(caps,list) or not caps or any(c not in ('llm','image_gen','video_gen','media_assemble','acp_cli','orchestrate') for c in caps):
@@ -144,14 +175,16 @@ def save_agent(conn, me, slug, body):
     if not isinstance(labels,dict) or len(labels)>30 or any(not isinstance(k,str) or not isinstance(v,str) or len(k)>80 or len(v)>120 for k,v in labels.items()):
         raise AgentError(400, "Capability labels must map short strings to short strings.")
     profile['provider_config'] = validate_provider(profile['provider_config'])
-    if profile['bound_limb_id']:
+    if profile['bound_limb_id'] is not None:
+        from project_assistant.orchestration_store import identifier
+        profile['bound_limb_id'] = identifier(profile['bound_limb_id'])
         from project_assistant import limbs
         if not any(w['id'] == profile['bound_limb_id'] and w['enabled'] for w in limbs.list_workers(conn, slug)):
             raise AgentError(400, "This worker does not exist, is disabled, or cannot access this production.")
     if profile['runtime_kind'] != 'builtin_llm' and not profile['bound_limb_id']:
         raise AgentError(400, "External runtimes must be bound to a worker in this production.")
     columns = sorted(fields)
-    encoded = {'capabilities','labels','allowed_tools','provider_config'}
+    encoded = {'capabilities','labels','allowed_tools','provider_config','skill_keys','tool_policies','multiagent_config','outcome_grader','memory_mounts'}
     values = [json.dumps(profile[n],ensure_ascii=False) if n in encoded else profile[n] for n in columns]
     placeholders = [('%s::jsonb' if n in encoded else '%s') for n in columns]
     with conn.cursor() as cur:
@@ -214,3 +247,60 @@ def roster(conn, me, slug):
         rows[-1]['can_propose_table']=True
         rows[-1]['can_propose_document']=True
     return rows
+
+
+def validate_console_fields(conn, me, slug, agent_key, profile):
+    from project_assistant import agent_console_store as console
+    if profile['effort'] not in ('low', 'medium', 'high'):
+        raise AgentError(400, 'Invalid reasoning effort.')
+    console.strings(profile['skill_keys'], 32, check=console.key)
+    from project_assistant.skills_registry import get_skill
+    if any(not get_skill(conn, slug, k) for k in profile['skill_keys']):
+        raise AgentError(400, 'Unknown project skill.')
+    policies = profile['tool_policies']
+    if not isinstance(policies, dict) or len(policies) > 128 or any(
+        not isinstance(k, str) or k not in tool_specs.TOOL_NAMES | console.STUDIO_TOOLS or
+        v not in ('auto', 'always_ask', 'disabled') for k, v in policies.items()):
+        raise AgentError(400, 'Invalid per-tool permission policy.')
+    multi = profile['multiagent_config']
+    if not isinstance(multi, dict) or set(multi) != set(CONSOLE_DEFAULTS['multiagent_config']) or any(
+        type(multi[n]) is not bool for n in ('allow_subagents', 'allow_workflows')):
+        raise AgentError(400, 'Invalid multiagent configuration.')
+    advisor = multi['advisor_agent_key']
+    if advisor is not None:
+        console.key(advisor)
+        if advisor == agent_key or not get_agent(conn, slug, advisor):
+            raise AgentError(400, 'Advisor must be another project agent.')
+    grader = profile['outcome_grader']
+    if not isinstance(grader, dict) or set(grader) != set(CONSOLE_DEFAULTS['outcome_grader']) or type(grader['enabled']) is not bool:
+        raise AgentError(400, 'Invalid outcome grader.')
+    console.text(grader['criteria'], 4000)
+    console.integer(grader['max_revisions'], 0, 3)
+    console.key(grader['grader_agent_key'])
+    if grader['enabled'] and (grader['grader_agent_key'] == agent_key or not get_agent(conn, slug, grader['grader_agent_key'])):
+        raise AgentError(400, 'Enabled grader must be a separate project agent.')
+    mounts = profile['memory_mounts']
+    if not isinstance(mounts, list) or len(mounts) > 32:
+        raise AgentError(400, 'Invalid memory mounts.')
+    seen = set()
+    for mount in mounts:
+        if not isinstance(mount, dict) or set(mount) != {'store_key', 'access'} or mount['access'] not in ('read_only', 'read_write'):
+            raise AgentError(400, 'Invalid memory mount permission.')
+        store_key = console.key(mount['store_key'])
+        if store_key in seen:
+            raise AgentError(400, 'Duplicate memory mount.')
+        seen.add(store_key)
+        store = console._get(conn, 'memory_store', slug, store_key)
+        if not store:
+            raise AgentError(400, 'Unknown project memory store.')
+        console.authorize_scope(conn, me, slug, store, episode_id=store['scope_id'] if store['scope_kind'] == 'episode' else None)
+    console.key(profile['default_environment_key'])
+    if not console._get(conn, 'environment', slug, profile['default_environment_key']):
+        raise AgentError(400, 'Unknown project environment.')
+
+
+def console_profiles(conn, slug):
+    """Display-only descriptors: never use this accessor for admission/claims."""
+    from project_assistant import story_media_adapter as media
+    return [dict(p, read_only=False) for p in list_agents(conn, slug)] + [
+        dict(media.profile(k), read_only=True, project_slug=slug) for k in media.KEYS]

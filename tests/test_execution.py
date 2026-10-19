@@ -78,7 +78,9 @@ class PostgreSQLExecutionTests(unittest.TestCase):
             cur.execute("DELETE FROM projectops.flow_run WHERE project_slug=%s", (self.slug,))
             cur.execute("DELETE FROM projectops.flow_definition WHERE project_slug=%s", (self.slug,))
             cur.execute("SELECT table_name FROM information_schema.columns WHERE table_schema='projectops' AND column_name='project_slug'")
-            tables = [r[0] for r in cur.fetchall() if r[0] not in ("limb_task", "flow_run", "flow_definition")]
+            # Append-only Console records are removed by the final project cascade.
+            tables = [r[0] for r in cur.fetchall() if r[0] not in (
+                "limb_task", "flow_run", "flow_definition", "agent_resource_revision", "agent_usage_ledger")]
             for name in tables:
                 cur.execute(sql.SQL("DELETE FROM projectops.{} WHERE project_slug=%s").format(sql.Identifier(name)), (self.slug,))
             cur.execute("DELETE FROM projectops.agent_limb WHERE created_by=%s", (self.actor,))
