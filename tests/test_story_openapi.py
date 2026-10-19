@@ -148,6 +148,8 @@ class StoryHTTPTests(unittest.TestCase):
         actor = next(a for a in assets if a["assetCode"] == "CAST-01")
         variant = self.ok(f"/assets/{actor['assetId']}/variants", "POST", {"name": "Night", "key": "night", "kind": "OUTFIT", "prompt": "Night jacket"})
         self.assertEqual(variant["assetCode"], "CAST-01:NIGHT")
+        self.assertEqual(variant['kind'], 'OUTFIT')
+        self.assertIn('ARRI Alexa', shots[0]['opticalRig'])
         self.assertEqual(len(self.ok("/assets/" + actor["assetId"])["variants"]), 1)
         selected = shots[0]
         self.ok(f"/shots/{selected['shotId']}/assets", "PUT", {"assetCodes": ["CAST-01:NIGHT"]})

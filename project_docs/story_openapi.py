@@ -284,7 +284,8 @@ def asset_view(slug, row):
     code = cells[0].lstrip("@").upper().replace("#", ":")
     return {"assetId": asset_id(slug, row), "assetCode": code, "name": cells[1], "prompt": cells[2],
             "type": "CHARACTER" if code.startswith("CAST") else "PROP" if code.startswith("PROP") else "SCENE",
-            "isDefault": ":" not in code, "selectedImageUrl": media_url(cells[3]), "rowId": row["rid"], "tabKey": "soul-cast"}
+            "isDefault": ":" not in code, "kind": cells[6] if ":" in code and len(cells)>6 and cells[6] in ("OUTFIT", "POSE", "LOOK") else None,
+            "selectedImageUrl": media_url(cells[3]), "rowId": row["rid"], "tabKey": "soul-cast"}
 
 
 def assets(conn, ep):
@@ -323,7 +324,8 @@ def shot_view(conn, slug, row):
     refs = list(dict.fromkeys(m[1].upper().replace("#", ":") for m in ASSET_RE.finditer(" ".join(row["cells"]))))
     return {**meta, "shotId": identifier, "rowId": row["rid"], "tabKey": row["tabKey"], "shotIndex": row["cells"][0],
             "description": next((v for k, v in fields.items() if re.search("prompt", k, re.I)), ""),
-            "opticalRig": fields.get("Optical Rig", ""), "cameraMotion": fields.get("Camera Motion", ""),
+            "opticalRig": next((v for k, v in fields.items() if re.search(r"optical|rig", k, re.I)), ""),
+            "cameraMotion": next((v for k, v in fields.items() if re.search(r"camera.*motion", k, re.I)), ""),
             "assets": refs, "status": mapped.get(status, "PENDING"), "selectedImageUrl": output("image"), "selectedVideoUrl": output("video")}
 
 
