@@ -40,6 +40,136 @@ def public_plan(plan):
             "summary": {re.sub(r"_([a-z])", lambda m: m[1].upper(), k): v for k, v in plan["summary"].items()}}
 
 
+def preflight_inputs(conn, slug, identifier, allocation, cards, sources=None):
+    """Validate real media metadata and typed future outputs, never render/upload.
+
+    Pure allocator readiness covers configuration only. This authorized boundary
+    adds executable input readiness; execution still rechecks MIME and ownership.
+    """
+    row_slug, row = story.find_row(conn, identifier, "shot")
+    if row_slug != slug:
+        story.invalid("Allocation shot belongs to another production.")
+    task = {"input": story.snapshot(conn, slug, row)}
+    base = worker.resolve_studio_context(task)
+    candidates = worker._shot_media_candidates(task)
+    metadata = {}
+
+    def media_type(value):
+        if isinstance(value, dict) and value.get("planned_output"):
+            return value["content_type"], None
+        if isinstance(value, dict):
+            value = value.get("asset_url")
+        if not isinstance(value, str) or not value or value.lower() in ("none", "@source"):
+            return None, "missing_media"
+        match = re.fullmatch(r"/projects/api/" + re.escape(slug) + r"/assets/(pa_[0-9a-f]{32})", value)
+        if not match:
+            return None, "media_not_owned"
+        if value not in metadata:
+            found = repo.get_asset_meta(conn, slug, match[1])
+            if not found:
+                metadata[value] = None, "media_missing"
+            elif not 0 < found[1] <= worker.MAX_MEDIA:
+                metadata[value] = None, "media_size_invalid"
+            else:
+                metadata[value] = found[0], None
+        return metadata[value]
+
+    def branch(plan):
+        blockers, outputs, ancestors = [], dict(sources or {}), {}
+        for step in plan["stages"]:
+            name = step["step_id"]
+            dependencies = set(step.get("depends_on", []))
+            errors = []
+            if name in ancestors or not dependencies <= ancestors.keys():
+                errors.append("invalid_dependencies:" + name)
+            ancestors[name] = dependencies | {a for dep in dependencies for a in ancestors.get(dep, set())}
+            ctx = dict(base)
+            for role, binding in step.get("inputs", {}).items():
+                source = outputs.get("approved:" + binding["approved_source_id"]) if "approved_source_id" in binding else outputs.get(binding.get("from_step"))
+                if source is None or ("from_step" in binding and (binding["from_step"] not in ancestors[name] or source.get("output_role") != binding.get("output_role"))):
+                    errors.append("invalid_preparation_binding:" + name + ":" + role)
+                else:
+                    mime, error = media_type(source)
+                    expected = "video/" if role in ("source_video", "motion_structure_video", "output_video") else "image/"
+                    if error or not mime.startswith(expected):
+                        errors.append((error or "media_type_mismatch") + ":" + name + ":" + role)
+                    ctx[role] = source if source.get("planned_output") else source.get("asset_url")
+            if step["kind"] == "approval":
+                blockers.extend(errors)
+                continue  # Existing M8 director gates, not preflight, grant approval.
+            if step["kind"] == "prepare":
+                config = step["config"]
+                mode = config.get("mode")
+                procedural = mode in ("motion_structure", "time_strata") and (mode == "time_strata" or config.get("structure_type") in ("layout_silhouette", "sparse_tracks", "time_strata"))
+                if mode == "ingredients_sheet":
+                    refs = ctx.get("asset_images") or [ctx.get("anchor_keyframe"), ctx.get("first_frame"), *candidates]
+                    required_kind, output_kind, role = "image/", "image/png", "ingredients_sheet"
+                else:
+                    refs = [ctx.get("source_video"), *candidates]
+                    required_kind = "video/"
+                    output_kind, role = {"motion_structure": ("video/mp4", "motion_structure_video"),
+                                         "frame_sheet": ("image/png", "frame_sheet"),
+                                         "extract_frame": ("image/png", "first_frame")}.get(mode, ("image/png", "time_strata"))
+                    if mode == "motion_structure" and config.get("structure_type") == "time_strata":
+                        output_kind, role = "image/png", "time_strata"
+                found_kind = False
+                for ref in (r for r in refs if r):
+                    mime, error = media_type(ref)
+                    if error:
+                        errors.append(error + ":" + name + ":preparation_source")
+                    if mime and mime.startswith(required_kind):
+                        found_kind = True
+                        if mode != "ingredients_sheet":
+                            break
+                if not procedural and not found_kind:
+                    errors.append("missing_preparation_source:" + name)
+                if mode not in ("motion_structure", "time_strata", "frame_sheet", "extract_frame", "ingredients_sheet") or role != step.get("output_role"):
+                    errors.append("invalid_preparation_output:" + name)
+            else:
+                card, _ = cards[step["card_id"]]
+                story.authorize_card(conn, slug, card)
+                # Match direct-router protection against the legacy image-as-video fallback.
+                if not worker.card_execution_profile(card)["requires_comfyui"]:
+                    if ctx.get("source_video") and ctx["source_video"] in (ctx.get("anchor_keyframe"), ctx.get("first_frame")):
+                        ctx["source_video"] = None
+                    if not ctx.get("anchor_keyframe") and ctx.get("first_frame"):
+                        ctx["anchor_keyframe"] = ctx["first_frame"]
+                try:
+                    values = worker._build_card_form_values(card, ctx, dict(card["engine_config"]), task, None)
+                except worker.WorkerError:
+                    values = {}
+                    errors.append("invalid_card_inputs:" + name)
+                locked = card["engine_config"].get("locked_nodes", {})
+                for node in card["nodes"]:
+                    if node["fieldType"] not in ("IMAGE", "VIDEO", "AUDIO"):
+                        continue
+                    key = f"{node['nodeId']}.{node['fieldName']}"
+                    value = locked.get(key, values.get(key, node.get("defaultValue")))
+                    mime, error = media_type(value)
+                    if error == "missing_media" and not node.get("required"):
+                        continue
+                    if error:
+                        errors.append(("required_media_missing" if error == "missing_media" else error) + ":" + name + ":" + key)
+                    elif not mime.startswith(node["fieldType"].lower() + "/"):
+                        errors.append("media_type_mismatch:" + name + ":" + key)
+                output_kind, role = card["output_mode"] + "/" + ("mp4" if card["output_mode"] == "video" else "png"), "output_" + card["output_mode"]
+                if role != step.get("output_role"):
+                    errors.append("invalid_generation_output:" + name)
+            blockers.extend(errors)
+            if not errors:
+                outputs[name] = {"planned_output": True, "content_type": output_kind, "output_role": role}
+        return blockers
+
+    blockers = branch(allocation) if not allocation.get("race_plans") else [b for p in allocation["race_plans"] for b in branch(p)]
+    # Keep the existing UI blocker list compatible while exposing input-only detail.
+    config = [b for b in allocation["configuration_blockers"] if b not in allocation.get("input_blockers", [])]
+    allocation["input_blockers"] = list(dict.fromkeys(blockers))
+    allocation["configuration_blockers"] = list(dict.fromkeys(config + blockers))
+    allocation["readiness_scope"] = "configuration_and_inputs"
+    allocation["ready"] = not allocation["configuration_blockers"]
+    return allocation
+
+
 def plan(conn, me, ep, body):
     opts = options(conn, ep["slug"], body)
     items = current_shots(conn, ep, body.get("shotIds"))
@@ -64,12 +194,16 @@ def plan(conn, me, ep, body):
         result["ready"] = bool(ready)
     if body.get("engineTier") and any(a["tier"] != body["engineTier"] for a in result["allocations"]):
         story.invalid("engineTier does not match the allocation.")
+    cards = {step["card_id"]: copy.deepcopy(worker._resolve_openapi_card_and_workflow(step["card_id"]))
+             for a in result["allocations"] for step in a["stages"] if step["kind"] == "generate"}
     for allocation in result["allocations"]:
-        story.authorize_card(conn, ep["slug"], worker._resolve_openapi_card_and_workflow(allocation["assigned_card_id"])[0])
+        preflight_inputs(conn, ep["slug"], allocation["shot_id"], allocation, cards)
+    result["ready"] = all(a["ready"] for a in result["allocations"])
+    result["readiness_scope"] = "configuration_and_inputs"
     identifier = "al_" + uuid.uuid4().hex
     saved = {"allocationId": identifier, "episodeId": ep["episodeId"], "slug": ep["slug"], "options": opts,
              "guards": source_guard(conn, items), "plan": result,
-             "cards": {a["assigned_card_id"]: copy.deepcopy(worker._resolve_openapi_card_and_workflow(a["assigned_card_id"])) for a in result["allocations"]}}
+             "cards": cards}
     story.store(conn, identifier, "allocation", saved, ep["slug"], me.actor_id)
     return {"allocationId": identifier, "productionPolicy": opts["production_policy"], **public_plan(result)}
 
@@ -82,8 +216,10 @@ def apply_batch(conn, me, ep, items, kind, body, actions):
         raise story.StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "This allocation was already dispatched; create a new preflight.")
     if saved["options"]["production_policy"] != story.production_policy(conn, ep["slug"]) or saved["guards"] != source_guard(conn, items):
         raise story.StoryError(409, "DRAMA_STAGE_PRECONDITION", "Allocation sources or policy changed; run preflight again.")
-    if not saved["plan"]["ready"]:
-        raise story.StoryError(409, "DRAMA_STAGE_PRECONDITION", "Resolve allocation configuration blockers before dispatch.")
+    for allocation in saved["plan"]["allocations"]:
+        preflight_inputs(conn, ep["slug"], allocation["shot_id"], allocation, saved["cards"])
+    if not saved["plan"]["ready"] or any(not a["ready"] for a in saved["plan"]["allocations"]):
+        raise story.StoryError(409, "DRAMA_STAGE_PRECONDITION", "Resolve allocation configuration/media input blockers before dispatch.")
     if any(body.get(k, v) != v for k, v in (("budgetMode", saved["options"]["budget_mode"]), ("productionPolicy", saved["options"]["production_policy"]))):
         story.invalid("Dispatch options must match the reviewed allocation.")
     if body.get("engineTier") and any(a["tier"] != body["engineTier"] for a in saved["plan"]["allocations"]):
@@ -194,8 +330,12 @@ def dispatch(conn, me, method, parts, body, actions):
                 allocation = worker.plan_shot_chain(shot, chain_mode=body["chainMode"], approved_source=source, **opts)
             else:
                 allocation = worker.escalate_shot_on_retake(shot, strategy=body.get("strategy", "closed_hero"), **opts)
+            plans = allocation.get("race_plans") or [allocation]
+            cards = {s["card_id"]: worker._resolve_openapi_card_and_workflow(s["card_id"])
+                     for p in plans for s in p["stages"] if s["kind"] == "generate"}
+            preflight_inputs(conn, ep["slug"], identifier, allocation, cards, sources)
             if not allocation["ready"]:
-                raise story.StoryError(409, "DRAMA_STAGE_PRECONDITION", "Resolve strategy configuration/policy blockers: " + ", ".join(allocation["configuration_blockers"]))
+                raise story.StoryError(409, "DRAMA_STAGE_PRECONDITION", "Resolve strategy configuration/policy/media blockers: " + ", ".join(allocation["configuration_blockers"]))
             from project_assistant import story_media_adapter
             return story_media_adapter.enqueue(conn, me, ep["slug"], identifier, allocation, sources, actions)
     return None

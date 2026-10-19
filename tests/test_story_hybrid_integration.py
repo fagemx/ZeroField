@@ -107,11 +107,14 @@ class StoryHybridIntegrationTests(unittest.TestCase):
         self.assertEqual(code, 200, payload)
         return payload
 
-    def image(self, identifier):
+    def image(self, identifier, *, cast_reference=False):
         from PIL import Image
         image = io.BytesIO(); Image.new('RGB', (16,16), 'green').save(image, format='PNG')
         aid = repo.put_asset(self.conn, self.slug, data=image.getvalue(), content_type='image/png', actor_id=self.actor)
-        _, row = story.find_row(self.conn, identifier, 'shot')
+        if cast_reference:
+            row = next(r for r in story.table_rows(self.conn, self.slug, 'soul-cast') if r['cells'][0] == 'CAST-01')
+        else:
+            _, row = story.find_row(self.conn, identifier, 'shot')
         story.mutate_row(self.conn, self.me, self.slug, row['tabKey'], row['rid'], {story.media_column(row,'image'):f'![Image](/projects/api/{self.slug}/assets/{aid})'})
         self.conn.commit()
 
@@ -163,6 +166,7 @@ class StoryHybridIntegrationTests(unittest.TestCase):
 
     def test_structural_preparation_real_ffmpeg_and_review_before_writeback(self):
         selected=self.prepare()[0];identifier=selected['shotId'];before=self.ok('/shots/'+identifier)['selectedVideoUrl']
+        self.image(identifier, cast_reference=True)
         seen=[]
         def infer(task,config,head):
             context=worker.resolve_studio_context(task);seen.append(context)
@@ -178,7 +182,7 @@ class StoryHybridIntegrationTests(unittest.TestCase):
         self.assertTrue(self.ok('/shots/'+identifier)['selectedVideoUrl'])
 
     def test_real_m8_ab_candidates_winner_and_internal_principal_cannot_be_forged(self):
-        identifier=self.prepare()[0]['shotId'];self.hybrid()
+        identifier=self.prepare()[0]['shotId'];self.image(identifier, cast_reference=True);self.hybrid()
         with patch.object(worker,'comfyui',side_effect=self.local_inference):
             run=self.escalate(identifier,{'strategy':'ab_race'});gate=self.gate(run['runId'],2)
             self.assertIsNone(self.ok('/shots/'+identifier)['selectedVideoUrl'])
@@ -330,7 +334,7 @@ class StoryHybridIntegrationTests(unittest.TestCase):
             self.resolve(gate)
 
     def test_masking_blocks_commercial_export_and_custom_video_choice_keeps_frozen_graph(self):
-        identifier=self.prepare()[0]['shotId'];self.hybrid()
+        identifier=self.prepare()[0]['shotId'];self.image(identifier);self.hybrid()
         repo.update_project_meta(self.conn,self.slug,privacy_mode='mask_numbers');self.conn.commit()
         self.assertEqual(self.call('/shots/'+identifier+'/video-generations','POST',{'appCode':'seedance-20-pro'})[0],403)
         self.assertEqual(self.submits,[])
@@ -357,7 +361,7 @@ class StoryHybridIntegrationTests(unittest.TestCase):
         self.assertTrue(paths);self.assertFalse(paths[0].exists())
 
     def test_open_previz_actual_structure_review_extract_then_vendor_final(self):
-        identifier=self.prepare()[0]['shotId'];self.hybrid()
+        identifier=self.prepare()[0]['shotId'];self.image(identifier, cast_reference=True);self.hybrid()
         with patch.object(worker,'comfyui',side_effect=self.local_inference):
             run=self.escalate(identifier,{'chainMode':'open_previz_to_closed_hero'})
             first=self.gate(run['runId'])

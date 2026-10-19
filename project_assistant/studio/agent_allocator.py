@@ -158,11 +158,12 @@ def _assignment(shot, state, profile, reasons, policy, preparation_steps=None):
     if prep:
         slot = "motion_structure_video" if any(n.get("slot") == "structure_video" for n in card["nodes"]) else "source_video"
         stage["inputs"][slot] = {"from_step": "structure", "output_role": "motion_structure_video"}
+        stage["inputs"]["frame_sheet"] = {"from_step": "frame_sheet", "output_role": "frame_sheet"}
     fields = _fields(shot)
     return {**profile, "shot_id": fields.get("shotId", fields.get("shot_id", fields.get("rid", fields.get("rowId")))),
             "assigned_card_id": card["card_id"], **execution, "production_policy": policy,
             "reasons": list(profile["reasons"]) + reasons, "status": "planned",
-            "ready": not blockers, "configuration_blockers": list(blockers),
+            "readiness_scope": "configuration_and_availability", "ready": not blockers, "configuration_blockers": list(blockers),
             "preparation_steps": prep, "stages": prep + [stage], "handoffs": [],
             "requires_user_confirmation": True}
 
@@ -266,7 +267,8 @@ def plan_allocation(shots, **options):
                 raise runtime.WorkerError("Card cost_weight must be nonnegative and finite")
             remote_units += duration * weight
         allocations.append(item)
-    return {"status": "planned", "ready": all(a["ready"] for a in allocations), "allocations": allocations,
+    return {"status": "planned", "readiness_scope": "configuration_and_availability",
+            "ready": all(a["ready"] for a in allocations), "allocations": allocations,
             "summary": {"open_weights_shot_count": counts["open_weights"],
                         "closed_hero_shot_count": counts["closed_hero"], "cloud_burst_shot_count": counts["cloud_burst"],
                         "estimated_local_output_seconds": local_seconds, "estimated_cloud_resource_units": remote_units,
