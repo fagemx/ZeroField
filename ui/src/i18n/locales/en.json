@@ -1928,7 +1928,9 @@
     "benchStrip": "Shots in this view",
     "canvasScript": "Script",
     "canvasHint": "Drag to arrange · scroll to zoom · hover a card to trace what feeds it · double-click a shot to open its bench",
-    "canvasOpenHint": "Double-click to open the shot bench"
+    "canvasOpenHint": "Double-click to open the shot bench",
+    "canvasFullscreen": "Full screen",
+    "canvasExitFullscreen": "Exit full screen"
   },
   "studioPresets": {
     "arriAlexa65": "ARRI Alexa 65 / 35mm Anamorphic f/1.4",

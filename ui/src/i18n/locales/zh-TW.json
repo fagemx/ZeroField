@@ -1928,7 +1928,9 @@
     "benchStrip": "本視圖的鏡頭",
     "canvasScript": "劇本",
     "canvasHint": "拖曳排列 · 滾輪縮放 · 滑過卡片追蹤上下游 · 雙擊鏡頭開啟工作台",
-    "canvasOpenHint": "雙擊開啟鏡頭工作台"
+    "canvasOpenHint": "雙擊開啟鏡頭工作台",
+    "canvasFullscreen": "全螢幕",
+    "canvasExitFullscreen": "結束全螢幕"
   },
   "studioPresets": {
     "arriAlexa65": "ARRI Alexa 65／35mm 變形寬銀幕 f/1.4",

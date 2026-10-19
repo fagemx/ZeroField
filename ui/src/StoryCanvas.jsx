@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { applyNodeChanges, Background, Controls, Handle, MiniMap, Position, ReactFlow } from '@xyflow/react';
+import { applyNodeChanges, Background, Controls, Handle, MiniMap, Panel, Position, ReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useLocale } from './i18n/react.jsx';
 import { t as uiText } from './i18n/index.js';
 import { statusClass, statusLabel } from './format.js';
 import { benchLinks } from './studioModel.js';
+import { Icon } from './Icon.jsx';
 
 // Meso view: the production laid out as a story wall. Script scenes -> cast & sets -> scene shot tables ->
 // each shot's media chain (keyframe -> shot, or source -> passes -> remaster). It is a view of the same
@@ -70,7 +71,27 @@ const nodeTypes = { media: MediaNode, asset: AssetNode, script: ScriptNode, scen
 
 export function StoryCanvas({ storageKey, model, parsed, scenes, title, writable, busy, onOpen, onPreview, onCommit, onUpload, onRunStep }) {
   useLocale();
-  const [hover, setHover] = useState(null);
+  const [hover, setHover] = useState(null), [full, setFull] = useState(false);
+  const box = useRef(null), flow = useRef(null);
+  // Full screen keeps the whole sheet card (title, views, shot bench, dialogs) and fills the window; the
+  // browser's own full screen hides its chrome when allowed. Esc or the button returns.
+  useEffect(() => {
+    const sheet = box.current?.closest('.sheet-workspace');
+    sheet?.classList.toggle('is-maximized', full);
+    const fit = setTimeout(() => flow.current?.fitView({ padding: 0.12, duration: 200 }), 80);
+    return () => { clearTimeout(fit); sheet?.classList.remove('is-maximized'); };
+  }, [full]);
+  useEffect(() => {
+    const left = () => { if (!document.fullscreenElement) setFull(false); };
+    // Esc closes an open shot bench or dialog first; only a bare Esc leaves the window-filling view.
+    const key = event => { if (event.key === 'Escape' && !document.fullscreenElement && !document.querySelector('.sheet-review, [role=dialog]')) setFull(false); };
+    document.addEventListener('fullscreenchange', left); document.addEventListener('keydown', key, true);
+    return () => { document.removeEventListener('fullscreenchange', left); document.removeEventListener('keydown', key, true); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); };
+  }, []);
+  const toggleFull = () => {
+    if (full) { setFull(false); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); return; }
+    setFull(true); document.documentElement.requestFullscreen?.().catch(() => { /* window-filling view still applies */ });
+  };
   const positions = useRef(null);
   if (positions.current === null) { try { positions.current = JSON.parse(localStorage.getItem(storageKey)) || {}; } catch { positions.current = {}; } }
   const types = parsed.table.attrs.column_types || [];
@@ -136,15 +157,16 @@ export function StoryCanvas({ storageKey, model, parsed, scenes, title, writable
   useEffect(() => { setNodes(current => built.map(node => { const moved = current.find(n => n.id === node.id); return moved ? { ...node, position: moved.position } : node; })); }, [built]);
   const shown = nodes.map(node => ({ ...node, data: { ...node.data, dim: Boolean(lit && !lit.has(node.id)) } }));
   const styled = edges.map(edge => ({ ...edge, type: 'default', className: lit ? (lit.has(edge.source) && lit.has(edge.target) ? 'is-lit' : 'is-dim') : '' }));
-  return <div className="story-canvas">
+  return <div className="story-canvas" ref={box}>
     <ReactFlow colorMode="dark" nodes={shown} edges={styled} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.12 }} minZoom={0.15} maxZoom={1.6}
-      nodesConnectable={false} proOptions={{ hideAttribution: true }}
+      nodesConnectable={false} proOptions={{ hideAttribution: true }} onInit={instance => { flow.current = instance; }}
       onNodesChange={changes => setNodes(current => applyNodeChanges(changes, current))}
       onNodeDragStop={(_, node) => { positions.current[node.id] = node.position; try { localStorage.setItem(storageKey, JSON.stringify(positions.current)); } catch { /* positions stay for this visit */ } }}
       onNodeMouseEnter={(_, node) => setHover(node.id)} onNodeMouseLeave={() => setHover(null)}>
       <Background gap={28} size={1} color="#1c1c1c" />
       <MiniMap position="top-right" pannable zoomable nodeColor="#2a2a2a" maskColor="rgba(0,0,0,.6)" style={{ width: 168, height: 104 }} />
       <Controls showInteractive={false} />
+      <Panel position="top-left"><button type="button" className="sc-full" aria-pressed={full} onClick={toggleFull}><Icon name={full ? 'collapse' : 'expand'} />{uiText(full ? 'studio.canvasExitFullscreen' : 'studio.canvasFullscreen')}</button></Panel>
     </ReactFlow>
     <p className="story-canvas-hint">{uiText('studio.canvasHint')}</p>
   </div>;

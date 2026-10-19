@@ -375,3 +375,11 @@
 .sc-status.done { background: var(--s-done-bg); color: var(--s-done-fg); }
 .story-canvas .react-flow__controls-button { width: 30px; height: 30px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
 .story-canvas .react-flow__controls-button svg { fill: var(--text); max-width: 12px; max-height: 12px; }
+
+/* Canvas full screen: the sheet card fills the window (shot bench and dialogs still open inside it). */
+.workbench-app .sheet-workspace.is-maximized { position: fixed; inset: 0; z-index: 160; margin: 0; border-radius: 0; display: flex; flex-direction: column; }
+.workbench-app .sheet-workspace.is-maximized .sheet-workspace-body { flex: 1 1 auto; min-height: 0; }
+.workbench-app .sheet-workspace.is-maximized .sheet-main-view { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.workbench-app .sheet-workspace.is-maximized .story-canvas { min-height: 0; }
+.workbench-app .story-canvas .sc-full { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border: 0; border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: 500 13px var(--font); cursor: pointer; }
+.workbench-app .story-canvas .sc-full:hover { background: var(--raised); }

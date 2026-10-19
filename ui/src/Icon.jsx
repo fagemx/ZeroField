@@ -32,6 +32,8 @@ const PATHS = {
   gauge: 'M4 17a8 8 0 1 1 16 0M12 17l4-5',
   database: 'M12 4c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
   play: 'M7 5l12 7-12 7z',
+  expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
+  collapse: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
   arrowUp: 'M12 19V5M6 11l6-6 6 6',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
   rocket: 'M5 15l-1 5 5-1M9 15l6-6M14 4c3 0 6 3 6 6l-6 6-6-6z',
