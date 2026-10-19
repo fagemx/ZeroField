@@ -45,6 +45,45 @@ _OPENAPI_CARDS: dict[str, tuple[dict, dict | None]] = {}
 
 _OPENAPI_TASKS: dict[str, dict] = {}
 
+# Execution capabilities and frozen inputs never enter serializable task/wire data.
+_OPENAPI_EXECUTIONS: dict[str, dict] = {}
+
+
+class _OpenAPIAuthority:
+    """Trusted in-process HTTP binding; JSON/callable-shaped inputs are not authority."""
+    def check(self, card, references):
+        raise NotImplementedError
+
+
+def _media_slots(card, workflow, node_info):
+    """All consumed media literals, including hidden/unexposed graph defaults."""
+    media_fields = {(str(n["nodeId"]), n["fieldName"]) for n in card["nodes"]
+                    if n["fieldType"] in ("IMAGE", "VIDEO", "AUDIO")}
+    if workflow is None:
+        for item in node_info:
+            if (str(item["nodeId"]), item["fieldName"]) in media_fields:
+                value = item["fieldValue"]
+                if str(value).strip().lower() not in ("", "none"):
+                    yield item, "fieldValue", str(value)
+        return
+
+    def literals(container, key, media=False):
+        value = container[key]
+        if isinstance(value, str):
+            if value.strip().lower() not in ("", "none") and (media or re.fullmatch(r"[0-9a-f]{64}\.[A-Za-z0-9]+", value)):
+                yield container, key, value
+        elif isinstance(value, (dict, list)):
+            if (isinstance(value, list) and len(value) == 2 and isinstance(value[0], str)
+                    and value[0] in workflow and type(value[1]) is int):
+                return  # A Comfy link is not a media literal, even with a filename-shaped node ID.
+            for child in (value if isinstance(value, dict) else range(len(value))):
+                yield from literals(value, child)
+
+    for nid, node in workflow.items():
+        inputs = node.get("inputs") or {}
+        for field in inputs:
+            yield from literals(inputs, field, (str(nid), field) in media_fields or field in ("image", "video", "audio"))
+
 
 def _parse_multipart_file(raw_bytes: bytes, content_type: str) -> tuple[bytes, str, str]:
     """Extract (file_bytes, mime, filename) from a multipart/form-data upload or raw binary body."""
@@ -198,30 +237,66 @@ def _resolve_openapi_card_and_workflow(webapp_id: str) -> tuple[dict, dict | Non
 
 def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                           node_info: list[dict], base_url: str) -> None:
-    client = None
+    client, authority = None, None
     try:
-        policy = _OPENAPI_TASKS[task_id].get("production_policy")
+        with _OPENAPI_LOCK:
+            record = _OPENAPI_TASKS[task_id]
+            if record["status"] != "RUNNING":
+                return
+            execution = _OPENAPI_EXECUTIONS.get(task_id)
+            if execution is not None:
+                if execution["started"]:
+                    return
+                execution["started"] = True
+                card, compiled_workflow, node_info = copy.deepcopy(execution["inputs"])
+                authority, references = execution["authority"], execution["references"]
+            elif record.get("http_bound"):
+                raise runtime.WorkerError("HTTP media execution authority is unavailable")
+            else:
+                references = ()  # Retain trusted standalone/private-helper compatibility.
+            policy = record.get("production_policy")
+
+        def checkpoint():
+            with _OPENAPI_LOCK:
+                if _OPENAPI_TASKS.get(task_id, {}).get("status") != "RUNNING":
+                    raise runtime.WorkerError("Media execution was canceled")
+            if authority is not None:
+                try:
+                    authority.check(card, references)
+                except Exception:
+                    raise runtime.WorkerError("Media execution authority changed or reference access was revoked") from None
+
+        def read_reference(reference):
+            checkpoint()
+            if authority is not None and reference not in references:
+                raise runtime.WorkerError("Reference is outside the frozen media inputs")
+            stored = openapi_get_media(reference)
+            if stored is None:
+                raise runtime.WorkerError("OpenAPI inputs require an uploaded media reference")
+            return stored
+
+        checkpoint()
         model_router.enforce_card_policy(card, policy)
         if not card_engine.card_execution_profile(card)["requires_comfyui"]:
             class MediaHead:
                 def lease_lost(self):
-                    with _OPENAPI_LOCK:
-                        return _OPENAPI_TASKS.get(task_id, {}).get("status") != "RUNNING"
+                    try:
+                        checkpoint()
+                        return False
+                    except runtime.WorkerError:
+                        return True
 
                 def asset(self, task, reference):
-                    stored = openapi_get_media(reference)
-                    if stored is None:
-                        raise runtime.WorkerError("Direct OpenAPI inputs require an uploaded media reference")
-                    return stored
+                    return read_reference(reference)
 
                 def upload(self, task, raw, mime):
-                    if self.lease_lost():
-                        raise runtime.WorkerError("OpenAPI task was canceled")
+                    checkpoint()
                     saved = openapi_upload_binary(raw, mime)["data"]["fileName"]
                     return {"asset_url": f"{base_url.rstrip('/')}/openapi/v2/media/output/{saved}", "content_type": mime}
 
             output = legacy.execute_story_card({"id": task_id, "production_policy": policy}, card,
                 {f"{n['nodeId']}.{n['fieldName']}": n["fieldValue"] for n in node_info}, MediaHead())
+            checkpoint()
             with _OPENAPI_LOCK:
                 if _OPENAPI_TASKS[task_id]["status"] == "RUNNING":
                     _OPENAPI_TASKS[task_id].update(status="SUCCESS", results=[{
@@ -231,31 +306,31 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
         ecfg = dict(card.get("engine_config") or {})
         client = legacy.ComfyPlatformClient(ecfg)
         wf_to_send = copy.deepcopy(compiled_workflow)
-        for item in node_info:
-            nid = str(item["nodeId"])
-            fname = str(item["fieldName"])
-            fval = str(item.get("fieldValue") or "").strip()
-            stored = openapi_get_media(fval)
-            if stored is not None and nid in wf_to_send and fname in (wf_to_send[nid].get("inputs") or {}):
-                raw_bytes, mime = stored
-                uploaded_name = client.upload_media(raw_bytes, mime, "openapi")
-                wf_to_send[nid]["inputs"][fname] = uploaded_name
+        if authority is not None:
+            for container, key, reference in _media_slots(card, wf_to_send, node_info):
+                raw_bytes, mime = read_reference(reference)
+                checkpoint()
+                container[key] = client.upload_media(raw_bytes, mime, "openapi")
+        else:
+            for item in node_info:
+                nid, fname = str(item["nodeId"]), str(item["fieldName"])
+                stored = openapi_get_media(str(item.get("fieldValue") or "").strip())
+                if stored is not None and nid in wf_to_send and fname in (wf_to_send[nid].get("inputs") or {}):
+                    checkpoint()
+                    wf_to_send[nid]["inputs"][fname] = client.upload_media(*stored, "openapi")
+        checkpoint()
         prompt_id = client.submit_workflow(wf_to_send, task_id)
         deadline = time.monotonic() + float(ecfg.get("timeout", 600))
         poll = float(ecfg.get("poll_interval", 0.5))
         while time.monotonic() < deadline:
+            checkpoint()
             history = client.fetch_history(prompt_id)
+            checkpoint()
             entry = history.get(prompt_id) if isinstance(history, dict) else None
             status_obj = entry.get("status", {}) if isinstance(entry, dict) else {}
             if isinstance(entry, dict) and (status_obj.get("status_str") == "error" or status_obj.get("error")):
                 err_msg = card_engine._normalize_comfy_error(entry)
-                with _OPENAPI_LOCK:
-                    _OPENAPI_TASKS[task_id].update({
-                        "status": "FAILED",
-                        "errorMessage": err_msg,
-                        "failedReason": status_obj.get("failedReason") or {"exception_message": err_msg},
-                    })
-                return
+                raise runtime.WorkerError(err_msg)
             if isinstance(entry, dict) and (entry.get("outputs") or status_obj.get("completed")):
                 out_node = str(ecfg.get("output_node") or "")
                 outputs = entry.get("outputs") or {}
@@ -274,13 +349,17 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                     raise runtime.WorkerError(f"Output node {out_node} produced no media items")
                 first_item = raw_items[0]
                 out_filename = str(first_item.get("filename", getattr(first_item.get("sdk_output"), "name", "output.mp4")))
+                checkpoint()
                 raw_out, out_mime = client.download_output(first_item)
+                checkpoint()
                 if not raw_out or len(raw_out) > legacy.MAX_MEDIA:
                     raise runtime.WorkerError("Comfy output exceeds the 64 MB asset limit or is empty")
                 ext = Path(out_filename).suffix.lower() or (".mp4" if out_mime.startswith("video/") else ".png")
                 out_type = ext.lstrip(".")
                 saved_name = hashlib.sha256(raw_out).hexdigest() + ext
                 with _OPENAPI_LOCK:
+                    if _OPENAPI_TASKS[task_id]["status"] != "RUNNING":
+                        return
                     _OPENAPI_MEDIA_STORE[saved_name] = (raw_out, out_mime)
                     _OPENAPI_TASKS[task_id].update({
                         "status": "SUCCESS",
@@ -296,23 +375,35 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
             time.sleep(max(0.01, poll))
         raise runtime.WorkerError("Local ComfyUI workflow timed out")
     except Exception as exc:
+        message = ("Media execution failed or its authority changed; reconcile any accepted provider job."
+                   if authority is not None else str(exc))
         with _OPENAPI_LOCK:
             if task_id in _OPENAPI_TASKS and _OPENAPI_TASKS[task_id]["status"] == "RUNNING":
                 _OPENAPI_TASKS[task_id].update({
                     "status": "FAILED",
-                    "errorMessage": str(exc),
-                    "failedReason": {"exception_message": str(exc)},
+                    "errorMessage": message,
+                    "failedReason": {"exception_message": message},
                 })
     finally:
         if client is not None:
-            client.close()
+            try:
+                client.close()
+            except Exception:
+                if authority is None:
+                    raise  # Keep standalone diagnostics; HTTP cleanup must not leak provider details.
 
 
 def openapi_run_app(webapp_id: str, body: dict, *,
                     base_url: str = "http://127.0.0.1:8000",
-                    sync: bool = False, production_policy=None) -> dict:
-    """Self-hosted RunningHub-compatible POST /openapi/v2/run/ai-app/{webappId} & /workflow/{workflowId} handler."""
+                    sync: bool = False, production_policy=None, _authority=None) -> dict:
+    """Freeze one execution plan. HTTP passes a server-minted _authority, never body callbacks.
+
+    Without _authority this remains the trusted standalone Python API. HTTP always
+    supplies a live actor/project binding; task status/policy snapshots cannot grant it.
+    """
     global _OPENAPI_SEQ
+    if _authority is not None and not isinstance(_authority, _OpenAPIAuthority):
+        raise runtime.WorkerError("Invalid in-process media execution authority")
     parsed = card_engine.parse_runninghub_curl_or_payload(body)
     target_id = str(webapp_id or parsed.get("webappId") or "").strip()
     if not target_id:
@@ -338,6 +429,10 @@ def openapi_run_app(webapp_id: str, body: dict, *,
                 "description": item.get("description"),
             })
     compiled_workflow = None if direct else card_engine.inject_node_info_into_workflow(raw_workflow, node_info, card)
+    references = tuple(sorted({value for _, _, value in _media_slots(card, compiled_workflow, node_info)}))
+    if _authority is not None:
+        _authority.check(card, references)
+    frozen = copy.deepcopy((card, compiled_workflow, node_info))
     with _OPENAPI_LOCK:
         _OPENAPI_SEQ += 1
         task_id = f"{int(time.time() * 1000)}{_OPENAPI_SEQ}"
@@ -353,9 +448,11 @@ def openapi_run_app(webapp_id: str, body: dict, *,
             "nodeInfoList": node_info,
             "compiled_workflow": compiled_workflow,
             "production_policy": policy,
+            "http_bound": _authority is not None,
             "instanceType": parsed.get("instanceType", "default"),
             "usePersonalQueue": parsed.get("usePersonalQueue", "false"),
         }
+        _OPENAPI_EXECUTIONS[task_id] = {"inputs": frozen, "authority": _authority, "references": references, "started": False}
     if sync:
         _execute_openapi_task(task_id, card, compiled_workflow, node_info, base_url)
     else:

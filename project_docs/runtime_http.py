@@ -183,6 +183,26 @@ OPENAPI_RUN = re.compile(r"^/openapi/v2/run/(?:ai-app|workflow)/([A-Za-z0-9_-]{1
 OPENAPI_MEDIA = re.compile(r"^/openapi/v2/media/(?:output|input)/([A-Za-z0-9._-]{1,120})$")
 
 
+def _v2_authority(actor_id, slug):
+    """Mint a server-only actor/project capability, never from serialized task fields."""
+    from project_assistant.studio.openapi_v2_hub import _OpenAPIAuthority
+
+    class Authority(_OpenAPIAuthority):
+        def check(self, card, references):
+            from project_docs import http, story_openapi as story
+            with http.open_connection() as conn:
+                story.authorize(conn, service.Identity(actor_id, "Media API", "member"), slug, write=True)
+                story.authorize_card(conn, slug, card)
+                for reference in references:
+                    saved = story.record(conn, "v2_" + story.digest([actor_id, "media", reference]), required=False)
+                    if not saved:
+                        raise story.StoryError(404, "DRAMA_NOT_FOUND", "Reference media does not belong to this account.")
+                    if saved.get("slug") != slug:
+                        raise story.StoryError(403, "DRAMA_OPERATION_NOT_ALLOWED", "Reference media belongs to another production.")
+
+    return Authority()
+
+
 def _handle_openapi(handler, parsed, method: str) -> bool:
     """Self-hosted RunningHub OpenAPI v2 compatible endpoints."""
     from project_docs import http, media, story_openapi as story
@@ -202,6 +222,8 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
         def grant(kind, value, slug=None):
             with http.open_connection() as conn:
                 http._ensure_schema(conn)
+                if slug:
+                    story.authorize(conn, me, slug, write=True)
                 story.store(conn, "v2_" + story.digest([me.actor_id, kind, value]), "v2_grant", {"value": value, "slug": slug}, slug, me.actor_id)
         def require(kind, value):
             with http.open_connection() as conn:
@@ -295,15 +317,9 @@ def _handle_openapi(handler, parsed, method: str) -> bool:
                 http._ensure_schema(conn)
                 story.authorize(conn, me, slug, write=True)
                 policy = story.production_policy(conn, slug)
-                card, _ = worker._resolve_openapi_card_and_workflow(run_match.group(1))
-                story.authorize_card(conn, slug, card)
-            for item in body.get("nodeInfoList", []):
-                value = str(item.get("fieldValue", ""))
-                if worker.openapi_get_media(value) is not None:
-                    saved = require("media", value.rsplit("/", 1)[-1])
-                    if saved.get("slug") != slug:
-                        raise story.StoryError(403, "DRAMA_OPERATION_NOT_ALLOWED", "Reference media belongs to another production.")
-            result = worker.openapi_run_app(run_match.group(1), body, base_url=base_url, production_policy=policy)
+            # The dispatcher expands/freezes once, then checks every consumed default/override.
+            result = worker.openapi_run_app(run_match.group(1), body, base_url=base_url, production_policy=policy,
+                                           _authority=_v2_authority(me.actor_id, slug))
             grant("task", result["taskId"], slug)
             handler.send_json(200, result)
             return True

@@ -59,9 +59,11 @@ relax an open-only lock. A hybrid deployment does NOT opt projects into hybrid.
 Pass an authorized project choice as task['production_policy']; never trust a card
 or model input to grant permission. Self-hosted openapi_run_app accepts the same
 choice ONLY as the trusted production_policy keyword, not from its JSON body.
-Its HTTP caller must authenticate and authorize that choice before forwarding it;
-legacy unauthenticated v2 HTTP routes remain open-only. enforce_card_policy is reusable
-by preflight/allocator and is repeated at execution boundaries.
+All v2 HTTP routes require crew authentication. HTTP dispatch binds a server-only
+actor/project authority to frozen effective inputs and rechecks current membership,
+policy, privacy and media grants at execution/export checkpoints. JSON authority or
+callback fields grant nothing. Trusted standalone Python calls remain separate.
+enforce_card_policy is reusable by preflight/allocator and at execution boundaries.
 provider_configuration_status(card) reports configuration only, never health or
 inference success, and never returns endpoint URLs or credentials.
 """.strip()
