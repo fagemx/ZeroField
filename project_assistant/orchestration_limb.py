@@ -56,9 +56,18 @@ def claim(conn,worker):
         payload={'prompt':task['spec'],'tabs':tabs,'rows':rows,'request_scope':for_model(scope)}
     payload=privacy.sanitize(payload,mode)
     capability=source.get('capability') or next((c for c in dispatch['profile_snapshot']['capabilities'] if c in worker['capabilities']),None)
+    mounted = ''
+    if not dispatch['agent_key'].startswith('limb:'):
+        from project_assistant import prompting
+        run = db.get_run(conn, dispatch['project_slug'], dispatch['run_id'])
+        me = service.Identity(run['created_by'], 'Production crew', 'member')
+        episode_id = prompting.episode_context(conn, dispatch['project_slug'], cp.effective_scope(conn, dispatch, task))
+        mounted = prompting.mounted_context(conn, me, dispatch['project_slug'], dispatch['profile_snapshot'], episode_id=episode_id)
+    profile = privacy.sanitize({k: dispatch['profile_snapshot'].get(k) for k in ('system_prompt','knowledge_pack','allowed_tools','role_kind')}, mode)
+    profile['system_prompt'] = (profile.get('system_prompt') or '') + '\n' + mounted
     return {'task':{'id':dispatch['id'],'orchestration_task_id':task['id'],'dispatch_handle':dispatch['handle'],
         'lease_token':dispatch['lease_token'],'project_slug':dispatch['project_slug'],'capability':capability,
-        'agent_key':dispatch['agent_key'],'profile':privacy.sanitize({k:dispatch['profile_snapshot'].get(k) for k in ('system_prompt','knowledge_pack','allowed_tools','role_kind')},mode),
+        'agent_key':dispatch['agent_key'],'profile':profile,
         'deadline_at':dispatch['deadline_at'],'input':payload,'continuation':privacy.sanitize(dispatch['continuation'] or {},mode)},'lease_seconds':120}
 
 
@@ -126,7 +135,8 @@ def tool(conn,worker,body,connection_factory):
     # Release this HTTP transaction before entering it (no nested row locks).
     conn.rollback()
     try:
-        return {'text':tools.call(ctx,body.get('name'),body.get('arguments'))}
+        result = tools.call(ctx,body.get('name'),body.get('arguments'))
+        return {'text':str(result), 'images':getattr(result, 'images', [])}
     except tools.ToolError as exc:
         code='STALE_DISPATCH' if 'STALE_DISPATCH' in str(exc) else 'POLICY_DENIED'
         raise cp.OrchestrationError(409 if code=='STALE_DISPATCH' else 403,str(exc),code) from None

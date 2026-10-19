@@ -126,12 +126,13 @@ class ToolHost:
                 raise tools.ToolError("POLICY_DENIED: This tool is not granted for this turn.")
             result = self.call_tool(name, args) if self.call_tool else tools.call(self.ctx, name, args)
             payload = {"text": result}
-            if name in ('ask_decision_gate','trigger_flow_run'):
-                try:
-                    if json.loads(result).get('awaiting_gate') is True:
-                        self.pending.set()
-                except (ValueError, TypeError, AttributeError):
-                    pass
+            if getattr(result, 'images', None):
+                payload['images'] = result.images
+            try:
+                if json.loads(result).get('awaiting_gate') is True:
+                    self.pending.set()
+            except (ValueError, TypeError, AttributeError):
+                pass
             summary["ok"] = True
         except tools.ToolError as exc:
             payload = {"error": str(exc)}

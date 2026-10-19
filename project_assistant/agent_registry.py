@@ -62,30 +62,46 @@ def default_tools(key,orchestration=True):
     if key == 'coordinator':
         return sorted(tool_specs.TOOL_NAMES if orchestration else tool_specs.TOOL_NAMES-tool_specs.DELEGATION_TOOLS)
     if key == 'doc_writer':
-        return reads + ['propose', 'offer_document'] + (['ask_decision_gate'] if orchestration else [])
+        return reads + ['propose', 'offer_document', 'studio_ingest_script', 'studio_manage_asset', 'consult_advisor'] + (['ask_decision_gate'] if orchestration else [])
     if key == 'sheet_ops':
-        return reads + reports + ['propose_table_edit'] + (['ask_decision_gate'] if orchestration else [])
-    return reads + reports + ['propose'] + (['ask_decision_gate'] if orchestration else [])
+        return reads + reports + ['propose_table_edit', 'studio_plan_allocation', 'studio_dispatch_shot', 'studio_inspect_frames', 'studio_edit_timeline', 'consult_advisor'] + (['ask_decision_gate'] if orchestration else [])
+    return reads + reports + ['propose', 'studio_inspect_frames'] + (['ask_decision_gate'] if orchestration else [])
+
+
+LEGACY_SEED_PROMPTS = {'coordinator': 'You are the Showrunner. Understand the production goal, pages, and selected scope. Delegate to available specialists when useful. Break complex work into tasks with clear outputs and dependencies, read the source, and prepare proposals for review. Only approved proposals count as applied changes. Report pending, queued, canceled, and failed work honestly. Media generation requires configured workers and validated workflows; do not promise an unavailable capability.\n', 'doc_writer': 'You are the Screenwriter. Organize production briefs, revise scenes and dialogue, and preserve the established voice and continuity. Read sources before writing. When no body-editing tool is available, provide a draft or annotation without claiming the document changed. Keep every proposal inside the selected passages and submit it for review.\n', 'sheet_ops': 'You are the Cinematographer and slate specialist. Read headers and stable row and column IDs before editing shot prompts, production data, or formulas. Preserve cast IDs, appearance references, optical choices, and continuity. Respect the selected scope; do not invent masked values or expand the batch. Produce structured table proposals with before/after values and reasons. Unproduced shots stay Queued with empty media cells until real assets are returned.\n', 'qa_critic': "You are the Continuity Supervisor. Check source consistency, cast continuity, calculation definitions, and delivery requirements. Locate each issue precisely. Use only permitted question annotations or discussions. Do not change statuses, numbers, body text, or another person's decisions. Distinguish verified facts, inferences, and unverified work; human approval remains with the crew.\n"}
+LEGACY_SEED_TOOLS = {'coordinator': ['ask_decision_gate', 'cancel_delegation', 'check_delegation', 'list_agents', 'list_pages', 'my_todo', 'offer_document', 'propose', 'propose_table_edit', 'read_page', 'report_cell', 'report_find', 'report_list', 'report_overview', 'report_sheet', 'search_pages', 'spawn_agent', 'trigger_flow_run'], 'doc_writer': ['list_pages', 'read_page', 'search_pages', 'propose', 'offer_document', 'ask_decision_gate'], 'sheet_ops': ['list_pages', 'read_page', 'search_pages', 'report_cell', 'report_find', 'report_list', 'report_overview', 'report_sheet', 'propose_table_edit', 'ask_decision_gate'], 'qa_critic': ['list_pages', 'read_page', 'search_pages', 'report_cell', 'report_find', 'report_list', 'report_overview', 'report_sheet', 'propose', 'ask_decision_gate']}
+
+
+def seed_mounts(key):
+    return {'skill_keys': {'coordinator':['shotgen','character-continuity','docx'], 'doc_writer':['shotgen','character-continuity','pdf'],
+                          'sheet_ops':['shotgen','h3-context-ir','xlsx'], 'qa_critic':['shotcheck','character-continuity']}[key],
+            'multiagent_config': {'allow_subagents':key=='coordinator', 'allow_workflows':key=='coordinator',
+                                  'advisor_agent_key':'qa_critic' if key!='qa_critic' else None},
+            'memory_mounts':[{'store_key':'style_rules','access':'read_only'}]}
 
 
 def ensure_default_agents(conn, slug):
     with conn.cursor() as cur:
         for key, name, icon, role, domain in ROSTER:
             prompt = (Path(__file__).parent / 'prompts' / (key + '.md')).read_text(encoding='utf-8')
+            mounted = seed_mounts(key)
             cur.execute('''INSERT INTO projectops.agent_profile
-                (project_slug,agent_key,display_name,icon,role_kind,system_prompt,capabilities,labels,allowed_tools)
-                VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb) ON CONFLICT DO NOTHING''',
-                (slug, key, name, icon, role, prompt, json.dumps(['llm','orchestrate'] if role=='primary' else ['llm']),
-                 json.dumps({'domain': domain}), json.dumps(default_tools(key))))
-            cur.execute('''UPDATE projectops.agent_profile SET allowed_tools=%s::jsonb
-                WHERE project_slug=%s AND agent_key=%s AND allowed_tools=%s::jsonb
-                AND system_prompt=%s AND provider_config='{}'::jsonb AND role_kind=%s
-                AND runtime_kind='builtin_llm' AND display_name=%s AND created_by IS NULL
-                AND version=1 AND enabled AND knowledge_pack='' AND bound_limb_id IS NULL
-                AND icon=%s AND description='' AND max_concurrency=2
-                AND labels=%s::jsonb AND capabilities=%s::jsonb''',
-                (json.dumps(default_tools(key)), slug, key, json.dumps(default_tools(key, False)), prompt, role, name,
-                 icon, json.dumps({'domain': domain}), json.dumps(['llm','orchestrate'] if role=='primary' else ['llm'])))
+                (project_slug,agent_key,display_name,icon,role_kind,system_prompt,capabilities,labels,allowed_tools,skill_keys,multiagent_config,memory_mounts)
+                VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb) ON CONFLICT DO NOTHING''',
+                (slug,key,name,icon,role,prompt,json.dumps(['llm','orchestrate'] if role=='primary' else ['llm']),json.dumps({'domain':domain}),
+                 json.dumps(default_tools(key)),json.dumps(mounted['skill_keys']),json.dumps(mounted['multiagent_config']),json.dumps(mounted['memory_mounts'])))
+            # Match the entire pristine seed, not just the prompt; never rewrite customization.
+            profile = get_agent(conn, slug, key)
+            pristine = (profile['created_by'] is None and profile['system_prompt'] in (LEGACY_SEED_PROMPTS[key], prompt) and
+                profile['allowed_tools'] in (LEGACY_SEED_TOOLS[key], [t for t in LEGACY_SEED_TOOLS[key] if t not in tool_specs.DELEGATION_TOOLS], default_tools(key, False)) and
+                all(profile.get(k)==v for k,v in CONSOLE_DEFAULTS.items()) and
+                all(profile.get(k)==v for k,v in dict(display_name=name,icon=icon,role_kind=role,runtime_kind='builtin_llm',description='',
+                    provider_config={},knowledge_pack='',enabled=True,bound_limb_id=None,max_concurrency=2,labels={'domain':domain},
+                    capabilities=['llm','orchestrate'] if role=='primary' else ['llm']).items()))
+            if pristine:
+                cur.execute('''UPDATE projectops.agent_profile SET system_prompt=%s,allowed_tools=%s::jsonb,
+                    skill_keys=%s::jsonb,multiagent_config=%s::jsonb,memory_mounts=%s::jsonb WHERE project_slug=%s AND agent_key=%s''',
+                    (prompt,json.dumps(default_tools(key)),json.dumps(mounted['skill_keys']),json.dumps(mounted['multiagent_config']),json.dumps(mounted['memory_mounts']),slug,key))
     from project_assistant.agent_console_store import ensure_defaults
     ensure_defaults(conn, slug)
 

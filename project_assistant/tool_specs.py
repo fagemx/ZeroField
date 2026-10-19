@@ -88,6 +88,55 @@ TOOLS += [
      'inputSchema':_obj({'flow_tab_key':_S,'execution_mode':{'type':'string','enum':['workflow','single_step']},
          'node_id':_S,'start_node_id':_S,'sample_row_id':_S,'row_ids':{'type':'array','items':_S},'target_tab':_S},['flow_tab_key'])},
 ]
+# Studio wire schemas are also validated at the shared tool boundary.
+_ID = {'type':'string','minLength':1,'maxLength':180}
+_TEXT = {'type':'string','minLength':1,'maxLength':10000}
+_IDS = {'type':'array','items':_ID,'minItems':1,'maxItems':200,'uniqueItems':True}
+STUDIO_SCHEMAS = {
+    'studio_ingest_script': _obj({'episode_id':_ID,'script':{'type':'string','minLength':1,'maxLength':100000}}, ['episode_id','script']),
+    'studio_manage_asset': _obj({'episode_id':_ID,'operation':{'type':'string','enum':['create','update','variant']},
+        'asset_id':_ID,'type':{'type':'string','enum':['CHARACTER','SCENE','PROP']},'name':{'type':'string','minLength':1,'maxLength':200},
+        'prompt':_TEXT,'key':{'type':'string','pattern':'^[a-z0-9_-]{1,60}$'},'kind':{'type':'string','enum':['OUTFIT','POSE','LOOK']}}, ['episode_id','operation','name','prompt']),
+    'studio_plan_allocation': _obj({'episode_id':_ID,'shot_ids':_IDS,'budget_mode':{'type':'string','enum':['lab_economical','hybrid_balanced','deadline_rush']},
+        'time_pressure':{'type':'string','enum':['low','normal','high']},'app_code':_ID}, ['episode_id']),
+    'studio_dispatch_shot': _obj({'episode_id':_ID,'shot_ids':_IDS,'allocation_id':_ID}, ['episode_id','shot_ids','allocation_id']),
+    'studio_inspect_frames': _obj({'episode_id':_ID,'shot_id':_ID,'candidate_id':_ID}, ['episode_id','shot_id']),
+    'studio_edit_timeline': _obj({'episode_id':_ID,'operation':{'type':'string','enum':['split','merge','export']},'shot_ids':_IDS}, ['episode_id','operation']),
+    'consult_advisor': _obj({'question':{'type':'string','minLength':1,'maxLength':4000},'candidate':{'type':'string','maxLength':12000}}, ['question']),
+}
+DEFAULT_POLICIES = {name: ('always_ask' if name in {'studio_ingest_script','studio_manage_asset','studio_dispatch_shot','studio_edit_timeline'} else 'auto') for name in STUDIO_SCHEMAS}
+for _name, _schema in STUDIO_SCHEMAS.items():
+    TOOLS.append({'name':_name,'description':{
+        'studio_ingest_script':'Review a script import, asset extraction and storyboard construction in the active episode.',
+        'studio_manage_asset':'Review a cast/set/prop or costume variant change in the active production.',
+        'studio_plan_allocation':'Preview actual configuration_and_inputs readiness; retain the returned allocationId for dispatch.',
+        'studio_dispatch_shot':'Consume an authorized allocation once and enqueue M8 media proposals, never select a candidate.',
+        'studio_inspect_frames':'Inspect authorized source/candidate video as an attached timestamped 8-frame contact sheet.',
+        'studio_edit_timeline':'Review a shot split, merge, or episode rough-cut export.',
+        'consult_advisor':'Ask the configured independent specialist for one bounded, read-only critique; no delegation.'}[_name],
+        'inputSchema':_schema,'annotations':{'readOnlyHint':_name in {'studio_plan_allocation','studio_inspect_frames','consult_advisor'},'destructiveHint':False}})
 TOOL_NAMES = {tool["name"] for tool in TOOLS}
 DELEGATION_TOOLS={'list_agents','spawn_agent','check_delegation','cancel_delegation','ask_decision_gate','trigger_flow_run'}
-MUTATING_TOOLS={'propose','propose_table_edit','spawn_agent','cancel_delegation','ask_decision_gate','trigger_flow_run'}
+MUTATING_TOOLS={'propose','propose_table_edit','spawn_agent','cancel_delegation','ask_decision_gate','trigger_flow_run'} | set(STUDIO_SCHEMAS)
+
+
+def validate_studio_args(name, args):
+    """Small validator for the bounded schema subset above; never trust MCP validation."""
+    import re
+    def check(value, schema):
+        kind=schema['type']
+        if kind=='object':
+            if not isinstance(value,dict) or set(value)-schema['properties'].keys() or not set(schema['required'])<=value.keys():
+                raise ValueError('Unknown or missing Studio tool arguments.')
+            for key,item in value.items(): check(item,schema['properties'][key])
+        elif kind=='string':
+            if not isinstance(value,str) or '\x00' in value or not schema.get('minLength',0)<=len(value)<=schema.get('maxLength',10000):
+                raise ValueError('Invalid Studio string length.')
+            if 'enum' in schema and value not in schema['enum'] or 'pattern' in schema and not re.fullmatch(schema['pattern'],value):
+                raise ValueError('Invalid Studio option.')
+        elif kind=='array':
+            if not isinstance(value,list) or not schema.get('minItems',0)<=len(value)<=schema['maxItems']:
+                raise ValueError('Invalid Studio selection.')
+            for item in value: check(item,schema['items'])
+            if schema.get('uniqueItems') and len(set(value))!=len(value): raise ValueError('Duplicate Studio selection.')
+    if name in STUDIO_SCHEMAS: check(args,STUDIO_SCHEMAS[name])

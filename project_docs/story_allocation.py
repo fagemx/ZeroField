@@ -9,13 +9,13 @@ from project_assistant import limb_worker as worker
 from project_docs import repository as repo, story_openapi as story
 
 
-def options(conn, slug, body):
+def options(conn, slug, body, *, local_comfy_online=None):
     policy = story.production_policy(conn, slug)
     if body.get("productionPolicy", policy) != policy:
         story.invalid("Select the project production policy explicitly before planning.")
     return {"budget_mode": body.get("budgetMode", "hybrid_balanced"), "production_policy": policy,
             "time_pressure": body.get("timePressure", "normal"),
-            "local_comfy_online": worker.probe_local_comfy_status()["online"]}
+            "local_comfy_online": worker.probe_local_comfy_status()["online"] if local_comfy_online is None else local_comfy_online}
 
 
 def current_shots(conn, ep, ids=None):
@@ -170,8 +170,8 @@ def preflight_inputs(conn, slug, identifier, allocation, cards, sources=None):
     return allocation
 
 
-def plan(conn, me, ep, body):
-    opts = options(conn, ep["slug"], body)
+def plan(conn, me, ep, body, *, local_comfy_online=None):
+    opts = options(conn, ep["slug"], body, local_comfy_online=local_comfy_online)
     items = current_shots(conn, ep, body.get("shotIds"))
     result = worker.plan_allocation(items, **opts)
     # An explicit card choice is preserved; automatic allocation is opt-in.

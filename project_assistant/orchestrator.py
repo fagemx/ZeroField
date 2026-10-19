@@ -347,8 +347,11 @@ def spawn_dispatch(conn,slug,task_id,*,agent_key,slot_key,caller_dispatch_id=Non
         raise OrchestrationError(409,"The delegation source is no longer valid.",'STALE_DISPATCH')
     if parent:
         caller_profile=runtime_profile(conn,slug,parent['agent_key'])
-        if caller_profile['role_kind']!='primary':
-            raise OrchestrationError(403,"Only a coordinator can delegate child tasks.",'POLICY_DENIED')
+        multi = caller_profile.get('multiagent_config') or {}
+        if (caller_profile['role_kind']!='primary' or 'spawn_agent' not in caller_profile.get('allowed_tools', []) or not multi.get('allow_subagents') or
+            task['strategy'] != 'single' and not multi.get('allow_workflows') or
+            caller_profile.get('tool_policies', {}).get('spawn_agent') == 'disabled'):
+            raise OrchestrationError(403,"Current agent policy does not allow this delegation.",'POLICY_DENIED')
         chain=parent['chain']+['agent:'+agent_key]
         if 'agent:'+agent_key in parent['chain'] or len([v for v in chain if v.startswith('agent:')])-1>run['max_depth']:
             raise OrchestrationError(403,"Delegation exceeds the depth limit or creates a cycle.",'POLICY_DENIED')
@@ -761,7 +764,13 @@ def resolve_gate(conn,me,slug,gate_id,*,resolution,client_request_id):
             raise OrchestrationError(409,"The pipeline definition, source, or worker changed. Review it again.",'SOURCE_CHANGED')
         flow_id=flow_runner.start(conn,me,slug,action['flow_tab_key'],action['body'])['run']['id']
         db.execute(conn,'UPDATE projectops.orchestration_run SET flow_run_id=%s WHERE id=%s',(flow_id,run['id']))
+    if action.get('kind') == 'tool_action' and resolution == '0':
+        from project_assistant.studio_tools import approve_review
+        approve_review(conn, me, slug, gate, dispatch)
     continuation=copy.deepcopy(dispatch['continuation'] or {})
+    if action.get('kind') == 'tool_action':
+        continuation.setdefault('journal', {})[action['tool_cache_key']] = ({'tool': action['tool'], 'approved_gate_id': gate['id']}
+            if resolution == '0' else {'tool': action['tool'], 'result': json.dumps({'canceled': True, 'awaiting_gate': False})})
     continuation.setdefault('answers',[]).append({'question':gate['question'],'options':[o['label'] for o in gate['options']],'answer':choice['label'],**({'flow_run_id':flow_id} if flow_id else {})})
     for entry in continuation.get('journal',{}).values():
         if entry.get('gate_id')==gate['id']:

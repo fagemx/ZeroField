@@ -137,6 +137,9 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                     "tool_call_id": tc.get("id") or "",
                     "content": str(out),
                 })
+                if getattr(out, 'images', None):
+                    messages.append({'role': 'user', 'content': [{'type': 'text', 'text': 'Authorized tool contact sheet; timing is in the tool result.'}] +
+                        [{'type': 'image_url', 'image_url': {'url': image}} for image in out.images]})
         raise model_client.ModelError("bad_response", "Tool calls exceeded the limit.")
     except model_client.ModelError as exc:
         result.status = "quota" if exc.kind == "quota" else "error"

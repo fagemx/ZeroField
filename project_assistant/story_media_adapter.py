@@ -65,7 +65,7 @@ def verify_task(conn, task):
     return job
 
 
-def enqueue(conn, me, slug, identifier, allocation, sources, actions):
+def enqueue(conn, me, slug, identifier, allocation, sources, actions, *, frozen_cards=None):
     cp.actor(conn, slug, me)
     _, row = story.find_row(conn, identifier, "shot")
     tab = cp.freeze_tab(conn, slug, row["tabKey"])
@@ -86,14 +86,14 @@ def enqueue(conn, me, slug, identifier, allocation, sources, actions):
                 name = f"branch{index}:" + step["step_id"]
                 fixed = copy.deepcopy(step)
                 fixed["inputs"] = {k: {**v, "from_step": f"branch{index}:" + v["from_step"]} for k, v in fixed.get("inputs", {}).items()}
-                task = add_task(conn, me, slug, run, target, scope, job, name, fixed, deps)
+                task = add_task(conn, me, slug, run, target, scope, job, name, fixed, deps, frozen_cards=frozen_cards)
                 deps = [task["id"]]
                 mapped[name] = task["id"]
             final = copy.deepcopy(branch["stages"][-1])
             final["inputs"] = {k: {**v, "from_step": f"branch{index}:" + v["from_step"]} for k, v in final.get("inputs", {}).items()}
             branches.append((final, deps))
         steps = {"studio:open": branches[0][0], "studio:closed": branches[1][0]}
-        task = add_task(conn, me, slug, run, target, scope, job, "race", steps, list(dict.fromkeys(d for _, deps in branches for d in deps)), race=True)
+        task = add_task(conn, me, slug, run, target, scope, job, "race", steps, list(dict.fromkeys(d for _, deps in branches for d in deps)), race=True, frozen_cards=frozen_cards)
         cp.start_race(conn, me, slug, task["id"], ["studio:open", "studio:closed"])
     else:
         for step in allocation["stages"]:
@@ -103,7 +103,7 @@ def enqueue(conn, me, slug, identifier, allocation, sources, actions):
                 # Upstream generation completes only after its existing proposal is applied.
                 mapped[name] = dependencies
                 continue
-            task = add_task(conn, me, slug, run, target, scope, job, name, step, dependencies)
+            task = add_task(conn, me, slug, run, target, scope, job, name, step, dependencies, frozen_cards=frozen_cards)
             mapped[name] = [task["id"]]
     cp.schedule_ready(conn, slug)
     actions.append(lambda: wake(slug, run["id"]))
@@ -112,12 +112,13 @@ def enqueue(conn, me, slug, identifier, allocation, sources, actions):
     return {"runId": run["id"], "status": "QUEUED", "reviewRequired": True, "allocation": allocation}
 
 
-def add_task(conn, me, slug, run, target, scope, base, name, step, dependencies, race=False):
+def add_task(conn, me, slug, run, target, scope, base, name, step, dependencies, race=False, *, frozen_cards=None):
     steps = copy.deepcopy(step if race else {"single": step})
     for value in steps.values():
         if value["kind"] == "generate":
-            value["card"], value["workflow"] = worker._resolve_openapi_card_and_workflow(value["card_id"])
-    key = "studio:open" if race else "studio:prepare" if step["kind"] == "prepare" else "studio:open" if step.get("tier", "open_weights") == "open_weights" else "studio:closed"
+            value["card"], value["workflow"] = (copy.deepcopy(frozen_cards[value["card_id"]]) if frozen_cards is not None
+                                                  else worker._resolve_openapi_card_and_workflow(value["card_id"]))
+    key = "studio:open" if race else "studio:prepare" if step["kind"] == "prepare" else "studio:open" if worker.card_execution_profile(steps['single']['card'])['tier'] == 'open_weights' else "studio:closed"
     job = copy.deepcopy(base) | {"name": name, "steps": steps}
     task = cp.create_task(conn, me, slug, run["id"], objective="Studio " + name, agent_key=key, scope=scope, target=target,
                           depends_on=dependencies, strategy="race" if race else "single", write_mode="analysis_only" if not race and step["kind"] == "prepare" else "proposal",

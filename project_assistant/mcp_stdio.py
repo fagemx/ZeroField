@@ -38,7 +38,11 @@ def _call_tool(name: str, args: dict) -> tuple[str, bool]:
         payload = {"error": f"The tool is temporarily unavailable ({type(exc).__name__}). Try again."}
     if "error" in payload:
         return str(payload["error"]), True
-    return str(payload.get("text", "")), False
+    class MediaText(str):
+        pass
+    text = MediaText(payload.get('text', ''))
+    text.images = payload.get('images', [])
+    return text, False
 
 
 def _host_tools():
@@ -64,7 +68,11 @@ def handle(message: dict):
         if name not in {s['name'] for s in _host_tools()}:
             raise LookupError(f"Tool {name} does not exist.")
         text, is_error = _call_tool(name, params.get("arguments") or {})
-        return {"content": [{"type": "text", "text": text}], "isError": is_error}
+        content = [{'type': 'text', 'text': str(text)}]
+        for image in getattr(text, 'images', []):
+            if isinstance(image, str) and image.startswith('data:image/png;base64,'):
+                content.append({'type': 'image', 'mimeType': 'image/png', 'data': image.split(',', 1)[1]})
+        return {'content': content, 'isError': is_error}
     raise NotImplementedError(method)
 
 

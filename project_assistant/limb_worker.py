@@ -113,12 +113,13 @@ def acp_stdio(task, config, head):
         def list_tools(self):
             return head.action('orchestration/tool_list',lease)['tools']
         def call(self,name,args):
-            text=head.action('orchestration/tool',dict(lease,name=name,arguments=args))['text']
-            if name in ('ask_decision_gate','trigger_flow_run'):
-                try:
-                    if json.loads(text).get('awaiting_gate') is True: self.pending.set()
-                except (ValueError,AttributeError):
-                    pass
+            from project_assistant.tools import ToolResult
+            result=head.action('orchestration/tool',dict(lease,name=name,arguments=args))
+            text=ToolResult(result['text'],result.get('images', []))
+            try:
+                if json.loads(text).get('awaiting_gate') is True: self.pending.set()
+            except (ValueError,AttributeError):
+                pass
             return text
     class Canceled:
         def is_set(self):

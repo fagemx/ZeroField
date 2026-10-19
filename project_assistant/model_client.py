@@ -279,6 +279,9 @@ def run_turn(*, instructions: str, turn_text: str, call_tool, model: str, effort
                     args = {}
                 output = call_tool(item.get("name"), args if isinstance(args, dict) else {})
                 items.append({"type": "function_call_output", "call_id": item.get("call_id"), "output": str(output)})
+                if getattr(output, 'images', None):
+                    items.append({'role': 'user', 'content': [{'type': 'input_text', 'text': 'Authorized tool contact sheet; timing is in the tool result.'}] +
+                        [{'type': 'input_image', 'image_url': image} for image in output.images]})
         raise ModelError("bad_response", f"Tool calls exceeded {MAX_ROUNDS} rounds.")
     except ModelError as exc:
         result.status = "quota" if exc.kind == "quota" else "error"

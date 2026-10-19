@@ -5,10 +5,11 @@ ToolError 的訊息會原文回給模型，讓它改參數再試，所以要寫�
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -44,6 +45,11 @@ class ToolContext:
     worker_id: str | None = None
     run_id: str | None = None
     deadline_at: str | None = None
+    episode_id: str | None = None
+    execution_guard: Callable | None = None
+    runtime_cost_hook: Callable | None = None
+    pending_images: list = field(default_factory=list)
+    post_commit_actions: list = field(default_factory=list)
 
 
 def _clip(text: str) -> str:
@@ -603,62 +609,123 @@ HANDLERS = {
 }
 from project_assistant import delegation_tools
 HANDLERS.update(delegation_tools.HANDLERS)
+from project_assistant import studio_tools
+HANDLERS.update(studio_tools.HANDLERS)
+
+
+class ToolResult(str):
+    def __new__(cls, text, images=()):
+        obj = super().__new__(cls, text)
+        obj.images = list(images)
+        return obj
 
 
 def call(ctx: ToolContext, name: str, args) -> str:
     if name not in TOOL_NAMES:
         raise ToolError(f"Tool {name} does not exist.")
     args = args if isinstance(args, dict) else {}
-    conn = ctx.connection_factory()
+    from project_assistant import agent_policy, orchestrator as cp, orchestration_store as db
+    from project_assistant.tool_specs import MUTATING_TOOLS, DELEGATION_TOOLS, validate_studio_args
     try:
-        from project_assistant.agent_policy import authorize_tool
-        from project_assistant import orchestrator as cp, orchestration_store as db
-        from project_assistant.tool_specs import MUTATING_TOOLS,DELEGATION_TOOLS
-        if name in MUTATING_TOOLS or getattr(ctx,'dispatch_id',None):
-            cp.lock_project(conn,ctx.slug)
-        authorize_tool(ctx, conn, name, args)
-        journal_owner=None
-        journal={}
-        cache_key=cp.digest({'tool':name,'args':args})
-        if getattr(ctx,'dispatch_id',None):
-            dispatch=db.get_dispatch(conn,ctx.slug,ctx.dispatch_id)
-            continuation=dispatch['continuation'] or {}
-            journal=continuation.get('journal',{})
-            journal_owner=('dispatch',ctx.dispatch_id,continuation)
-        elif ctx.message_id and name in MUTATING_TOOLS:
-            journal=db.one(conn,'SELECT tool_journal FROM projectops.assistant_message WHERE id=%s FOR UPDATE',(ctx.message_id,)) or {}
-            journal_owner=('message',ctx.message_id,None)
-        if name in MUTATING_TOOLS and cache_key in journal:
+        validate_studio_args(name, args)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from None
+    ctx.pending_images = []
+    ctx.post_commit_actions = []
+    conn = ctx.connection_factory()
+    actions = []
+    try:
+        agent_policy.authorize_tool(ctx, conn, name, args)
+        if name == 'studio_plan_allocation':
             conn.rollback()
-            out=journal[cache_key]['result']
-            return delegation_tools.wait_for_task(ctx,out) if name=='spawn_agent' and args.get('wait') is True else out
-        out = HANDLERS[name](ctx, conn, args)
-        if name not in DELEGATION_TOOLS:
-            out = privacy.text(conn, ctx.slug, out)[0]
-        if name in MUTATING_TOOLS and journal_owner:
-            journal[cache_key]={'tool':name,'result':out}
-            if name in ('ask_decision_gate','trigger_flow_run'):
-                journal[cache_key]['gate_id']=json.loads(out).get('gate_id')
-            kind,identifier,continuation=journal_owner
-            if kind=='dispatch':
-                continuation={**continuation,'journal':journal}
-                db.execute(conn,'UPDATE projectops.orchestration_dispatch SET continuation=%s::jsonb WHERE id=%s',
-                           (json.dumps(continuation,ensure_ascii=False),identifier))
-            else:
-                db.execute(conn,'UPDATE projectops.assistant_message SET tool_journal=%s::jsonb WHERE id=%s',
-                           (json.dumps(journal,ensure_ascii=False),identifier))
-        if name in MUTATING_TOOLS or getattr(ctx,'dispatch_id',None):
-            conn.commit()
+            from project_assistant import limb_worker
+            ctx.local_comfy_online = bool(limb_worker.probe_local_comfy_status()['online'])
+        cp.lock_project(conn, ctx.slug)
+        agent_policy.authorize_tool(ctx, conn, name, args)
+        mode = agent_policy.permission_mode(ctx, conn, name, args)
+        journal_owner = None
+        journal = {}
+        cache_key = cp.digest({'tool': name, 'args': args})
+        if getattr(ctx, 'dispatch_id', None):
+            dispatch = db.get_dispatch(conn, ctx.slug, ctx.dispatch_id)
+            continuation = dispatch['continuation'] or {}
+            journal = copy.deepcopy(continuation.get('journal', {}))
+            journal_owner = ('dispatch', ctx.dispatch_id, continuation)
+        elif ctx.message_id:
+            message = store.message(conn, ctx.message_id)
+            if not message or message['slug'] != ctx.slug or message['owner_id'] != ctx.me.actor_id:
+                raise ToolError('POLICY_DENIED: Invalid private conversation context.')
+            journal = db.one(conn, 'SELECT tool_journal FROM projectops.assistant_message WHERE id=%s FOR UPDATE', (ctx.message_id,)) or {}
+            journal_owner = ('message', ctx.message_id, None)
+        cached = journal.get(cache_key)
+        if mode == 'auto' and name in {'studio_plan_allocation', 'studio_inspect_frames'}:
+            cached = None  # Read previews follow current sources; fingerprint storage deduplicates FFmpeg.
+        if cached and cached.get('in_progress'):
+            raise ToolError('Ambiguous prior tool execution; reconcile it before a new request.')
+        if cached and 'result' in cached:
+            out = cached['result']
+            images = []
+            if name == 'studio_inspect_frames' and 'frame_sheet_asset_id' in json.loads(out):
+                images = studio_tools.cached_frame_images(ctx, conn, args, out)
+            conn.rollback()
+            return delegation_tools.wait_for_task(ctx, out) if name == 'spawn_agent' and args.get('wait') is True else ToolResult(out, images)
+        approved = None
+        if cached and cached.get('approved_gate_id'):
+            approved = db.get_gate(conn, ctx.slug, cached['approved_gate_id'])
+            if not approved or approved['status'] != 'resolved' or approved['resolution'] != '0' or not getattr(ctx, 'dispatch_id', None) or approved['task_id'] != dispatch['task_id']:
+                raise ToolError('POLICY_DENIED: Invalid action approval.')
+            studio_tools.validate_review(ctx, conn, approved)
+        if mode == 'always_ask' and not approved:
+            if not journal_owner:
+                raise ToolError('Crew review requires a private conversation or M8 context.')
+            out = studio_tools.request_review(ctx, conn, name, args)
         else:
-            conn.rollback()
+            if name in studio_tools.EXTERNAL_TOOLS:
+                # Save an attempt before releasing locks; ambiguous inference is never automatically repeated.
+                if journal_owner and name == 'consult_advisor':
+                    journal[cache_key] = {'tool': name, 'in_progress': True}
+                    _save_journal(conn, journal_owner, journal)
+                    conn.commit()
+                else:
+                    conn.rollback()
+                agent_policy.authorize_tool(ctx, conn, name, args)
+            value = HANDLERS[name](ctx, conn, args)
+            out = json.dumps(studio_tools.public_result(conn, ctx.slug, value), ensure_ascii=False) if name in studio_tools.HANDLERS else value
+            if approved and name in {'studio_inspect_frames', 'consult_advisor'}:
+                studio_tools.validate_review(ctx, conn, approved)
+        if name not in DELEGATION_TOOLS and name not in studio_tools.HANDLERS:
+            out = privacy.text(conn, ctx.slug, out)[0]
+        if journal_owner and (name in MUTATING_TOOLS or mode == 'always_ask'):
+            journal[cache_key] = {'tool': name, 'result': out}
+            try:
+                pending = json.loads(out)
+                if pending.get('awaiting_gate'): journal[cache_key]['gate_id'] = pending['gate_id']
+            except (ValueError, AttributeError):
+                pass
+            _save_journal(conn, journal_owner, journal)
+        actions = list(ctx.post_commit_actions)
+        conn.commit()
     except ValueError as exc:
         conn.rollback()
-        raise ToolError(getattr(exc,'code','INVALID_REQUEST')+'：'+str(exc)) from exc
+        raise ToolError(getattr(exc, 'code', 'INVALID_REQUEST') + ': ' + str(exc)) from None
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
-    if name=='spawn_agent' and args.get('wait') is True:
-        return delegation_tools.wait_for_task(ctx,out)
-    return out if name in DELEGATION_TOOLS else _clip(out)
+    for action in actions:
+        action()
+    if name == 'spawn_agent' and args.get('wait') is True:
+        return delegation_tools.wait_for_task(ctx, out)
+    return ToolResult(out if name in DELEGATION_TOOLS or name in studio_tools.HANDLERS else _clip(out), ctx.pending_images)
+
+
+def _save_journal(conn, owner, journal):
+    from project_assistant import orchestration_store as db
+    kind, identifier, continuation = owner
+    if kind == 'dispatch':
+        db.execute(conn, 'UPDATE projectops.orchestration_dispatch SET continuation=%s::jsonb WHERE id=%s',
+                   (json.dumps({**continuation, 'journal': journal}, ensure_ascii=False), identifier))
+    else:
+        db.execute(conn, 'UPDATE projectops.assistant_message SET tool_journal=%s::jsonb WHERE id=%s',
+                   (json.dumps(journal, ensure_ascii=False), identifier))
