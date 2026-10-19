@@ -22,7 +22,7 @@ openbench-worker = "project_assistant.limb_worker:main"
 
 [tool.setuptools]
 py-modules = ["server", "run_studio"]
-packages = ["project_docs", "project_assistant", "openbench_data"]
+packages = ["project_docs", "project_assistant", "project_assistant.studio", "openbench_data"]
 include-package-data = false
 
 [tool.setuptools.package-data]
