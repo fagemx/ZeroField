@@ -1,165 +1,366 @@
 {
   "date": "2026-10-19",
-  "scope": "SPEC_07 integration on the completed modularization/router/allocator components; independent read-only acceptance review remains separate.",
-  "base": "34d2991",
+  "scope": "SPEC_07 targeted corrective integration only; original approved scope, no modularization redo or product edits by integration.",
+  "reviewedBase": "dda463b271169f3ccee0f9539983e78917aab7ce",
+  "candidateProductRevision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+  "integrationRevision": "Documentation-only successor containing this receipt; full frozen SHA is recorded in the managed spec07-fixes/integrated.json handoff. All product files/assets equal candidateProductRevision.",
   "componentCommits": [
-    "e68ae4496fe6ac0ccdaaaae449080a5c045dd4d8",
-    "c82acdda28b4a55de764e22b8505ccda6a0411c7",
-    "3f103572bdd9dffdd15b3ae77ca92632f93bdef1"
+    "47dd860742375f6c81153fa72a392a6f7114c874",
+    "d81f9dcdff1026f3ead1713aaac7b2748f72b5c7",
+    "956536dafff7832bcd1c765f459515d9ee536fe0"
   ],
-  "integrationRevision": "The commit containing this receipt; its frozen full SHA is recorded in the managed integration-recovered.json handoff.",
-  "result": "latest follow-up: backend 362 tests pass, zero failures/errors/skips; frontend 109/build/browser/wheel evidence retained from unchanged product commit 6255b940a7ee6aae3e4168c573bd77ebd4879cca",
+  "result": "Final corrective integration gates passed: backend 389 / frontend 111, zero failures/errors/skips; production build and newly installed-wheel checks passed. Retained independent corrected-candidate review is pending, not passed.",
+  "independentReview": {
+    "status": "pending",
+    "historicalVerdict": "BLOCK at dda463b271169f3ccee0f9539983e78917aab7ce: two P1 and four P2 accepted as source-supported defects. Old passing totals were not acceptance.",
+    "historicalReview": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/b35c5bd1-ba2a-475f-b856-e26b4def3eee/spec07/review.md"
+  },
   "commandsRan": [
     {
-      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -m unittest discover -s tests -p \"test_*.py\"",
+      "command": "C:/Users/fagem/tools/pg16/pgsql/bin/pg_ctl.exe -D C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-integration-scs2u4wk\\data -l C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-integration-scs2u4wk\\postgres.log -o \"-p 55447 -h 127.0.0.1\" -w -t 12 start",
+      "exitStatus": 0,
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "result": "passed"
+    },
+    {
+      "command": "C:\\Python313\\python.exe -m unittest discover -s tests -p test_*.py",
+      "exitStatus": 0,
+      "seconds": 202.941,
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\backend-final.log",
       "result": "passed",
-      "tests": 361,
+      "tests": 389,
       "failures": 0,
       "errors": 0,
       "skips": 0,
-      "seconds": 168.663,
-      "log": "logs/backend-final-361.log"
+      "testSeconds": 201.658
     },
     {
-      "command": "npm test --prefix ui",
+      "command": "npm.cmd test --prefix ui",
+      "exitStatus": 0,
+      "seconds": 1.268,
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\ui-final.log",
       "result": "passed",
-      "tests": 109,
+      "tests": 111,
       "failures": 0,
+      "errors": 0,
       "skips": 0,
-      "log": "logs/ui-final.log"
+      "testMilliseconds": 485.0087
     },
     {
-      "command": "npm run build --prefix ui",
+      "command": "npm.cmd run build --prefix ui",
+      "exitStatus": 0,
+      "seconds": 4.682,
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\ui-build-final.log",
       "result": "passed",
-      "summary": "333 modules; current static/projects assets rebuilt. Non-failing chunk-size warning: JS approximately 1.48 MB before gzip; no warning threshold weakened.",
-      "log": "logs/ui-build-final-2.log"
+      "modules": 333,
+      "buildSeconds": 3.7,
+      "summary": "Current assets unchanged by rebuild; JS 1485.07 kB, retained non-failing 1200 kB chunk warning, threshold not changed."
     },
     {
-      "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> PYTHONPATH=tests python -X utf8 -m unittest test_story_hybrid_integration -q",
+      "command": "C:/Users/fagem/tools/pg16/pgsql/bin/pg_ctl.exe -D C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-integration-scs2u4wk\\data -m fast -w -t 12 stop",
+      "exitStatus": 0,
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "result": "passed"
+    },
+    {
+      "command": "C:\\Python313\\python.exe -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\wheel .",
+      "exitStatus": 0,
+      "cwd": "C:\\ai_project\\ZeroField",
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\wheel-build.log",
       "result": "passed",
-      "summary": "12 integration tests passed before the final added open-previz chain case; that case passed separately, and all 13 subsequently passed in full discovery.",
-      "log": "logs/integration-12-final.log; logs/open-chain-check.log"
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0"
     },
     {
-      "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> python -X utf8 -u <owned-temp>/browser_check.py",
+      "command": "C:\\Python313\\python.exe -m pip install --no-deps --no-index --target C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\wheel-installed C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\wheel\\openbench-0.2.0-py3-none-any.whl",
+      "exitStatus": 0,
+      "cwd": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration",
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\wheel-install.log",
       "result": "passed",
-      "summary": "Playwright Chromium headless 1440x1000: five navigation entries, policy/resource controls, Gallery complexity badges, allocation preview, Micro Retake actions, EN/zh-TW switching; zero page errors and zero generation POSTs. Screenshots manually inspected; allocation contrast corrected before final rebuild/check.",
-      "log": "logs/browser-final-2.log"
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0"
     },
     {
-      "command": "python -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir <owned-temp>/wheel .",
+      "command": "C:\\Python313\\python.exe -I -X utf8 C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\wheel_check.py",
+      "exitStatus": 0,
+      "cwd": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration",
+      "log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec07-corrective-integration\\wheel-check.log",
       "result": "passed",
-      "sha256": "cca75caa15a5117a70237d676c42d948ec949e4e29c3d285068ad94ee21f58e6",
-      "log": "logs/wheel-build.log"
-    },
-    {
-      "command": "python -m pip install --no-deps --no-index --target <owned-temp>/wheel-installed <owned-temp>/wheel/openbench-0.2.0-py3-none-any.whl; python -I -X utf8 <owned-temp>/wheel_check.py",
-      "result": "passed",
-      "summary": "Installed outside checkout; new integration modules, router/allocator/facade, shared registries, all 10 cards/workflows and current compiled assets resolve. Facade remains 244 lines. Existing explicit Studio package-list fix preserved.",
-      "log": "logs/wheel-install.log; logs/wheel-check.log"
-    },
-    {
-      "command": "pg_ctl.exe -D <owned-temp>/data -m fast -w -t 12 stop",
-      "result": "passed",
-      "summary": "Same PG16 toolchain, binary file-backed stdout/stderr, stdin DEVNULL, subprocess timeout 18s; exit 0. postmaster.pid absent and postgres.log records clean shutdown at 12:37:47.697 CST.",
-      "log": "control-stop.log; postgres.log"
-    },
-    {
-      "command": "git diff --check; git diff --exit-code -- docs/story-workbench-verification.json docs/studio-verification.json docs/bilingual-baseline.json docs/english-baseline.json",
-      "result": "passed",
-      "summary": "No whitespace errors or historical receipt changes. Git emitted only configured LF/CRLF conversion notices."
-    },
-    {
-      "command": "git diff --cached --check",
-      "result": "failed",
-      "summary": "Generated minified JS line 197 retains an upstream renderMarkdown template literal ending with two spaces. Confirmed identical literal in predecessor index-J3oWdeB9.js; preserving its Markdown hard-break semantics rather than editing the production build."
-    },
-    {
-      "command": "git diff --cached --check -- . ':!static/projects/assets/*'",
-      "result": "passed",
-      "summary": "All source/documentation/test diffs are whitespace-clean. Generated upstream Markdown literal is the only full staged whitespace-check exception."
+      "revision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "sha256": "bb77a19c89a191a54a5fce4a6a75883d451cf5af625e33fdc5ab8b8bc902bce1",
+      "summary": "Installed outside checkout, python -I; 19 corrected source/resource hashes match, 10 cards/workflows resolve, 244-line facade/shared registries, authority/default-media checks and explicit frame-sheet binding pass."
     }
   ],
-  "integrationCoverage": [
-    "Actual Story HTTP -> configured loopback vendor and RunningHub-style cloud -> real FFmpeg normalization -> PostgreSQL candidate/guarded writeback; Comfy client/executor configured to fail if touched in these graphless cases.",
-    "Default policy denial, explicit admin project choice and deployment ceiling; viewers/crew policy restrictions; numeric masking denies commercial export; alias fallback before submit.",
-    "Exact nested project/episode/shot IDs, foreign candidates, other-actor v2 media grants, authenticated v2 task/query/output boundaries and server-derived commercial policy.",
-    "Allocator-selected cards actually dispatched; consumed source/policy-bound preflight, honest null billing/GPU estimates, custom video card choice and immutable preflight/queued graphs.",
-    "Real persisted layout/frame-sheet preparation, existing M8 object-principal admissions/leases/proposals, A/B winner-only writeback, generic-apply bypass denial, stale-source rejection, lease expiry without automatic resubmission.",
-    "Closed -> reviewed source -> real ingredients -> local optimize review; open previz -> review -> real frame extraction -> vendor final; existing approved image skips draft. Pending/READY is not accepted as director approval.",
-    "Canceled running chain late outputs cannot create a proposal or overwrite the reviewed take. All original facade/local graph/SDK/media/stale-output tests retained.",
-    "Legacy v2 HTTP test retains its compiler/media assertions but now uses an actual token/project PostgreSQL fixture, required auth/CSRF/project headers and grant cleanup rather than unauthenticated access. Dedicated-URI full discovery skips none."
+  "findingRegressions": [
+    {
+      "id": "P1-imported-default-grants",
+      "fixCommit": "47dd860742375f6c81153fa72a392a6f7114c874",
+      "regressions": [
+        "tests/test_studio_v2_authority.py: test_imported_victim_default_is_rejected_before_admission",
+        "tests/test_studio_v2_authority.py: test_imported_same_actor_wrong_project_default_is_rejected",
+        "tests/test_studio_v2_authority.py: test_unexposed_and_hidden_defaults_are_authorized_without_reading_bytes",
+        "tests/test_studio_v2_authority.py: test_own_project_default_frozen_once_and_executor_replay_is_inert"
+      ],
+      "evidence": "RAN in final 389-test discovery: cross-account/project denied; valid frozen own-project defaults retained."
+    },
+    {
+      "id": "P1-live-v2-authority",
+      "fixCommit": "47dd860742375f6c81153fa72a392a6f7114c874",
+      "regressions": [
+        "tests/test_studio_v2_authority.py: test_queued_policy_revocation_prevents_graphless_export",
+        "tests/test_studio_v2_authority.py: test_queued_privacy_member_and_project_access_revocation",
+        "tests/test_studio_v2_authority.py: test_reference_grant_rechecked_at_execution_and_before_submit",
+        "tests/test_studio_v2_authority.py: test_remote_upload_revocation_prevents_paid_submit_and_output",
+        "tests/test_studio_v2_authority.py: test_current_authority_blocks_late_result_publication_and_cancel_replay",
+        "tests/test_studio_v2_authority.py: test_http_fields_and_missing_capability_cannot_forge_execution_authority"
+      ],
+      "evidence": "RAN in final discovery: real HTTP/PG and loopback vendor/cloud/FFmpeg, synthetic inference, current revocation/cancel/no-wire-bypass checks."
+    },
+    {
+      "id": "P2-allocation-input-readiness",
+      "fixCommit": "d81f9dcdff1026f3ead1713aaac7b2748f72b5c7",
+      "regressions": [
+        "tests/test_story_allocation_preflight.py: test_offline_deadline_missing_cloud_inputs_blocks_entire_batch_before_dispatch",
+        "tests/test_story_allocation_preflight.py: test_deleted_required_input_rechecked_for_all_shots_before_any_task",
+        "tests/test_story_allocation_preflight.py: test_owned_cloud_inputs_ready_without_blob_upload_or_inference",
+        "tests/test_story_allocation_preflight.py: test_imported_custom_card_required_inputs_share_preflight_and_freeze",
+        "tests/test_story_allocation_preflight.py: test_escalation_validates_later_preparation_before_any_m8_enqueue"
+      ],
+      "evidence": "RAN all 13 preflight regressions in final discovery: metadata/typed-future readiness, all-or-none validation, required media/ownership/type/size/custom cards; no blob/provider during preflight."
+    },
+    {
+      "id": "P2-bulk-contact-sheet-binding",
+      "fixCommit": "d81f9dcdff1026f3ead1713aaac7b2748f72b5c7",
+      "regressions": [
+        "tests/test_story_allocation_preflight.py: test_bulk_structural_generation_consumer_receives_contact_sheet_and_structure",
+        "tests/test_story_allocation_preflight.py: test_procedural_preparation_is_typed_future_media_not_an_existing_asset",
+        "tests/test_story_hybrid_integration.py: test_structural_preparation_real_ffmpeg_and_review_before_writeback"
+      ],
+      "evidence": "RAN in final discovery: real persisted FFmpeg structure/contact sheet reaches actual subsequent resolve_studio_context consumer; M8 route retained."
+    },
+    {
+      "id": "P2-same-row-review-refresh",
+      "fixCommit": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "regressions": [
+        "ui/tests/shotReview.browser.py: test_status_changes_update_actions_without_reopen_and_keep_video_source",
+        "ui/tests/shotReview.browser.py: test_media_refresh_ignores_an_older_inflight_candidate_response"
+      ],
+      "evidence": "READ same frozen-candidate browser gate: ordinary status/upload edits, unchanged DOM/draft, fresh media selection after held stale GET, zero page errors. Not rerun because integration changed no product/assets."
+    },
+    {
+      "id": "P2-approved-image-ui-handoff",
+      "fixCommit": "956536dafff7832bcd1c765f459515d9ee536fe0",
+      "regressions": [
+        "ui/tests/storyWorkbench.test.mjs: approved composition chooses selected image when no video exists and preserves selected-video precedence",
+        "ui/tests/shotReview.browser.py: test_approved_image_only_handoff_and_localized_preflight_blockers",
+        "tests/test_story_hybrid_integration.py: test_existing_approved_source_skips_draft_and_uses_real_vendor_handoff"
+      ],
+      "evidence": "RAN unit selection and backend approved-image real loopback vendor handoff in final suites; READ browser image-only action sends referenceSourceImageId, video retains precedence. Browser admission is mocked; backend authority is exercised separately."
+    }
+  ],
+  "connectedProductPath": [
+    "UI batch preview -> authenticated Story plan-allocation -> authoritative snapshot/context and effective card media preflight -> frozen allocationId -> all assignments revalidated before any schedule/consume -> actual allocator-selected generation -> router -> loopback vendor/cloud HTTP -> real FFmpeg -> PostgreSQL candidate and guarded row writeback.",
+    "Bulk economical structure -> persisted FFmpeg layout + frame_sheet -> explicit predecessor bindings -> actual generation resolve_studio_context sees both; existing M8 strategy/chain uses its own unchanged admission/lease/review/winner/cancel authority.",
+    "Same-row SheetWorkspace revision/status/media identity -> ShotProduction current eligibility/fresh candidates -> selected opaque image/video source -> authenticated Story approved_source ownership/status/policy validation -> M8 reviewed chain -> real reference preparation -> router. Browser checks mock only handoff admission/preview; real backend chain boundary is covered by final discovery.",
+    "Authenticated v2 run -> one expanded frozen execution plan/default-media grants -> private server actor/project capability -> current access/policy/privacy/grants at execution/read/export/submit/poll/publication -> output/task grants. Trusted facade/standalone, local graphs and synthetic official SDK seams remain tested."
   ],
   "readEvidenceNotNewExecution": [
-    "Approved AGENTS.md, maintained handoff, complete SPEC_07, SPEC_06, design guidelines, ZEROFIELD_SPEC and AGENT_ORCHESTRATION_SPEC; remaining previously truncated source instructions reread with bounded offsets.",
-    "Exact predecessor managed handoffs and unchanged component implementations/evidence; predecessor milestones are not represented as new integration work.",
-    "Supervisor explicitly authorized the narrow server-managed M8 adapter/lifecycle seam without existing agent config writes, admin impersonation or relaxed remote-worker binding."
+    "AGENTS.md, CLAUDE.md, maintained handoff, approved SPEC_07, SPEC_06, design guidelines, ZEROFIELD_SPEC, AGENT_ORCHESTRATION_SPEC and actual connected source/callers/tests inspected.",
+    "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/53089aed-e944-4946-9474-2fc4349253f6/spec07-fixes/v2-authority.json: 14 new regressions, frozen 54-test gate and baseline failures at dda463b; initial wrong-port/timeout/invalid-token fixture attempts retained as failed historical evidence.",
+    "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/53089aed-e944-4946-9474-2fc4349253f6/spec07-fixes/allocation-inputs.json: 13 new regressions, frozen 45-test gate at d81f9dc; 3 baseline failures at 47dd860, fixture/compiler failures and truncated heredoc attempt retained as historical failures.",
+    "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/53089aed-e944-4946-9474-2fc4349253f6/spec07-fixes/shot-review.json: baseline two expected browser failures at predecessor d81f9dc; frozen 22 focused Node tests and three Playwright interactions at 956536d; earlier fixture-discovery/selector adjustments retained as historical.",
+    "C:/Users/fagem/AppData/Local/Temp/zerofield-spec07-shot-review/browser-frozen.log: Ran 3 tests in 12.074s, OK, zero skips/page errors. Read script and manually inspected status-video-review.png, image-handoff-zh-blockers.png and media-refresh-stale-response.png. Rebuild produced identical assets, so no browser rerun needed.",
+    "Original integration, test-only follow-up and independent review receipts remain historical. Their old totals do not claim coverage of corrected defects."
   ],
-  "historicalRedAndRecovery": [
-    "Original blocked integration.json is preserved. Initial localized PG16 subprocess output failed UTF-8 decoding; the one approved binary-pipe recovery then timed out. Those attempts remain failed, not retrospectively passed.",
-    "Parent recovered the same preserved cluster/toolchain using a real control log file, verified pg_ctl exit 0 and SELECT ('postgres','55447',1), then transferred ownership. No re-init/createdb or alternate executor/model was used in this revival.",
-    "Initial UI test RED: nested locale values violated the existing two-level dictionary contract; flattened semantic keys, retaining the old test.",
-    "Initial integration REDs: policy WorkerError envelope classification and omitted prepared frame-sheet forwarding fixed; cloud fixture supplied its required source video. Legacy HTTP auth fixture/grant cleanup updated without removing old assertions.",
-    "First full discovery: 356 tests with one legacy unauthenticated-v2 fixture error. Its newly authenticated route lacked the test connection factory and attempted the default DB connection, which timed out before access; the fixture was corrected to the dedicated token/project DB context. Later 359, 360 and final 361 tests passed with no skips. First browser selector targeted a non-Retake demo row; corrected fixture selector and subsequent checks passed.",
-    "Owned postgres.log contains a non-failing Windows child shared-memory reservation warning (error 487) at 12:35:36; final full discovery still returned OK. Shutdown was clean."
-  ],
-  "ownedTemp": "C:/Users/fagem/AppData/Local/Temp/zerofield-spec07-integration-scs2u4wk",
-  "screenshots": [
-    "browser-en-allocation.png",
-    "browser-zh-review.png"
-  ],
-  "services": "Only the adopted dedicated 127.0.0.1:55447 PG16 cluster was used/stopped; HTTP fixtures and Playwright browsers were closed by their owned cleanup. No real project database was accessed.",
+  "services": {
+    "database": "Only existing isolated PG16 cluster C:/Users/fagem/AppData/Local/Temp/zerofield-spec07-integration-scs2u4wk/data, 127.0.0.1:55447, postgres; no re-init/createdb or real project DB. SELECT returned postgres/55447/1.",
+    "control": "pg_ctl start/stop -w -t 12, explicit -p 55447 -h 127.0.0.1; subprocess timeout 18s, stdin DEVNULL, stdout/stderr real binary pg-control.log distinct from postgres.log; no PIPE/capture_output/text startup. Both exit 0.",
+    "state": "Stopped; postmaster.pid absent; postgres.log clean shutdown 2026-10-19 13:53:30.160 CST. Fixture HTTP servers closed by tests. No other service started."
+  },
+  "ownedTemp": "C:/Users/fagem/AppData/Local/Temp/zerofield-spec07-corrective-integration",
+  "logs": "All newly captured logs total 12920 bytes; gate/wheel JSON records exact commands, exit statuses and revisions. Scripts/self-check and source-hash manifest retained in ownedTemp.",
   "substitutionsAndNotRun": [
-    "Commercial inference is deterministic loopback substitution, not Seedance/Kling/RunningHub model execution or an official vendor protocol validation.",
-    "Structural/race/chain tests additionally substitute local inference; real PostgreSQL, HTTP, FFmpeg preparation/normalization, M8 reviews and writeback are exercised.",
-    "NOT RUN: real paid APIs/credentials/private media, model downloads, GPU generation/benchmarks, real visual or model-weight verification, live billing/quota/remote cancellation checks, public webhooks, push/release/deployment.",
-    "No Codex/external coding-agent CLI, agent/provider config rewrite, dependency addition or global model/config change."
+    "Real PostgreSQL, authenticated HTTP, FFmpeg preparation/normalization/faststart, M8 review and guarded writes ran where boundary tests require them. Commercial and local GPU inference remain deterministic synthetic substitutions.",
+    "NOT RUN by integration: browser interactions (READ at identical product revision/assets); real paid API inference, credentials/private media, model downloads, GPU generation/benchmarks, actual provider compatibility/visual quality/weights/billing/quota/remote cancellation, public webhooks, push/release/deployment.",
+    "No external coding-agent CLI, agent/executor/model/global config changes, dependencies added, reset/clean/stash, or other component edits. No test assertions weakened; integration needed no product glue or new tests."
   ],
   "residualRisks": [
-    "Commercial adapter contracts and cloud WebApp field mappings require operator validation; no live provider quality/pricing/throughput promise.",
-    "Cancellation cannot guarantee provider-side termination or prevent charges. Ambiguous/interrupted paid jobs need reconciliation and an explicit new reviewed request; internal media is never automatically retried.",
-    "Lower-level registry/media/task storage remains process-local; an interrupted in-process M8 worker is not an exactly-once provider transaction. Persistent Story candidates remain database-backed.",
-    "GPU seconds/billed credits are uncalibrated; catalog policy labels do not independently certify imported graph/model weights or contest eligibility."
+    "Independent corrected-candidate review remains pending; passing gates and component claims are not independent acceptance.",
+    "Live provider adapter/cloud WebApp mapping, quality, pricing/throughput, model weights and contest eligibility require operator validation; catalog lock is not certification.",
+    "Revocation stops subsequent checkpoint export/publication but cannot reverse an accepted upload/provider job. Cancellation cannot guarantee provider termination or avoid charges; ambiguous paid jobs require reconciliation and an explicit reviewed request, not automatic retry.",
+    "v2 registries/media/tasks/capabilities retain process-local restart limits; missing HTTP capability fails closed. No durable provider exactly-once guarantee.",
+    "Preflight uses authorized metadata/typed future outputs, not blob decoding/model execution; actual executor ownership/MIME/schema/authority/lease checks remain final.",
+    "Retained non-failing JS chunk warning: 1485.07 kB minified, threshold unchanged."
   ],
-  "followupVerification": {
-    "baseCommit": "6255b940a7ee6aae3e4168c573bd77ebd4879cca",
-    "scope": "Test-only follow-up: all legacy urllib smoke requests now timeout after 10 seconds; its unauthenticated refusal assertion and a real runtime identity-exception safe-response regression are added. No production/frontend/package changes.",
-    "commandsRan": [
-      {
-        "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> PYTHONPATH=tests python -X utf8 -m unittest test_story_hybrid_integration test_studio_worker.Spec05MediaAndLineWorldsTests.test_suite8_runninghub_interoperability_and_self_hosted_openapi_v2 -q",
-        "result": "passed",
-        "tests": 15,
-        "skips": 0,
-        "seconds": 70.139,
-        "log": "logs/followup-narrow.log"
-      },
-      {
-        "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -m unittest discover -s tests -p \"test_*.py\"",
-        "result": "passed",
-        "tests": 362,
-        "failures": 0,
-        "errors": 0,
-        "skips": 0,
-        "seconds": 171.805,
-        "log": "logs/backend-followup-final-362.log"
-      },
-      {
-        "command": "file-backed pg_ctl -w -t 12 start/stop on the same owned cluster; psycopg SELECT database/port/1",
-        "result": "passed",
-        "summary": "Both controls exited 0; SELECT returned postgres/55447/1; cluster stopped and postmaster.pid absent. No other service touched.",
-        "log": "control-followup.log"
+  "historicalVerification": {
+    "revision": "dda463b271169f3ccee0f9539983e78917aab7ce",
+    "classification": "Historical READ only, not acceptance for current corrections. Original receipt preserved verbatim in ownedTemp/spec07-verification-at-dda463b.json and unchanged semantically below.",
+    "originalReceiptSha256": "310c511deb6e519b31d891a1212c985562b7c1b079dec7de6e6d3bd11bb1530b",
+    "receipt": {
+      "date": "2026-10-19",
+      "scope": "SPEC_07 integration on the completed modularization/router/allocator components; independent read-only acceptance review remains separate.",
+      "base": "34d2991",
+      "componentCommits": [
+        "e68ae4496fe6ac0ccdaaaae449080a5c045dd4d8",
+        "c82acdda28b4a55de764e22b8505ccda6a0411c7",
+        "3f103572bdd9dffdd15b3ae77ca92632f93bdef1"
+      ],
+      "integrationRevision": "The commit containing this receipt; its frozen full SHA is recorded in the managed integration-recovered.json handoff.",
+      "result": "latest follow-up: backend 362 tests pass, zero failures/errors/skips; frontend 109/build/browser/wheel evidence retained from unchanged product commit 6255b940a7ee6aae3e4168c573bd77ebd4879cca",
+      "commandsRan": [
+        {
+          "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -m unittest discover -s tests -p \"test_*.py\"",
+          "result": "passed",
+          "tests": 361,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "seconds": 168.663,
+          "log": "logs/backend-final-361.log"
+        },
+        {
+          "command": "npm test --prefix ui",
+          "result": "passed",
+          "tests": 109,
+          "failures": 0,
+          "skips": 0,
+          "log": "logs/ui-final.log"
+        },
+        {
+          "command": "npm run build --prefix ui",
+          "result": "passed",
+          "summary": "333 modules; current static/projects assets rebuilt. Non-failing chunk-size warning: JS approximately 1.48 MB before gzip; no warning threshold weakened.",
+          "log": "logs/ui-build-final-2.log"
+        },
+        {
+          "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> PYTHONPATH=tests python -X utf8 -m unittest test_story_hybrid_integration -q",
+          "result": "passed",
+          "summary": "12 integration tests passed before the final added open-previz chain case; that case passed separately, and all 13 subsequently passed in full discovery.",
+          "log": "logs/integration-12-final.log; logs/open-chain-check.log"
+        },
+        {
+          "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> python -X utf8 -u <owned-temp>/browser_check.py",
+          "result": "passed",
+          "summary": "Playwright Chromium headless 1440x1000: five navigation entries, policy/resource controls, Gallery complexity badges, allocation preview, Micro Retake actions, EN/zh-TW switching; zero page errors and zero generation POSTs. Screenshots manually inspected; allocation contrast corrected before final rebuild/check.",
+          "log": "logs/browser-final-2.log"
+        },
+        {
+          "command": "python -m pip wheel --no-deps --no-build-isolation --no-index --wheel-dir <owned-temp>/wheel .",
+          "result": "passed",
+          "sha256": "cca75caa15a5117a70237d676c42d948ec949e4e29c3d285068ad94ee21f58e6",
+          "log": "logs/wheel-build.log"
+        },
+        {
+          "command": "python -m pip install --no-deps --no-index --target <owned-temp>/wheel-installed <owned-temp>/wheel/openbench-0.2.0-py3-none-any.whl; python -I -X utf8 <owned-temp>/wheel_check.py",
+          "result": "passed",
+          "summary": "Installed outside checkout; new integration modules, router/allocator/facade, shared registries, all 10 cards/workflows and current compiled assets resolve. Facade remains 244 lines. Existing explicit Studio package-list fix preserved.",
+          "log": "logs/wheel-install.log; logs/wheel-check.log"
+        },
+        {
+          "command": "pg_ctl.exe -D <owned-temp>/data -m fast -w -t 12 stop",
+          "result": "passed",
+          "summary": "Same PG16 toolchain, binary file-backed stdout/stderr, stdin DEVNULL, subprocess timeout 18s; exit 0. postmaster.pid absent and postgres.log records clean shutdown at 12:37:47.697 CST.",
+          "log": "control-stop.log; postgres.log"
+        },
+        {
+          "command": "git diff --check; git diff --exit-code -- docs/story-workbench-verification.json docs/studio-verification.json docs/bilingual-baseline.json docs/english-baseline.json",
+          "result": "passed",
+          "summary": "No whitespace errors or historical receipt changes. Git emitted only configured LF/CRLF conversion notices."
+        },
+        {
+          "command": "git diff --cached --check",
+          "result": "failed",
+          "summary": "Generated minified JS line 197 retains an upstream renderMarkdown template literal ending with two spaces. Confirmed identical literal in predecessor index-J3oWdeB9.js; preserving its Markdown hard-break semantics rather than editing the production build."
+        },
+        {
+          "command": "git diff --cached --check -- . ':!static/projects/assets/*'",
+          "result": "passed",
+          "summary": "All source/documentation/test diffs are whitespace-clean. Generated upstream Markdown literal is the only full staged whitespace-check exception."
+        }
+      ],
+      "integrationCoverage": [
+        "Actual Story HTTP -> configured loopback vendor and RunningHub-style cloud -> real FFmpeg normalization -> PostgreSQL candidate/guarded writeback; Comfy client/executor configured to fail if touched in these graphless cases.",
+        "Default policy denial, explicit admin project choice and deployment ceiling; viewers/crew policy restrictions; numeric masking denies commercial export; alias fallback before submit.",
+        "Exact nested project/episode/shot IDs, foreign candidates, other-actor v2 media grants, authenticated v2 task/query/output boundaries and server-derived commercial policy.",
+        "Allocator-selected cards actually dispatched; consumed source/policy-bound preflight, honest null billing/GPU estimates, custom video card choice and immutable preflight/queued graphs.",
+        "Real persisted layout/frame-sheet preparation, existing M8 object-principal admissions/leases/proposals, A/B winner-only writeback, generic-apply bypass denial, stale-source rejection, lease expiry without automatic resubmission.",
+        "Closed -> reviewed source -> real ingredients -> local optimize review; open previz -> review -> real frame extraction -> vendor final; existing approved image skips draft. Pending/READY is not accepted as director approval.",
+        "Canceled running chain late outputs cannot create a proposal or overwrite the reviewed take. All original facade/local graph/SDK/media/stale-output tests retained.",
+        "Legacy v2 HTTP test retains its compiler/media assertions but now uses an actual token/project PostgreSQL fixture, required auth/CSRF/project headers and grant cleanup rather than unauthenticated access. Dedicated-URI full discovery skips none."
+      ],
+      "readEvidenceNotNewExecution": [
+        "Approved AGENTS.md, maintained handoff, complete SPEC_07, SPEC_06, design guidelines, ZEROFIELD_SPEC and AGENT_ORCHESTRATION_SPEC; remaining previously truncated source instructions reread with bounded offsets.",
+        "Exact predecessor managed handoffs and unchanged component implementations/evidence; predecessor milestones are not represented as new integration work.",
+        "Supervisor explicitly authorized the narrow server-managed M8 adapter/lifecycle seam without existing agent config writes, admin impersonation or relaxed remote-worker binding."
+      ],
+      "historicalRedAndRecovery": [
+        "Original blocked integration.json is preserved. Initial localized PG16 subprocess output failed UTF-8 decoding; the one approved binary-pipe recovery then timed out. Those attempts remain failed, not retrospectively passed.",
+        "Parent recovered the same preserved cluster/toolchain using a real control log file, verified pg_ctl exit 0 and SELECT ('postgres','55447',1), then transferred ownership. No re-init/createdb or alternate executor/model was used in this revival.",
+        "Initial UI test RED: nested locale values violated the existing two-level dictionary contract; flattened semantic keys, retaining the old test.",
+        "Initial integration REDs: policy WorkerError envelope classification and omitted prepared frame-sheet forwarding fixed; cloud fixture supplied its required source video. Legacy HTTP auth fixture/grant cleanup updated without removing old assertions.",
+        "First full discovery: 356 tests with one legacy unauthenticated-v2 fixture error. Its newly authenticated route lacked the test connection factory and attempted the default DB connection, which timed out before access; the fixture was corrected to the dedicated token/project DB context. Later 359, 360 and final 361 tests passed with no skips. First browser selector targeted a non-Retake demo row; corrected fixture selector and subsequent checks passed.",
+        "Owned postgres.log contains a non-failing Windows child shared-memory reservation warning (error 487) at 12:35:36; final full discovery still returned OK. Shutdown was clean."
+      ],
+      "ownedTemp": "C:/Users/fagem/AppData/Local/Temp/zerofield-spec07-integration-scs2u4wk",
+      "screenshots": [
+        "browser-en-allocation.png",
+        "browser-zh-review.png"
+      ],
+      "services": "Only the adopted dedicated 127.0.0.1:55447 PG16 cluster was used/stopped; HTTP fixtures and Playwright browsers were closed by their owned cleanup. No real project database was accessed.",
+      "substitutionsAndNotRun": [
+        "Commercial inference is deterministic loopback substitution, not Seedance/Kling/RunningHub model execution or an official vendor protocol validation.",
+        "Structural/race/chain tests additionally substitute local inference; real PostgreSQL, HTTP, FFmpeg preparation/normalization, M8 reviews and writeback are exercised.",
+        "NOT RUN: real paid APIs/credentials/private media, model downloads, GPU generation/benchmarks, real visual or model-weight verification, live billing/quota/remote cancellation checks, public webhooks, push/release/deployment.",
+        "No Codex/external coding-agent CLI, agent/provider config rewrite, dependency addition or global model/config change."
+      ],
+      "residualRisks": [
+        "Commercial adapter contracts and cloud WebApp field mappings require operator validation; no live provider quality/pricing/throughput promise.",
+        "Cancellation cannot guarantee provider-side termination or prevent charges. Ambiguous/interrupted paid jobs need reconciliation and an explicit new reviewed request; internal media is never automatically retried.",
+        "Lower-level registry/media/task storage remains process-local; an interrupted in-process M8 worker is not an exactly-once provider transaction. Persistent Story candidates remain database-backed.",
+        "GPU seconds/billed credits are uncalibrated; catalog policy labels do not independently certify imported graph/model weights or contest eligibility."
+      ],
+      "followupVerification": {
+        "baseCommit": "6255b940a7ee6aae3e4168c573bd77ebd4879cca",
+        "scope": "Test-only follow-up: all legacy urllib smoke requests now timeout after 10 seconds; its unauthenticated refusal assertion and a real runtime identity-exception safe-response regression are added. No production/frontend/package changes.",
+        "commandsRan": [
+          {
+            "command": "OPENBENCH_TEST_DB_URI=<dedicated URI> PYTHONPATH=tests python -X utf8 -m unittest test_story_hybrid_integration test_studio_worker.Spec05MediaAndLineWorldsTests.test_suite8_runninghub_interoperability_and_self_hosted_openapi_v2 -q",
+            "result": "passed",
+            "tests": 15,
+            "skips": 0,
+            "seconds": 70.139,
+            "log": "logs/followup-narrow.log"
+          },
+          {
+            "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55447/postgres python -m unittest discover -s tests -p \"test_*.py\"",
+            "result": "passed",
+            "tests": 362,
+            "failures": 0,
+            "errors": 0,
+            "skips": 0,
+            "seconds": 171.805,
+            "log": "logs/backend-followup-final-362.log"
+          },
+          {
+            "command": "file-backed pg_ctl -w -t 12 start/stop on the same owned cluster; psycopg SELECT database/port/1",
+            "result": "passed",
+            "summary": "Both controls exited 0; SELECT returned postgres/55447/1; cluster stopped and postmaster.pid absent. No other service touched.",
+            "log": "control-followup.log"
+          }
+        ],
+        "readNotRerun": [
+          "6255b94 frontend 109-test pass and build",
+          "6255b94 Playwright EN/zh-TW browser evidence",
+          "6255b94 installed-wheel imports/resources and SHA256 cca75caa15a5117a70237d676c42d948ec949e4e29c3d285068ad94ee21f58e6"
+        ],
+        "preservedReceipts": [
+          "<owned-temp>/spec07-verification-at-6255b94.json",
+          "<owned-temp>/integration-recovered-at-6255b94.json",
+          "Original blocked integration.json and failed backend-full-1.log retained unchanged"
+        ],
+        "handoffRule": "Writer released after follow-up commit; delayed informational messages do not reauthorize edits after review starts."
       }
-    ],
-    "readNotRerun": [
-      "6255b94 frontend 109-test pass and build",
-      "6255b94 Playwright EN/zh-TW browser evidence",
-      "6255b94 installed-wheel imports/resources and SHA256 cca75caa15a5117a70237d676c42d948ec949e4e29c3d285068ad94ee21f58e6"
-    ],
-    "preservedReceipts": [
-      "<owned-temp>/spec07-verification-at-6255b94.json",
-      "<owned-temp>/integration-recovered-at-6255b94.json",
-      "Original blocked integration.json and failed backend-full-1.log retained unchanged"
-    ],
-    "handoffRule": "Writer released after follow-up commit; delayed informational messages do not reauthorize edits after review starts."
+    }
   }
 }
