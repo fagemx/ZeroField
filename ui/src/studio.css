@@ -1,0 +1,284 @@
+/* ZeroField system layer (true-black-flat). Loaded last: it sets the controls, the shell and the
+   production surfaces on the tokens in tokens.css. Lightness steps separate surfaces; no resting shadows.
+   Grid: sidebar 232 + 1px rule; canvas gutter 24px; cards 16px radius on #000, controls are 32px pills. */
+
+/* ---------- Controls ---------- */
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch) button), button.ghost, button.primary, .story-nav button, .story-macro button,
+  .story-batch button, .batch-bar button, .sheet-stage-actions button, .sheet-panel-actions button, .sheet-review > header button, .hub-create, .canvas-button) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 14px;
+  border: 1px solid var(--control); border-radius: var(--radius-control); background: transparent; color: var(--text);
+  font: 500 13px/1 var(--font); white-space: nowrap; cursor: pointer; box-shadow: none;
+}
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch) button), button.ghost, .story-nav button, .story-macro button, .story-batch button,
+  .batch-bar button, .sheet-stage-actions button, .sheet-panel-actions button, .sheet-review > header button, .canvas-button):hover:not(:disabled) {
+  background: var(--hover-bg); border-color: #5a5a5a;
+}
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(button.primary, .hub-create) { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(button.primary, .hub-create):hover:not(:disabled) { background: #e6e6e6; border-color: #e6e6e6; }
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) button.quiet { border-color: transparent; color: var(--muted); }
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) button:disabled { opacity: .4; cursor: default; }
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea) {
+  min-height: 32px; padding: 0 12px; border: 1px solid var(--control); border-radius: var(--radius-field); background: var(--ground);
+  color: var(--text); font: 400 13px/1.4 var(--font); max-width: 100%;
+}
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) textarea { padding: 8px 12px; line-height: 1.5; }
+:is(.workbench-app, .hub-app) :is(input, select, textarea)::placeholder { color: var(--faint); }
+:is(.workbench-app, .hub-app) select option { background: var(--surface); color: var(--text); }
+:is(.workbench-app, .hub-app) input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+:is(.workbench-app, .hub-app, .sheet-dialog) :is(button, input, select, textarea, a, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ico { flex: none; display: block; }
+
+/* ---------- Shell: top bar ---------- */
+.workbench-app .top, .hub-app .top { height: var(--topbar); padding: 0 16px; gap: 2px; background: var(--ground); border-bottom: 1px solid var(--line); backdrop-filter: none; }
+.workbench-app .top > .icon-btn, .hub-app .top .icon-btn { height: 32px; padding: 0 10px; border-radius: var(--radius-control); color: #bbbbbb; font-size: 13px; gap: 6px; }
+.workbench-app .top > .icon-btn:hover, .workbench-app .top > .icon-btn.on { background: var(--active); color: var(--text); }
+.workbench-app .doc-name { flex: 0 1 auto; min-width: 140px; max-width: 320px; color: var(--text); font-weight: 600; font-size: 14px; margin: 0 6px 0 4px; }
+.workbench-app .top .count { background: #c4242a; color: #fff; font-size: 11px; font-weight: 600; }
+.top .me { color: var(--text); font-size: 13px; }
+.top .avatar { width: 28px; height: 28px; }
+
+/* ---------- Shell: sidebar ---------- */
+.workbench-app .rail { top: var(--topbar); height: calc(100dvh - var(--topbar)); background: var(--ground); border-right: 1px solid var(--line); padding: 14px 12px 24px; }
+.workbench-app .rail a { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 6px 30px 6px 10px; border-radius: 10px; color: #bbbbbb; font-size: 14px; font-weight: 400; }
+.workbench-app .rail a:hover { background: var(--hover-bg); color: var(--text); }
+.workbench-app .rail a.on { background: var(--surface); color: var(--text); font-weight: 500; }
+.workbench-app .rail a .ico { color: var(--faint); }
+.workbench-app .rail a.on .ico { color: var(--text); }
+.workbench-app .rail a .n { margin-left: auto; float: none; background: var(--pill-warning-bg); color: var(--pill-warning-ink); border: 0; font-size: 11px; line-height: 18px; padding: 0 7px; }
+.workbench-app .rail .rail-add, .workbench-app .rail .rail-import { color: var(--muted); font-size: 13px; border-radius: 10px; }
+.workbench-app .rail-hint { color: var(--faint); font-size: 12px; line-height: 1.5; padding: 0 10px 14px; }
+.workbench-app .rail .more { color: var(--faint); border-radius: 8px; }
+.workbench-app.surface-sheet .main, .workbench-app.surface-flow .main { padding: 20px 24px 32px; min-height: calc(100dvh - var(--topbar)); }
+
+/* ---------- Studio toolbar (story navigation + script baseline) ---------- */
+.story-workbench { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0 0 16px; font-size: 13px; }
+.story-nav { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 2px; padding: 0; background: none; border-radius: 0; color: var(--text); }
+.workbench-app .story-workbench .story-nav button { height: 32px; padding: 0 12px; border-color: transparent; color: #bbbbbb; }
+.workbench-app .story-workbench .story-nav button:hover:not(:disabled) { background: var(--hover-bg); border-color: transparent; color: var(--text); }
+.workbench-app .story-workbench .story-nav button[aria-current] { background: var(--surface); color: var(--text); border-color: transparent; }
+.story-nav label { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 12px; }
+.story-nav select { max-width: 200px; }
+.story-macro { display: flex; flex: 1 1 100%; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; background: var(--surface); border-radius: var(--radius-panel); }
+.story-macro > span { flex: 1; color: var(--muted); }
+.story-film { display: block; width: min(100%, 960px); border-radius: var(--radius-panel); background: var(--ground); }
+
+/* ---------- Production sheet (Macro) ---------- */
+.sheet-workspace.sheet-v2 { background: var(--surface); border: 0; border-radius: var(--radius-card); overflow: hidden; color: var(--text); }
+.sheet-workspace-heading { min-height: 0; padding: 18px 20px 6px; border-bottom: 0; gap: 10px; }
+.sheet-workspace-heading h1 { font-size: var(--fs-title); font-weight: 600; letter-spacing: -.01em; color: var(--text); }
+.sheet-workspace-heading .sheet-count { color: var(--faint); font-size: 13px; }
+.sheet-save-state { color: var(--faint); font-size: 12px; }
+.sheet-workspace-heading > button, .sheet-workspace-heading summary { width: 32px; height: 32px; border-radius: 50%; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
+.sheet-workspace-heading > button:hover:not(:disabled), .sheet-workspace-heading summary:hover { background: var(--hover-bg); color: var(--text); }
+.sheet-workspace-toolbar { gap: 8px; padding: 8px 20px 14px; border-bottom: 1px solid var(--line); }
+.sheet-workspace .sheet-view-switch { display: inline-flex; gap: 2px; padding: 3px; border: 0; border-radius: var(--radius-control); background: var(--ground); }
+.workbench-app .sheet-workspace .sheet-view-switch button { height: 26px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--muted); font-size: 13px; }
+.workbench-app .sheet-workspace .sheet-view-switch button[aria-pressed=true] { background: var(--raised); color: var(--text); }
+.sheet-workspace .sheet-search { width: 240px; }
+.sheet-workspace button, .sheet-workspace input, .sheet-workspace select { font-size: 13px; }
+
+/* Production policy and batch generation: one quiet strip */
+.story-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 13px; }
+.story-batch label { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.story-batch select { width: auto; max-width: 260px; }
+.story-resource-pill, .story-policy-badge, .story-tier-badge { height: 26px; padding: 0 10px; border: 0; border-radius: var(--radius-control); background: var(--pill-positive-bg); color: var(--pill-positive-ink); font-size: 12px; font-weight: 500; }
+.story-allocation { background: var(--ground); border: 0; border-radius: var(--radius-panel); color: var(--text); }
+.story-allocation strong { color: var(--accent); }
+.sheet-workspace .batch-bar { background: var(--raised); border: 0; color: var(--text); padding: 8px 20px; }
+
+/* The grid: rules and alignment, media rows tall enough to see the frame */
+.sheet-workspace.sheet-v2 .sheet-scroll { min-height: 0; max-height: calc(100dvh - 330px); background: var(--surface); }
+.sheet-workspace-body { min-height: 0; }
+.sheet-workspace.sheet-v2 .production-sheet { background: var(--surface); color: var(--text); }
+.sheet-workspace.sheet-v2 .production-sheet th { height: 40px; background: var(--surface); color: var(--faint); font-size: 12px; font-weight: 500; border-color: var(--line); }
+.sheet-workspace .sheet-column-trigger { font-weight: 500; color: var(--muted); font-size: 12px; }
+.sheet-workspace .column-letter { color: #5c5c5c; font-size: 11px; }
+.sheet-workspace.sheet-v2 .production-sheet td { height: 92px; padding: 8px 12px; border-color: #1c1c1c; background: var(--surface); }
+.sheet-workspace.sheet-v2 .production-sheet tr:hover td { background: #161616; }
+.sheet-workspace.sheet-v2 .production-sheet .cell-text { font-size: 13px; line-height: 1.5; color: var(--text); }
+.sheet-workspace.sheet-v2 .production-sheet .row-number { color: var(--faint); font-size: 12px; text-align: center; }
+.sheet-workspace.sheet-v2 .production-sheet td.range-cell, .sheet-workspace.sheet-v2 .production-sheet tr:hover td.range-cell { background: var(--accent-bg); }
+.sheet-workspace.sheet-v2 .production-sheet td.active-cell, .sheet-workspace.sheet-v2 .production-sheet td.active-cell:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.sheet-inline-editor { background: var(--ground); color: var(--text); border-color: var(--accent); }
+.sheet-workspace .media-compact { height: 72px; border: 0; background: transparent; padding: 0; }
+.sheet-workspace .media-compact img, .sheet-workspace .media-compact video { height: 72px; width: 128px; max-width: 128px; object-fit: cover; border-radius: 6px; background: var(--ground); }
+.media-compact small { border-radius: 0 0 6px 6px; }
+.sheet-workspace .sheet-footer { background: var(--surface); border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; padding: 10px 20px; }
+
+/* Gallery (Meso): the shot chain on each card */
+.sheet-workspace .sheet-gallery { padding: 20px; gap: 14px; background: var(--surface); }
+.sheet-card { background: var(--ground); border: 0; border-radius: var(--radius-panel); box-shadow: none; overflow: hidden; }
+.sheet-card:hover { background: #0a0a0a; }
+.sheet-card-cover { background: #050505; aspect-ratio: 16 / 9; }
+
+/* Side panels on the sheet */
+.sheet-side-panel, .sheet-side-panel > header { background: var(--surface); border-color: var(--line); }
+
+/* ---------- Shot review (Micro): a black viewing room ---------- */
+.sheet-review { inset: 64px 16px 16px; background: var(--ground); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-float); }
+.sheet-workspace .sheet-review { height: calc(100dvh - 96px); }
+.sheet-review > header { min-height: 56px; padding: 0 16px; gap: 8px; background: var(--ground); border-bottom: 1px solid var(--line); }
+.sheet-review > header h2 { font-size: 16px; font-weight: 600; color: var(--text); }
+.sheet-review-body { background: var(--ground); }
+.sheet-review-image { padding: 20px 24px 32px; gap: 20px; background: var(--ground); align-items: stretch; }
+.sheet-review-body > aside { width: 320px; padding: 20px; background: var(--surface); border-left: 0; }
+.sheet-review-body > aside > h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+.review-asset-strip { gap: 10px; margin: 0; }
+.review-asset-strip figure { flex: 0 0 120px; }
+.review-asset-strip .media-compact { width: 120px; height: 68px; border-radius: 8px; overflow: hidden; }
+.review-asset-strip .media-compact img { object-fit: cover; }
+.review-asset-strip figcaption { color: var(--faint); font-size: 12px; }
+.review-stage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; overflow: visible; }
+.review-stage-grid > section { padding: 0; border: 0; border-radius: var(--radius-panel); background: var(--surface); overflow: hidden; min-width: 0; }
+.review-stage-grid > section.is-active { box-shadow: inset 0 0 0 2px var(--accent); }
+.workbench-app .review-stage-title { display: block; width: 100%; height: auto; margin: 0; padding: 12px 14px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font: 500 13px/1.3 var(--font); text-align: left; cursor: pointer; }
+.workbench-app .review-stage-title[aria-pressed=true] { color: var(--text); }
+.review-stage-grid .media-cell { max-width: none; width: 100%; gap: 0; }
+.review-stage-grid :is(img, video, .media-video-player) { display: block; width: 100%; height: auto; max-height: 52dvh; aspect-ratio: 16 / 9; object-fit: contain; background: #050505; border-radius: 0; }
+.review-stage-grid .media-cell small { padding: 8px 14px 0; color: var(--faint); font-size: 12px; }
+.review-stage-grid .sheet-stage-actions, .review-stage-grid .media-cell > div { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 12px 14px 14px; }
+.story-variants .media-cell, .sheet-review .media-cell { max-width: none; }
+.story-shot-tools { border-top: 0; margin-top: 0; padding: 16px 0 0; color: var(--text); }
+.story-shot-tools h3, .story-shot-tools h4 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+.sheet-panel-actions { gap: 8px; }
+.review-presets strong { font-size: 13px; font-weight: 600; color: var(--text); }
+.review-presets > small { color: var(--faint); font-size: 12px; }
+.sheet-review .modal-field > span { color: var(--faint); font-size: 12px; }
+
+/* ---------- Productions home ---------- */
+.hub-app { background: var(--ground); min-height: 100dvh; }
+.hub-page { max-width: 1200px; padding: 48px 32px 80px; }
+.hub-heading { align-items: flex-end; }
+.hub-heading h1 { font-size: 28px; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+.hub-heading p { color: var(--muted); font-size: 15px; }
+.hub-app .hub-create { height: 36px; padding: 0 18px; }
+.hub-guide { display: flex; gap: 0; margin: 28px 0 44px; padding: 0; list-style: none; background: none; border: 0; font-size: 13px; color: var(--muted); }
+.hub-guide li { display: flex; align-items: center; }
+.hub-guide li + li::before { content: "→"; color: #5c5c5c; margin: 0 14px; }
+.hub-filter h2 { font-size: 16px; font-weight: 600; }
+.hub-filter input, .hub-filter select { color: var(--text); font-size: 13px; }
+.hub-projects { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--gap); }
+.hub-card { background: var(--surface); border: 0; border-radius: var(--radius-card); padding: 20px; }
+.hub-card:hover { background: #161616; }
+.hub-project-icon { color: var(--muted); }
+.hub-card-top select { height: 24px; min-height: 0; padding: 0 10px; border: 0; border-radius: var(--radius-control); font-size: 12px; font-weight: 500; }
+.hub-card > p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.hub-card footer { border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+.brand-mark { background: var(--text); color: var(--ground); border-radius: 6px; }
+
+/* Top bar fits at 1440: buttons that already carry an accessible name show their icon only. */
+.workbench-app .top > .icon-btn[aria-label] .label { display: none; }
+.workbench-app .top > .icon-btn[aria-label] { width: 36px; padding: 0; justify-content: center; }
+
+/* Status in a row is a pale pill of its own hue: one mark per row. */
+.workbench-app .sheet-v2 select.cell-status { width: auto; min-height: 0; height: 26px; padding: 0 24px 0 10px; border: 0; border-radius: var(--radius-control);
+  background-color: var(--s-not-bg); color: var(--s-not-fg); font-size: 12px; font-weight: 500; }
+.workbench-app .sheet-v2 select.cell-status.inprogress { background-color: var(--s-go-bg); color: var(--s-go-fg); }
+.workbench-app .sheet-v2 select.cell-status.waiting { background-color: var(--s-wait-bg); color: var(--s-wait-fg); }
+.workbench-app .sheet-v2 select.cell-status.stuck, .workbench-app .sheet-v2 select.cell-status.blocked { background-color: var(--s-stuck-bg); color: var(--s-stuck-fg); }
+.workbench-app .sheet-v2 select.cell-status.done { background-color: var(--s-done-bg); color: var(--s-done-fg); }
+.workbench-app .top .pa-btn, .workbench-app .top .pa-btn.on { box-shadow: none; }
+.workbench-app .story-batch select { width: auto; max-width: 260px; }
+.sheet-workspace .media-compact .media-video-player { width: 128px; height: 72px; object-fit: cover; border-radius: 6px; }
+
+/* ---------- Gallery (Meso): each shot is one row of its chain, @asset -> keyframe -> take ---------- */
+.sheet-workspace .sheet-gallery { max-height: calc(100dvh - 330px); }
+.sheet-gallery:has(.sheet-card-chain) { grid-template-columns: 1fr; }
+.sheet-card { background: #181818; border: 0; border-radius: var(--radius-panel); }
+.sheet-card.is-selected { box-shadow: inset 0 0 0 2px var(--accent); }
+.sheet-gallery .sheet-card:has(.sheet-card-chain) { display: grid; grid-template-columns: minmax(0, 1fr) 300px; align-items: stretch; }
+.sheet-workspace .sheet-card-chain { display: flex; align-items: flex-start; gap: 12px; padding: 16px; overflow-x: auto; background: transparent; }
+.sheet-chain-part { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sheet-chain-stage { display: grid; gap: 8px; width: 240px; }
+.sheet-chain-stage.sheet-chain-assets { width: 96px; gap: 10px; }
+.sheet-chain-stage .media-compact, .sheet-workspace .sheet-chain-stage .media-compact { width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--ground); border: 0; padding: 0; }
+.sheet-chain-stage .media-compact :is(img, video), .sheet-workspace .sheet-chain-stage .media-compact :is(img, video) { width: 100%; height: 100%; max-width: none; object-fit: cover; border-radius: 0; }
+.sheet-chain-stage > small, .sheet-chain-assets small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.sheet-chain-arrow { align-self: center; color: #5c5c5c; font-size: 16px; }
+.sheet-chain-empty { height: auto; aspect-ratio: 16 / 9; border: 1px dashed #333; border-radius: 8px; color: var(--faint); font-size: 12px; }
+.sheet-chain-stage .sheet-stage-actions { display: flex; gap: 6px; }
+.workbench-app .sheet-chain-stage .sheet-stage-actions button { height: 28px; padding: 0 12px; font-size: 12px; }
+.sheet-card-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.sheet-gallery .sheet-card:has(.sheet-card-chain) .sheet-card-body { border-left: 1px solid var(--line); }
+.sheet-card-heading { margin: 0; }
+.sheet-card-heading .sheet-card-title { color: var(--text); font-size: 16px; font-weight: 600; }
+.sheet-card-index { color: var(--faint); font-size: 12px; }
+.sheet-card .story-tier-badge { align-self: flex-start; background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
+.card-asset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.card-asset-chip small, .card-asset-chip button { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border: 0; border-radius: var(--radius-control); background: var(--raised); color: var(--text); font-size: 12px; }
+.sheet-card-summary { gap: 10px; }
+.sheet-card-summary dt { color: var(--faint); font-size: 12px; }
+.sheet-card-summary dd { color: var(--text); font-size: 13px; line-height: 1.5; }
+.sheet-card-actions { margin-top: auto; }
+.workbench-app .sheet-card-actions select { height: 26px; min-height: 0; max-width: 65%; padding: 0 24px 0 10px; border: 0; border-radius: var(--radius-control); background-color: var(--raised); color: var(--text); font-size: 12px; font-weight: 500; }
+.story-scene > summary { padding: 16px 20px 0; color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
+
+/* Board keeps narrow columns: show only the final take of the chain. */
+.sheet-board .sheet-card-chain { padding: 0; gap: 0; }
+.sheet-board .sheet-chain-part { display: none; }
+.sheet-board .sheet-chain-part:last-child { display: flex; flex: 1; }
+.sheet-board .sheet-chain-part:last-child .sheet-chain-arrow, .sheet-board .sheet-chain-part:last-child .sheet-stage-actions { display: none; }
+.sheet-board .sheet-chain-stage { width: 100%; }
+.sheet-board .sheet-chain-stage .media-compact { border-radius: 0; }
+.sheet-board-column { background: var(--ground); border-radius: var(--radius-panel); }
+.sheet-board-column header h2 { font-size: 13px; font-weight: 600; color: var(--text); }
+
+/* Review room fixes */
+.sheet-workspace.sheet-v2 { overflow: visible; }
+.sheet-workspace .sheet-scroll { border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.media-cell a { color: var(--muted); text-decoration: none; font-size: 12px; }
+.media-cell a:hover { color: var(--text); }
+.review-presets { gap: 8px; margin: 20px 0 0; }
+.studio-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.workbench-app .review-presets .preset-chip { height: 28px; padding: 0 12px; border: 0; background: var(--raised); color: var(--text); font-size: 12px; font-weight: 500; }
+.workbench-app .review-presets .preset-chip:hover:not(:disabled) { background: #333333; }
+.workbench-app .sheet-review .review-presets > button { justify-self: start; height: 28px; padding: 0 12px; font-size: 12px; }
+.sheet-panel-actions { display: flex; flex-wrap: wrap; }
+
+/* Generation settings are project-level: one summary chip that opens the three selects. */
+.story-settings { position: relative; }
+.story-settings > summary { display: inline-flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px 0 4px; border-radius: var(--radius-control); cursor: pointer; list-style: none; color: var(--muted); font-size: 13px; }
+.story-settings > summary::-webkit-details-marker { display: none; }
+.story-settings > summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); margin-left: 2px; }
+.story-settings > summary:hover { background: var(--hover-bg); color: var(--text); }
+.story-settings[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
+.story-settings-body { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 0 4px; }
+.story-settings-body .story-resource-pill { height: auto; padding: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 400; }
+.story-batch-hint { color: var(--faint); font-size: 13px; }
+.story-batch { padding: 10px 20px; }
+.story-batch > .story-settings[open] { flex-basis: 100%; }
+.sheet-review .review-presets > small { color: var(--text); font-size: 13px; line-height: 1.5; }
+.story-macro:not(.is-dirty) { flex: 0 0 auto; padding: 0; background: none; }
+.story-macro:not(.is-dirty) > span { display: none; }
+.story-macro.is-dirty > span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; background: var(--warning); vertical-align: 1px; }
+
+/* The sheet card runs to the bottom of the window; rows scroll inside it, the header row stays put. */
+@media (min-width: 861px) {
+  .workbench-app.surface-sheet .main { display: flex; flex-direction: column; height: calc(100dvh - var(--topbar)); min-height: 0; overflow: auto; padding-bottom: 20px; }
+  .workbench-app.surface-sheet .doc-host { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+  .workbench-app.surface-sheet .sheet-workspace.sheet-v2 { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 420px; }
+  .workbench-app.surface-sheet .sheet-workspace-body { flex: 1 1 auto; min-height: 0; }
+  .workbench-app.surface-sheet .sheet-main-view { display: flex; flex-direction: column; min-height: 0; }
+  .workbench-app.surface-sheet .sheet-workspace.sheet-v2 .sheet-scroll,
+  .workbench-app.surface-sheet .sheet-workspace .sheet-gallery,
+  .workbench-app.surface-sheet .sheet-workspace .sheet-board,
+  .workbench-app.surface-sheet .sheet-workspace .story-scene-groups { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; }
+  .workbench-app.surface-sheet .sheet-side-panel { max-height: none; }
+  .workbench-app.surface-sheet .sheet-workspace .sheet-review { inset: 0; height: auto; }
+}
+.sheet-workspace.sheet-v2 .production-sheet thead th { position: sticky; top: 0; z-index: 2; }
+
+/* Narrower desktops (pane or laptop): quieter top bar, thumbnails 16:9 at 112px. */
+.top .icon-btn[aria-label] .label { display: none; }
+.hub-app .top .icon-btn[aria-label], .workbench-app .top .icon-btn[aria-label] { width: 36px; padding: 0; justify-content: center; }
+.top .me .name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-workspace .media-compact img, .sheet-workspace .media-compact video, .sheet-workspace .media-compact .media-video-player { width: 112px; max-width: 112px; height: 63px; }
+.sheet-workspace .media-compact { height: 63px; }
+.sheet-workspace.sheet-v2 .production-sheet td { height: 84px; padding: 8px 10px; }
+.sheet-workspace .sheet-search { width: clamp(150px, 16vw, 240px); }
+@media (max-width: 1360px) {
+  .workbench-app .top > #annBtn .label { display: none; }
+  .workbench-app .story-workbench .story-nav button { padding: 0 9px; }
+}
+.sheet-workspace .sheet-gallery { grid-auto-rows: max-content; align-content: start; }
+.sheet-board-column > div[role=list] { display: grid; gap: 10px; grid-auto-rows: max-content; }

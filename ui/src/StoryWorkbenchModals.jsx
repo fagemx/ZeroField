@@ -9,6 +9,7 @@ import { normalizeStatus, statusLabel } from './format.js';
 import { ProposalRaceView } from './assistant/ProposalRaceView.jsx';
 import { allocationPath, escalationPath, allocationDispatchBody, approvedCompositionSource, allocationBlockerLabel } from './storyModel.js';
 import './story-workbench.css';
+import { Icon } from './Icon.jsx';
 
 function useStoryAction(onChanged) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [task, setTask] = useState(null);
@@ -57,16 +58,16 @@ export function StoryWorkbench({slug, tab, me, version, onReload, onNavigate, fl
   });
   return <div className="story-workbench">
     <nav className="story-nav" aria-label={t('story.navigation')}>
-      <button disabled={!writable || action.busy} onClick={() => open('import')}>✦ {t('story.startCreating')}</button>
-      <button aria-current={!modal ? 'page' : undefined} onClick={() => {setModal(null); onNavigate?.('cinema-studio');}}>🎬 {t('story.myProjects')}</button>
-      <button onClick={() => open('assets')}>❖ {t('story.assetVault')}</button>
-      <button onClick={() => open('toolbox')}>🧰 {t('story.toolbox')}</button>
-      <button onClick={() => open('api')}>⚡ {t('story.openApi')}</button>
-      <button onClick={onConsole}>⌘ {t('console.entry')}</button>
+      <button disabled={!writable || action.busy} onClick={() => open('import')}><Icon name="sparkle" />{t('story.startCreating')}</button>
+      <button aria-current={!modal ? 'page' : undefined} onClick={() => {setModal(null); onNavigate?.('cinema-studio');}}><Icon name="clapper" />{t('story.myProjects')}</button>
+      <button onClick={() => open('assets')}><Icon name="layers" />{t('story.assetVault')}</button>
+      <button onClick={() => open('toolbox')}><Icon name="toolbox" />{t('story.toolbox')}</button>
+      <button onClick={() => open('api')}><Icon name="code" />{t('story.openApi')}</button>
+      <button onClick={onConsole}><Icon name="terminal" />{t('console.entry')}</button>
       {episodes.length > 0 && <label>{t('story.episode')} <select value={epId} disabled={action.busy} onChange={async event => {const next=event.target.value;if(await flush?.()===false)return;onEpisode?.(next);setFilm(null);}}>{episodes.map(item => <option key={item.episodeId} value={item.episodeId}>{item.title}</option>)}</select></label>}
     </nav>
     {error && <p role="alert">{error}</p>}
-    {ep && ['director-brief','cinema-studio','openjutsu-lab',ep.tabKey].includes(tab?.key) && <div className="story-macro">
+    {ep && ['director-brief','cinema-studio','openjutsu-lab',ep.tabKey].includes(tab?.key) && <div className={'story-macro'+(ep.scriptDirty ? ' is-dirty' : '')}>
       <span>{t(ep.scriptDirty ? 'story.scriptDirty' : 'story.scriptConfirmed')}</span>
       <button disabled={!writable || action.busy} onClick={confirm}>{t('story.confirmScript')}</button>
       <button disabled={!writable || action.busy} onClick={() => action.run(async wait => {
@@ -200,10 +201,14 @@ export function StoryBatchBar({slug, epId = episodeId(slug), rowIds, writable, d
   useEffect(() => {let alive = true; Promise.all(['IMAGE','VIDEO'].map(capability => storyList('/catalog/apps?capability=' + capability))).then(lists => {if (alive) setApps(lists.flat());}).catch(() => {}); return () => {alive = false;};}, []);
   const selected = apps.find(a => a.appCode === app);
   return <div className="story-batch">
-    <span className="story-policy-badge">{t(policy === 'open_weights_only' ? 'allocation.openBadge' : 'allocation.hybridBadge')}</span>
+    <details className="story-settings"><summary aria-label={t('allocation.settings')}><span className="story-policy-badge">{t(policy === 'open_weights_only' ? 'allocation.openBadge' : 'allocation.hybridBadge')}</span><span className="story-settings-summary">{t('allocation.mode_'+mode)} · {app==='automatic' ? t('allocation.automatic') : (selected?.name || app)}</span></summary>
+      <div className="story-settings-body">
     <label>{t('allocation.policy')} <select aria-label={t('allocation.policy')} value={policy} disabled={!writable || disabled || action.busy} onChange={e=>{const next=e.target.value; action.run(async()=>{const saved=await storyRequest(`/projects/pj_${slug}/production-policy`,'PUT',{productionPolicy:next});setPolicy(saved.productionPolicy);setMode(saved.productionPolicy==='hybrid_studio'?'hybrid_balanced':'lab_economical');});}}><option value="open_weights_only">{t('allocation.openPolicy')}</option><option value="hybrid_studio" disabled={ceiling==='open_weights_only'}>{t('allocation.hybridPolicy')}</option></select></label>
     <label className="story-resource-pill">{t('allocation.resourceMode')} <select value={mode} disabled={disabled || action.busy} onChange={e=>setMode(e.target.value)}>{['lab_economical','hybrid_balanced','deadline_rush'].map(value=><option key={value} value={value}>{t('allocation.mode_'+value)}</option>)}</select></label>
     <label>{t('story.appCode')} <select aria-label={t('story.appCode')} value={app} disabled={action.busy || disabled} onChange={e => setApp(e.target.value)}><option value="automatic">{t('allocation.automatic')}</option>{apps.map(a => <option key={a.appCode} value={a.appCode}>{a.name} · {a.webappId}</option>)}</select></label>
+      </div>
+    </details>
+    {rowIds.length ? <>
     <button disabled={!writable || disabled || action.busy || !rowIds.length || selected?.capability === 'IMAGE'} onClick={()=>action.run(async()=>{
       if(beforeRun?.()===false)return;
       setAllocation(await storyRequest(allocationPath(slug,epId),'POST',{budgetMode:mode,productionPolicy:policy,shotIds:rowIds.map(rid=>shotId(slug,rid)),...(app!=='automatic'?{appCode:app}:{})}));
@@ -222,6 +227,8 @@ export function StoryBatchBar({slug, epId = episodeId(slug), rowIds, writable, d
       if(beforeRun?.()===false)return;
       return storyRequest('/shot-merges','POST',{shotIds:rowIds.map(rid=>shotId(slug,rid))});
     })}>{t('story.mergeSelected')}</button>
+
+    </> : <span className="story-batch-hint">{t('story.selectShotsHint')}</span>}
     <ActionState action={action}/>
   </div>;
 }

@@ -13,9 +13,12 @@ import {
   appliedLabel, blocks, clip, currentFocus, documentUrl, inlineParts, isReportSource, lookedAt, progressCounts,
   sourceTarget,
   liveText, splitSources, taskLine, todoGroups, workingLine,
-  ACCEPT_FILES, attachmentHint, clampWidth, elapsedSeconds, fileIcon, formatSeconds, isPicked, orphanPending,
+  ACCEPT_FILES, attachmentHint, clampWidth, elapsedSeconds, formatSeconds, isPicked, orphanPending,
   paneTab, paneTabs, pickTodo, proposalCopy,
 } from "./text.js";
+import { Icon } from "../Icon.jsx";
+
+const FILE_ICON = { sheet: "table", image: "image", text: "doc", doc: "doc" };
 
 const INFO = (privacyMode) => (
   <>
@@ -86,7 +89,7 @@ function Attachments({ slug, items, onZoom }) {
           onClick={() => onZoom && onZoom({ src: attachmentUrl(slug, a.id, "preview"), name: a.name })}>
           <img src={attachmentUrl(slug, a.id, "thumb")} alt={a.name} />
         </button>
-        : <a key={a.id} className="u-file" href={attachmentUrl(slug, a.id, "file")} download={a.name}>{fileIcon(a.kind)} {a.name}</a>))}
+        : <a key={a.id} className="u-file" href={attachmentUrl(slug, a.id, "file")} download={a.name}><Icon name={FILE_ICON[a.kind] || "doc"} /> {a.name}</a>))}
     </div>
   );
 }
@@ -200,7 +203,7 @@ function Sources({ items, tabs, onOpenTab }) {
       {items.map((item) => {
         const target = sourceTarget(item, tabs);
         if (target) return <button type="button" key={item} className="src" onClick={() => onOpenTab(target.key)}>↗ {item}</button>;
-        return <span key={item} className="src">{isReportSource(item) ? "📊" : "📄"} {item}</span>;
+        return <span key={item} className="src"><Icon name={isReportSource(item) ? "chart" : "doc"} /> {item}</span>;
       })}
     </div>
   );
@@ -261,7 +264,7 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
             {message.request_scope && <small className="message-scope">{message.request_scope.kind === 'doc' ? uiText("assistantViews.selectedPassagesPassages", {v0: (message.request_scope.tab_title), v1: (message.request_scope.block_ids.length)}) : uiText("assistantViews.selectedScopeRowsColumns", {v0: (message.request_scope.table_name), v1: (message.request_scope.row_ids?.length), v2: (message.request_scope.column_ids?.length)})}</small>}
           </div>
         </div>
-        {(message.notes || []).map((note) => <div key={note} className="guard">🛡 {note}</div>)}
+        {(message.notes || []).map((note) => <div key={note} className="guard"><Icon name="shield" /> {note}</div>)}
       </>
     );
   }
@@ -427,7 +430,7 @@ function Composer({ assistant, value, onChange, inputRef }) {
               title={f.status === "uploading" ? uiText("assistantViews.uploading") : f.name}>
               {f.kind === "image"
                 ? <img src={f.local || (f.attachment ? attachmentUrl(assistant.slug, f.attachment.id, "thumb") : "")} alt="" />
-                : <span className="ic">{fileIcon(f.kind)}</span>}
+                : <span className="ic"><Icon name={FILE_ICON[f.kind] || "doc"} /></span>}
               <span className="nm">{f.status === "uploading" ? uiText("assistantViews.uploading") : f.name}</span>
               <button type="button" className="rm" title={uiText("assistantViews.remove")} aria-label={uiText("assistantViews.remove2", {v0: (f.name)})} onClick={() => assistant.removeFile(f.key)}>✕</button>
             </span>
@@ -627,11 +630,11 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
     <aside className="pa" aria-label={uiText("assistantViews.studioAssistant2")}>
 
       <div className="pa-top">
-        <span className="t"><span className="spark">✦</span>{uiText("assistantViews.studioAssistant2")}</span>
+        <span className="t"><Icon name="sparkle" />{uiText("assistantViews.studioAssistant2")}</span>
         <button type="button" className={"info" + (info ? " on" : "")} title={uiText("assistantViews.whatTheAgentCanRead")} aria-label={uiText("assistantViews.whatTheAgentCanRead")}
           aria-expanded={info} onClick={() => setInfo(!info)}>ⓘ</button>
         <span className="grow" />
-        <button type="button" className="icon-btn" onClick={onConsole} title={uiText('console.entry')} aria-label={uiText('console.entry')}>⌘</button>
+        <button type="button" className="icon-btn" onClick={onConsole} title={uiText('console.entry')} aria-label={uiText('console.entry')}><Icon name="terminal" /></button>
         <button type="button" className="icon-btn" title={uiText("assistantViews.expandWorkspace")} aria-label={uiText("assistantViews.expandWorkspace")} onClick={onExpand}>⤢</button>
         <button type="button" className="icon-btn x" title={uiText("assistantViews.collapse")} aria-label={uiText("assistantViews.collapse")} onClick={onClose}>✕</button>
       </div>
@@ -690,7 +693,7 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
   return (
     <div className="ws" aria-label={uiText("assistantViews.studioAssistantWorkspace")}>
       <div className="ws-head">
-        <h1><span className="spark">✦</span>{uiText("assistantViews.studioAssistant2")}</h1>
+        <h1><Icon name="sparkle" />{uiText("assistantViews.studioAssistant2")}</h1>
         <OrchestrationCounters counts={assistant.orchestrationCounts} onOpen={() => onView('agents')} />
         <span className="sub">{uiText("assistantViews.sWorkspaceMoveTheProductionForward", {v0: (me.name)})}</span>
         {manager && <Seg view={view} onView={onView} />}

@@ -171,10 +171,6 @@ export function guessKind(file) {
   return "text";
 }
 
-export function fileIcon(kind) {
-  return kind === "sheet" ? "📊" : kind === "image" ? "🖼" : "📄";
-}
-
 // 側邊欄可以拖拉調寬：至少 320、最多 720，也要留至少 360 給專案頁
 export const PA_WIDTH = { min: 320, max: 720, fallback: 400 };
 

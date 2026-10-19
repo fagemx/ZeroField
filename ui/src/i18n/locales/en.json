@@ -57,7 +57,8 @@
     "cycleVariant": "Cycle wardrobe variant",
     "ungrouped": "Other Shots",
     "shotCount": "{{count}} Shots",
-    "rebuildScene": "Rebuild Scene Shots"
+    "rebuildScene": "Rebuild Scene Shots",
+    "selectShotsHint": "Select shots to plan and generate takes."
   },
   "common": {
     "save": "Save",
@@ -268,11 +269,11 @@
     "owner": "Owner",
     "copy": "Copy",
     "read": "Read:{{v0}}",
-    "downloadWord": "⬇ Download Word",
+    "downloadWord": "Download Word",
     "copyResponse": "Copy Response",
     "timeFromSubmissionToCompletedResponse": "Time from submission to completed response",
     "earlierConversationsHaveResponsesAwaitingApproval": "Earlier conversations have {{v0}}  responses awaiting approval",
-    "studioAssistant": "✦ Studio Assistant",
+    "studioAssistant": "Studio Assistant",
     "whatWouldYouLikeToWorkOnICan": "{{v0}}, what would you like to work on? I can read production pages and slates, identify gaps, and propose changes.",
     "iWillPrepareChangesForYourReviewBeforeApplying": "I will prepare changes for your review before applying them.",
     "agentMentions": "Agent mentions",
@@ -992,7 +993,7 @@
     "downloadAttachment": "Download Attachment ↗",
     "loadingMedia": "Loading media…",
     "replaceUpload": "Replace Upload",
-    "regenerateImage": "✦ Regenerate Image"
+    "regenerateImage": "Regenerate Image"
   },
   "nodeViews": {
     "select": "Select",
@@ -1282,7 +1283,7 @@
     "highlightAndAnnotateThisDocumentOrReturnToIts": "Highlight and annotate this document, or return to its canvas at any time.",
     "backToTable": "Back to Table",
     "backToPipeline": "Back to Pipeline",
-    "askAnAgentAboutThisCanvas": "✦ Ask an Agent About This Canvas",
+    "askAnAgentAboutThisCanvas": "Ask an Agent About This Canvas",
     "pageCount": "{{count}} pages"
   },
   "tabRail": {
@@ -1345,7 +1346,7 @@
     "send": "Send"
   },
   "workspaceSettings": {
-    "crewSettings": "👥 Crew & Settings",
+    "crewSettings": "Crew & Settings",
     "crewProductionSettings": "Crew & Production Settings",
     "crewSettings2": "Crew & Settings",
     "crewRolesApplyAcrossThisStudioSProductions": "Crew roles apply across this studio’s productions.",
@@ -1898,9 +1899,9 @@
     "couldNotPlayVideo": "Could not play video",
     "couldNotLoadImage": "Could not load image",
     "couldNotPlayAudio": "Could not play audio",
-    "reshoot": "✦ Re-shoot Take",
+    "reshoot": "Re-shoot Take",
     "emptyStage": "No media yet",
-    "runStage": "✦ Run",
+    "runStage": "Run",
     "worker": "Worker",
     "invalidRows": "Select between 1 and 200 unique shots.",
     "noSafeStep": "No unambiguous pipeline step matches this shot and media column. Configure its source and output in Pipeline.",
@@ -1986,7 +1987,8 @@
     "blockerPreparation": "The preparation bindings or dependencies need correction.",
     "blockerCardInputs": "The card inputs or output type need correction.",
     "blockerUnknown": "Resolve the input or configuration issue before dispatch.",
-    "blockerField": "{{message}} Input: {{field}}"
+    "blockerField": "{{message}} Input: {{field}}",
+    "settings": "Generation settings"
   },
   "console": {
     "entry": "Agent Console",

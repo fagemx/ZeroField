@@ -39,7 +39,7 @@ test('cards render source and output stages with upload and run actions',()=>{
   const row={rid:'r1',cells:[{value:'Shot 1'}]},parsed={headers:['Shot','Source','Take'],rows:[row],table:{attrs:{column_types:['text','video','video']}}};
   const model={coverColumn:1,groupColumn:-1,cards:[{row,index:0,title:'Shot 1',summary:[],mediaChain:[{column:1,label:'Source',type:'video',value:'[video](https://example.org/source.mp4)',media:{kind:'video'}},{column:2,label:'Take',type:'video',value:'',media:null}],assets:[{id:'CAST-01',value:'![cast](https://example.org/cast.png)',type:'image'}]}]};
   const html=render(components.SheetCards,{model,mode:'gallery',parsed,selected:new Set(),writable:true});
-  assert.match(html,/sheet-card-chain/);assert.match(html,/<video/);assert.match(html,/No media yet/);assert.match(html,/@CAST-01/);assert.match(html,/✦ Run/);
+  assert.match(html,/sheet-card-chain/);assert.match(html,/<video/);assert.match(html,/No media yet/);assert.match(html,/@CAST-01/);assert.match(html,/>Run<\/button>/);
 });
 
 test('opening Assistant preserves review and row panels; annotation clicks open the stable row',async()=>{

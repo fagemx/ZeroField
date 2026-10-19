@@ -9,6 +9,9 @@ import { ConsolePlayground, ConsoleSkills } from './ConsoleBuildViews.jsx';
 import { ConsoleAgents, ConsoleDeployments, ConsoleEnvironments, ConsoleMemory, ConsoleProviders, ConsoleSessions } from './ConsoleManagedViews.jsx';
 import { Budget, ConsoleLimits, ConsoleUsage } from './ConsoleAnalyticsAdminViews.jsx';
 import './agentConsole.css';
+import { Icon } from '../Icon.jsx';
+
+const PAGE_ICON={dashboard:'chart',api_keys:'key',playground:'play',skills:'doc',quickstart:'sparkle',agents:'bot',sessions:'comment',deployments:'rocket',environments:'layers',memory_store:'database',usage_cost:'chart',spend_rate_limits:'gauge'};
 
 export function AgentConsoleApp({slug,me,project,route,episodeId,onReturn}) {
   useLocale();
@@ -61,10 +64,10 @@ function ConsoleShell({page,busy,error,projects,project,onReturn}) {
   const Views={dashboard:ConsoleDashboard,api_keys:ConsoleProviders,playground:ConsolePlayground,skills:ConsoleSkills,quickstart:ConsoleQuickstart,agents:ConsoleAgents,sessions:ConsoleSessions,deployments:ConsoleDeployments,environments:ConsoleEnvironments,memory_store:ConsoleMemory,usage_cost:ConsoleUsage,spend_rate_limits:ConsoleLimits};
   const View=Views[page];
   return <div className={'agent-console'+(collapsed ? ' ac-collapsed':'')}>
-    <aside className="ac-nav"><div className="ac-brand"><strong>{collapsed ? 'ZF':t('console.brand')}</strong><button aria-label={t('console.toggleNav')} aria-expanded={!collapsed} onClick={()=>setCollapsed(!collapsed)}>☰</button></div>
+    <aside className="ac-nav"><div className="ac-brand"><strong>{collapsed ? 'ZF':t('console.brand')}</strong><button aria-label={t('console.toggleNav')} aria-expanded={!collapsed} onClick={()=>setCollapsed(!collapsed)}><Icon name="menu"/></button></div>
       <label className="ac-workspace"><span>{t('console.workspace')}</span><select aria-label={t('console.workspace')} value={slug} onChange={e=>{if(e.target.value!==slug)window.location.assign('/projects/'+encodeURIComponent(e.target.value)+'/'+consoleHash(page));}}><option value={slug}>{project.title}</option>{projects.filter(p=>p.slug!==slug).map(p=><option key={p.slug} value={p.slug}>{p.title}</option>)}</select></label>
       <button ref={searchButton} className="ac-search-button" onClick={()=>setSearch('')}>{t('console.search')} <kbd>Ctrl K</kbd></button>
-      <nav aria-label={t('console.navigation')}>{Object.entries(GROUPS).map(([group,pages])=><section key={group}><h2>{t('console.groups.'+group)}</h2>{pages.map((key,index)=><button title={t('console.pages.'+key)} key={key} aria-current={page===key ? 'page':undefined} disabled={busy} onClick={()=>navigate(key)}><span aria-hidden="true">{index+1}</span><span className="ac-nav-label">{t('console.pages.'+key)}</span></button>)}</section>)}</nav>
+      <nav aria-label={t('console.navigation')}>{Object.entries(GROUPS).map(([group,pages])=><section key={group}><h2>{t('console.groups.'+group)}</h2>{pages.map(key=><button title={t('console.pages.'+key)} key={key} aria-current={page===key ? 'page':undefined} disabled={busy} onClick={()=>navigate(key)}><Icon name={PAGE_ICON[key]}/><span className="ac-nav-label">{t('console.pages.'+key)}</span></button>)}</section>)}</nav>
       <footer><Budget budget={overview?.budget}/><p>{me.name} · {roleLabel(me.role)}</p></footer>
     </aside>
     <div className="ac-stage"><header className="ac-header"><button disabled={busy} onClick={onReturn}>{t('console.returnProduction')}</button><span className="ac-production">{project.title}</span><button onClick={refresh} disabled={busy}>{t('console.refresh')}</button><LanguageSwitch/></header>

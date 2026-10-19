@@ -18,8 +18,8 @@ const CONSOLE_STATUSES = new Set(['queued','running','awaiting_gate','succeeded'
 export function statusLabel(value) { const normalized = normalizeStatus(value); return Object.hasOwn(STATUS_KEYS, normalized) ? t('status.' + STATUS_KEYS[normalized]) : CONSOLE_STATUSES.has(normalized) ? t('consoleStatus.' + normalized) : value; }
 
 const PALETTE = [
-  ["#e9e2d4", "#5b4a2c"], ["#dbeafe", "#1e40af"], ["#fce7f3", "#9d174d"], ["#dcfce7", "#166534"],
-  ["#ede9fe", "#5b21b6"], ["#ffedd5", "#9a3412"], ["#e0f2fe", "#075985"], ["#fef9c3", "#854d0e"],
+  ["#2a251c", "#e6d3ad"], ["#18222e", "#9cc3f0"], ["#2c1a24", "#f0a6c8"], ["#172a1d", "#8fdcab"],
+  ["#14282a", "#8fd8dc"], ["#2e1f14", "#f2b98a"], ["#15242c", "#94cfee"], ["#2a2814", "#e8dc8a"],
 ];
 
 const DATE_OPTIONS = {

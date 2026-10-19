@@ -21,7 +21,7 @@ const render=(name,props)=>renderToStaticMarkup(React.createElement(components[n
 test('all five workbench entries render and viewers cannot start creation',()=>{
   const html=render('StoryWorkbench',{slug:'demo',me:{can_write:false},tab:{key:'cinema-studio'}});
   for(const name of ['Start Creating','My Projects','Asset Vault','Toolbox','Open API']) assert.ok(html.includes(name));
-  assert.match(html,/<button disabled="">✦ Start Creating/);
+  assert.match(html,/<button disabled=""><svg[^>]*class="ico"[\s\S]*?<\/svg>Start Creating/);
 });
 
 test('Micro has real candidate, split, restoration and node-input surfaces',()=>{

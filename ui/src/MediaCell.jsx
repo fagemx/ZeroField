@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { mediaOf } from './sheetModel.js';
 import { getMediaMeta } from './mediaMeta.js';
+import { Icon } from './Icon.jsx';
 
 export function MediaCell({ value, type, label, onLightbox, onRegenerate, onReplace, compact = false }) {
   useLocale();
@@ -32,7 +33,7 @@ export function MediaCell({ value, type, label, onLightbox, onRegenerate, onRepl
     onLoadedMetadata={metadata} onError={() => setError(uiText('studio.couldNotPlayVideo'))} />;
   if (compact) return <button type="button" className="media-compact" aria-label={uiText('mediaCell.preview', {v0: label || uiText('mediaCell.media')})} title={error || info || uiText('mediaCell.clickToPreview')} onMouseEnter={event => { event.currentTarget.querySelector('video')?.play()?.catch(() => {}); }} onMouseLeave={event => event.currentTarget.querySelector('video')?.pause()} onClick={event => { event.currentTarget.querySelector('video')?.pause(); preview(); }}>
     {kind === 'image' ? <img src={media.url} alt={label || ''} loading="lazy" onError={() => setError(uiText('studio.couldNotLoadImage'))} />
-      : kind === 'video' ? video : kind === 'audio' ? <><audio preload="metadata" src={media.url} onLoadedMetadata={metadata} onError={() => setError(uiText('studio.couldNotPlayAudio'))} /><span className="media-audio">♫</span></> : <span>{uiText('mediaCell.loading')}</span>}
+      : kind === 'video' ? video : kind === 'audio' ? <><audio preload="metadata" src={media.url} onLoadedMetadata={metadata} onError={() => setError(uiText('studio.couldNotPlayAudio'))} /><span className="media-audio"><Icon name="music" size={20} /></span></> : <span>{uiText('mediaCell.loading')}</span>}
     {(info || error) && <small>{error || info}</small>}
   </button>;
   return <div className="media-cell">

@@ -22,6 +22,7 @@ import { useAssistant } from "./assistant/useAssistant.js";
 import { assignmentRequest } from './assistant/orchestrationModel.js';
 import "./assistant/assistant.css";
 import "./workbench.css";
+import { Icon } from "./Icon.jsx";
 
 const POLL_MS = 20000;
 
@@ -542,8 +543,8 @@ function ProjectPage({ slug }) {
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
       <header className="top">
         <button type="button" className="icon-btn" onClick={() => (window.innerWidth <= 860 ? setRailOpen(!railOpen) : setRailHidden(!railHidden))}
-          aria-label={uiText("app.togglePages")}>☰ <span className="label">{uiText("app.pages")}</span></button>
-        <a href="/projects/" className="icon-btn" title={uiText("app.backToProductions")} style={{ textDecoration: "none" }}>← <span className="label">{uiText("app.allProductions")}</span></a>
+          aria-label={uiText("app.togglePages")}><Icon name="menu" /> <span className="label">{uiText("app.pages")}</span></button>
+        <a href="/projects/" className="icon-btn" title={uiText("app.backToProductions")} style={{ textDecoration: "none" }}><Icon name="arrowLeft" /> <span className="label">{uiText("app.allProductions")}</span></a>
         <span className="doc-name">{data.project.title}</span>
         {data.project.status && PROJECT_STATUS[data.project.status] && (
           <span style={{
@@ -566,7 +567,7 @@ function ProjectPage({ slug }) {
         {paEnabled && (
           <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title={uiText("app.studioAssistant")}
             onClick={() => { if (paMode === 'off') { if (assistant.orchestrationCounts?.needs_you || assistant.orchestrationCounts?.working) setPaView('agents'); openAssistant(); } else setPaMode('off'); }}>
-            <span className="spark">✦</span><span className="label">{uiText("app.studioAssistant")}</span>
+            <Icon name="sparkle" /><span className="label">{uiText("app.studioAssistant")}</span>
             {paMode === 'off' && assistant.orchestrationCounts?.needs_you > 0 && <span className="count">? {assistant.orchestrationCounts.needs_you}</span>}
             {paMode === 'off' && assistant.orchestrationCounts?.working > 0 && <span className="count">⟳ {assistant.orchestrationCounts.working}</span>}
           </button>
@@ -574,7 +575,7 @@ function ProjectPage({ slug }) {
         <button type="button" className="icon-btn" onClick={copyLink} title={uiText("app.copyALinkToThisPageOrAnnotation")} aria-label={uiText("app.copyLink")}>
           <LinkIcon /><span className="label">{uiText("app.copyLink")}</span>
         </button>
-        <button type="button" className="icon-btn" onClick={openConsole}>{uiText('console.entry')}</button>
+        <button type="button" className="icon-btn" onClick={openConsole} aria-label={uiText('console.entry')}><Icon name="terminal" /><span className="label">{uiText('console.entry')}</span></button>
         <LanguageSwitch /><WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
         <IdentityBadge me={me} members={data.members} />
       </header>

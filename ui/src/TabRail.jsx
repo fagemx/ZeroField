@@ -10,11 +10,12 @@ import { Menu } from "./Menu.jsx";
 import { canManageTab } from "./permissions.js";
 import { tabHash } from "./route.js";
 import { ImportPreview } from "./ImportPreview.jsx";
+import { Icon } from "./Icon.jsx";
 
 // 左邊的分頁清單（10/15）：最下面「＋ 新增分頁」大家都能用（滑鼠移到清單上才出現）；每一頁滑過去出現「⋯」
 // 改名、移動、刪除（管理者每一頁都有，其他人只有自己新增的頁）；「已刪除的分頁…」收在管理者的「⋯」最下面。
 // 以前這些藏在編輯工具列的「▤ 分頁 ▾」，只有管理者看得到。
-const SURFACE_ICON = { doc: "▤ ", sheet: "▦ ", flow: "⑂ ", board: "▥ " };
+const SURFACE_ICON = { doc: "doc", sheet: "table", flow: "flow", board: "board" };
 
 export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsChanged, flush, onRenamed, onVersions,
   onError, onToast }) {
@@ -90,14 +91,14 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
       ...exports, "sep",
       ...(admin && !t.parent_key ? [{ key: "child", icon: "＋", label: uiText("tabRail.addAChildPage"),
         run: () => { setNewSurface("doc"); setDialog({ kind: "new", parent: t.key }); } }, "sep"] : []),
-      { key: "rename", icon: "✎", label: uiText("tabRail.rename"), run: () => setDialog({ kind: "rename", tab: t }) },
+      { key: "rename", icon: <Icon name="pencil" />, label: uiText("tabRail.rename"), run: () => setDialog({ kind: "rename", tab: t }) },
       { key: "up", icon: "↑", label: uiText("tabRail.moveUp"), run: () => act(meta, { move: "up" }) },
       { key: "down", icon: "↓", label: uiText("tabRail.moveDown"), run: () => act(meta, { move: "down" }) },
       { key: "parent", icon: "↳", label: t.parent_key ? uiText("tabRail.moveToTheTopLevelOrAnotherPage") : uiText("tabRail.moveUnderAnotherPage"),
         disabled: hasChildren, note: hasChildren ? uiText("tabRail.hasChildPages") : undefined, run: () => setDialog({ kind: "parent", tab: t }) },
       "sep",
-      ...(admin ? [{ key: "history", icon: "🕘", label: uiText("tabRail.versionHistory"), run: () => onVersions(t.key) }] : []),
-      { key: "delete", icon: "🗑", label: uiText("tabRail.deletePage"), danger: true, run: () => setDialog({ kind: "delete", tab: t }) },
+      ...(admin ? [{ key: "history", icon: <Icon name="history" />, label: uiText("tabRail.versionHistory"), run: () => onVersions(t.key) }] : []),
+      { key: "delete", icon: <Icon name="trash" />, label: uiText("tabRail.deletePage"), danger: true, run: () => setDialog({ kind: "delete", tab: t }) },
       ...(admin ? ["sep", { key: "deleted", icon: "↺", label: uiText("tabRail.deletedPages"), note: uiText("tabRail.allPages"),
         run: () => setDialog({ kind: "deleted" }) }] : []),
     ];
@@ -116,7 +117,7 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
         const n = openCount(t.key);
         const can = canManageTab(t, me);
         const open = Boolean(menu && menu.key === t.key);
-        const icon = SURFACE_ICON[t.surface_type] || "";
+        const icon = SURFACE_ICON[t.surface_type] ? <Icon name={SURFACE_ICON[t.surface_type]} /> : null;
         return (
           <div key={t.key} className={"item" + (can ? " can" : "")} onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); importFiles([...e.dataTransfer.files], t); } }}>
             <a href={tabHash(t.key)} className={(t.parent_key ? "child " : "") + (t.key === tabKey ? "on" : "")}

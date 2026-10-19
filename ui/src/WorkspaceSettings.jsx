@@ -4,6 +4,7 @@ import { t as uiText } from './i18n/index.js';
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
 import { AgentSettings } from './assistant/AgentSettings.jsx';
+import { Icon } from "./Icon.jsx";
 
 export function WorkspaceSettings({ me, project, onReload, onError }) {
   const locale = useLocale();
@@ -30,7 +31,7 @@ export function WorkspaceSettings({ me, project, onReload, onError }) {
     return () => { document.removeEventListener('keydown', keydown); previous?.focus(); };
   }, [open]);
   if (!me?.can_edit) return null;
-  return <><button className="icon-btn" onClick={() => setOpen(true)}>{uiText("workspaceSettings.crewSettings")}</button>{open && <div className="modal-scrim"><div ref={dialog} className="modal workspace-settings" role="dialog" aria-modal="true" aria-label={uiText("workspaceSettings.crewProductionSettings")}><h2>{uiText("workspaceSettings.crewSettings2")}</h2><p>{uiText("workspaceSettings.crewRolesApplyAcrossThisStudioSProductions")}</p>
+  return <><button className="icon-btn" aria-label={uiText("workspaceSettings.crewSettings")} title={uiText("workspaceSettings.crewSettings")} onClick={() => setOpen(true)}><Icon name="users" /><span className="label">{uiText("workspaceSettings.crewSettings")}</span></button>{open && <div className="modal-scrim"><div ref={dialog} className="modal workspace-settings" role="dialog" aria-modal="true" aria-label={uiText("workspaceSettings.crewProductionSettings")}><h2>{uiText("workspaceSettings.crewSettings2")}</h2><p>{uiText("workspaceSettings.crewRolesApplyAcrossThisStudioSProductions")}</p>
     {project && <label className="modal-field">{uiText("workspaceSettings.agentDataAccess")}<select value={project.privacy_mode || "full_access"} disabled={busy} onChange={(e) => work(async () => { await api.post(`/projects/api/${project.slug}/meta`, { privacy_mode: e.target.value }); await onReload(); })}><option value="full_access">{uiText("workspaceSettings.fullAccessNumbersFormulasAndProductionParameters")}</option><option value="mask_numbers">{uiText("workspaceSettings.numericMaskingMaskSensitiveNumbersAndExcludeImages")}</option></select></label>}
     {error && <p role="alert" className="error">{error}</p>}
     {project && <AgentSettings slug={project.slug} onSaved={onReload} />}

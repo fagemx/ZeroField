@@ -26,6 +26,7 @@ import { blockEditable, canAddRow, isHeaderRowNode, unitEditable, unitsInRange }
 import { internalTab } from "./route.js";
 import { COLORS, LABELS, comments, markClass } from "./rules.js";
 import { Avatar } from "./Talk.jsx";
+import { Icon } from "./Icon.jsx";
 
 const SAVE_DELAY = 1500;
 const RETRY_DELAY = 5000;
@@ -47,7 +48,7 @@ function blockItems(pickImage) {
     { key: "quote", label: uiText("docSurface.quote"), icon: "❝", words: uiText("docSurface.quoteCitation"), run: (e) => e.chain().focus().toggleBlockquote().run() },
     { key: "divider", label: uiText("docSurface.divider"), icon: "—", words: uiText("docSurface.dividerHr"), run: (e) => e.chain().focus().setHorizontalRule().run() },
     { key: "table", label: uiText("docSurface.table"), icon: "▦", words: uiText("docSurface.table2"), run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
-    { key: "image", label: uiText("docSurface.image"), icon: "🖼", words: uiText("docSurface.imagePhoto"), run: () => pickImage() },
+    { key: "image", label: uiText("docSurface.image"), icon: <Icon name="image" />, words: uiText("docSurface.imagePhoto"), run: () => pickImage() },
     { key: "status", label: uiText("docSurface.status"), icon: "●", words: uiText("docSurface.statusProgress"),
       run: (e) => e.chain().focus().insertContent([{ type: "status", attrs: { label: "Queued" } }, { type: "text", text: " " }]).run() },
     { key: "fill", label: uiText("docSurface.sharedField"), icon: "✎", words: uiText("docSurface.fillEditableField"), run: (e) => e.chain().focus().insertContent({ type: "fill", attrs: { label: "" } }).run() },
@@ -1404,7 +1405,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
           onMouseDown={(event) => { event.preventDefault(); setWide(!wide); }}>↔</button>
         <span className="vsep" />
         {toolButton("table", "▦ ▾", { title: uiText("docSurface.table") })}
-        <button type="button" className="tb" title={uiText("docSurface.insertImage")} aria-label={uiText("docSurface.insertImage")} onMouseDown={(event) => { event.preventDefault(); pickImage(); }}>🖼</button>
+        <button type="button" className="tb" title={uiText("docSurface.insertImage")} aria-label={uiText("docSurface.insertImage")} onMouseDown={(event) => { event.preventDefault(); pickImage(); }}><Icon name="image" /></button>
         <button type="button" className="tb" title={uiText("docSurface.checklist")} aria-label={uiText("docSurface.checklist")}
           onMouseDown={(event) => { event.preventDefault(); editor && editor.chain().focus().toggleTaskList().run(); }}>☑</button>
         {toolButton("plus", "＋ ▾", { title: uiText("docSurface.insert"), hint: uiText("docSurface.typeInTheDocumentToOpenThisMenu") })}
@@ -1473,7 +1474,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
               <button type="button" key={"row" + row.rid} className={"rowbtn" + (row.has ? " has" : "")}
                 style={row.left === null ? { top: row.top } : { top: row.top, left: row.left, right: "auto" }}
                 title={uiText("docSurface.rowDiscussionAndStatusHistory")} aria-label={uiText("docSurface.rowDiscussionAndStatusHistory")} onClick={() => openRowTalk(row.rid)}>
-                💬{row.count ? ` ${row.count}` : ""}
+                <Icon name="comment" />{row.count ? ` ${row.count}` : ""}
               </button>
             ))}
             {layout.adds.map((add) => (
@@ -1512,7 +1513,7 @@ export function DocSurface({ slug, tab, tabs, me, members, values, annotations, 
                   <button type="button" title={uiText("docSurface.bold")} onClick={() => applyFormat("bold")}>B</button>
                   <button type="button" title={uiText("docSurface.italic")} onClick={() => applyFormat("italic")}><i>I</i></button>
                   <button type="button" title={uiText("docSurface.strikethrough")} onClick={() => applyFormat("strike")}><s>S</s></button>
-                  <button type="button" title={uiText("docSurface.link")} onClick={() => applyFormat("link")}>🔗</button>
+                  <button type="button" title={uiText("docSurface.link")} onClick={() => applyFormat("link")}><Icon name="link" /></button>
                 </span>
               )}
               <span className="grp"><span>{uiText("docSurface.highlight")}</span>

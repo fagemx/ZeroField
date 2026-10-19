@@ -57,7 +57,8 @@
     "cycleVariant": "切換服裝變體",
     "ungrouped": "其他鏡頭",
     "shotCount": "{{count}} 鏡",
-    "rebuildScene": "重建本場分鏡"
+    "rebuildScene": "重建本場分鏡",
+    "selectShotsHint": "勾選鏡頭後即可規劃並生成 take。"
   },
   "common": {
     "save": "儲存",
@@ -268,11 +269,11 @@
     "owner": "負責人",
     "copy": "複製",
     "read": "查了：{{v0}}",
-    "downloadWord": "⬇ 下載 Word 檔",
+    "downloadWord": "下載 Word 檔",
     "copyResponse": "複製回答",
     "timeFromSubmissionToCompletedResponse": "從你送出到回答寫完",
     "earlierConversationsHaveResponsesAwaitingApproval": "之前的對話還有 {{v0}} 個答案等你確認",
-    "studioAssistant": "✦ 工作室助理",
+    "studioAssistant": "工作室助理",
     "whatWouldYouLikeToWorkOnICan": "{{v0}}，你想完成什麼工作？我可以讀取專案裡的文件與表格，整理重點、找出缺漏，並提出修改建議。",
     "iWillPrepareChangesForYourReviewBeforeApplying": "要改專案頁時，我會先整理好給你確認，你按確認才會放上去。",
     "agentMentions": "代理點名建議",
@@ -992,7 +993,7 @@
     "downloadAttachment": "下載附件 ↗",
     "loadingMedia": "讀取媒體…",
     "replaceUpload": "上傳替換",
-    "regenerateImage": "✦ 重抽此格圖片"
+    "regenerateImage": "重抽此格圖片"
   },
   "nodeViews": {
     "select": "選取",
@@ -1282,7 +1283,7 @@
     "highlightAndAnnotateThisDocumentOrReturnToIts": "你可以在這裡使用螢光筆畫重點與文字標註，或隨時切回專屬畫布。",
     "backToTable": "返回表格",
     "backToPipeline": "返回工作流",
-    "askAnAgentAboutThisCanvas": "✦ 請代理協助此畫布",
+    "askAnAgentAboutThisCanvas": "請代理協助此畫布",
     "pageCount": "{{count}} 頁"
   },
   "tabRail": {
@@ -1345,7 +1346,7 @@
     "send": "送出"
   },
   "workspaceSettings": {
-    "crewSettings": "👥 成員與設定",
+    "crewSettings": "成員與設定",
     "crewProductionSettings": "成員與專案設定",
     "crewSettings2": "成員與設定",
     "crewRolesApplyAcrossThisStudioSProductions": "劇組角色適用於此工作室的所有製作專案。",
@@ -1898,9 +1899,9 @@
     "couldNotPlayVideo": "無法播放影片",
     "couldNotLoadImage": "無法載入圖片",
     "couldNotPlayAudio": "無法播放音訊",
-    "reshoot": "✦ 重拍鏡頭",
+    "reshoot": "重拍鏡頭",
     "emptyStage": "尚無媒體",
-    "runStage": "✦ 執行",
+    "runStage": "執行",
     "worker": "工作器",
     "invalidRows": "請選取 1 至 200 個不重複鏡頭。",
     "noSafeStep": "沒有明確對應此鏡頭與媒體欄的管線步驟。請在管線中設定來源與輸出。",
@@ -1986,7 +1987,8 @@
     "blockerPreparation": "請修正前置處理的綁定或相依關係。",
     "blockerCardInputs": "請修正卡片輸入或輸出類型。",
     "blockerUnknown": "請先排除輸入或設定問題再派發。",
-    "blockerField": "{{message}} 輸入：{{field}}"
+    "blockerField": "{{message}} 輸入：{{field}}",
+    "settings": "生成設定"
   },
   "console": {
     "entry": "代理中控台",
