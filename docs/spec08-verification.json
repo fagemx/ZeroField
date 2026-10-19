@@ -1,5 +1,5 @@
 {
-  "status": "paused-user-request-integration-engineering-gates-passed-independent-reviews-not-started",
+  "status": "independent-reviews-complete-ok-with-notes-fixes-verified-awaiting-user-acceptance",
   "overallAcceptance": false,
   "originalBase": "eaf87f19d3fa4b7959024fb1f0faaa65553ff77c",
   "frozenProductRevision": "c3900b440e75c015ef9d6c686667ef8887daaea2",
@@ -344,7 +344,7 @@
     "frontendTimeoutSeconds": 120,
     "buildTimeoutSeconds": 120
   },
-  "stoppingReason": "USER_PAUSE_REQUESTED: integration engineering gates passed, but no automatic reviewers/next stage authorized. This is a safe checkpoint, not engineering failure or overall acceptance.",
+  "stoppingReason": "Independent security and journey reviews completed after explicit user takeover; six defects fixed in bbcb51537d1dd6441bb6b6f18ace9549013f5103 and gates rerun. Overall acceptance remains the user's decision (open policy question S2: project-memory write authority). Not pushed.",
   "durableEvidence": {
     "backend.log": {
       "path": "docs/verification/spec08/backend.log",
@@ -371,5 +371,39 @@
       "sha256": "b2edf2fa1eded0fd0fef63e5a185f46c5f24d845001e3374a0ecbc5c664dece4"
     }
   },
-  "handoff": "docs/SPEC08_HANDOFF.md"
+  "handoff": "docs/SPEC08_HANDOFF.md",
+  "independentReview": {
+    "record": "docs/SPEC08_REVIEW.md",
+    "reviewedCandidate": "c3900b440e75c015ef9d6c686667ef8887daaea2",
+    "correctedProduct": "bbcb51537d1dd6441bb6b6f18ace9549013f5103",
+    "verdict": "OK with notes",
+    "fixed": [
+      "J1 stale :new draft after create",
+      "J2 Ctrl+K deployment key",
+      "J3 limits load-current after 409",
+      "J4 blank quickstart",
+      "J5 action abort signal killed next page load",
+      "J6 deep-linked form editable before load",
+      "S1 card loader read cwd files for dotted IDs"
+    ],
+    "open": [
+      "S2 project/episode memory entries writable by any editor (policy decision)"
+    ],
+    "RAN": {
+      "backend": "506 tests, 0 failures/skips",
+      "frontend": "119 pass",
+      "build": "exit 0",
+      "browser": "4 journeys OK",
+      "wheel": {
+        "files": 151,
+        "migrations": 12,
+        "cards": 17,
+        "router_schemas": 7,
+        "identity": "2f46d80fe253013b631b5b0fbe188b9319e7f28806b9529a4de12d80ca26afbd",
+        "wheelSha256": "dc7d04784cf64819411f5b07d215da4045efbfffb180278d5d9484835302b3a0"
+      }
+    },
+    "logs": "docs/verification/spec08/review/",
+    "pg": "owned 55447 started for gates; stopped, status 3, postmaster.pid absent"
+  }
 }

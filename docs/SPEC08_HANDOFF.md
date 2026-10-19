@@ -1,5 +1,10 @@
 # SPEC_08 portable handoff — USER_PAUSE_REQUESTED
 
+> **Superseded 2026-10-19:** the user explicitly handed control to a new owner, who completed the
+> independent security and journey reviews and fixed the findings in
+> `bbcb51537d1dd6441bb6b6f18ace9549013f5103`. See [SPEC08_REVIEW.md](SPEC08_REVIEW.md). The record
+> below is the historical pause state.
+
 ## Stop and authority
 
 **Stage:** integration engineering complete; safely paused by the user's explicit request

@@ -1,7 +1,8 @@
 # Lean Agent Console: use, authority and evidence
 
-**USER_PAUSE_REQUESTED:** Integration engineering gates are complete, but no reviewers/new
-stage/new writer are authorized. [Portable handoff](SPEC08_HANDOFF.md) records the safe stop.
+**Independent review complete (OK with notes):** security and journey review fixes are in product
+`bbcb51537d1dd6441bb6b6f18ace9549013f5103`; see [review record](SPEC08_REVIEW.md). The candidate,
+receipt and counts below describe the earlier `c3900b4` integration and remain historical.
 
 Product candidate: **`c3900b440e75c015ef9d6c686667ef8887daaea2`**, on service
 `8c3eb4a767aaca2694d48cb338147daa95e5838e`, Router `d7cb6031d16e53daa08959bf633e087db1548571`.
