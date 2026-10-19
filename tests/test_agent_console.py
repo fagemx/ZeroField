@@ -128,6 +128,32 @@ class ConsoleHTTPTests(unittest.TestCase):
             self.api('/' + route, status=404)
         self.api('/agents', 'POST', {'agent_key': 'studio:closed', 'version': 0}, status=400)
 
+    def test_builder_conversation_drafts_within_ceilings_and_falls_back_without_model(self):
+        ask = {'messages': [{'role': 'user', 'content': 'An agent that checks continuity on every finished shot.'}], 'template_key': 'blank'}
+        # No reachable model for the coordinator: the deterministic draft is returned unchanged, nothing persisted.
+        with patch.dict(os.environ, {'OPENBENCH_API_BASE': 'http://127.0.0.1:9/v1', 'OPENBENCH_PROVIDER': 'openai_compat'}):
+            fallback = self.api('/quickstart/converse', 'POST', ask)
+        self.assertEqual((fallback['mode'], fallback['changed'], fallback['persisted']), ('deterministic_preview', [], False))
+        agents.save_agent(self.conn, self.me, self.slug, {'agent_key': 'coordinator', 'provider_config': self.config}); self.conn.commit()
+        self.responses.append({'content': '<think>plan</think>' + json.dumps({'reply': 'Drafted a continuity checker.', 'changes': {
+            'display_name': 'Continuity checker', 'system_prompt': '1. Inspect the contact sheet.\n2. Report breaks.',
+            'allowed_tools': ['studio_inspect_frames', 'propose', 'not_a_real_tool'], 'skill_keys': ['shotcheck', 'invented_skill'],
+            'outcome_grader': {'enabled': True, 'criteria': 'Every break cites a frame.', 'max_revisions': 9},
+            'provider_config': {'base_url': 'https://attacker.invalid'}}})})
+        result = self.api('/quickstart/converse', 'POST', ask)
+        self.assertEqual(result['mode'], 'model'); self.assertEqual(result['reply'], 'Drafted a continuity checker.')
+        draft = result['draft']
+        self.assertEqual(draft['display_name'], 'Continuity checker')
+        self.assertEqual(draft['allowed_tools'], ['studio_inspect_frames', 'propose', 'ask_decision_gate'])
+        self.assertEqual(draft['skill_keys'], ['shotcheck'])
+        self.assertEqual(draft['provider_config'], {})  # not an editable field
+        self.assertEqual(draft['outcome_grader']['max_revisions'], 1)  # out-of-range value ignored
+        self.assertTrue(all(draft['tool_policies'][n] == 'always_ask' for n in ('studio_inspect_frames', 'propose', 'ask_decision_gate')))
+        self.assertNotIn('Continuity checker', json.dumps(self.api('/agents')))  # still unsaved
+        saved = self.api('/agents', 'POST', draft)['agent']
+        self.assertEqual(saved['version'], 1)
+        self.api('/quickstart/converse', 'POST', {'messages': [{'role': 'assistant', 'content': 'hi'}]}, status=400)
+
     def test_early_http_draft_save_mounted_runtime_gate_confirmation_grader_and_ledger(self):
         self.api('/memory-entries', 'POST', {'store_key': 'style_rules', 'entry_key': 'lens', 'version': 0, 'content_md': 'Console fixture uses 35mm optics.'})
         config = self.draft(outcome_grader={'enabled': True, 'criteria': 'Only source-backed content.', 'grader_agent_key': 'qa_critic', 'max_revisions': 0})

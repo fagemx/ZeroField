@@ -61,6 +61,8 @@ def dispatch(conn, me, slug, path, method, body, query):
     if method in ('POST', 'PUT', 'PATCH'):
         if path == 'quickstart/draft' and method == 'POST':
             return app.draft(conn, me, slug, body)
+        if path == 'quickstart/converse' and method == 'POST':
+            return app.converse(conn, me, slug, body)
         if path == 'agents':
             return {'agent': app.save_profile(conn, me, slug, body)}
         if path == 'api-keys/default':

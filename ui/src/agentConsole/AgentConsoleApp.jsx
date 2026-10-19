@@ -50,7 +50,7 @@ export function AgentConsoleApp({slug,me,project,route,episodeId,onReturn}) {
   const setAgentDraft=draft=>setAgentDrafts(current=>{
     const next={...current,[draft.agent_key]:draft};try{sessionStorage.setItem(draftKey+':newAgents',JSON.stringify(next));}catch{/* Mounted draft is retained. */}return next;
   });
-  const value={slug,me,episodeId,request,externalRequest,revision,refresh,action,navigate,catalog,overview,resource:route.resource,draftKey,canEdit:overview?.can_edit===true,canExecute:overview?.can_execute===true,agentDrafts,setAgentDraft};
+  const value={slug,me,episodeId,request,externalRequest,revision,refresh,action,navigate,catalog,overview,resource:route.resource,draftKey,canEdit:overview?.can_edit===true,canExecute:overview?.can_execute===true,agentDrafts,setAgentDraft,busy};
   return <ConsoleContext.Provider value={value}><ConsoleShell page={route.page} busy={busy} error={error} projects={projects} project={project} onReturn={onReturn}/></ConsoleContext.Provider>;
 }
 function ConsoleShell({page,busy,error,projects,project,onReturn}) {

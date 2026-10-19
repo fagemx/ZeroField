@@ -6,7 +6,8 @@ import { SheetDialog } from '../SheetDialog.jsx';
 
 export function SheetAgentRequest({ request, instruction, onInstruction, agents, onSubmit, onUpdateScope, onClose }) {
   const locale = useLocale();
-  const [strategy, setStrategy] = useState('chat'), [agentKey, setAgentKey] = useState('sheet_ops');
+  // The crew path starts as a reviewed background task for the Cinematographer; every other option is folded away.
+  const [strategy, setStrategy] = useState(request.crew ? 'single' : 'chat'), [agentKey, setAgentKey] = useState('sheet_ops');
   const [raceAgents, setRaceAgents] = useState(() => agents.filter(a => a.enabled && a.can_propose_table).slice(0, 2).map(a => a.agent_key));
   const [writeMode, setWriteMode] = useState('proposal'), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [outputColumn, setOutputColumn] = useState(request.preferredOutputColumn ?? request.scope.column_indices.find(index => ['image', 'video', 'audio'].includes(request.table.table?.attrs.column_types?.[index])) ?? request.scope.column_indices[0]);
@@ -36,6 +37,7 @@ export function SheetAgentRequest({ request, instruction, onInstruction, agents,
     <p className="sheet-subtle">{uiText("sheetAgentRequest.thisScopeStaysPinnedUntilSubmissionReviewChangesBefore")}</p>
     <fieldset disabled={busy} className="agent-request-fields">
       <label className="modal-field"><span>{uiText("sheetAgentRequest.whatShouldTheAgentDo")}</span><textarea data-autofocus aria-label={uiText("sheetAgentRequest.agentTaskBrief")} rows={4} value={instruction} onChange={e => onInstruction(e.target.value)} placeholder={uiText("sheetAgentRequest.forExampleReviewTheseShotsAndProposeMissingProduction")} /></label>
+      <details className="agent-request-options" open={!request.crew}><summary>{uiText("sheetAgentRequest.options")}</summary>
       <label className="modal-field"><span>{uiText("sheetAgentRequest.executionMode")}</span><select aria-label={uiText("sheetAgentRequest.agentExecutionMode")} value={strategy} onChange={e => setStrategy(e.target.value)}>
         <option value="chat">{uiText("sheetAgentRequest.discussInChat")}</option><option value="single">{uiText("sheetAgentRequest.createABackgroundTask")}</option><option value="fanout_rows">{uiText("sheetAgentRequest.backgroundTaskPerRow")}</option><option value="race">{uiText("sheetAgentRequest.generateCandidates")}</option>
       </select></label>
@@ -54,6 +56,7 @@ export function SheetAgentRequest({ request, instruction, onInstruction, agents,
       {strategy !== 'chat' && strategy !== 'race' && !mediaAgent && <label className="modal-field"><span>{uiText("sheetAgentRequest.delivery")}</span><select aria-label={uiText("sheetAgentRequest.delivery")} value={writeMode} onChange={e => setWriteMode(e.target.value)}>
         <option value="proposal">{uiText("sheetAgentRequest.proposeChangesForReview")}</option><option value="analysis_only">{uiText("sheetAgentRequest.analyzeAndKeepFindings")}</option>
       </select></label>}
+      </details>
     </fieldset>
     {error && <p role="alert" className="error">{error}</p>}
     <div className="sheet-dialog-actions"><button disabled={busy} onClick={onUpdateScope}>{uiText("sheetAgentRequest.updateScopeFromSelectedVisibleRows")}</button>

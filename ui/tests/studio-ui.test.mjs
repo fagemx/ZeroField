@@ -53,7 +53,9 @@ test('opening Assistant preserves review and row panels; annotation clicks open 
 test('Micro review displays bound assets and edits prompts with the guarded cell draft',async()=>{
   const source=await readFile(join(uiRoot,'src/SheetWorkspace.jsx'),'utf8');
   assert.match(source,/previewAssets=previewRow\?assetReferences\(previewRow\)/);
-  assert.match(source,/className="review-asset-strip"/);
+  assert.match(source,/<ShotBench stages=\{rowMediaCols\} assets=\{previewAssets\}/);
+  const bench=await readFile(join(uiRoot,'src/ShotBench.jsx'),'utf8');
+  assert.match(bench,/className="bench-assets" aria-label=\{uiText\('studio.boundAssets'\)\}/);
   assert.match(source,/onClick=\{\(\)=>beginEdit\(preview.r,c\)\}/);
   assert.match(source,/<textarea ref=\{editor\} aria-label=\{parsed.headers\[c\]\} rows=\{4\} value=\{text\}/);
   assert.match(source,/onChange=\{event=>setText\(event.target.value\)\}/);

@@ -33,9 +33,15 @@ Exactly four groups/twelve page IDs (no separate enterprise Files/Batches/cache/
 | managed_agents | `quickstart`12 templates/blank/literal requirement draft; `agents` form/raw configuration; `sessions` live M8 progress/gates/scorecards; `deployments` manual/cron; `environments` controls/bridge metadata; `memory_store` scoped versions/history/consolidation |
 | analytics | `usage_cost` combined ledger/tokens/cache/fingerprint/private logs; `spend_rate_limits` active currency/rate/Judge/Router mode controls |
 
-1. Quickstart drafts one of the exact12 templates, blank, or your literal requirements.
-   Natural-language drafting is deterministic instruction copying, not model understanding
-   or inferred permissions. Inspect form/raw JSON; **Save version** explicitly before launch.
+1. Quickstart is agent-assisted: describe the agent (or preview one of the exact12 templates,
+   or start blank) and the builder conversation drafts the configuration with the project's
+   default model (`POST quickstart/converse`, admin only; local default `qwen3.8:27b-16k` via Ollama's
+   OpenAI-compatible endpoint, set by `OPENBENCH_API_BASE`/`OPENBENCH_MODEL`). The model may only edit
+   name, description, instructions, catalog skills/tools, grader criteria and effort; unknown tools/skills
+   are dropped, every production-changing tool is forced to `always_ask`, and providers, credentials,
+   budgets and memory scope are never model-editable. The result is an unsaved draft. Without a reachable
+   model the draft keeps the request literally (deterministic fallback, clearly labelled). Inspect the
+   full editor/raw JSON; **Save version** explicitly before launch.
    A409 keeps your draft; explicitly load the current saved version before replacing it.
 2. Mount saved skills and scoped memory, choose tools and `auto`/`always_ask`/`disabled`,
    provider/effort/environment, and an independent grader rubric with0..3 revisions.

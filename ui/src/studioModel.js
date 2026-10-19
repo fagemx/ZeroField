@@ -16,6 +16,11 @@ function stageRole(label) {
   if (/remaster|cinema\s*shot|output/i.test(label)) return 4;
   return null;
 }
+// Bench column for a media stage: footage in, control passes, the produced shot/remaster and its comparison out.
+export function benchGroup(label) {
+  const role = stageRole(label);
+  return role === 0 ? 'input' : role >= 4 ? 'output' : 'control';
+}
 export function mediaStages(parsed, row) {
   const types = parsed.table.attrs.column_types || [];
   const stages = parsed.headers.flatMap((label, column) => {
