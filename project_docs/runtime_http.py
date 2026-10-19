@@ -188,11 +188,31 @@ def _v2_authority(actor_id, slug):
     from project_assistant.studio.openapi_v2_hub import _OpenAPIAuthority
 
     class Authority(_OpenAPIAuthority):
+        def prepare(self, card, inputs, key):
+            from project_assistant import execution_governance as governance
+            from project_docs import http, story_openapi as story
+            ctx = governance.media_context(service.Identity(actor_id, 'Media API', 'member'), slug,
+                accounting_session_key='v2:' + key)
+            with http.open_connection() as conn:
+                governance.prepare_operation(conn, ctx, request_key='v2:' + key, card=card,
+                    operation_digest=story.digest(inputs))
+            self.accounting_context = ctx
+            self.accounting_destination = governance.media_destination(card)
+            return ctx, 'v2:' + key
+
+        def check_destination(self, url):
+            from project_assistant import execution_governance as governance
+            governance.check_destination(self.accounting_context,url)
+
         def check(self, card, references):
             from project_docs import http, story_openapi as story
             with http.open_connection() as conn:
                 story.authorize(conn, service.Identity(actor_id, "Media API", "member"), slug, write=True)
                 story.authorize_card(conn, slug, card)
+                from project_assistant import execution_governance as governance
+                if hasattr(self, 'accounting_context'):
+                    governance.live(conn, self.accounting_context, destination=self.accounting_destination)
+                    governance.media_credentials(conn,self.accounting_context,card)
                 for reference in references:
                     saved = story.record(conn, "v2_" + story.digest([actor_id, "media", reference]), required=False)
                     if not saved:

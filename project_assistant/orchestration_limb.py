@@ -17,11 +17,25 @@ def context(conn,worker,body):
         raise cp.OrchestrationError(403,"The initiator is disabled.")
     me=service.Identity(member['actor_id'],member['name'],member['role'])
     task=db.get_task(conn,dispatch['project_slug'],dispatch['task_id'])
+    execution_binding(conn,me,dispatch,worker)
     ctx=tools.ToolContext(lambda:None,dispatch['project_slug'],me,Path('.'),None,agent_key=dispatch['agent_key'],
         dispatch_id=dispatch['id'],admission_no=dispatch['admission_no'],lease_token=body['lease_token'],
         write_mode=task['write_mode'],scope=cp.effective_scope(conn,dispatch,task),worker_id=worker,run_id=run['id'],deadline_at=dispatch['deadline_at'])
+    from project_assistant import execution_governance
+    execution_governance.install(ctx)
+    ctx.original_objective=task['spec']
     ctx.allowed_tools=set(dispatch['profile_snapshot'].get('allowed_tools',[]))
     return dispatch,task,ctx
+
+
+def execution_binding(conn, me, dispatch, worker):
+    if dispatch['agent_key'].startswith('limb:'):
+        return  # Existing standalone limb protocol is not a persisted Console profile.
+    from project_assistant import agent_console_store as resources
+    bindings=resources.execution_resources(conn,me,dispatch['project_slug'],dispatch['agent_key'])
+    bound=bindings['environment']['config'].get('worker_id')
+    if bound and bound != worker['id']:
+        raise cp.OrchestrationError(403,'This environment does not authorize the claiming worker.','POLICY_DENIED')
 
 
 def claim(conn,worker):
@@ -34,6 +48,8 @@ def claim(conn,worker):
     dispatch=cp.claim_dispatch(conn,worker,keys,allowed_projects=worker['allowed_projects'])
     if not dispatch:
         return {'task':None,'retry_after':3}
+    run=db.get_run(conn,dispatch['project_slug'],dispatch['run_id'])
+    execution_binding(conn,service.Identity(run['created_by'],'Production crew','member'),dispatch,worker)
     task=db.get_task(conn,dispatch['project_slug'],dispatch['task_id'])
     mode=privacy.mode(conn,dispatch['project_slug'])
     source=task['input_snapshot']
@@ -83,6 +99,10 @@ def complete(conn,worker,body):
     previous=cp._authenticated_dispatch(conn,worker,body.get('dispatch_handle'),body.get('lease_token'))
     if str(body.get('task_id'))!=previous['id']:
         raise cp.OrchestrationError(409,"Task and dispatch credentials do not match.",'STALE_DISPATCH')
+    if previous['output_digest'] and previous.get('outcome_candidate_digest'):
+        if previous['outcome_candidate_digest'] != cp.digest(body.get('output')):
+            raise cp.OrchestrationError(409, 'This graded dispatch already reported a different candidate.', 'STALE_DISPATCH')
+        return {'id':previous['id'],'handle':body['dispatch_handle'],'status':previous['status']}
     if previous['output_digest']:
         proposals=db.many(conn,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s ORDER BY id',(previous['id'],))
         return cp.complete_dispatch(conn,worker,body['dispatch_handle'],body['lease_token'],outcome=outcome,output=body.get('output'),proposal_ids=proposals)
@@ -102,6 +122,34 @@ def complete(conn,worker,body):
     if runtime:
         db.execute(conn,'UPDATE projectops.orchestration_dispatch SET executed_model=%s,executed_provider=%s WHERE id=%s',
                    (runtime.get('model'),runtime.get('adapter'),dispatch['id']))
+    from project_assistant import agent_registry, outcome_grader, execution_governance as governance
+    profile=agent_registry.get_agent(conn,ctx.slug,ctx.agent_key)
+    if profile and profile.get('outcome_grader',{}).get('enabled'):
+        cp.lock_project(conn,ctx.slug)
+        begun=db.one(conn, 'UPDATE projectops.orchestration_dispatch SET outcome_grading_started=TRUE,outcome_candidate_digest=%s WHERE id=%s AND NOT outcome_grading_started RETURNING id', (cp.digest(output),dispatch['id']))
+        if not begun:
+            raise cp.OrchestrationError(409,'Outcome grading already started; reconcile the existing attempt before retry.','STALE_DISPATCH')
+        conn.commit()  # Never hold the HTTP transaction/lease lock across inference.
+        from project_docs import http
+        ctx.connection_factory=http.open_connection
+        ctx.original_objective=task['spec']
+        from project_assistant import prompting
+        ctx.episode_id=governance.transaction(ctx, lambda c: prompting.episode_context(c,ctx.slug,ctx.scope))
+        def trace(entry):
+            def save(c):
+                governance.live(c,ctx)
+                db.execute(c,'UPDATE projectops.orchestration_dispatch SET tools_trace=tools_trace||%s::jsonb WHERE id=%s',(json.dumps([entry]),dispatch['id']))
+            governance.transaction(ctx,save)
+        candidate,card=outcome_grader.grade_candidate(ctx=ctx,profile=profile,candidate={'answer':json.dumps(output),'proposals':[]},
+            timeout=max(0,(cp.instant(dispatch['deadline_at'])-cp.now()).total_seconds()),on_trace=trace)
+        if not card['passed']:
+            outcome_grader.needs_you(ctx,card)
+            return cp.complete_dispatch(conn,worker,body['dispatch_handle'],body['lease_token'],outcome='awaiting_gate',
+                output={'text':'Needs You: independent outcome check failed.','outcome_grader':card},proposal_ids=[])
+        output=json.loads(candidate['answer'])
+        if not isinstance(output,dict):
+            raise cp.OrchestrationError(400,'Graded remote candidate must remain an object.')
+        output['outcome_grader']=card
     proposals=cp.prepare_dispatch_output(conn,ctx,output)
     return cp.complete_dispatch(conn,worker,body['dispatch_handle'],body['lease_token'],outcome='succeeded',output=output,proposal_ids=proposals)
 
@@ -109,7 +157,7 @@ def complete(conn,worker,body):
 def fail(conn,worker,body):
     context(conn,worker,body)
     return cp.complete_dispatch(conn,worker,body['dispatch_handle'],body['lease_token'],outcome='failed',
-        output={'error':str(body.get('error') or 'Worker failed')[:2000],'retryable':body.get('retryable') is True},proposal_ids=[])
+        output={'error':'Remote execution failed; reconcile accepted requests before retry.','retryable':False},proposal_ids=[])
 
 
 def upload(conn,worker,body,raw,mime):

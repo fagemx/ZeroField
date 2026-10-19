@@ -172,6 +172,10 @@ def provider_configuration_status(card):
 
 def _request(url, head, **kwargs):
     _check_lease(head)
+    if callable(getattr(type(head), 'outbound_check', None)):
+        head.outbound_check(url)
+    if callable(getattr(type(head), 'outbound_timeout', None)):
+        kwargs['timeout'] = head.outbound_timeout(kwargs.get('timeout', 60))
     try:
         result = legacy.json_fetch(url, **kwargs)
     except runtime.TransientWorkerError:
@@ -209,6 +213,8 @@ def _execute_remote(task, card, values, head, driver):
     timeout = _positive(config.get("timeout", 600), "timeout")
     poll = _positive(config.get("poll_interval", 0.5), "poll_interval")
     request_timeout = min(_positive(config.get("request_timeout", 60), "request_timeout"), timeout)
+    if callable(getattr(type(head), 'outbound_timeout', None)):
+        request_timeout = head.outbound_timeout(request_timeout)
     deadline = time.monotonic() + timeout
     cache, source_duration, requested = {}, None, None
     for node, item in zip(card["nodes"], nodes):
@@ -291,6 +297,8 @@ def _execute_remote(task, card, values, head, driver):
     if origin not in allowed:
         raise runtime.WorkerError("Provider output origin is not authorized")
     _check_lease(head)
+    if callable(getattr(type(head), 'outbound_check', None)):
+        head.outbound_check(item['url'])
     try:
         raw, mime = legacy.fetch(item["url"], timeout=request_timeout, limit=legacy.MAX_MEDIA)
     except runtime.TransientWorkerError:

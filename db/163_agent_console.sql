@@ -232,3 +232,57 @@ BEGIN
  END LOOP;
 END $$;
 CREATE INDEX IF NOT EXISTS agent_usage_project_date_idx ON projectops.agent_usage_ledger(project_slug,created_at);
+
+-- Short-lived outbound capacity, retained uncertain spend, immutable settlement.
+-- Nullable money is unknown pricing, never evidence of a free local/provider call.
+ALTER TABLE projectops.agent_usage_ledger
+ ALTER COLUMN estimated_cost_usd DROP NOT NULL,
+ ADD COLUMN IF NOT EXISTS observed_cost_usd NUMERIC(10,4) CHECK (observed_cost_usd>=0 AND observed_cost_usd<1000000),
+ ADD COLUMN IF NOT EXISTS pricing_provenance TEXT NOT NULL DEFAULT 'legacy_estimate',
+ ADD COLUMN IF NOT EXISTS session_key TEXT;
+ALTER TABLE projectops.agent_console_settings ADD COLUMN IF NOT EXISTS model_pricing JSONB NOT NULL DEFAULT '{}';
+CREATE TABLE IF NOT EXISTS projectops.agent_usage_reservation (
+ project_slug TEXT NOT NULL REFERENCES projectops.project(slug) ON DELETE CASCADE,
+ request_key TEXT NOT NULL CHECK(length(request_key) BETWEEN 1 AND 160),
+ session_key TEXT NOT NULL CHECK(length(session_key) BETWEEN 1 AND 160),
+ episode_id TEXT, run_id UUID, owner_id UUID NOT NULL,
+ agent_key TEXT NOT NULL, usage_kind TEXT NOT NULL,
+ category TEXT NOT NULL CHECK(category IN ('llm','render')),
+ provider_name TEXT NOT NULL, model_name TEXT NOT NULL, tier TEXT NOT NULL,
+ ceiling_cost_usd NUMERIC(10,4) CHECK(ceiling_cost_usd>=0 AND ceiling_cost_usd<1000000),
+ accounted_cost_usd NUMERIC(10,4) CHECK(accounted_cost_usd>=0 AND accounted_cost_usd<1000000),
+ pricing_provenance TEXT NOT NULL,
+ state TEXT NOT NULL DEFAULT 'reserved' CHECK(state IN ('reserved','dispatched','finalized','released','uncertain')),
+ lease_until TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY(project_slug,request_key)
+);
+CREATE INDEX IF NOT EXISTS agent_reservation_admission_idx ON projectops.agent_usage_reservation(project_slug,state,created_at);
+
+ALTER TABLE projectops.agent_console_settings
+ ADD COLUMN IF NOT EXISTS judge_trial_mode BOOLEAN NOT NULL DEFAULT FALSE,
+ ADD COLUMN IF NOT EXISTS judge_trial_cap_runs INTEGER NOT NULL DEFAULT 10 CHECK(judge_trial_cap_runs BETWEEN 1 AND 1000),
+ ADD COLUMN IF NOT EXISTS judge_trial_used_runs INTEGER NOT NULL DEFAULT 0 CHECK(judge_trial_used_runs>=0);
+ALTER TABLE projectops.agent_usage_reservation
+ ADD COLUMN IF NOT EXISTS operation_digest TEXT,
+ ADD COLUMN IF NOT EXISTS quote_expires_at TIMESTAMPTZ;
+-- Queued batches reserve currency and judge admissions, not execution concurrency.
+ALTER TABLE projectops.agent_usage_reservation DROP CONSTRAINT IF EXISTS agent_usage_reservation_state_check;
+ALTER TABLE projectops.agent_usage_reservation ADD CONSTRAINT agent_usage_reservation_state_check
+ CHECK(state IN ('queued','reserved','dispatched','finalized','released','uncertain'));
+CREATE TABLE IF NOT EXISTS projectops.agent_generation_admission (
+ project_slug TEXT NOT NULL REFERENCES projectops.project(slug) ON DELETE CASCADE,
+ operation_key TEXT NOT NULL CHECK(length(operation_key) BETWEEN 1 AND 160),
+ owner_id UUID NOT NULL, operation_digest TEXT NOT NULL,
+ protected BOOLEAN NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY(project_slug,operation_key)
+);
+-- Fence duplicate remote completion requests before any server-side grading call.
+ALTER TABLE projectops.orchestration_dispatch
+ ADD COLUMN IF NOT EXISTS outcome_grading_started BOOLEAN NOT NULL DEFAULT FALSE,
+ ADD COLUMN IF NOT EXISTS outcome_candidate_digest TEXT;
+ALTER TABLE projectops.agent_usage_reservation ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE projectops.agent_usage_ledger
+ ALTER COLUMN estimated_cost_usd SET DEFAULT NULL,
+ ALTER COLUMN estimated_saved_usd DROP NOT NULL,
+ ALTER COLUMN estimated_saved_usd SET DEFAULT NULL;
+ALTER TABLE projectops.agent_usage_reservation ADD COLUMN IF NOT EXISTS session_cap_usd NUMERIC(10,4) CHECK(session_cap_usd>=0 AND session_cap_usd<1000000);

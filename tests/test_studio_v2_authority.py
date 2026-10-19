@@ -69,6 +69,8 @@ class V2AuthorityTests(unittest.TestCase):
 
     def setUp(self):
         fixture.ProductHTTPTests.setUp(self)
+        from governance_fixture import authorize_synthetic_media
+        authorize_synthetic_media(self)
         self.policy_env = patch.dict(os.environ, {"OPENBENCH_PRODUCTION_POLICY": "hybrid_studio"})
         self.policy_env.start()
         self.other = str(uuid.uuid4())

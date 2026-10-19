@@ -642,6 +642,13 @@ def call(ctx: ToolContext, name: str, args) -> str:
             ctx.local_comfy_online = bool(limb_worker.probe_local_comfy_status()['online'])
         cp.lock_project(conn, ctx.slug)
         agent_policy.authorize_tool(ctx, conn, name, args)
+        if name in {'propose','propose_table_edit','offer_document'} and getattr(ctx, 'graded_source_stamp', None) is not None:
+            if studio_tools.source_stamp(ctx, conn) != ctx.graded_source_stamp:
+                raise ToolError('Proposal source changed during grading; request another reviewed candidate.')
+        if name in {'propose','propose_table_edit','offer_document'} and not getattr(ctx, 'grading_enabled', False) and getattr(ctx, 'worker_id', None) and isinstance(ctx.worker_id, dict):
+            current = agent_policy.agent_registry.get_agent(conn, ctx.slug, ctx.agent_key)
+            if current.get('outcome_grader', {}).get('enabled'):
+                raise ToolError('Return the candidate in your completion report; graded remote proposals are published only after the independent scorecard.')
         mode = agent_policy.permission_mode(ctx, conn, name, args)
         journal_owner = None
         journal = {}

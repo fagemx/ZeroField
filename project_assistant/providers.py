@@ -52,11 +52,18 @@ def _chat_tools(specs=None) -> list[dict]:
     ]
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
 def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_text: str,
                            call_tool, timeout: float, on_text=None, on_round=None,
-                           images=(), opener=urllib.request.urlopen, now=time.monotonic, tool_specs=None) -> model_client.TurnResult:
+                           images=(), opener=urllib.request.urlopen, now=time.monotonic, tool_specs=None, admission=None) -> model_client.TurnResult:
     """標準 `/v1/chat/completions` 工具呼叫迴圈（支援 OpenAI / Gemini / OpenRouter / Ollama / vLLM）。"""
 
+    if admission and opener is urllib.request.urlopen:
+        opener = urllib.request.build_opener(_NoRedirect()).open
     started = now()
     deadline = started + timeout
     result = model_client.TurnResult(status="error")
@@ -90,13 +97,19 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                 **({'tools':available_tools} if available_tools else {}),
                 **({'tool_choice': 'none' if round_no == model_client.MAX_ROUNDS else 'auto'} if available_tools else {}),
             }
+            if admission:
+                admission.before(payload)
             req = urllib.request.Request(
                 url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 method="POST", headers=headers,
             )
             try:
-                with opener(req, timeout=max(5.0, left)) as resp:
-                    data = json.loads(resp.read().decode("utf-8", "replace"))
+                with opener(req, timeout=max(.1, min(left, getattr(admission, 'timeout_limit', left)))) as resp:
+                    limit = getattr(admission, 'response_limit', 2*1024*1024)
+                    raw = resp.read(limit+1)
+                    if len(raw) > limit:
+                        raise model_client.ModelError('bad_response', 'Provider response exceeds the environment transport limit.')
+                    data = json.loads(raw.decode("utf-8", "replace"))
             except urllib.error.HTTPError as exc:
                 # Error bodies can echo API credentials; return only the HTTP status.
                 detail = f'模型端點回應 HTTP {exc.code}'
@@ -106,6 +119,13 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                     raise model_client.ModelError("auth", detail) from None
                 raise model_client.ModelError("unavailable", detail) from None
 
+            usage = data.get('usage') or {}
+            for name, value in usage.items():
+                for key, number in (value.items() if isinstance(value, dict) else [(name, value)]):
+                    if type(number) is int and number >= 0:
+                        result.usage[key] = result.usage.get(key, 0) + number
+            if admission:
+                admission.after(usage)
             result.rounds = round_no
             choice = ((data.get("choices") or [{}])[0]).get("message") or {}
             content = (choice.get("content") or "").strip()
@@ -141,9 +161,14 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                     messages.append({'role': 'user', 'content': [{'type': 'text', 'text': 'Authorized tool contact sheet; timing is in the tool result.'}] +
                         [{'type': 'image_url', 'image_url': {'url': image}} for image in out.images]})
         raise model_client.ModelError("bad_response", "Tool calls exceeded the limit.")
+    except (urllib.error.URLError, TimeoutError, OSError):
+        result.status, result.error_kind, result.error = 'error', 'unavailable', 'Provider transport unavailable; reconcile before retry.'
+        return result
     except model_client.ModelError as exc:
         result.status = "quota" if exc.kind == "quota" else "error"
         result.error_kind, result.error = exc.kind, str(exc)
         return result
     finally:
+        if admission:
+            admission.after({}, 'unknown')
         result.seconds = round(now() - started, 1)

@@ -577,6 +577,9 @@ def refresh_run(conn,slug,run_id):
     db.execute(conn,'''UPDATE projectops.orchestration_run SET status=%s,updated_at=NOW(),
         finished_at=CASE WHEN %s IN ('succeeded','failed','canceled') THEN COALESCE(finished_at,NOW()) ELSE NULL END WHERE id=%s''',
         (status,status,run_id))
+    if status in ('failed','canceled'):
+        from project_assistant.execution_governance import release_run_operations
+        release_run_operations(conn,slug,run_id)
 
 
 def complete_dispatch(conn,identity,dispatch_handle,lease_token,*,outcome,output,proposal_ids):
@@ -674,6 +677,8 @@ def cancel_run(conn,me,slug,run_id,reason='已取消整批工作'):
     db.execute(conn,"UPDATE projectops.orchestration_task SET status='canceled',updated_at=NOW() WHERE run_id=%s AND status NOT IN ('completed','failed','canceled')",(run_id,))
     db.execute(conn,"UPDATE projectops.orchestration_gate SET status='dismissed',resolved_at=NOW() WHERE run_id=%s AND status='open'",(run_id,))
     db.execute(conn,"UPDATE projectops.orchestration_run SET status='canceled',finished_at=NOW(),updated_at=NOW() WHERE id=%s",(run_id,))
+    from project_assistant.execution_governance import release_run_operations
+    release_run_operations(conn,slug,run_id)
     repo.add_audit(conn,slug,action='orchestration_cancel_run',actor_id=me.actor_id,target=run_id)
     return {'run_id':run['id'],'status':'canceled'}
 

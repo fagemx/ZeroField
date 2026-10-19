@@ -97,7 +97,7 @@ def credentials(*, fetch=None, now=time.monotonic) -> tuple[str, str]:
             token = (fetch or _default_bearer_token)()
             account = _jwt_account_id(token)
         except Exception as exc:  # noqa: BLE001
-            raise ModelError("auth", str(exc)) from None
+            raise ModelError("auth", "Model credentials unavailable; verify the configured reference.") from None
         _CRED.update(token=token, account=account, at=now())
         return token, account
 
@@ -137,7 +137,7 @@ def _is_transient(text: str) -> bool:
 
 
 def stream_once(body: dict, *, token: str, account: str, on_delta, timeout: float,
-                opener=urllib.request.urlopen) -> dict:
+                opener=urllib.request.urlopen, response_limit=2*1024*1024) -> dict:
     """送一次請求，邊收邊把文字交給 on_delta；回傳這一次的 output 項目和用量。"""
 
     request = urllib.request.Request(
@@ -150,7 +150,11 @@ def stream_once(body: dict, *, token: str, account: str, on_delta, timeout: floa
     usage: dict = {}
     try:
         with opener(request, timeout=timeout) as response:
+            received = 0
             for raw in response:
+                received += len(raw)
+                if received > response_limit:
+                    raise ModelError('bad_response', 'Provider stream exceeds the environment transport limit.')
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
                     continue
@@ -168,16 +172,16 @@ def stream_once(body: dict, *, token: str, account: str, on_delta, timeout: floa
                 elif kind in ("response.failed", "error"):
                     detail = json.dumps(event, ensure_ascii=False)
                     if _is_quota(detail):
-                        raise ModelError("quota", _clean(detail, token))
-                    raise ModelError("unavailable", _clean(detail, token), transient=_is_transient(detail))
+                        raise ModelError("quota", "Provider quota exceeded.")
+                    raise ModelError("unavailable", "Provider response failed.", transient=_is_transient(detail))
     except urllib.error.HTTPError as exc:
         detail = exc.read()[:600].decode("utf-8", "replace")
         if exc.code == 429 or _is_quota(detail):
-            raise ModelError("quota", _clean(detail, token)) from None
+            raise ModelError("quota", "Provider quota exceeded.") from None
         if exc.code in (401, 403):
             forget_credentials()
-            raise ModelError("auth", f"{exc.code} {_clean(detail, token)}") from None
-        raise ModelError("unavailable", f"{exc.code} {_clean(detail, token)}", transient=exc.code >= 500) from None
+            raise ModelError("auth", f"Provider authentication HTTP {exc.code}") from None
+        raise ModelError("unavailable", f"Provider HTTP {exc.code}", transient=exc.code >= 500) from None
     except TimeoutError as exc:
         raise ModelError("timeout", type(exc).__name__) from None
     except urllib.error.URLError as exc:
@@ -218,7 +222,7 @@ def _message_text(items: list[dict]) -> str:
 
 def run_turn(*, instructions: str, turn_text: str, call_tool, model: str, effort: str, cache_key: str,
              timeout: float, on_text=None, on_round=None, credentials_fn=credentials, images=(),
-             opener=urllib.request.urlopen, now=time.monotonic, sleep=time.sleep, tool_specs=None) -> TurnResult:
+             opener=urllib.request.urlopen, now=time.monotonic, sleep=time.sleep, tool_specs=None, admission=None) -> TurnResult:
     """跑完一輪：可能來回用幾次工具，最後一段文字就是回答。call_tool(name, args) 回傳要給模型的文字。
     images：使用者這一輪附的圖片（data URL），跟她的話放在同一則訊息裡。"""
 
@@ -227,7 +231,10 @@ def run_turn(*, instructions: str, turn_text: str, call_tool, model: str, effort
     result = TurnResult(status="error")
     allowed_names = {s['name'] for s in response_tools(tool_specs)}
     try:
-        token, account = credentials_fn()
+        token, account = credentials_fn() if not admission else (None, None)
+        if admission and opener is urllib.request.urlopen:
+            from project_assistant.providers import _NoRedirect
+            opener = urllib.request.build_opener(_NoRedirect()).open
         items: list = [{"role": "user", "content": [{"type": "input_text", "text": turn_text}]
                         + [{"type": "input_image", "image_url": url} for url in images]}]
         for round_no in range(1, MAX_ROUNDS + 1):
@@ -251,7 +258,16 @@ def run_turn(*, instructions: str, turn_text: str, call_tool, model: str, effort
             if round_no == MAX_ROUNDS:
                 body["tool_choice"] = "none"
                 body["input"] = items + [{"role": "user", "content": [{"type": "input_text", "text": LAST_ROUND_NOTE}]}]
-            got = _stream_with_retry(body,
+            if admission:
+                admission.before(body)
+                if token is None:
+                    token, account = credentials_fn()
+                got = stream_once(body, token=token, account=account, on_delta=on_delta,
+                                  timeout=max(.1, min(deadline-now(), admission.timeout_limit)), opener=opener,
+                                  response_limit=admission.response_limit)
+                admission.after(got['usage'])
+            else:
+                got = _stream_with_retry(body,
                                      token=token, account=account, on_delta=on_delta, on_retry=text.clear,
                                      deadline=deadline, opener=opener, now=now, sleep=sleep)
             result.rounds = round_no
@@ -288,4 +304,6 @@ def run_turn(*, instructions: str, turn_text: str, call_tool, model: str, effort
         result.error_kind, result.error = exc.kind, str(exc)
         return result
     finally:
+        if admission:
+            admission.after({}, 'unknown')
         result.seconds = round(now() - started, 1)

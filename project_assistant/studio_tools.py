@@ -133,14 +133,16 @@ def studio_dispatch_shot(ctx, conn, args):
         story_allocation.preflight_inputs(conn, ctx.slug, allocation['shot_id'], allocation, saved['cards'])
     if not saved['plan'].get('ready') or not plans or any(not a['ready'] for a in plans):
         raise ValueError('Allocation has configuration or input blockers.')
-    from project_assistant import story_media_adapter
+    from project_assistant import story_media_adapter, execution_governance
     guard = getattr(ctx, 'execution_guard', None)
     if not callable(guard):
         raise ValueError('Runtime media budget/environment admission is unavailable.')
-    guard(ctx, conn, 'media_dispatch', saved)
+    accounting = copy.copy(ctx)
+    accounting.episode_id = ep['episodeId']
+    guard(accounting, conn, 'media_dispatch', saved)
     results = []
     for allocation in plans:
-        results.append(story_media_adapter.enqueue(conn, ctx.me, ctx.slug, allocation['shot_id'], allocation, {}, ctx.post_commit_actions, frozen_cards=saved['cards']))
+        results.append(story_media_adapter.enqueue(conn, ctx.me, ctx.slug, allocation['shot_id'], allocation, {}, ctx.post_commit_actions, frozen_cards=saved['cards'], accounting_prefix=saved['allocationId'] + ':' + allocation['shot_id'], execution_agent_key=ctx.agent_key, grading_objective=getattr(ctx,'original_objective',None), accounting_session_key=execution_governance.session_key(ctx), budget_cap_usd=getattr(ctx,'budget_cap_usd',None)))
     saved['consumed'] = True
     story.store(conn, saved['allocationId'], 'allocation', saved)
     return {'allocationId': saved['allocationId'], 'runs': results, 'reviewRequired': True}
@@ -206,14 +208,17 @@ def studio_inspect_frames(ctx, conn, args):
         sheet, timing = bytes(asset[1]), cached['timing']
     else:
         # shortcut: concurrent first cache misses may both render locally; add single-flight if measured.
-        from project_assistant import limb_worker as worker
+        from project_assistant import limb_worker as worker, execution_governance as governance
         from project_assistant.studio.media_prep import build_video_frame_sheet
-        with tempfile.TemporaryDirectory(prefix='studio-inspect-') as folder:
-            path = Path(folder) / 'source.mp4'
-            path.write_bytes(raw)
-            media = worker._probe_video(path, {})
-            image, timing = build_video_frame_sheet(path, media['duration'], Path(folder))
-            sheet = image.read_bytes()
+        import uuid
+        def render():
+            with tempfile.TemporaryDirectory(prefix='studio-inspect-') as folder:
+                path = Path(folder) / 'source.mp4'
+                path.write_bytes(raw)
+                media = worker._probe_video(path, {'probe_timeout':governance.remaining(ctx, 60)})
+                image, timing = build_video_frame_sheet(path, media['duration'], Path(folder), {'timeout':governance.remaining(ctx), '_lease_lost':lambda:governance.lease_ended(ctx)})
+                return image.read_bytes(), timing
+        sheet, timing = governance.run_operation(ctx, 'inspect:' + uuid.uuid4().hex, render, model_name='frame_sheet', fingerprint=fingerprint)
     from project_assistant.agent_policy import authorize_tool
     cp.lock_project(conn, ctx.slug)
     authorize_tool(ctx, conn, 'studio_inspect_frames', args)
@@ -224,6 +229,13 @@ def studio_inspect_frames(ctx, conn, args):
         story.store(conn, 'frames_' + fingerprint, 'frame_sheet', {'slug': ctx.slug, 'asset_id': aid, 'timing': timing}, ctx.slug, ctx.me.actor_id)
     else:
         aid = cached['asset_id']
+    if asset:
+        from project_assistant import agent_console_store as resources
+        import uuid
+        resources.append_usage(conn,ctx.slug,{'event_key':'frame-cache:' + uuid.uuid4().hex, 'owner_id':ctx.me.actor_id,
+            'run_id':getattr(ctx,'run_id',None),'episode_id':args['episode_id'],'agent_key':ctx.agent_key,'usage_kind':'frame_prep',
+            'provider_name':'local','model_name':'frame_sheet','cache_hit':True,'fingerprint':fingerprint,
+            'meta':{'estimated':True,'outcome':'succeeded'}})
     ctx.pending_images.append('data:image/png;base64,' + base64.b64encode(sheet).decode('ascii'))
     return {'fingerprint': fingerprint, 'frame_sheet_asset_id': aid, 'cache_hit': bool(asset), 'timing_seconds': timing, 'frames': 8, 'width': 1600, 'height': 600}
 
@@ -255,7 +267,9 @@ def consult_advisor(ctx, conn, args):
     isolated.agent_key, isolated.advisor_call = key, True
     isolated.allowed_tools = set()
     isolated.pending_images = []
-    isolated.run_id = isolated.dispatch_id = isolated.message_id = isolated.lease_owner = None
+    isolated.governance_phase = 'advisor:' + cp.digest(args)
+    isolated.governance_origin = getattr(ctx, 'governance_origin', ctx)
+    isolated.accounting_session_key = getattr(ctx, 'accounting_session_key', None)
     readonly = {**advisor, 'allowed_tools': [], 'multiagent_config': {'allow_subagents': False, 'allow_workflows': False, 'advisor_agent_key': None}}
     result = agent_runtime.run_agent(profile=readonly, ctx=isolated,
         instructions=privacy.sanitize(system + '\n' + knowledge + '\nGive one focused critique only. No actions, delegation, or conversation history.', mode),

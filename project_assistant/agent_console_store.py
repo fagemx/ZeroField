@@ -28,7 +28,7 @@ RESOURCES = {
     'service_account': ('agent_service_account', 'account_key', {'display_name', 'limb_id', 'enabled'}),
 }
 JSON_FIELDS = {'recommended_tools', 'config', 'allowed_hosts', 'packages', 'provider_config', 'allowed_agent_keys',
-               'tags', 'rate_limits', 'retention_policy', 'otel_config', 'webhooks'}
+               'tags', 'rate_limits', 'retention_policy', 'otel_config', 'webhooks', 'model_pricing'}
 DEFAULTS = {
     'skill': dict(category='custom', summary='', instructions_md='', recommended_tools=[], enabled=True),
     'environment': dict(env_kind='local_sandbox', config={}, network_access='restricted', allowed_hosts=[], packages=[], enabled=True),
@@ -38,7 +38,8 @@ DEFAULTS = {
 }
 SETTINGS = {
     'spend_limit_monthly_usd': 100, 'spend_limit_session_usd': 5, 'spend_limit_episode_usd': 15,
-    'on_spend_limit': 'downgrade_open_weights',
+    'on_spend_limit': 'downgrade_open_weights', 'model_pricing': {},
+    'judge_trial_mode': False, 'judge_trial_cap_runs': 10,
     'rate_limits': {'rpm_per_agent': 30, 'max_concurrent_renders': 2, 'max_concurrent_llm': 4},
     'retention_policy': {'session_logs_days': 90, 'temp_media_days': 14, 'zero_data_retention_notice': True},
     'otel_config': {'enabled': False, 'endpoint': '', 'service_name': 'zerofield-studio'}, 'webhooks': [],
@@ -385,6 +386,25 @@ def save_settings(conn, me, slug, body):
             bad('Spend limits permit cents only.')
     if values['on_spend_limit'] not in ('pause', 'downgrade_open_weights'):
         bad('Invalid spend policy.')
+    if type(values['judge_trial_mode']) is not bool:
+        bad('Judge protection must be boolean.')
+    integer(values['judge_trial_cap_runs'], 1, 1000)
+    prices = values['model_pricing']
+    if not isinstance(prices, dict) or len(prices) > 100:
+        bad('Invalid model pricing table.')
+    for model, price in prices.items():
+        text(model, 160, required=True)
+        if not isinstance(price, dict) or set(price) != {'input_usd_per_million', 'output_usd_per_million', 'max_input_tokens', 'max_output_tokens', 'byte_bounded_tokenizer', 'base_url', 'kind'}:
+            bad('Supply rates, enforced token ceilings and explicit byte-tokenizer attestation.')
+        endpoint(price['base_url'])
+        if price['kind'] not in ('openai_compat', 'responses'):
+            bad('Unsupported priced provider transport.')
+        if price['byte_bounded_tokenizer'] is not True:
+            bad('Hard admission requires an operator-verified byte-bounded tokenizer.')
+        for field in ('input_usd_per_million', 'output_usd_per_million'):
+            price[field] = float(money(price[field]))
+        integer(price['max_input_tokens'], 1, 10000000)
+        integer(price['max_output_tokens'], 1, 1000000)
     for name in ('rate_limits', 'retention_policy', 'otel_config'):
         v = values[name]
         if not isinstance(v, dict) or set(v) != set(SETTINGS[name]):
@@ -431,7 +451,7 @@ def append_usage(conn, slug, event):
     """
     defaults = dict(run_id=None, episode_id=None, owner_id=None, agent_key='coordinator', provider_name='local',
                     model_name='default', tier='open_weights', input_tokens=0, output_tokens=0, cached_tokens=0,
-                    cache_hit=False, fingerprint=None, duration_ms=0, estimated_cost_usd=0, estimated_saved_usd=0, meta={})
+                    cache_hit=False, fingerprint=None, duration_ms=0, estimated_cost_usd=None, estimated_saved_usd=None, meta={})
     if not isinstance(event, dict) or set(event) - set(defaults) - {'event_key', 'usage_kind'} or not {'event_key', 'usage_kind'} <= set(event):
         bad('Invalid usage event.')
     v = {**defaults, **event}
@@ -450,7 +470,7 @@ def append_usage(conn, slug, event):
     if v['fingerprint'] is not None and (not isinstance(v['fingerprint'], str) or not re.fullmatch('[a-f0-9]{64}', v['fingerprint'])):
         bad('Invalid request fingerprint.')
     for n in ('estimated_cost_usd', 'estimated_saved_usd'):
-        v[n] = money(v[n])
+        v[n] = money(v[n]) if v[n] is not None else None
     if v['run_id'] is not None:
         run = db.get_run(conn, slug, v['run_id'])
         if not run or (v['owner_id'] is not None and str(v['owner_id']) != run['created_by']):
@@ -476,7 +496,7 @@ def append_usage(conn, slug, event):
     _lock(conn, slug)
     old = db.one(conn, 'SELECT to_jsonb(l) FROM projectops.agent_usage_ledger l WHERE project_slug=%s AND event_key=%s', (slug, v['event_key']))
     # Normalize through JSON numbers for comparison with PostgreSQL to_jsonb numeric values.
-    compare = {**v, 'estimated_cost_usd': float(v['estimated_cost_usd']), 'estimated_saved_usd': float(v['estimated_saved_usd'])}
+    compare = {**v, 'estimated_cost_usd': float(v['estimated_cost_usd']) if v['estimated_cost_usd'] is not None else None, 'estimated_saved_usd': float(v['estimated_saved_usd']) if v['estimated_saved_usd'] is not None else None}
     if old:
         if any(old[n] != compare[n] for n in compare):
             raise AgentError(409, 'Usage event identity was already recorded with different values.')
@@ -494,10 +514,15 @@ def analytics(conn, me, slug, *, days=30):
     return db.many(conn, '''SELECT jsonb_build_object('date',created_at::date,'agent_key',agent_key,
         'provider_name',provider_name,'model_name',model_name,'usage_kind',usage_kind,
         'input_tokens',sum(input_tokens),'output_tokens',sum(output_tokens),'cached_tokens',sum(cached_tokens),
-        'events',count(*),'cache_hits',count(*) FILTER (WHERE cache_hit),
-        'estimated_cost_usd',sum(estimated_cost_usd),'estimated_saved_usd',sum(estimated_saved_usd))
+        'events',count(*),'successful_events',count(*) FILTER (WHERE meta->>'outcome'='succeeded'),
+        'successful_uncached_events',count(*) FILTER (WHERE meta->>'outcome'='succeeded' AND NOT cache_hit),
+        'uncertain_events',count(*) FILTER (WHERE meta->>'outcome'='unknown'),
+        'canceled_events',count(*) FILTER (WHERE meta->>'outcome'='canceled'),'cache_hits',count(*) FILTER (WHERE cache_hit),
+        'estimated_cost_usd',sum(estimated_cost_usd),'estimated_saved_usd',sum(estimated_saved_usd),
+        'observed_cost_usd',sum(observed_cost_usd),'unknown_price_events',count(*) FILTER (WHERE estimated_cost_usd IS NULL),
+        'pricing_provenance',pricing_provenance)
         FROM projectops.agent_usage_ledger WHERE project_slug=%s AND created_at>=NOW()-(%s * INTERVAL '1 day')
-        GROUP BY created_at::date,agent_key,provider_name,model_name,usage_kind ORDER BY created_at::date''', (slug, days))
+        GROUP BY created_at::date,agent_key,provider_name,model_name,usage_kind,pricing_provenance ORDER BY created_at::date''', (slug, days))
 
 
 def execution_resources(conn, me, slug, agent_key, *, destination=None, vault_key=None):
@@ -531,7 +556,38 @@ def execution_resources(conn, me, slug, agent_key, *, destination=None, vault_ke
         access = environment['network_access']
         if access == 'offline' or (access == 'restricted' and host not in ('localhost', '127.0.0.1', '::1')) or (access == 'allowlist' and host not in [h.lower() for h in environment['allowed_hosts']]):
             raise AgentError(403, 'Environment network policy denies this destination.')
+    if provider and provider.get('api_key_env') and 'vault_keys' in environment['config']:
+        permitted = False
+        for mounted in environment['config']['vault_keys']:
+            reference = _get(conn, 'vault', slug, mounted)
+            if reference and reference['enabled'] and agent_key in reference['allowed_agent_keys'] and reference['provider_config'].get('api_key_env') == provider['api_key_env'] and all(reference['provider_config'].get(field) in (None, provider.get(field)) for field in ('kind','base_url','model')):
+                permitted = True
+        if not permitted:
+            raise AgentError(403, 'Environment credential allowlist denies this provider reference.')
     worker_id = environment['config'].get('worker_id')
     if worker_id:
         _limb(conn, slug, worker_id)
     return {'profile': profile, 'environment': environment, 'provider_config': provider}
+
+
+def set_judge_protection(conn, me, slug, *, enabled, version):
+    """Admin preset; enabling/toggling never resets the read-only used counter."""
+    return save_settings(conn, me, slug, {'version': version, 'judge_trial_mode': enabled, 'judge_trial_cap_runs': 10})
+
+
+def budget_summary(conn, me, slug):
+    """Project aggregates only; never return session/owner IDs, prompts or traces."""
+    settings=get_settings(conn,me,slug)
+    totals=db.one(conn, """SELECT jsonb_build_object(
+        'accounted_usd',sum(accounted_cost_usd),
+        'pending_usd',sum(accounted_cost_usd) FILTER (WHERE state IN ('queued','reserved','dispatched')),
+        'uncertain_usd',sum(accounted_cost_usd) FILTER (WHERE state='uncertain'),
+        'unknown_price_operations',count(*) FILTER (WHERE accounted_cost_usd IS NULL),
+        'active_operations',count(*) FILTER (WHERE state IN ('reserved','dispatched')))
+        FROM projectops.agent_usage_reservation WHERE project_slug=%s AND state<>'released'
+        AND (COALESCE(started_at,created_at)>=date_trunc('month',NOW()) OR state IN ('queued','reserved','dispatched','uncertain'))""", (slug,))
+    return {**totals, 'spend_limit_monthly_usd':settings['spend_limit_monthly_usd'],
+        'judge_trial_mode':settings['judge_trial_mode'],'judge_trial_cap_runs':settings['judge_trial_cap_runs'],
+        'judge_trial_used_runs':settings['judge_trial_used_runs'],
+        'judge_trial_remaining_runs':max(0,settings['judge_trial_cap_runs']-settings['judge_trial_used_runs']),
+        'cost_basis':'Reserved ceilings and configured estimates; unknown pricing is not zero. Observed billing is reported separately.'}

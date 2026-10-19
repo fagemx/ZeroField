@@ -237,7 +237,7 @@ def _resolve_openapi_card_and_workflow(webapp_id: str) -> tuple[dict, dict | Non
 
 def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                           node_info: list[dict], base_url: str) -> None:
-    client, authority = None, None
+    client, authority, accounting = None, None, None
     try:
         with _OPENAPI_LOCK:
             record = _OPENAPI_TASKS[task_id]
@@ -277,8 +277,22 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
 
         checkpoint()
         model_router.enforce_card_policy(card, policy)
+        if authority is not None:
+            from project_assistant import execution_governance as governance
+            accounting = authority.prepare(card, [card, compiled_workflow, node_info], task_id)
+            governance.transaction(accounting[0], lambda conn: governance.begin_operation(conn, accounting[0], accounting[1], card=card))
         if not card_engine.card_execution_profile(card)["requires_comfyui"]:
             class MediaHead:
+                def outbound_timeout(self, requested):
+                    if accounting is not None:
+                        from project_assistant import execution_governance as governance
+                        return governance.remaining(accounting[0], requested)
+                    return requested
+
+                def outbound_check(self, url):
+                    if authority is not None:
+                        authority.check_destination(url)
+
                 def lease_lost(self):
                     try:
                         checkpoint()
@@ -375,7 +389,9 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
             time.sleep(max(0.01, poll))
         raise runtime.WorkerError("Local ComfyUI workflow timed out")
     except Exception as exc:
-        message = ("Media execution failed or its authority changed; reconcile any accepted provider job."
+        from project_assistant.execution_governance import AdmissionError
+        message = (str(exc) if isinstance(exc, AdmissionError) else
+                   "Media execution failed or its authority changed; reconcile any accepted provider job."
                    if authority is not None else str(exc))
         with _OPENAPI_LOCK:
             if task_id in _OPENAPI_TASKS and _OPENAPI_TASKS[task_id]["status"] == "RUNNING":
@@ -385,6 +401,11 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                     "failedReason": {"exception_message": message},
                 })
     finally:
+        if accounting is not None:
+            from project_assistant import execution_governance as governance
+            with _OPENAPI_LOCK:
+                succeeded = _OPENAPI_TASKS.get(task_id, {}).get('status') == 'SUCCESS'
+            governance.transaction(accounting[0], lambda conn: governance.finalize(conn, accounting[0].slug, accounting[1], outcome='succeeded' if succeeded else 'unknown'))
         if client is not None:
             try:
                 client.close()

@@ -1116,6 +1116,8 @@ class ComfyPlatformClient:
                         os.environ["COMFY_BASE_URL"] = previous
 
     def upload_media(self, raw, mime, filename_prefix="input"):
+        if getattr(self, 'config', {}).get('_lease_lost', lambda:False)():
+            raise runtime.WorkerError('Execution authority ended before Comfy outbound work.')
         extensions = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "video/mp4": ".mp4", "video/webm": ".webm"}
         if mime not in extensions or len(raw) > legacy.MAX_MEDIA:
             raise runtime.WorkerError("Unsupported or oversized Comfy input media")
@@ -1130,6 +1132,8 @@ class ComfyPlatformClient:
         return (result.get("subfolder", "").strip("/") + "/" + result["name"]).lstrip("/")
 
     def submit_workflow(self, workflow, client_id, metadata=None):
+        if getattr(self, 'config', {}).get('_lease_lost', lambda:False)():
+            raise runtime.WorkerError('Execution authority ended before Comfy outbound work.')
         if self.sdk:
             return self.sdk.submit(self.sdk.workflows.from_json(workflow), **({"metadata": metadata} if metadata else {})).id
         result = legacy.json_fetch(self.base_url + "/prompt", token=self.token, payload={"prompt": workflow, "client_id": client_id, **({"extra_data": metadata} if metadata else {})})
@@ -1138,6 +1142,8 @@ class ComfyPlatformClient:
         return str(result["prompt_id"])
 
     def fetch_history(self, prompt_id):
+        if getattr(self, 'config', {}).get('_lease_lost', lambda:False)():
+            raise runtime.WorkerError('Execution authority ended before Comfy outbound work.')
         if self.sdk:
             job = self.sdk.jobs.get(prompt_id)
             outputs = {}
@@ -1148,6 +1154,8 @@ class ComfyPlatformClient:
         return legacy.json_fetch(self.base_url + "/history/" + urllib.parse.quote(prompt_id, safe=""), token=self.token)
 
     def download_output(self, item):
+        if getattr(self, 'config', {}).get('_lease_lost', lambda:False)():
+            raise runtime.WorkerError('Execution authority ended before Comfy outbound work.')
         if "sdk_output" in item:
             output = item["sdk_output"]
             class LimitedBuffer(io.BytesIO):
@@ -1257,6 +1265,10 @@ def comfyui(task, config, head):
         card = extract_studio_card_from_workflow(raw_workflow, label=Path(workflow_path).stem)
     workflow = convert_litegraph_to_api(raw_workflow)
     ctx = legacy.resolve_studio_context(task)
+    config = dict(config, _lease_lost=lambda: getattr(head, 'lease_lost', lambda:False)())
+    if callable(getattr(type(head),'outbound_timeout',None)):
+        config['timeout'] = head.outbound_timeout(config.get('timeout',1800))
+        config['probe_timeout'] = head.outbound_timeout(config.get('probe_timeout',60))
     client = legacy.ComfyPlatformClient(config)
     try:
         if card is not None:

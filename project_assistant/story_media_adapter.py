@@ -65,7 +65,7 @@ def verify_task(conn, task):
     return job
 
 
-def enqueue(conn, me, slug, identifier, allocation, sources, actions, *, frozen_cards=None):
+def enqueue(conn, me, slug, identifier, allocation, sources, actions, *, frozen_cards=None, accounting_prefix=None, execution_agent_key='coordinator', grading_objective=None, accounting_session_key=None, budget_cap_usd=None):
     cp.actor(conn, slug, me)
     _, row = story.find_row(conn, identifier, "shot")
     tab = cp.freeze_tab(conn, slug, row["tabKey"])
@@ -74,7 +74,19 @@ def enqueue(conn, me, slug, identifier, allocation, sources, actions, *, frozen_
     scope = {"target_tab": row["tabKey"], "table_id": table["attrs"]["bid"], "base_revision": tab["revision"], "row_ids": [row["rid"]], "column_ids": column_ids(table)}
     run = cp.create_run(conn, me, slug, "Studio media review: " + identifier, client_request_id="studio:" + uuid.uuid4().hex,
                         deadline_at=(cp.now() + dt.timedelta(minutes=30)).isoformat())
-    job = {"slug": slug, "entityId": identifier, "production_policy": story.production_policy(conn, slug), "sources": sources, "steps": {}}
+    from project_assistant import execution_governance as governance
+    prefix = accounting_prefix or 'media:' + run['id']
+    episode_id = story.shot_view(conn, slug, row).get('episodeId', 'ep_' + slug + '_01')
+    accounting_session_key = accounting_session_key or 'run:' + run['id']
+    accounting = governance.media_context(me, slug, agent_key=execution_agent_key, episode_id=episode_id, accounting_session_key=accounting_session_key, budget_cap_usd=budget_cap_usd)
+    operations = governance.allocation_operations(allocation, prefix, frozen_cards)
+    for operation in operations:
+        governance.prepare_operation(conn, accounting, **operation)
+    operation_keys = {o['request_key'].removeprefix(prefix + ':'): o['request_key'] for o in operations}
+    from project_assistant import agent_registry
+    sponsor=agent_registry.get_agent(conn,slug,execution_agent_key)
+    envelope=sponsor['outcome_grader'] if grading_objective is not None else None
+    job = {"accounting_session_key": accounting_session_key, "budget_cap_usd": str(budget_cap_usd) if budget_cap_usd is not None else None, "grading_objective": grading_objective, "outcome_grader": envelope, "episode_id": episode_id, "execution_agent_key": execution_agent_key, "operation_keys": operation_keys, "slug": slug, "entityId": identifier, "production_policy": story.production_policy(conn, slug), "sources": sources, "steps": {}}
     mapped = {}
     plans = allocation.get("race_plans")
     if plans:
@@ -140,6 +152,11 @@ class MediaHead(story.StoryHead):
         try:
             with http.open_connection() as conn:
                 cp.renew_dispatch(conn, _PRINCIPAL, self.dispatch["handle"], self.dispatch["lease_token"])
+                if hasattr(self, 'accounting_context'):
+                    from project_assistant import execution_governance as governance
+                    governance.live(conn, self.accounting_context, destination=getattr(self, 'accounting_destination', None))
+                    if getattr(self, 'accounting_card', None):
+                        governance.media_credentials(conn,self.accounting_context,self.accounting_card)
             return False
         except Exception:
             return True
@@ -171,7 +188,42 @@ def execute(dispatch):
             execution["input"]["predecessor_tasks"] = [{"output": value} for value in outputs.values()]
             step = job["steps"].get(current["agent_key"], job["steps"].get("single"))
         head = MediaHead(dispatch, task, run["created_by"])
+        from project_assistant import execution_governance as governance
+        accounting = governance.media_context(service.Identity(run['created_by'], 'Studio media', 'member'), job['slug'],
+            agent_key=job.get('execution_agent_key', 'coordinator'), episode_id=job.get('episode_id'), run_id=run['id'],
+            accounting_session_key=job.get('accounting_session_key') or 'run:' + run['id'], budget_cap_usd=job.get('budget_cap_usd'), dispatch_id=dispatch['id'],
+            admission_no=dispatch['admission_no'], lease_token=dispatch['lease_token'], worker_id=_PRINCIPAL,
+            deadline_at=dispatch['deadline_at'], authority_check=lambda conn: verify_task(conn, task))
+        name = job['name']
+        if name == 'race':
+            name = ('branch0:' if current['agent_key'] == 'studio:open' else 'branch1:') + step['step_id']
+        head.accounting_context = accounting
+        head.accounting_keys = {step['step_id']: job.get('operation_keys', {}).get(name, 'prep:' + dispatch['id'])}
         output = story_allocation.execute_steps(execution, [step], head, outputs=outputs)
+        if step['kind'] == 'generate' and job.get('grading_objective') is not None:
+            from project_assistant import agent_registry, outcome_grader
+            with http.open_connection() as conn:
+                sponsor=agent_registry.get_agent(conn,job['slug'],accounting.agent_key)
+            config=job.get('outcome_grader') or {}
+            if not config.get('enabled'):
+                config=sponsor.get('outcome_grader') or {}
+            if config.get('enabled'):
+                accounting.original_objective=job['grading_objective']
+                def trace(entry):
+                    def save(conn):
+                        governance.live(conn,accounting)
+                        cp.renew_dispatch(conn,_PRINCIPAL,dispatch['handle'],dispatch['lease_token'])
+                        db.execute(conn,'UPDATE projectops.orchestration_dispatch SET tools_trace=tools_trace||%s::jsonb WHERE id=%s',
+                                   (json.dumps([entry]),dispatch['id']))
+                    governance.transaction(accounting,save)
+                card=outcome_grader.grade_media(accounting,{**sponsor,'outcome_grader':config},output,on_trace=trace)
+                if not card['passed']:
+                    outcome_grader.needs_you(accounting,card,terminal=True)
+                    with http.open_connection() as conn:
+                        cp.complete_dispatch(conn,_PRINCIPAL,dispatch['handle'],dispatch['lease_token'],outcome='awaiting_gate',
+                            output={'text':'Needs You: media outcome check failed.','outcome_grader':card,'candidate':output},proposal_ids=[])
+                    return
+                output={**output,'outcome_grader':card}
         with http.open_connection() as conn:
             cp.leased_dispatch(conn, _PRINCIPAL, dispatch["handle"], dispatch["lease_token"])
             ctx = SimpleNamespace(worker_id=_PRINCIPAL, slug=job["slug"], dispatch_id=dispatch["id"], admission_no=dispatch["admission_no"], lease_token=dispatch["lease_token"], me=service.Identity(run["created_by"], "Studio media", "member"))

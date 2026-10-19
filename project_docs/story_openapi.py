@@ -560,12 +560,25 @@ def queue_task(conn, me, slug, kind, job, actions):
     task = {"taskId": identifier, "type": kind, "status": "QUEUED", "progress": None, "error": None,
             "result": None, "cost": None, "createdAt": now(), "finishedAt": None, "_job": job,
             "_actor": me.actor_id, "_slug": slug, "_process": _PROCESS}
+    from project_assistant import execution_governance as governance
+    if job.get('card'):
+        context = governance.media_context(me, slug, episode_id=job.get('episodeId'), accounting_session_key=identifier)
+        if job.get('allocation'):
+            operations = job.pop('_accounting_operations', [])
+        else:
+            operations = [dict(request_key=identifier + ':generate', card=job['card'], operation_digest=governance.cp.digest(job))]
+        for operation in operations:
+            governance.prepare_operation(conn, context, **operation)
+        if not job.get('allocation'):
+            job['_accounting_keys'] = {o['request_key'].split(':')[-1]: o['request_key'] for o in operations}
+        else:
+            job['_accounting_keys'] = {step['step_id']: job['_accounting_prefix'] + ':' + step['step_id'] for step in job['allocation']['stages'] if step['kind'] != 'approval'}
     store(conn, identifier, "task", task, slug, me.actor_id)
     actions.append(lambda: _POOL.submit(execute_task, identifier))
     return public_task(task)
 
 
-def generation(conn, me, identifier, kind, body, actions):
+def generation_job(conn, me, identifier, kind, body):
     slug, row = find_row(conn, identifier, "shot" if identifier.startswith("sh_") else "asset")
     authorize(conn, me, slug, write=True)
     policy = production_policy(conn, slug)
@@ -602,19 +615,59 @@ def generation(conn, me, identifier, kind, body, actions):
         values.update({f"{n['nodeId']}.{n['fieldName']}": chosen["url"] for n in card["nodes"] if n.get("slot") == "driving_video"})
     column = media_column(row, kind)
     workflow = frozen[1] if frozen else worker._resolve_openapi_card_and_workflow(card["card_id"])[1]
-    job = {"entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
+    episode_id = shot_view(conn, slug, row).get('episodeId', 'ep_' + slug + '_01') if identifier.startswith('sh_') else None
+    job = {"episodeId": episode_id, "entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
            "card": card, "workflow": workflow, "values": values, "column": column, "production_policy": policy}
     if body.get("_allocation"):
         job["allocation"] = copy.deepcopy(body["_allocation"])
+        job['_accounting_prefix'] = body.get('_accountingPrefix') or 'generation:' + uuid.uuid4().hex
+        from project_assistant import execution_governance as context
+        job['_accounting_operations'] = context.allocation_operations(job['allocation'], job['_accounting_prefix'])
         for step in job["allocation"]["stages"]:
             if step["kind"] == "generate":
                 step["card"], step["workflow"] = (card, workflow) if step["card_id"] == card["card_id"] else worker._resolve_openapi_card_and_workflow(step["card_id"])
+    if identifier.startswith('sh_') and not job.get('allocation'):
+        from project_docs import story_allocation
+        step={'step_id':'generate','kind':'generate','card_id':card['card_id'],'depends_on':[],'inputs':{},'output_role':'output_'+kind}
+        readiness={'stages':[step],'configuration_blockers':[]}
+        story_allocation.preflight_inputs(conn,slug,identifier,readiness,{card['card_id']:(card,workflow)},card_values=values)
+        if not readiness['ready']:
+            raise StoryError(409,'DRAMA_STAGE_PRECONDITION','Resolve required generation inputs before batch admission: ' + ', '.join(readiness['input_blockers']))
+    return slug,job
+
+
+def generation(conn, me, identifier, kind, body, actions):
+    slug,job=generation_job(conn,me,identifier,kind,body)
     return queue_task(conn, me, slug, ("SHOT_" if identifier.startswith("sh_") else "ASSET_") + kind.upper() + "_GENERATE", job, actions)
 
 
 class StoryHead:
     def __init__(self, task):
         self.task = task
+        from project_assistant import execution_governance as governance
+        if 'taskId' not in task:
+            return
+        self.accounting_context = governance.media_context(service.Identity(task['_actor'], 'Story worker', 'member'), task['_slug'],
+            accounting_session_key=task.get('taskId', 'story'), episode_id=task.get('_job',{}).get('episodeId'), authority_check=self.accounting_check)
+        self.accounting_keys = task.get('_job', {}).get('_accounting_keys', {})
+
+    def accounting_check(self, conn):
+        current = record(conn, self.task['taskId'], required=False)
+        if not current or current['status'] != 'RUNNING':
+            raise worker.WorkerError('Story operation ended before outbound work.')
+        authorize(conn, self.accounting_context.me, self.task['_slug'], write=True)
+        card = current['_job'].get('card')
+        if card:
+            authorize_card(conn, self.task['_slug'], card)
+
+    def outbound_check(self, url):
+        from project_assistant import execution_governance as governance
+        if hasattr(self, 'accounting_context'):
+            governance.check_destination(self.accounting_context, url)
+
+    def outbound_timeout(self, requested):
+        from project_assistant import execution_governance as governance
+        return governance.remaining(self.accounting_context, requested) if hasattr(self, 'accounting_context') else requested
 
     @property
     def paid_request_submitted(self):
@@ -643,6 +696,10 @@ class StoryHead:
                 card = current["_job"].get("card")
                 if card:
                     authorize_card(conn, self.task["_slug"], card)
+                from project_assistant import execution_governance as governance
+                governance.live(conn, self.accounting_context, destination=getattr(self, 'accounting_destination', None))
+                if getattr(self, 'accounting_card', None):
+                    governance.media_credentials(conn,self.accounting_context,self.accounting_card)
                 return False
         except (ValueError, worker.WorkerError):
             return True
@@ -672,6 +729,7 @@ class StoryHead:
 
 def execute_task(identifier):
     from project_docs import http
+    from project_assistant.execution_governance import AdmissionError
     try:
         with http.open_connection() as conn:
             task = record(conn, identifier, lock=True)
@@ -684,15 +742,21 @@ def execute_task(identifier):
         head = StoryHead(task)
         if task["type"] == "SCRIPT_REFINE":
             from project_assistant import providers
-            result = providers.run_openai_compat_turn(config=providers.provider_from_env(),
+            from project_assistant import execution_governance as governance, agent_registry
+            config = providers.provider_from_env()
+            with http.open_connection() as conn:
+                profile = agent_registry.get_agent(conn, slug, 'coordinator')
+            result = providers.run_openai_compat_turn(config=config, admission=governance.ProviderAdmission(head.accounting_context, profile, config),
                 instructions="Rewrite the supplied screenplay according to the instruction. Preserve asset tags and scene headings. Return only the complete screenplay, without commentary.",
                 turn_text=job["instruction"] + "\n\nSCREENPLAY:\n" + job["script"], call_tool=lambda *args: "Unavailable", timeout=180, tool_specs=[])
             if result.status != "ok" or not result.answer.strip():
                 raise worker.WorkerError("Script refinement failed; verify the configured model endpoint.")
             output = {"scriptContent": result.answer}
         elif task["type"] == "FILM_EXPORT":
-            output = worker.ffmpeg({"id": identifier, "input": {"rows": [{"row_id": str(i), "cells": [url]} for i, url in enumerate(job["urls"])]}},
-                                   job["config"], head)
+            from project_assistant import execution_governance as governance
+            output = governance.run_operation(head.accounting_context, identifier + ':export', lambda: worker.ffmpeg({"id": identifier, "input": {"rows": [{"row_id": str(i), "cells": [url]} for i, url in enumerate(job["urls"])]}},
+                                   dict(job["config"], timeout=head.outbound_timeout(job['config'].get('timeout',1800)),
+                                        probe_timeout=head.outbound_timeout(job['config'].get('probe_timeout',60))), head))
         else:
             with http.open_connection() as conn:
                 authorize(conn, me, slug, write=True)
@@ -703,7 +767,11 @@ def execute_task(identifier):
                 from project_docs import story_allocation
                 output = story_allocation.execute_steps(execution, job["allocation"]["stages"], head, job["values"])
             else:
-                output = worker.execute_story_card(execution, job["card"], job["values"], head)
+                from project_assistant import execution_governance as governance
+                head.accounting_card = job['card']
+                head.accounting_destination = governance.media_destination(job['card'])
+                output = governance.run_operation(head.accounting_context, job['_accounting_keys']['generate'],
+                    lambda: worker.execute_story_card(execution, job['card'], job['values'], head), card=job['card'])
         with http.open_connection() as conn:
             current = record(conn, identifier, lock=True)
             if current["status"] != "RUNNING":
@@ -747,8 +815,10 @@ def execute_task(identifier):
                 current = record(conn, identifier, required=False, lock=True)
                 if not current or current["status"] == "CANCELED":
                     return
-                message = str(exc) if isinstance(exc, (StoryError, worker.WorkerError)) else "Execution failed; check worker deployment and media inputs."
+                message = str(exc) if isinstance(exc, (StoryError, worker.WorkerError, AdmissionError)) else "Execution failed; check worker deployment and media inputs."
                 current["_paid_ambiguous"] = bool(getattr(exc, "no_retry", False) or getattr(locals().get("head"), "paid_request_submitted", False))
+                from project_assistant.execution_governance import release_unstarted
+                release_unstarted(conn,current['_slug'],current.get('_job',{}).get('_accounting_keys',{}).values())
                 current.update(status="FAILED", error={"code": "DRAMA_REQUEST_FAILED", "message": message[:500]}, finishedAt=now())
                 store(conn, identifier, "task", current)
             notify(current["_actor"], public_task(current))
@@ -1067,7 +1137,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             if body.get("allocationId"):
                 tasks = story_allocation.apply_batch(conn, me, ep, chosen, kind, body, actions)
             else:
-                tasks = [generation(conn, me, s["shotId"], kind, body, actions) for s in chosen]
+                jobs=[generation_job(conn,me,s['shotId'],kind,body) for s in chosen]
+                tasks=[queue_task(conn,me,job_slug,'SHOT_'+kind.upper()+'_GENERATE',job,actions) for job_slug,job in jobs]
             identifier = "tg_" + uuid.uuid4().hex
             group = {"taskGroupId": identifier, "taskIds": [t["taskId"] for t in tasks]}
             return store(conn, identifier, "taskGroup", group, slug, me.actor_id)
@@ -1241,6 +1312,8 @@ def dispatch(conn, me, method, path, body, query, actions):
                 if parts[2] == "cancellations":
                     if task["status"] not in ("QUEUED", "RUNNING"):
                         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Only active tasks can be canceled.")
+                    from project_assistant.execution_governance import release_unstarted
+                    release_unstarted(conn, task['_slug'], task.get('_job',{}).get('_accounting_keys',{}).values())
                     task.update(status="CANCELED", finishedAt=now())
                     store(conn, task["taskId"], "task", task)
                     return public_task(task)
@@ -1249,6 +1322,8 @@ def dispatch(conn, me, method, path, body, query, actions):
                         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Only failed or canceled execution tasks can be retried.")
                     if task.get("_paid_ambiguous") and body.get("confirmPaidResubmit") is not True:
                         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Reconcile the provider job and explicitly confirm paid resubmission.")
+                    if task['_job'].get('allocation'):
+                        raise StoryError(409, 'DRAMA_STAGE_PRECONDITION', 'Create a new source-bound reviewed allocation before retrying an allocation job.')
                     authorize(conn, me, task["_slug"], write=True)
                     return queue_task(conn, me, task["_slug"], task["type"], task["_job"], actions)
     if parts[0] == "task-groups" and len(parts) == 2 and method == "GET":
@@ -1334,6 +1409,7 @@ def upload_file(conn, me, handler, raw):
 
 def handle(handler, parsed, method):
     from project_docs import http
+    from project_assistant.execution_governance import AdmissionError
     conn = None
     actions = []
     try:
@@ -1364,6 +1440,8 @@ def handle(handler, parsed, method):
                 body, error = http._json_body(handler)
             if error:
                 raise StoryError(400, "DRAMA_REQUEST_FAILED", error[1]["error"])
+        if any(key.startswith('_') for key in body):
+            invalid('Reserved internal request fields are not accepted.')
         conn = http.open_connection()
         http._ensure_schema(conn)
         restore_cards(conn)
@@ -1404,7 +1482,9 @@ def handle(handler, parsed, method):
     except Exception as exc:
         if conn:
             conn.rollback()
-        if isinstance(exc, StoryError):
+        if isinstance(exc, AdmissionError):
+            status, code, message = 409, "DRAMA_STAGE_PRECONDITION", str(exc)
+        elif isinstance(exc, StoryError):
             status, code, message = exc.status, exc.code, str(exc)
         elif isinstance(exc, (ValueError, TypeError, KeyError, worker.WorkerError, media.MediaError, blocks.OpsError)):
             status, code, message = 422, "DRAMA_VALIDATION_FAILED", "Invalid request or incompatible production sheet."

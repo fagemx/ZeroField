@@ -181,6 +181,24 @@ class StoryHTTPTests(unittest.TestCase):
         self.assertEqual(len(self.ok(f"/projects/pj_{slug}/episodes")["items"]), 2)
         self.assertEqual(self.request(file["url"])[1], raw)
 
+    def generation_inputs(self, identifier, video=None):
+        from PIL import Image
+        if video is None:
+            import subprocess, tempfile
+            with tempfile.TemporaryDirectory() as folder:
+                path=Path(folder)/'source.mp4'
+                subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=c=blue:s=64x64:r=8:d=0.5',
+                    '-c:v','libx264','-pix_fmt','yuv420p','-movflags','+faststart',str(path)],check=True,timeout=15)
+                video=path.read_bytes()
+        image=io.BytesIO();Image.new('RGB',(16,16),'blue').save(image,format='PNG')
+        aid=repo.put_asset(self.conn,self.slug,data=image.getvalue(),content_type='image/png',actor_id=self.actor)
+        vid=repo.put_asset(self.conn,self.slug,data=video,content_type='video/mp4',actor_id=self.actor)
+        _,row=story.find_row(self.conn,identifier,'shot')
+        story.mutate_row(self.conn,self.me,self.slug,row['tabKey'],row['rid'],
+            {4:f'![Image](/projects/api/{self.slug}/assets/{aid})',5:f'[Video](/projects/api/{self.slug}/assets/{vid})'})
+        self.conn.commit()
+        return f'/projects/api/{self.slug}/assets/{vid}'
+
     def test_generation_candidates_split_merge_and_real_film(self):
         import subprocess
         import tempfile
@@ -193,8 +211,9 @@ class StoryHTTPTests(unittest.TestCase):
             self.assertIn(card["card_id"], ("h3-short-video-v3", "h3-optimize"))
             return head.upload(task, raw, "video/mp4")
         identifier = shots[0]["shotId"]
+        source = self.generation_inputs(identifier, raw)
         with patch.object(worker, "execute_story_card", side_effect=render):
-            done = self.await_task(self.ok(f"/shots/{identifier}/video-generations", "POST", {"appCode": "2109942725885075458"}))
+            done = self.await_task(self.ok(f"/shots/{identifier}/video-generations", "POST", {"appCode": "2109942725885075458", "modelParams":{"driving_video":source}}))
         self.assertEqual(done["status"], "SUCCEEDED", done)
         candidates = self.ok(f"/shots/{identifier}/videos")["items"]
         self.assertTrue(candidates)
@@ -319,9 +338,10 @@ class StoryHTTPTests(unittest.TestCase):
 
     def test_cancel_preserves_new_selection_and_explicit_retry(self):
         identifier = self.prepare()[0]["shotId"]
+        source = self.generation_inputs(identifier)
         queued = []
         with patch.object(story._POOL, "submit", side_effect=lambda *args: queued.append(args)):
-            task = self.ok(f"/shots/{identifier}/video-generations", "POST", {"appCode": "h3-reference"})
+            task = self.ok(f"/shots/{identifier}/video-generations", "POST", {"appCode": "h3-reference", "modelParams":{"driving_video":source}})
             self.ok("/tasks/" + task["taskId"] + "/cancellations", "POST", {})
             retry = self.ok("/tasks/" + task["taskId"] + "/retries", "POST", {})
         self.assertNotEqual(task["taskId"], retry["taskId"])

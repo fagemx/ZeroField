@@ -40,7 +40,7 @@ def public_plan(plan):
             "summary": {re.sub(r"_([a-z])", lambda m: m[1].upper(), k): v for k, v in plan["summary"].items()}}
 
 
-def preflight_inputs(conn, slug, identifier, allocation, cards, sources=None):
+def preflight_inputs(conn, slug, identifier, allocation, cards, sources=None, *, card_values=None):
     """Validate real media metadata and typed future outputs, never render/upload.
 
     Pure allocator readiness covers configuration only. This authorized boundary
@@ -135,7 +135,7 @@ def preflight_inputs(conn, slug, identifier, allocation, cards, sources=None):
                     if not ctx.get("anchor_keyframe") and ctx.get("first_frame"):
                         ctx["anchor_keyframe"] = ctx["first_frame"]
                 try:
-                    values = worker._build_card_form_values(card, ctx, dict(card["engine_config"]), task, None)
+                    values = worker._build_card_form_values(card, ctx, dict(card["engine_config"], card_values=card_values or {}), task, None)
                 except worker.WorkerError:
                     values = {}
                     errors.append("invalid_card_inputs:" + name)
@@ -228,11 +228,16 @@ def apply_batch(conn, me, ep, items, kind, body, actions):
         selected = story.resolve_app(body["appCode"], "video", saved["options"]["production_policy"])
         if any(a["assigned_card_id"] != selected["card_id"] for a in saved["plan"]["allocations"]):
             story.invalid("appCode must match the reviewed allocation.")
+    from project_assistant import execution_governance as governance
+    context = governance.media_context(me, ep['slug'], episode_id=ep['episodeId'], accounting_session_key=saved['allocationId'])
+    for allocation in saved['plan']['allocations']:
+        for operation in governance.allocation_operations(allocation, saved['allocationId'] + ':' + allocation['shot_id'], saved['cards']):
+            governance.prepare_operation(conn, context, **operation)
     tasks = []
     for allocation in saved["plan"]["allocations"]:
         tasks.append(story.generation(conn, me, allocation["shot_id"], "video",
             {"appCode": allocation["assigned_card_id"], "budgetMode": saved["options"]["budget_mode"], "_allocation": allocation,
-             "_frozenCard": saved["cards"][allocation["assigned_card_id"]]}, actions))
+             "_frozenCard": saved["cards"][allocation["assigned_card_id"]], "_accountingPrefix": saved["allocationId"] + ":" + allocation["shot_id"]}, actions))
         meta = story.shot_meta(conn, allocation["shot_id"]) | {"allocation": allocation}
         story.store(conn, "meta_" + allocation["shot_id"], "shot_meta", meta, ep["slug"])
     saved["consumed"] = True
@@ -263,14 +268,31 @@ def execute_steps(task, steps, head, values=None, outputs=None):
             continue
         current = bind_inputs(task, step.get("inputs", {}), outputs)
         if step["kind"] == "prepare":
-            output = worker.ffmpeg(current, step["config"], head)
+            def action():
+                config = dict(step['config'])
+                if callable(getattr(type(head),'outbound_timeout',None)):
+                    config['timeout'] = head.outbound_timeout(config.get('timeout',1800))
+                    config['probe_timeout'] = head.outbound_timeout(config.get('probe_timeout',60))
+                return worker.ffmpeg(current, config, head)
+            if hasattr(head, 'accounting_context'):
+                from project_assistant import execution_governance as governance
+                output = governance.run_operation(head.accounting_context, head.accounting_keys[step['step_id']], action)
+            else:
+                output = action()
         else:
             if "card" in step:
                 card, workflow = step["card"], step["workflow"]
             else:
                 card, workflow = worker._resolve_openapi_card_and_workflow(step["card_id"])
             current["workflow"] = workflow
-            output = worker.execute_story_card(current, card, values or {}, head)
+            action = lambda: worker.execute_story_card(current, card, values or {}, head)
+            if hasattr(head, 'accounting_context'):
+                from project_assistant import execution_governance as governance
+                head.accounting_card = card
+                head.accounting_destination = governance.media_destination(card)
+                output = governance.run_operation(head.accounting_context, head.accounting_keys[step['step_id']], action, card=card)
+            else:
+                output = action()
         outputs[step["step_id"]] = output
     return output
 

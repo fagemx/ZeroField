@@ -256,6 +256,7 @@ def execute(connection_factory, claim: dict, settings: Settings, worker_id: str)
                           agent_key=profile['agent_key'],lease_owner=worker_id,scope=question.get('request_scope'),
                           deadline_at=(dt.datetime.now(dt.timezone.utc)+dt.timedelta(seconds=settings.timeout)).isoformat())
         ctx.profile = profile
+        ctx.original_objective = privacy.sanitize(question['body'], privacy_mode)
 
         def record(summary):
             _with_conn(connection_factory, lambda c: store.append_tool(c, claim["id"], summary))
@@ -264,6 +265,9 @@ def execute(connection_factory, claim: dict, settings: Settings, worker_id: str)
                               prompting.build_parts(**prompt_args),images=images)
 
         def save(c):
+            from project_assistant import execution_governance as governance
+            if outcome.status != 'awaiting_gate':
+                governance.live(c, ctx)
             if outcome.status in ("ok",'awaiting_gate'):
                 done = store.finish(c, claim["id"], worker_id, body=outcome.answer,
                                     seconds=time.monotonic() - started, model=outcome.model or settings.model,
@@ -279,14 +283,16 @@ def execute(connection_factory, claim: dict, settings: Settings, worker_id: str)
                 return store.fail(c, claim["id"], worker_id, kind="lockdown", body=MESSAGES["lockdown"], retry=False)
             _log(f"turn {claim['id']} {outcome.kind}: {outcome.detail[-300:]}")
             return store.fail(c, claim["id"], worker_id, kind=outcome.kind, body=MESSAGES["retry_exhausted"],
-                              retry=True)
+                              retry=False)
 
         return _with_conn(connection_factory, save)
     except Exception as exc:  # noqa: BLE001
-        _log(f"turn {claim.get('id')} crashed: {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+        _log(f"turn {claim.get('id')} stopped: {type(exc).__name__}; reconcile accepted requests before retry.")
         try:
-            _with_conn(connection_factory, lambda c: store.fail(c, claim["id"], worker_id, kind="crash",
-                                                                body=MESSAGES["retry_exhausted"], retry=True))
+            from project_assistant.execution_governance import AdmissionError
+            body = str(exc) if isinstance(exc, AdmissionError) else MESSAGES['retry_exhausted']
+            _with_conn(connection_factory, lambda c: store.fail(c, claim["id"], worker_id, kind="admission" if isinstance(exc, AdmissionError) else "crash",
+                                                                body=body, retry=False))
         except Exception as inner:  # noqa: BLE001
             _log(f"could not record crash: {type(inner).__name__}: {inner}")
         return "crash"
@@ -351,6 +357,7 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
         ctx=ToolContext(connection_factory,claim['project_slug'],me,report_dir(settings,claim['project_slug']),None,
             agent_key=claim['agent_key'],dispatch_id=claim['id'],admission_no=claim['admission_no'],lease_token=claim['lease_token'],
             write_mode=task['write_mode'],scope=task['request_scope'],worker_id=worker_id,run_id=claim['run_id'],deadline_at=claim['deadline_at'])
+        ctx.original_objective=task['spec']
         ctx.scope=_with_conn(connection_factory,lambda c:cp.effective_scope(c,claim,task))
         system,knowledge=prompting.load_agent(profile)
         instructions=system+'\n'+knowledge
@@ -389,9 +396,11 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
                 output={'text':outcome.answer}
         except ValueError:
             output={'text':outcome.answer}
+        if outcome.scorecard is not None:
+            output['outcome_grader']=outcome.scorecard
         state='succeeded' if outcome.status=='ok' else 'awaiting_gate' if outcome.status=='awaiting_gate' else 'failed'
         if state=='failed':
-            output={'error':outcome.detail or outcome.answer or "Agent execution failed.",'retryable':outcome.kind in ('unavailable','timeout','crash')}
+            output={'error':outcome.detail or outcome.answer or "Agent execution failed.",'retryable':False}
         def complete(c):
             cp.leased_dispatch(c,worker_id,claim['handle'],claim['lease_token']) if state!='awaiting_gate' else None
             db.execute(c,'UPDATE projectops.orchestration_dispatch SET executed_model=%s,executed_provider=%s WHERE id=%s',
@@ -403,9 +412,11 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
     except cp.OrchestrationError:
         return 'lost'
     except Exception as exc:
+        from project_assistant.execution_governance import AdmissionError
+        safe_error = str(exc) if isinstance(exc, AdmissionError) else 'Execution failed; reconcile accepted requests before retry.'
         try:
             _with_conn(connection_factory,lambda c:cp.complete_dispatch(c,worker_id,claim['handle'],claim['lease_token'],
-                outcome='failed',output={'error':str(exc)[:2000],'retryable':True},proposal_ids=db.many(c,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s',(claim['id'],))))
+                outcome='failed',output={'error':safe_error,'retryable':False},proposal_ids=db.many(c,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s',(claim['id'],))))
         except Exception:
             pass
         return 'failed'

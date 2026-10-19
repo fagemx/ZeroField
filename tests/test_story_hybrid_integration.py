@@ -60,6 +60,8 @@ class StoryHybridIntegrationTests(unittest.TestCase):
 
     def setUp(self):
         fixture.StoryHTTPTests.setUp(self)
+        from governance_fixture import authorize_synthetic_media
+        authorize_synthetic_media(self)
         type(self).submits = []
         self.provider_env = patch.dict(os.environ, {"OPENBENCH_PRODUCTION_POLICY": "hybrid_studio", "SEEDANCE_API_URL": self.base + "/vendor", "SEEDANCE_API_KEY": "synthetic-fixture-not-real", "RUNNINGHUB_API_URL": self.base + "/cloud", "RUNNINGHUB_API_KEY": "synthetic-fixture-not-real"})
         self.provider_env.start()
@@ -180,6 +182,9 @@ class StoryHybridIntegrationTests(unittest.TestCase):
             self.resolve(gate)
         self.assertEqual(len(seen),1)
         self.assertTrue(self.ok('/shots/'+identifier)['selectedVideoUrl'])
+        usage=db.many(self.conn,'SELECT usage_kind FROM projectops.agent_usage_ledger WHERE project_slug=%s',(self.slug,))
+        self.assertEqual(usage.count('frame_prep'),2)
+        self.assertIn('video_gen',usage)
 
     def test_real_m8_ab_candidates_winner_and_internal_principal_cannot_be_forged(self):
         identifier=self.prepare()[0]['shotId'];self.image(identifier, cast_reference=True);self.hybrid()
@@ -382,3 +387,87 @@ class StoryHybridIntegrationTests(unittest.TestCase):
         self.assertEqual(payload['msg'],'Media API unavailable; check deployment configuration.')
         self.assertNotIn('fixture-sensitive-identity-detail',json.dumps(payload))
         self.assertEqual(self.submits,[])
+
+
+    def media_grader_case(self, always_fail=False):
+        from project_assistant import agent_registry, tools, outcome_grader, execution_governance as governance
+        import psycopg
+        requests=[];grades=[];owner=self
+        class Model(BaseHTTPRequestHandler):
+            def log_message(self,*args): pass
+            def do_POST(self):
+                request=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                requests.append(request)
+                content=request['messages'][1]['content']
+                text=content[0]['text'] if isinstance(content,list) else content
+                payload=json.loads(text)
+                if request['messages'][0]['content']==outcome_grader.GRADE_INSTRUCTIONS:
+                    owner.assertIsInstance(content,list)
+                    owner.assertTrue(content[1]['image_url']['url'].startswith('data:image/png;base64,'))
+                    owner.assertEqual(payload['objective'],'Check the actual courier candidate.')
+                    owner.assertNotIn('PRIVATE SPONSOR PROMPT',json.dumps(request))
+                    owner.assertNotIn('tools',request)
+                    with psycopg.connect(os.environ['OPENBENCH_TEST_DB_URI']) as conn:
+                        owner.assertEqual(db.one(conn,'SELECT count(*) FROM projectops.assistant_proposal WHERE project_slug=%s',(owner.slug,)),0)
+                    media=json.loads(payload['candidate']['answer'])['media']
+                    if grades: owner.assertEqual(media,grades[0])
+                    grades.append(media)
+                    passed=len(grades)>1 and not always_fail
+                    answer={'passed':passed,'score':90 if passed else 25,'feedback':'Improve the evidence note, not the render.',
+                            'checklist':[{'criterion':'Candidate evidence','passed':passed}]}
+                else:
+                    owner.assertEqual(request['messages'][0]['content'],outcome_grader.REVISION_INSTRUCTIONS)
+                    candidate=payload['candidate'];value=json.loads(candidate['answer']);value['review_note']='Revised evidence note'
+                    candidate['answer']=json.dumps(value);answer=candidate
+                raw=json.dumps({'choices':[{'message':{'content':json.dumps(answer)}}],
+                    'usage':{'prompt_tokens':15,'completion_tokens':5}}).encode()
+                self.send_response(200);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+        server=ThreadingHTTPServer(('127.0.0.1',0),Model)
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        for key in ('coordinator','qa_critic'):
+            agent_registry.save_agent(self.conn,self.me,self.slug,{'agent_key':key,'system_prompt':'PRIVATE SPONSOR PROMPT',
+                'provider_config':{'kind':'openai_compat','model':'synthetic-grading','base_url':f'http://127.0.0.1:{server.server_port}/v1'}})
+        agent_registry.save_agent(self.conn,self.me,self.slug,{'agent_key':'coordinator','tool_policies':{'studio_dispatch_shot':'auto'},
+            'outcome_grader':{'enabled':True,'criteria':'Inspect actual media evidence','grader_agent_key':'qa_critic','max_revisions':1}})
+        self.conn.commit()
+        identifier=self.prepare()[0]['shotId'];self.image(identifier);self.image(identifier,cast_reference=True)
+        ctx=tools.ToolContext(lambda:psycopg.connect(os.environ['OPENBENCH_TEST_DB_URI']),self.slug,self.me,Path('.'),None)
+        ctx.episode_id=self.ep;ctx.original_objective='Check the actual courier candidate.';ctx.accounting_session_key='original-tool-session';governance.install(ctx)
+        plan=json.loads(tools.call(ctx,'studio_plan_allocation',{'episode_id':self.ep,'shot_ids':[identifier],'app_code':'ltx25-cinema'}))
+        self.assertTrue(plan['ready'],plan)
+        with patch.object(worker,'comfyui',side_effect=self.local_inference) as inference:
+            queued=json.loads(tools.call(ctx,'studio_dispatch_shot',{'episode_id':self.ep,'shot_ids':[identifier],'allocation_id':plan['allocationId']}))
+            run=queued['runs'][0]['runId'];self.runs.append(run)
+            until=time.monotonic()+20
+            dispatch=None
+            while time.monotonic()<until:
+                items=db.dispatches(self.conn,self.slug,run_id=run)
+                dispatch=items[0] if items else None
+                if dispatch and dispatch['status'] in ('awaiting_gate','failed') and dispatch.get('output_json'): break
+                time.sleep(.05)
+            self.assertIsNotNone(dispatch)
+            self.assertEqual(dispatch['status'],'awaiting_gate',dispatch)
+            self.assertEqual(inference.call_count,1)
+            self.assertEqual(len(grades),2)
+            self.assertEqual(len(requests),3)
+            self.assertEqual(dispatch['output_json']['outcome_grader']['passed'],not always_fail)
+            proposals=db.many(self.conn,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s',(dispatch['id'],))
+            self.assertEqual(len(proposals),0 if always_fail else 1)
+            if always_fail:
+                gate=db.one(self.conn,"SELECT to_jsonb(g) FROM projectops.orchestration_gate g WHERE dispatch_id=%s AND status='open'",(dispatch['id'],))
+                cp.resolve_gate(self.conn,self.me,self.slug,gate['id'],resolution='0',client_request_id='ack-failed-media');self.conn.commit()
+                self.assertEqual(len(db.dispatches(self.conn,self.slug,run_id=run)),1)
+                self.assertEqual(inference.call_count,1)
+            kinds=db.many(self.conn,'SELECT usage_kind FROM projectops.agent_usage_ledger WHERE project_slug=%s',(self.slug,))
+            self.assertEqual(kinds.count('video_gen'),1)
+            self.assertEqual(kinds.count('grader_check'),2)
+            self.assertEqual(kinds.count('frame_prep'),1)
+            self.assertEqual(kinds.count('llm_turn'),1)
+            self.assertEqual(db.many(self.conn,'SELECT DISTINCT session_key FROM projectops.agent_usage_ledger WHERE project_slug=%s',(self.slug,)),['original-tool-session'])
+
+    def test_actual_async_media_is_graded_before_review_without_rerender(self):
+        self.media_grader_case()
+
+    def test_failed_async_media_scorecard_gate_cannot_resume_paid_side_effects(self):
+        self.media_grader_case(always_fail=True)
