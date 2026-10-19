@@ -3,7 +3,8 @@ import { agentLabel } from './format.js';
 import { useLocale } from './i18n/react.jsx';
 import { t as uiText } from './i18n/index.js';
 import { useState } from "react";
-import { CAPABILITIES, SCOPE_LABELS, TASK_LABELS, connectedWorker, taskSourceContext } from "./flowModel.js";
+import { CAPABILITIES, NODE_KINDS, SCOPE_LABELS, TASK_LABELS, connectedWorker, taskSourceContext } from "./flowModel.js";
+import { Icon } from "./Icon.jsx";
 
 export function Status({ status }) {
   const locale = useLocale(); return <span className={`execution-status ${status || ""}`}>{TASK_LABELS[status] || uiText("flowPanels.notRun")}</span>; }
@@ -17,7 +18,7 @@ export function FlowInspector({ selected, selectedId, definition, tabs, tab, wor
   const setTarget = (patch) => update({ target: { ...(selected.target || {}), ...patch } });
   const setSource = (patch) => update({ row_source: { ...(selected.row_source || {}), ...patch } });
   return <aside className="flow-sidepanel" aria-label={uiText("flowPanels.stepSettings", {v0: (selected.title)})}>
-    <div className="flow-panel-title"><strong>{uiText("flowPanels.stepSettings2")}</strong><button aria-label={uiText("flowPanels.closeStepSettings")} onClick={onClose}>×</button></div>
+    <div className="flow-panel-title flow-node-head"><span className={`flow-kind tone-${(NODE_KINDS[selected.capability] || NODE_KINDS.llm).tone}`}><Icon name={(NODE_KINDS[selected.capability] || NODE_KINDS.llm).icon} /></span><div><strong>{selected.title || uiText("flowPanels.stepSettings2")}</strong><small>{CAPABILITIES[selected.capability]}</small></div><button aria-label={uiText("flowPanels.closeStepSettings")} onClick={onClose}>×</button></div>
     <fieldset disabled={!writable || busy} className="flow-step-form" onFocusCapture={(event) => { if (event.target.matches('textarea,input:not([type="checkbox"])')) onEditStart(); }} onBlurCapture={(event) => { if (event.target.matches('textarea,input:not([type="checkbox"])')) onEditEnd(); }}><label>{uiText("flowPanels.name")}<input value={selected.title} maxLength={200} onChange={(event) => update({ title: event.target.value })} /></label>
       <label>{uiText("flowPanels.executionMode")}<select value={selected.scope || "legacy"} onChange={(event) => { const scope = event.target.value; update({ scope: scope === "legacy" ? undefined : scope, ...(["rows", "aggregate"].includes(scope) ? { row_source: selected.row_source || { tab_key: sourceKey || tabs.find((item) => item.surface_type === "sheet")?.key || "" } } : { row_source: undefined }) }); }}><option value="once">{uiText("flowPanels.onceProcessTheCompleteSource")}</option><option value="rows">{uiText("flowPanels.perRowProcessEachRowSeparately")}</option><option value="aggregate">{uiText("flowPanels.aggregateRunAfterAllUpstreamTasksComplete")}</option>{!selected.scope && <option value="legacy">{uiText("flowPanels.inheritUseTheBatchSelection")}</option>}</select></label>
       <div className="flow-form-section"><strong>{uiText("flowPanels.sources")}</strong>

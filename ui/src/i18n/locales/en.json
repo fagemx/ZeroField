@@ -875,7 +875,12 @@
     "fitView": "Fit View",
     "controlPanel": "Control Panel",
     "nodeKeyboard": "Enter selects a step. Arrow keys move it; Delete removes it.",
-    "edgeKeyboard": "Enter selects a connection; Delete removes it."
+    "edgeKeyboard": "Enter selects a connection; Delete removes it.",
+    "start": "Start",
+    "addNextStep": "Add the next step after {{v0}}",
+    "tidy": "Tidy layout",
+    "runScopeTitle": "Start · what this run covers",
+    "fromStep": "From {{v0}} onward"
   },
   "format": {
     "showrunner": "Showrunner",
@@ -1373,14 +1378,18 @@
     "transform": "Organize Content",
     "generate": "Generate Image",
     "review": "Propose Revisions",
-    "write": "Update a Document or Table"
+    "write": "Update a Document or Table",
+    "video": "Generate Video",
+    "assemble": "Assemble with FFmpeg"
   },
   "stepDescriptions": {
     "read": "Extract relevant content from a document or slate",
     "transform": "Classify, rewrite, summarize, or explain calculations",
     "generate": "Generate an image from the source and instructions",
     "review": "Prepare suggestions for human review at a selected destination",
-    "write": "Prepare results for the target fields and apply after review"
+    "write": "Prepare results for the target fields and apply after review",
+    "video": "Generate a shot from the keyframe, references and instructions",
+    "assemble": "Extract frames, build structure passes, compare or cut media"
   },
   "errors": {
     "crossOriginSignInIsNotAllowed": "Cross-origin sign-in is not allowed.",

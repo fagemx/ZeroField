@@ -279,13 +279,16 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
               node("structure", "Prepare Motion Structure", "media_assemble", "openjutsu-lab", headers.index("Motion Structure"))]
     if "anchor" in registered:
         nodes.append(node("anchor", "Anchor Keyframe", "image_gen", "openjutsu-lab", headers.index("Anchor Keyframe")))
-    for i, n in enumerate(nodes):
-        n.update(x=60 + (i % 3) * 380, y=80 + (i // 3) * 250)
     legacy_edges = [{"source": "keyframe", "target": "cinema"}, {"source": "cinema", "target": "assemble"}, {"source": "v2v", "target": "split"}]
     for i, n in enumerate(legacy_nodes):
         n.update(x=60 + (i % 3) * 380, y=80 + (i // 3) * 250)
     legacy = flow_runner.validate_definition({"nodes": legacy_nodes, "edges": legacy_edges})
     prep_chain = ["extract"] + (["anchor"] if "anchor" in registered else []) + ["structure", "v2v", "split"]
+    # Production lines read left to right (Start sits to their left in the editor): one lane per chain.
+    by_id = {n["id"]: n for n in nodes}
+    for top, lane in zip((60, 320, 580), (["image"], ["keyframe", "cinema", "assemble"], prep_chain)):
+        for depth, key in enumerate(lane):
+            by_id[key].update(x=300 + depth * 340, y=top)
     edges = [edge for edge in legacy_edges if edge["source"] != "v2v"] + [
         {"source": left, "target": right} for left, right in zip(prep_chain, prep_chain[1:])]
     graph = {"nodes": nodes, "edges": edges}
@@ -294,10 +297,18 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
             item["target"]["table_id"] = reference_table["attrs"]["bid"]
             item["row_source"]["table_id"] = reference_table["attrs"]["bid"]
     normalized = flow_runner.validate_definition(graph)
+    # The earlier three-column seed is still an untouched showcase definition, so it upgrades too.
+    snake = copy.deepcopy(nodes)
+    for i, n in enumerate(snake):
+        n.update(x=60 + (i % 3) * 380, y=80 + (i // 3) * 250)
+    previous = flow_runner.validate_definition({"nodes": snake, "edges": edges})
     without_anchor = flow_runner.validate_definition({"nodes": [n for n in nodes if n["id"] != "anchor"],
         "edges": [edge for edge in legacy_edges if edge["source"] != "v2v"] + [
             {"source": a, "target": b} for a, b in zip(["extract", "structure", "v2v"], ["structure", "v2v", "split"])]})
-    if current["definition"] == normalized or current["definition"] not in (original, legacy, without_anchor):
+    without_anchor_previous = flow_runner.validate_definition({"nodes": [n for n in snake if n["id"] != "anchor"],
+        "edges": [edge for edge in legacy_edges if edge["source"] != "v2v"] + [
+            {"source": a, "target": b} for a, b in zip(["extract", "structure", "v2v"], ["structure", "v2v", "split"])]})
+    if current["definition"] == normalized or current["definition"] not in (original, legacy, without_anchor, previous, without_anchor_previous):
         return False
     flow_runner.save_definition(conn, service.Identity(actor_id, "Alex Rivera", "admin"), slug, "comfy-pipeline",
                                 {"revision": current["revision"], "definition": graph})

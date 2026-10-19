@@ -875,7 +875,12 @@
     "fitView": "符合視窗",
     "controlPanel": "畫布控制",
     "nodeKeyboard": "Enter 選取步驟。方向鍵移動；Delete 刪除。",
-    "edgeKeyboard": "Enter 選取連線；Delete 刪除。"
+    "edgeKeyboard": "Enter 選取連線；Delete 刪除。",
+    "start": "開始",
+    "addNextStep": "在「{{v0}}」之後新增下一步",
+    "tidy": "整理排版",
+    "runScopeTitle": "開始 · 這次要跑什麼",
+    "fromStep": "從「{{v0}}」開始"
   },
   "format": {
     "showrunner": "製片總監",
@@ -1373,14 +1378,18 @@
     "transform": "整理內容",
     "generate": "生成影像",
     "review": "提出修改建議",
-    "write": "更新文件或表格"
+    "write": "更新文件或表格",
+    "video": "生成影片",
+    "assemble": "FFmpeg 剪輯合成"
   },
   "stepDescriptions": {
     "read": "從文件或分鏡表擷取相關內容",
     "transform": "分類、改寫、摘要或說明計算",
     "generate": "依來源素材與指示生成影像",
     "review": "整理修改建議，交由使用者審核",
-    "write": "整理結果，審核後寫入目標欄位"
+    "write": "整理結果，審核後寫入目標欄位",
+    "video": "依首幀、參考素材與指示生成鏡頭",
+    "assemble": "抽幀、產生結構片、並排對比或剪接媒體"
   },
   "errors": {
     "crossOriginSignInIsNotAllowed": "不接受跨站登入",

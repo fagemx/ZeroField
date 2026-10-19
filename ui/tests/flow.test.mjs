@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { connectNodes, connectedWorker, readSelection, seedDefinition, summarizeTasks } from "../src/flowModel.js";
 import { textCell } from "../src/sheetModel.js";
-import { applyCanvasPositions, createStep, flowToCanvas, pushDefinition, redoDefinition, taskSourceContext, undoDefinition } from "../src/flowModel.js";
+import { applyCanvasPositions, createStep, flowToCanvas, pushDefinition, redoDefinition, taskSourceContext, tidyLayout, undoDefinition } from "../src/flowModel.js";
 
 test("result row context uses the claimed source snapshot and never offers a non-row jump", () => {
   const run = { definition: { nodes: [{ id: "step", row_source: { tab_key: "source", table_id: "table" } }] } };
@@ -98,4 +98,14 @@ test("single image redraw preserves cell selection and chooses matching node", a
   const definition = { nodes: [{ id: "wrong", capability: "image_gen", target: { tab_key: "shots", col_index: 2 } }, { id: "image", capability: "image_gen", target: { tab_key: "shots", col_index: 4 } }] };
   assert.equal(redrawStart(definition, selection), "image");
   assert.equal(redrawStart(definition, { ...selection, col_index: 9 }), "");
+});
+
+test("tidy layout reads left to right by dependency depth with one lane per connected group", () => {
+  const node = (id, y) => ({ id, x: 0, y, title: id, capability: "llm" });
+  const tidy = tidyLayout({ nodes: [node("cut", 10), node("shot", 5), node("frame", 0), node("solo", 20)], edges: [{ source: "frame", target: "shot" }, { source: "shot", target: "cut" }], extra: 1 });
+  const at = Object.fromEntries(tidy.nodes.map((n) => [n.id, [n.x, n.y]]));
+  assert.deepEqual([at.frame[0], at.shot[0], at.cut[0]], [300, 640, 980]);
+  assert.equal(at.frame[1], at.cut[1]);
+  assert.ok(at.solo[1] > at.frame[1]);
+  assert.equal(tidy.extra, 1);
 });

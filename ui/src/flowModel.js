@@ -12,7 +12,34 @@ export const STEP_KINDS = {
   generate: { title: "Generate Image", description: "Generate an image from the source and instructions", capability: "image_gen", prompt: "Generate an image using the specified source and instructions." },
   review: { title: "Propose Revisions", description: "Prepare suggestions for human review at a selected destination", capability: "llm", prompt: "Review the content and propose specific revisions with reasons." },
   write: { title: "Update a Document or Table", description: "Prepare results for the target fields and apply after review", capability: "llm", prompt: "Prepare source content to match the destination document or table fields." },
+  video: { title: "Generate Video", description: "Generate a shot from the keyframe, references and instructions", capability: "video_gen", prompt: "Generate the shot from the approved keyframe and the row's references." },
+  assemble: { title: "Assemble with FFmpeg", description: "Extract frames, build structure passes, compare or cut media", capability: "media_assemble", prompt: "Prepare the media for the next step without changing approved takes." },
 };
+
+// Node identity in the editor (Dify/Make style): one icon and one tone per kind of work.
+export const NODE_KINDS = { llm: { icon: "text", tone: "llm" }, image_gen: { icon: "image", tone: "image" }, video_gen: { icon: "clapper", tone: "video" }, media_assemble: { icon: "cut", tone: "media" } };
+
+// Left-to-right layout by dependency depth; each connected group gets its own lane.
+export function tidyLayout(definition, { x0 = 300, y0 = 60, column = 340, row = 190, gap = 70 } = {}) {
+  const ids = definition.nodes.map((node) => node.id), incoming = new Map(ids.map((id) => [id, []]));
+  for (const edge of definition.edges) incoming.get(edge.target)?.push(edge.source);
+  const depth = new Map(), visiting = new Set();
+  const depthOf = (id) => { if (depth.has(id)) return depth.get(id); if (visiting.has(id)) return 0; visiting.add(id);
+    const d = Math.max(0, ...incoming.get(id).map((source) => depthOf(source) + 1)); visiting.delete(id); depth.set(id, d); return d; };
+  ids.forEach(depthOf);
+  const group = new Map(ids.map((id) => [id, id]));
+  const find = (id) => group.get(id) === id ? id : find(group.get(id));
+  for (const edge of definition.edges) if (group.has(edge.source) && group.has(edge.target)) group.set(find(edge.source), find(edge.target));
+  const byOrder = (a, b) => (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0);
+  const lanes = [...new Set([...definition.nodes].sort(byOrder).map((node) => find(node.id)))];
+  const placed = new Map(); let top = y0;
+  for (const lane of lanes) {
+    const members = [...definition.nodes].filter((node) => find(node.id) === lane).sort(byOrder), rows = new Map();
+    for (const node of members) { const d = depth.get(node.id), r = rows.get(d) || 0; rows.set(d, r + 1); placed.set(node.id, { x: x0 + d * column, y: top + r * row }); }
+    top += Math.max(...rows.values()) * row + gap;
+  }
+  return { ...definition, nodes: definition.nodes.map((node) => ({ ...node, ...placed.get(node.id) })) };
+}
 
 export function createStep(kind, id, index = 0) {
   const preset = STEP_KINDS[kind] || STEP_KINDS.transform;
@@ -42,10 +69,12 @@ export function flowToCanvas(definition, selectedIds = [], tabs = [], tasks = []
         latestMediaUrl: tasks.filter(task => task.node_id === node.id && task.status === 'succeeded' && task.output?.asset_url).sort((a,b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))[0]?.output.asset_url,
         scope: node.scope || "legacy",
         source: name(node.row_source?.tab_key || node.input_tabs?.[0]) || uiText("flowModel.noSourceSelected"),
-        target: name(node.target?.tab_key) || uiText("flowModel.keepResult"), status: summarizeTasks(tasks.filter((t) => t.node_id === node.id)).status },
+        target: name(node.target?.tab_key) || uiText("flowModel.keepResult"), capability: node.capability, ...summarizeTasks(tasks.filter((t) => t.node_id === node.id)) },
       ariaLabel: `${node.title}；${name(node.row_source?.tab_key || node.input_tabs?.[0]) || uiText("flowModel.noSourceSelected")} → ${name(node.target?.tab_key) || uiText("flowModel.keepResult")}` })),
+    // "Run after completion" is the only edge behaviour, so the lines carry no label (it stays in the accessible name).
     edges: definition.edges.map((edge) => ({ id: `${edge.source}--${edge.target}`, source: edge.source, target: edge.target,
-      label: uiText("flowModel.runAfterCompletion"), ariaLabel: uiText("flowModel.runAfterThePreviousStepCompletesAndIsApproved"), markerEnd: { type: "arrowclosed" } })),
+      ariaLabel: uiText("flowModel.runAfterThePreviousStepCompletesAndIsApproved"), markerEnd: { type: "arrowclosed" },
+      animated: tasks.some((t) => t.node_id === edge.target && t.status === "running") })),
   };
 }
 
