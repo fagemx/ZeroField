@@ -3,15 +3,24 @@
   "scope": "SPEC_07 targeted corrective integration only; original approved scope, no modularization redo or product edits by integration.",
   "reviewedBase": "dda463b271169f3ccee0f9539983e78917aab7ce",
   "candidateProductRevision": "956536dafff7832bcd1c765f459515d9ee536fe0",
-  "integrationRevision": "Documentation-only successor containing this receipt; full frozen SHA is recorded in the managed spec07-fixes/integrated.json handoff. All product files/assets equal candidateProductRevision.",
+  "integrationRevision": "Reviewed documentation predecessor 4b77295904990561c59ac877a3cfd91a807b5b08 has product files/assets equal to candidateProductRevision. This later review closeout changes documentation only.",
   "componentCommits": [
     "47dd860742375f6c81153fa72a392a6f7114c874",
     "d81f9dcdff1026f3ead1713aaac7b2748f72b5c7",
     "956536dafff7832bcd1c765f459515d9ee536fe0"
   ],
-  "result": "Final corrective integration gates passed: backend 389 / frontend 111, zero failures/errors/skips; production build and newly installed-wheel checks passed. Retained independent corrected-candidate review is pending, not passed.",
+  "result": "Final corrective gates passed: backend 389 / frontend 111, zero failures/errors/skips; build and newly installed-wheel checks passed. Independent review concluded OK with notes: all six original findings resolved, no new blocker identified.",
   "independentReview": {
-    "status": "pending",
+    "status": "completed",
+    "verdict": "OK with notes",
+    "reviewedRevision": "4b77295904990561c59ac877a3cfd91a807b5b08",
+    "reviewedProductRevision": "956536dafff7832bcd1c765f459515d9ee536fe0",
+    "resolvedFindingCount": 6,
+    "report": "docs/SPEC07_REVIEW.md",
+    "reportSha256": "e0fa1b82dbac25f56c7a3ab5bb5a3adbc1244b9bc4692282d3b46d3b427d2c6a",
+    "reviewerRun": "106cdb39-7258-4768-ad79-4c81914118e3",
+    "parentDisposition": "Engineering delivery accepted against the approved SPEC_07 scope and observed integration evidence; no authority for paid inference, publication or live-provider/quality certification is implied.",
+    "closeoutValidation": "Documentation-only closeout; no product changes or full-gate reruns after independent review.",
     "historicalVerdict": "BLOCK at dda463b271169f3ccee0f9539983e78917aab7ce: two P1 and four P2 accepted as source-supported defects. Old passing totals were not acceptance.",
     "historicalReview": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/b35c5bd1-ba2a-475f-b856-e26b4def3eee/spec07/review.md"
   },
@@ -186,7 +195,7 @@
     "No external coding-agent CLI, agent/executor/model/global config changes, dependencies added, reset/clean/stash, or other component edits. No test assertions weakened; integration needed no product glue or new tests."
   ],
   "residualRisks": [
-    "Independent corrected-candidate review remains pending; passing gates and component claims are not independent acceptance.",
+    "Independent review concluded OK with notes and resolved all six findings; this does not establish official provider compatibility, live model quality, billing or contest certification.",
     "Live provider adapter/cloud WebApp mapping, quality, pricing/throughput, model weights and contest eligibility require operator validation; catalog lock is not certification.",
     "Revocation stops subsequent checkpoint export/publication but cannot reverse an accepted upload/provider job. Cancellation cannot guarantee provider termination or avoid charges; ambiguous paid jobs require reconciliation and an explicit reviewed request, not automatic retry.",
     "v2 registries/media/tasks/capabilities retain process-local restart limits; missing HTTP capability fails closed. No durable provider exactly-once guarantee.",
