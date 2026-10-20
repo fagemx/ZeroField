@@ -23,7 +23,10 @@
   "6": {
     "class_type": "CLIPTextEncode",
     "inputs": {
-      "text": "One continuous shot that follows the blocked camera path and staging.",
+      "text": [
+        "30",
+        0
+      ],
       "clip": [
         "4",
         0
@@ -200,6 +203,14 @@
         "5",
         0
       ]
+    }
+  },
+  "30": {
+    "class_type": "StringConcatenate",
+    "inputs": {
+      "string_a": "One continuous shot that follows the blocked camera path and staging.",
+      "string_b": "Photographic live-action film footage shot on a cinema camera: realistic human proportions, natural skin texture, real fabric, glass and brass, physically based light, subtle film grain.",
+      "delimiter": " "
     }
   }
 }

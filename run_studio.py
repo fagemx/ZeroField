@@ -255,7 +255,7 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
         "cinema": {"video_gen": comfy("ltx25_cinema_shot.json", image_node="2", output_node="12")},
         "v2v": {"video_gen": comfy("ltx25_openjutsu_v2v.json", video_node="1", image_node="2", structure_video_node="4", output_node="12")},
         # Previs-driven shot: the grey blockout drives motion, Klein restores identity, a look pass re-renders the approved motion.
-        "motion": {"video_gen": comfy("ltx25_previs_motion.json", output_node="12",
+        "motion": {"video_gen": comfy("ltx25_previs_motion.json", output_node="12", prompt_node="30", prompt_input="string_a",
                                       input_bindings={"20.video": {"source": "previs_video", "upload": "video"}})},
         "lookkey": {"image_gen": comfy("flux3_klein_look_key.json", prompt_node=None, output_node="9",
                                        input_bindings={"20.video": {"source": "output_video", "upload": "video"},

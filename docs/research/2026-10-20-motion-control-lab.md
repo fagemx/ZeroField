@@ -97,10 +97,19 @@ is now S03's cinema shot in the showcase.
   once instead of being replaced. Ran end to end in the app on S03 ([motion pass](../verification/motion-lab/app_lane_motion_pass.jpg)).
 - Fixed on the way: an optional media binding with no asset left its `LoadImage` pointing at a placeholder file; the
   empty loader is now removed.
+- **Frame-exact previs**: *Render previs* encodes with WebCodecs (VP9) into a small WebM writer (`ui/src/previs/webm.js`),
+  so the clip is exactly 97 frames at 24 fps (MediaRecorder gave ~95 at ~21). The blockout casts soft shadows from a
+  studio key like the Blender workbench one ([earlier flat version](../verification/motion-lab/previs_blender_vs_threejs.jpg)).
+- **Style lock in the motion pass**: distilled LTX-2.5 runs at cfg 1, so the negative prompt has no effect, and a grey
+  blockout pulled the draft toward CG cartoon. `ltx25_previs_motion.json` appends a fixed live-action sentence after the
+  shot prompt (`StringConcatenate`, node 30). Same S03 previs, before and after: [cartoon → photographic](../verification/motion-lab/motion_pass_style_lock.jpg).
 
-Known gaps: the browser previs reads flatter than the Blender one ([side by side](../verification/motion-lab/previs_blender_vs_threejs.jpg))
-and MediaRecorder timing gives ~95 frames at ~21 fps (the loader resamples to 24); the Look Key cannot restore a face on a
-back-view ending; the editor plan is remembered per browser, the rendered previs is what the project stores.
+Known gaps: **identity**. The Klein look key keeps the draft's person when the head is small or turned away. On S03 the
+push-in ends on his back, and a swap on the mid-shot profile (frame 48) either changed nothing or produced a different
+man ([draft, two seeds, CAST-01](../verification/motion-lab/look_key_identity_limit.jpg)); a stronger swap instruction
+and a camera end key beside him did not help (LTX still turns him to the console). The look pass is photographic and
+follows the blocking, but it is not Kael. Next candidates: an identity LoRA for the cast, or framing where the face fills
+the key. The editor plan is remembered per browser; the rendered previs is what the project stores.
 
 ## Product consequences
 

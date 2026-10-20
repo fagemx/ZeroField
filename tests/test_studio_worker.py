@@ -352,8 +352,11 @@ class PrevisTwoPassTests(unittest.TestCase):
         motion = load('motion', 'video_gen')
         worker.bind_external_workflow(motion, {'previs_video': ASSET(9), 'compiled_prompt': 'beats', 'seed': 3},
                                       cfg['motion']['video_gen'], task, head, client)
-        self.assertEqual((motion['20']['inputs']['video'], motion['6']['inputs']['text'], motion['3']['inputs']['denoise']),
+        self.assertEqual((motion['20']['inputs']['video'], motion['30']['inputs']['string_a'], motion['3']['inputs']['denoise']),
                          ('source_video.bin', 'beats', 0.75))
+        # Shot beats land before the fixed live-action look lock that the encoder reads (cfg 1 ignores negatives).
+        self.assertEqual(motion['6']['inputs']['text'], ['30', 0])
+        self.assertIn('live-action', motion['30']['inputs']['string_b'])
         key = load('lookkey', 'image_gen'); instruction = key['6']['inputs']['text']
         worker.bind_external_workflow(key, {'output_video': ASSET(7), 'asset_images': [ASSET(1)], 'compiled_prompt': 'beats', 'seed': 5},
                                       cfg['lookkey']['image_gen'], task, head, client)

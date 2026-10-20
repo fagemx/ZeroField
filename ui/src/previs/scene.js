@@ -31,7 +31,7 @@ function observatory(group, mats) {
     const top = add(new THREE.BoxGeometry(0.64, 0.12, w), mats.brass, ROOM.x + 4.85 * ca, 0.92, ROOM.z + 4.85 * sa, -a);
     top.rotateZ(0.38);
   }
-  const dial = add(new THREE.CylinderGeometry(0.17, 0.17, 0.14, 48), mats.brass, 0.25, 1.03, 0.56);
+  const dial = add(new THREE.CylinderGeometry(0.17, 0.17, 0.14, 48), mats.brass, -0.25, 1.03, 0.56);
   dial.rotation.x = -0.38;
 }
 
@@ -48,14 +48,20 @@ function actor(mats) {
   part(new THREE.BoxGeometry(0.48, 0.72, 0.28), mats.coat, 0, 1.25, 0);
   part(new THREE.SphereGeometry(0.13, 24, 16), mats.skin, 0, 1.78, 0).scale.set(0.92, 1.15, 1);
   part(new THREE.BoxGeometry(0.05, 0.06, 0.08), mats.skin, 0, 1.78, 0.13);  // nose: shows facing
-  part(new THREE.CylinderGeometry(0.05, 0.05, 0.64, 12), mats.coat, -0.3, 1.25, 0);
-  const shoulder = new THREE.Group(); shoulder.position.set(0.3, 1.55, 0); root.add(shoulder);
+  part(new THREE.CylinderGeometry(0.05, 0.05, 0.64, 12), mats.coat, 0.3, 1.25, 0);
+  const shoulder = new THREE.Group(); shoulder.position.set(-0.3, 1.55, 0); root.add(shoulder);  // reaching arm on -x
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.66, 12), mats.coat); arm.position.set(0, -0.33, 0); shoulder.add(arm);
   const hand = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), mats.skin); hand.position.set(0, -0.68, 0); shoulder.add(hand);
   return { root, shoulder };
 }
 
 // Build a stage for a plan. Returns { scene, camera, frame(f), pose(f), shoot(f), dispose }.
+// The renderer must have shadowMap enabled (see prepareRenderer).
+export function prepareRenderer(renderer) {
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  return renderer;
+}
+
 export function buildStage(plan) {
   const night = plan.mood === 'night';
   const scene = new THREE.Scene();
@@ -68,12 +74,17 @@ export function buildStage(plan) {
     const rim = new THREE.DirectionalLight(0x8cb4ff, 1.1); rim.position.set(-3, 5, 8); scene.add(rim);
   } else {
     scene.add(new THREE.HemisphereLight(0xdde4ee, 0x303236, 0.9));
-    const key = new THREE.DirectionalLight(0xffffff, 0.8); key.position.set(-4, 6, -6); scene.add(key);
+    // Studio key with soft shadows, like the Blender workbench blockout the motion pass was validated on.
+    const key = new THREE.DirectionalLight(0xffffff, 1.0); key.position.set(-4, 9, -8); key.target.position.copy(ROOM); scene.add(key, key.target);
+    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0005;
+    Object.assign(key.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 0.5, far: 40 });
   }
   const set = new THREE.Group(); scene.add(set);
   (plan.set === 'empty' ? emptyStage : observatory)(set, mats);
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.8, 24, 16), mats.beam); beacon.position.set(-2, 3, 28); scene.add(beacon);
   const figure = actor(mats); scene.add(figure.root);
+  // Shadows everywhere. No outline/crease lines: drawn edges read as a toon render and the motion pass turns cartoon.
+  scene.traverse(o => { if (o.isMesh && o.material !== mats.beam) o.castShadow = o.receiveShadow = true; });
   const camera = new THREE.PerspectiveCamera(verticalFov(plan.lens), WIDTH / HEIGHT, 0.05, 200);
   const aim = new THREE.Vector3();
   function pose(f) {  // actor and beacon at frame f

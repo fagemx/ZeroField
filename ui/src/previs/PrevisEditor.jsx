@@ -5,7 +5,8 @@ import { useLocale } from '../i18n/react.jsx';
 import { t as uiText } from '../i18n/index.js';
 import { Dialog } from '../Dialog.jsx';
 import { ACTIONS, FPS, FRAMES, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, describePlan, verticalFov as verticalFovFor } from './plan.js';
-import { buildStage } from './scene.js';
+import { buildStage, prepareRenderer } from './scene.js';
+import { encodeCanvas } from './webm.js';
 
 const pick = (label, value, options, onChange, text) => <fieldset className="previs-field"><legend>{label}</legend>
   {options.map(o => <button type="button" key={o} aria-pressed={value === o} onClick={() => onChange(o)}>{text(o)}</button>)}</fieldset>;
@@ -17,11 +18,11 @@ export default function PrevisEditor({ shot, plan: initial, busy, onRender, onCl
   const [plan, setPlan] = useState(initial);
   const [frame, setFrame] = useState(0), [playing, setPlaying] = useState(false);
   const [free, setFree] = useState(false), [rendering, setRendering] = useState(false), [error, setError] = useState('');
-  const host = useRef(null), live = useRef(null);
+  const host = useRef(null), live = useRef(null), progress = useRef(null);
   const set = patch => setPlan(old => ({ ...old, ...patch }));
 
   useEffect(() => {  // one renderer per dialog; the stage is rebuilt when the set or light changes
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = prepareRenderer(new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }));
     renderer.setPixelRatio(1); renderer.setSize(WIDTH, HEIGHT, false);
     host.current.appendChild(renderer.domElement);
     const controls = new OrbitControls(new THREE.PerspectiveCamera(), renderer.domElement);
@@ -66,18 +67,12 @@ export default function PrevisEditor({ shot, plan: initial, busy, onRender, onCl
   const render = async () => {
     const ctx = live.current; setPlaying(false); setFree(false); setRendering(true); setError('');
     try {
-      const canvas = ctx.renderer.domElement, stream = canvas.captureStream(0), track = stream.getVideoTracks()[0];
-      const type = ['video/webm;codecs=vp9', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
-      const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8_000_000 }), chunks = [];
-      recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
-      const done = new Promise(resolve => { recorder.onstop = resolve; });
-      recorder.start();
-      for (let f = 0; f < FRAMES; f++) {  // paced at 24 fps so the recorder timestamps match the shot rate
-        ctx.stage.frame(f); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera); track.requestFrame?.(); setFrame(f);
-        await new Promise(r => setTimeout(r, 1000 / FPS));
-      }
-      recorder.stop(); await done; track.stop();
-      await onRender(new Blob(chunks, { type: 'video/webm' }), plan);
+      // WebCodecs + a WebM writer: every frame gets its exact timestamp, so the clip is 97 frames at 24 fps.
+      const blob = await encodeCanvas(ctx.renderer.domElement, FRAMES, FPS, f => {
+        ctx.stage.frame(f); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera);
+      }, n => { if (progress.current) progress.current.textContent = `${n}/${FRAMES}`; });
+      setFrame(FRAMES - 1);
+      await onRender(blob, plan);
     } catch (e) { setError(e.message || String(e)); }
     setRendering(false);
   };
@@ -107,7 +102,7 @@ export default function PrevisEditor({ shot, plan: initial, busy, onRender, onCl
           <button type="button" disabled={!plan.keys} onClick={() => set({ keys: null })}>{t('resetPath')}</button>
         </fieldset>
         {error && <p className="sheet-save-error" role="alert">{error}</p>}
-        <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>{rendering ? t('rendering') : t('render')}</button>
+        <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>{rendering ? <>{t('rendering')} <span ref={progress} /></> : t('render')}</button>
         <p className="previs-note">{t('note')}</p>
       </div>
     </div>
