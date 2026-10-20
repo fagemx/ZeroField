@@ -354,6 +354,13 @@ def shot_view(conn, slug, row):
             "selectedImageUrl": output("image"), "selectedVideoUrl": output("video")}
 
 
+def film_cut(items):
+    """Video URLs of an episode film in shot order: the cinema slate is the cut; a lab clip joins once it is approved."""
+    ordered = sorted(items, key=lambda s: tuple((0, int(part)) if part.isdigit() else (1, part.casefold()) for part in re.split(r"(\d+)", str(s["shotIndex"]))))
+    return [s["selectedVideoUrl"] for s in ordered if s["selectedVideoUrl"]
+            and (s["tabKey"] == "cinema-studio" or s.get("reviewStatus") in ("Approved", "已完成"))]
+
+
 def shots(conn, ep):
     result = []
     for key in ("cinema-studio", "openjutsu-lab"):
@@ -1204,8 +1211,7 @@ def dispatch(conn, me, method, path, body, query, actions):
             if method == "GET":
                 return page([f for f in records(conn, "film", slug) if f["episodeId"] == ep["episodeId"]], query)
             if method == "POST":
-                ordered = sorted(shots(conn, ep), key=lambda s: tuple((0, int(part)) if part.isdigit() else (1, part.casefold()) for part in re.split(r"(\d+)", str(s["shotIndex"]))))
-                urls = [s["selectedVideoUrl"] for s in ordered if s["selectedVideoUrl"]]
+                urls = film_cut(shots(conn, ep))
                 if not urls:
                     raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Select at least one shot video before exporting a film.")
                 return queue_task(conn, me, slug, "FILM_EXPORT", {"episodeId": ep["episodeId"], "urls": urls, "config": {}}, actions)

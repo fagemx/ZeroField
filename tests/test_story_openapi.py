@@ -63,6 +63,14 @@ class StoryPureTests(unittest.TestCase):
                 story.webhook_address(url)
 
 
+class FilmCutTests(unittest.TestCase):
+    def test_slate_order_and_lab_clips_join_once_approved(self):
+        shot = lambda index, tab, url, status="": {"shotIndex": index, "tabKey": tab, "selectedVideoUrl": url, "reviewStatus": status}
+        items = [shot("VFX-01", "openjutsu-lab", "/vfx"), shot("S10", "cinema-studio", "/s10"), shot("S02", "cinema-studio", "/s02", "Retake"),
+                 shot("S03", "cinema-studio", None), shot("VFX-02", "openjutsu-lab", "/vfx2", "Approved")]
+        self.assertEqual(story.film_cut(items), ["/s02", "/s10", "/vfx2"])  # S02 before S10; no video, no unapproved lab sample
+
+
 @unittest.skipUnless(os.environ.get("OPENBENCH_TEST_DB_URI"), "set OPENBENCH_TEST_DB_URI for Story HTTP tests")
 class StoryHTTPTests(unittest.TestCase):
     request = product_fixture.ProductHTTPTests.request
