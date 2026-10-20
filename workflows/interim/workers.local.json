@@ -1,0 +1,5 @@
+{
+  "image": {"image_gen": {"adapter": "comfyui", "platform": "local", "base_url": "http://127.0.0.1:8188", "workflow": "flux1_dev_keyframe.json", "prompt_node": "6", "seed_node": "3", "output_node": "9"}},
+  "cinema": {"video_gen": {"adapter": "comfyui", "platform": "local", "base_url": "http://127.0.0.1:8188", "workflow": "ltxv097_cinema_shot.json", "prompt_node": "6", "seed_node": "3", "image_node": "2", "output_node": "12"}},
+  "v2v": {"video_gen": {"adapter": "comfyui", "platform": "local", "base_url": "http://127.0.0.1:8188", "workflow": "ltxv097_openjutsu_v2v.json", "prompt_node": "6", "seed_node": "3", "video_node": "1", "video_input": "file", "image_node": "2", "output_node": "12"}}
+}

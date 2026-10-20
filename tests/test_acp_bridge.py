@@ -87,8 +87,9 @@ class ACPBridgeTests(unittest.TestCase):
                 deadline_at=dt.datetime.now(dt.timezone.utc)+dt.timedelta(seconds=15),cancel_event=cancel)
             marker=Path(folder)/'child.pid'
             until=time.monotonic()+7
-            while not marker.exists() and time.monotonic()<until: time.sleep(.02)
-            self.assertTrue(marker.exists(),'fixture must spawn a child before cancellation')
+            # The fixture creates the file before writing the pid; wait for the content, not the name.
+            while not (marker.exists() and marker.read_text().strip()) and time.monotonic()<until: time.sleep(.02)
+            self.assertTrue(marker.exists() and marker.read_text().strip(),'fixture must spawn a child before cancellation')
             child=int(marker.read_text()); cancel.set()
             self.assertEqual(future.result(timeout=8)['status'],'canceled')
             if os.name=='nt':

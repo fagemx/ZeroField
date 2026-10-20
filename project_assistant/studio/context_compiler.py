@@ -246,6 +246,11 @@ def compile_ltx_ingredients_prompt(ctx: dict) -> str:
     return (base + "\nReference Sheet Layout: " + " ".join(panels)).strip()
 
 
+def _take_seed(base, take):
+    """Take 1 keeps the asset's identity seed; each re-shoot of the same cell advances it."""
+    return None if base is None else base + (take if isinstance(take, int) and take > 0 else 0)
+
+
 def resolve_studio_context(task: dict) -> dict:
     """Compile the authorized shot snapshot without I/O or cross-row fallbacks."""
     source = task.get("input", {})
@@ -322,8 +327,12 @@ def resolve_studio_context(task: dict) -> dict:
     motion = column(r"camera\s*motion|movement|景別|運鏡")
     mode = column(r"jutsu\s*mode|^mode$")
     action = column(r"action.*prompt|swap\s*prompt|prompt|appearance")
+    still = task.get("capability") == "image_gen"
+    # Text-to-image encoders read "Optical Rig: RED ..." / "Static Tripod" as props to draw; a still has no camera move.
     parts = [f"{label}: {value.rstrip('.')}." for label, value in
-             (("Optical Rig", optical), ("Camera Movement", motion), ("Mode", mode)) if value]
+             (("Optical Rig", "" if still else optical), ("Camera Movement", "" if still else motion), ("Mode", mode)) if value]
+    if still and optical:
+        parts.insert(0, f"Cinematic film still, shot on {optical.rstrip('.')}; no camera equipment in frame.")
     if resolved and row.get("tab_key") not in ("soul-cast", "assets", "asset-sheet"):
         parts.append("References: " + "; ".join(f"{a['asset_id']} ({a['name']}): {a['appearance_prompt']}" for a in resolved) + ".")
     # Fallback is scoped to this row; full tab text can include unrelated shots/assets.
@@ -379,7 +388,7 @@ def resolve_studio_context(task: dict) -> dict:
     planned_slots = slot_plan(resolved, 6, limit=runtime.MAX_MATERIALS, excluded_ids=excluded_refs)
     ctx = {"compiled_prompt": compiled_prompt,
            "action_prompt": action,
-           "seed": next((a["seed"] for a in resolved if a["seed"] is not None), None),
+           "seed": _take_seed(next((a["seed"] for a in resolved if a["seed"] is not None), None), source.get("take")),
            "optical_rig": optical, "camera_motion": motion, "jutsu_mode": mode,
            "resolved_assets": resolved, "asset_map": asset_map,
            "excluded_refs": excluded_refs, "slot_plan": planned_slots,

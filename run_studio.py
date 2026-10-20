@@ -64,14 +64,6 @@ def seed_showcase_media(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=
                           "S02": {4: "keyframe_s02.png", 5: "shot_s02.mp4"}},
         "openjutsu-lab": {"VFX-01": {2: "openjutsu_source.mp4", 4: "openjutsu_remastered.mp4", 5: "openjutsu_split.mp4"}},
     }
-    baseline = {}
-    from project_docs import markdown_import
-    for key, _, _, markdown in templates.tab_specs("zerofield_studio", "", ""):
-        if key not in targets:
-            continue
-        doc, _ = markdown_import.markdown_to_doc(markdown, tab_keys=set(), image_src=lambda _: None)
-        baseline[key] = {_text(row["content"][0]): [_text(cell) for cell in row["content"]]
-                         for table in doc["content"] if table["type"] == "table" for row in table["content"][1:]}
     values = repo.field_values(conn, slug)
     changed, review_row = [], None
     for key, row_targets in targets.items():
@@ -96,9 +88,6 @@ def seed_showcase_media(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=
                         added = dirty = True
                 if not added:
                     continue
-                prompt_col = 3 if key in ("cinema-studio", "openjutsu-lab") else None
-                if prompt_col is not None and _text(cells[prompt_col]) == baseline[key].get(label, [""] * 8)[prompt_col]:
-                    _set_text(cells[prompt_col], _text(cells[prompt_col]) + " @CAST-01 @SET-01")
                 status_col = 5 if key == "soul-cast" else 6
                 status = next((n for p in cells[status_col].get("content", []) for n in p.get("content", []) if n["type"] == "status"), None)
                 if pristine and status and _text(status, values.get(key)) == "Queued":

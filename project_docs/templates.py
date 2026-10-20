@@ -25,14 +25,14 @@ def tab_specs(template: str, title: str, summary: str) -> list[tuple[str, str, s
              "# Cinema Studio Multi-Shot Slate\n\n"
              "| Shot | Optical Rig (Camera & Lens) | Camera Motion | Action & Audio Prompt | Keyframe | Cinema Shot | Status | Director Take Notes |\n"
              "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
-             "| S01 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Establish the empty observatory as Kael enters. Wind against the glass. | | | {{s:Queued}} | Establish the space and light direction. |\n"
-             "| S02 | RED V-Raptor / 85mm Prime | Static Tripod | Kael notices the pulsing recorder. A quiet radio signal becomes audible. | | | {{s:Queued}} | Match CAST-01 wardrobe and recorder. |\n"
-             "| S03 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Kael reaches for the dial as a light answers outside. Hold the final frame. | | | {{s:Queued}} | Keep the decision readable. |\n"),
+             "| S01 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Establish the empty observatory as Kael enters. Wind against the glass. @CAST-01 @SET-01 | | | {{s:Queued}} | Establish the space and light direction. |\n"
+             "| S02 | RED V-Raptor / 85mm Prime | Static Tripod | Kael notices the pulsing recorder. A quiet radio signal becomes audible. @CAST-01 @SET-01 | | | {{s:Queued}} | Match CAST-01 wardrobe and recorder. |\n"
+             "| S03 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Kael reaches for the dial as a light answers outside. Hold the final frame. @CAST-01 @SET-01 | | | {{s:Queued}} | Keep the decision readable. |\n"),
             ("openjutsu-lab", "OpenJutsu Lab", "sheet",
              "# OpenJutsu V2V Planning Matrix\n\n"
              "| Clip ID | Jutsu Mode | Source Driving Video | Target Cast / Swap Prompt | Remastered Video | Split-Screen MP4 | Status | Notes |\n"
              "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
-             "| VFX-01 | Motion Transfer | | Restage an original source clip in the observatory while preserving its action. | | | {{s:Queued}} | Add a self-shot or appropriately licensed source in the video development phase. |\n"),
+             "| VFX-01 | Motion Transfer | | Restage an original source clip in the observatory while preserving its action. @CAST-01 @SET-01 | | | {{s:Queued}} | Add a self-shot or appropriately licensed source in the video development phase. |\n"),
             ("comfy-pipeline", "Comfy Pipeline", "flow",
              "# Comfy Production Pipeline\n\n"
              "This editable pipeline describes the intended production stages. Configure compatible workers before running it. "

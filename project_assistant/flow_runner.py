@@ -858,8 +858,17 @@ def _inputs(conn, run, task, node):
     target_tab = repo.get_tab(conn, run["project_slug"], task["target"]["tab_key"]) if task["target"].get("tab_key") else None
     target_tables = [{"table_id": t["table_id"], "headers": privacy.sanitize(t["headers"], mode)}
                      for t in _table_data(target_tab["doc"], {})] if target_tab else []
+    take = 0
+    if task["row_id"] and task["target"].get("tab_key"):
+        # Earlier outputs for this same cell: a re-shoot must not replay a locked identity seed.
+        with conn.cursor() as cur:
+            cur.execute("""SELECT COUNT(*) FROM projectops.limb_task WHERE project_slug=%s AND row_id=%s
+                AND target->>'tab_key'=%s AND target->>'col_index' IS NOT DISTINCT FROM %s
+                AND output IS NOT NULL AND created_at<%s""", (run["project_slug"], task["row_id"],
+                task["target"]["tab_key"], None if task["target"].get("col_index") is None else str(task["target"]["col_index"]), task["created_at"]))
+            take = cur.fetchone()[0]
     return {"prompt": privacy.sanitize(node["prompt"], mode), "tabs": inputs, "scope": node.get("scope", "legacy"),
-            "row_id": task["row_id"], "rows": structured_rows, "target": task["target"],
+            "row_id": task["row_id"], "rows": structured_rows, "target": task["target"], "take": take,
             "target_tables": target_tables, "predecessors": results, "predecessor_tasks": predecessor_tasks}
 
 

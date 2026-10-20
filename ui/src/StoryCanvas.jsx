@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { applyNodeChanges, Background, Controls, Handle, MiniMap, Panel, Position, ReactFlow } from '@xyflow/react';
+import { applyNodeChanges, Background, Controls, Handle, Panel, Position, ReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useLocale } from './i18n/react.jsx';
 import { t as uiText } from './i18n/index.js';
@@ -164,7 +164,6 @@ export function StoryCanvas({ storageKey, model, parsed, scenes, title, writable
       onNodeDragStop={(_, node) => { positions.current[node.id] = node.position; try { localStorage.setItem(storageKey, JSON.stringify(positions.current)); } catch { /* positions stay for this visit */ } }}
       onNodeMouseEnter={(_, node) => setHover(node.id)} onNodeMouseLeave={() => setHover(null)}>
       <Background gap={28} size={1} color="#1c1c1c" />
-      <MiniMap position="top-right" pannable zoomable nodeColor="#2a2a2a" maskColor="rgba(0,0,0,.6)" style={{ width: 168, height: 104 }} />
       <Controls showInteractive={false} />
       <Panel position="top-left"><button type="button" className="sc-full" aria-pressed={full} onClick={toggleFull}><Icon name={full ? 'collapse' : 'expand'} />{uiText(full ? 'studio.canvasExitFullscreen' : 'studio.canvasFullscreen')}</button></Panel>
     </ReactFlow>

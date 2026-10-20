@@ -1,0 +1,21 @@
+{
+  "30": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "ltxv-13b-0.9.7-dev.safetensors"}},
+  "31": {"class_type": "CLIPLoader", "inputs": {"clip_name": "t5xxl_fp8_e4m3fn.safetensors", "type": "ltxv", "device": "default"}},
+  "1": {"class_type": "LoadVideo", "inputs": {"file": "source_video.mp4"}},
+  "20": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+  "21": {"class_type": "ImageFromBatch", "inputs": {"image": ["20", 0], "batch_index": 0, "length": 97}},
+  "22": {"class_type": "ImageScale", "inputs": {"image": ["21", 0], "upscale_method": "lanczos", "width": 1024, "height": 576, "crop": "center"}},
+  "2": {"class_type": "LoadImage", "inputs": {"image": "reference.png"}},
+  "23": {"class_type": "ImageScale", "inputs": {"image": ["2", 0], "upscale_method": "lanczos", "width": 1024, "height": 576, "crop": "center"}},
+  "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["31", 0]}},
+  "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "low quality, worst quality, deformed, distorted, disfigured, motion smear, jitter, flicker, watermark", "clip": ["31", 0]}},
+  "9": {"class_type": "LTXVConditioning", "inputs": {"positive": ["6", 0], "negative": ["7", 0], "frame_rate": 24}},
+  "10": {"class_type": "VAEEncode", "inputs": {"pixels": ["22", 0], "vae": ["30", 2]}},
+  "19": {"class_type": "LTXVAddGuide", "inputs": {"positive": ["9", 0], "negative": ["9", 1], "vae": ["30", 2], "latent": ["10", 0], "image": ["23", 0], "frame_idx": 0, "strength": 0.75}},
+  "13": {"class_type": "ModelSamplingLTXV", "inputs": {"model": ["30", 0], "max_shift": 2.05, "base_shift": 0.95, "latent": ["19", 2]}},
+  "3": {"class_type": "KSampler", "inputs": {"model": ["13", 0], "positive": ["19", 0], "negative": ["19", 1], "latent_image": ["19", 2], "seed": 48291, "steps": 30, "cfg": 3, "sampler_name": "euler", "scheduler": "simple", "denoise": 0.72}},
+  "24": {"class_type": "LTXVCropGuides", "inputs": {"positive": ["19", 0], "negative": ["19", 1], "latent": ["3", 0]}},
+  "8": {"class_type": "VAEDecode", "inputs": {"samples": ["24", 2], "vae": ["30", 2]}},
+  "11": {"class_type": "CreateVideo", "inputs": {"images": ["8", 0], "fps": 24}},
+  "12": {"class_type": "SaveVideo", "inputs": {"video": ["11", 0], "filename_prefix": "zerofield_openjutsu", "format": "mp4", "codec": "h264"}}
+}

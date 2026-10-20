@@ -47,6 +47,12 @@ class ContextTests(unittest.TestCase):
         self.assertLess(prompt.index('References:'), prompt.index('@CAST-01 enters'))
         self.assertNotIn('unrelated', prompt)
         self.assertEqual(task, before)
+        task['input']['take'] = 2
+        self.assertEqual(worker.resolve_studio_context(task)['seed'], 48293)
+        task['capability'] = 'image_gen'  # a still keyframe has no camera move to render
+        still = worker.resolve_studio_context(task)['compiled_prompt']
+        self.assertNotIn('Camera Movement:', still)
+        self.assertTrue(still.startswith('Cinematic film still, shot on ARRI / 35mm'))
 
     def test_structured_rows_alias_video_column_and_zero_seed(self):
         task = studio_task()

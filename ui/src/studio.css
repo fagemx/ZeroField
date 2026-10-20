@@ -337,7 +337,6 @@
 .story-canvas .react-flow__node { cursor: grab; }
 .story-canvas .react-flow__handle { width: 8px; height: 8px; min-width: 0; min-height: 0; background: #555; border: 2px solid #050505; }
 .story-canvas .react-flow__controls { border-radius: 10px; overflow: hidden; box-shadow: none; }
-.story-canvas .react-flow__minimap { border-radius: 10px; overflow: hidden; }
 .story-canvas-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); margin: 0; padding: 6px 12px; border-radius: var(--radius-control); background: rgba(17,17,17,.9); color: var(--faint); font-size: 12px; white-space: nowrap; pointer-events: none; }
 .sc-node { background: var(--surface); border-radius: 12px; color: var(--text); font: 400 12px/1.45 var(--font); transition: opacity .15s; }
 .sc-node.is-dim { opacity: .22; }
