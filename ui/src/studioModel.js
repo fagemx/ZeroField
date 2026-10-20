@@ -118,7 +118,9 @@ export function applyPreset(value, preset) {
 
 // Single-step uses the node's saved source/output. Never silently broaden a cell action.
 // match: optional node predicate, to name one pipeline step among several that write the same column.
-export function studioRunInput(flow, {tabKey, tableId, columnIds = [], rowIds, singleStep, capability, col_index, match}) {
+// row: the single row's cell values. A step whose row_source filters a column (Jutsu Mode = Object Swap) runs only on rows
+// that pass it, and wins over an unfiltered step writing the same column.
+export function studioRunInput(flow, {tabKey, tableId, columnIds = [], rowIds, singleStep, capability, col_index, match, row}) {
   if (!rowIds.length || rowIds.length > 200 || new Set(rowIds).size !== rowIds.length) throw new Error(t('studio.invalidRows'));
   const nodes = flow.definition?.nodes || [];
   const sameTable = target => target?.tab_key === tabKey && (!target.table_id || target.table_id === tableId);
@@ -126,9 +128,16 @@ export function studioRunInput(flow, {tabKey, tableId, columnIds = [], rowIds, s
   const candidates = nodes.filter(node => sameTable(node.target) && (!match || match(node)) && (!capability || node.capability === capability || preparedStage && node.capability === 'media_assemble') &&
     (col_index == null || (node.target.column_id ? node.target.column_id === columnIds[col_index] : node.target.col_index === col_index)));
   if (singleStep) {
-    const matching = candidates.filter(node => node.scope === 'rows'
+    let matching = candidates.filter(node => node.scope === 'rows'
       ? node.row_source?.tab_key === tabKey && (!node.row_source.table_id || node.row_source.table_id === tableId)
       : node.scope === 'once' && node.target.row_id === rowIds[0] && !node.row_source);
+    if (row) {
+      const statuses = node => [].concat(node.row_source?.status ?? []);
+      const passes = node => { const wanted = statuses(node), col = node.row_source.status_col;
+        return !wanted.length || (Number.isInteger(col) ? [row[col]] : row).some(value => wanted.includes(String(value ?? '').trim())); };
+      matching = matching.filter(passes);
+      if (matching.some(node => statuses(node).length)) matching = matching.filter(node => statuses(node).length);
+    }
     if (rowIds.length !== 1 || matching.length !== 1) throw new Error(t('studio.noSafeStep'));
     return {execution_mode:'single_step', node_id:matching[0].id, input_mode:'current_sources', sample_row_id:rowIds[0], definition_revision:flow.revision};
   }

@@ -385,6 +385,40 @@ class PrevisTwoPassTests(unittest.TestCase):
         self.assertEqual((look['20']['inputs']['video'], look['2']['inputs']['image'], look['3']['inputs']['denoise']),
                          ('source_video.bin', 'input.bin', 0.5))
 
+    def test_openjutsu_swap_bindings_key_the_first_frame_and_composite_over_the_source(self):
+        import run_studio
+        cfg = run_studio.worker_configs('http://127.0.0.1:8188')
+        head, client = Mock(), Mock()
+        head.asset.side_effect = lambda task, url: (url.encode(), 'video/mp4' if url == ASSET(5) else 'image/png')
+        client.upload_media.side_effect = lambda raw, mime, prefix: raw.decode().rsplit('_', 1)[-1][-2:] + '.' + prefix
+        load = lambda stage, cap: json.loads(Path(cfg[stage][cap]['workflow']).read_text(encoding='utf-8'))
+        key = load('swapkey', 'image_gen')
+        worker.bind_external_workflow(key, {'source_video': ASSET(5), 'asset_images': [ASSET(1)], 'compiled_prompt': 'swap', 'seed': 5},
+                                      cfg['swapkey']['image_gen'], studio_task(), head, client)
+        # Klein edits frame 0 of the source (not the last frame like the look key), with the cast reference only.
+        self.assertEqual((key['20']['inputs']['video'], key['23']['inputs']['batch_index'], key['21']['inputs']['image']),
+                         ('05.source_video', 0, '01.reference'))
+        self.assertNotIn('22', key)
+        self.assertEqual(cfg['swapkey']['image_gen']['reference_role'], 'anchor_keyframe')  # the swap step reads it as its anchor
+        swap = load('swap', 'video_gen')
+        client.upload_media.reset_mock()
+        worker.bind_external_workflow(swap, {'source_video': ASSET(5), 'anchor_keyframe': ASSET(4), 'compiled_prompt': 'Mode: Object Swap.', 'seed': 7},
+                                      cfg['swap']['video_gen'], studio_task(), head, client)
+        # One upload feeds the LTX-size loader and the native-size composite plate; the native one loads the same frame count.
+        self.assertEqual((swap['20']['inputs']['video'], swap['25']['inputs']['video'], client.upload_media.call_count), ('05.source_video', '05.source_video', 2))
+        self.assertEqual(swap['25']['inputs']['frame_load_cap'], ['20', 1])
+        self.assertEqual((swap['2']['inputs']['image'], swap['6']['inputs']['text'], swap['3']['inputs']['seed']), ('04.input', 'Mode: Object Swap.', 7))
+        # Alpha-Gen per its model card: LoRA and reference at strength 1, empty prompt, IC-LoRA parameters on the guide.
+        self.assertEqual((swap['40']['inputs']['lora_name'], swap['40']['inputs']['strength_model'], swap['45']['inputs']['strength']),
+                         ('ltx-2.5-22b-ic-lora-alpha-gen-0.9.safetensors', 1.0, 1.0))
+        self.assertEqual((swap['42']['inputs']['text'], swap['45']['inputs']['image'], swap['45']['inputs']['iclora_parameters']), ('', ['20', 0], ['41', 0]))
+        # Regenerated frames go only inside the grown, feathered matte, over the native source, with the source audio.
+        self.assertEqual({k: swap['60']['inputs'][k] for k in ('destination', 'source', 'mask', 'resize_source')},
+                         {'destination': ['25', 0], 'source': ['8', 0], 'mask': ['62', 0], 'resize_source': True})
+        self.assertEqual((swap['56']['class_type'], swap['58']['class_type'], swap['11']['inputs']['audio']), ('GrowMask', 'ImageBlur', ['25', 2]))
+        # The matte's near-zero VAE noise is gated to exactly 0, so the source outside it is copied bit for bit.
+        self.assertEqual((swap['61']['inputs']['mask'], swap['62']['inputs']['source'], swap['62']['inputs']['operation']), (['59', 0], ['61', 0], 'multiply'))
+
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg and FFprobe are required')
 class ReferencePreparationTests(unittest.TestCase):

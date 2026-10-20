@@ -13,6 +13,19 @@ Bindings (adapter=comfyui):
 | flux3_klein_soul_cast.json | 6 | 3 | 9 | Text only |
 | ltx25_cinema_shot.json | 6 | 3 | 12 | image_node=2, image_input=image |
 | ltx25_openjutsu_v2v.json | 6 | 3 | 12 | video_node=1, video_input=video, reference_image_node=2, reference_image_input=image |
+| ltx25_openjutsu_swap.json | 6 | 3 | 12 | input_bindings 20.video and 25.video = source_video, 2.image = anchor_keyframe |
+
+### OpenJutsu subject replacement (Object Swap)
+
+Rows whose **Jutsu Mode** is `Object Swap` run their own pipeline lane, **Swap Key → OpenJutsu Swap**; other rows keep the restyle above.
+
+1. **Swap Key** (`flux3_klein_look_key.json`, stage `swapkey`): FLUX 3 Klein edits frame 0 of the source (`23.batch_index` = 0) with the row's first `@CAST` reference (and an optional second reference). It keeps the pose and framing and writes **Anchor Keyframe** for review.
+2. **OpenJutsu Swap** (`ltx25_openjutsu_swap.json`, stage `swap`) is one LTX-2.5 graph:
+   - The [Alpha-Gen IC-LoRA](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen) mattes the subject. Settings follow its model card: LoRA strength 1.0, the source video as the IC-LoRA reference at strength 1.0, an empty prompt, and the official 8-step distilled sigmas. No custom nodes are needed: ComfyUI 0.42.1 core chains `LoraLoaderModelOnly` → `GetICLoRAParameters` → `LTXVAddGuide(iclora_parameters)`.
+   - The subject is regenerated from the source latent at denoise 0.85, with the approved Anchor Keyframe pinned on frame 0 (`LTXVImgToVideoInplace`). Motion comes from the source and identity from the key.
+   - `GrowMask` (20 px) and an `ImageBlur` feather extend the matte past the old silhouette, since the new subject's outline differs from the old one. The decoded matte carries faint VAE noise everywhere, so `ThresholdMask` (0.02) × `MaskComposite` sets it to exactly 0 outside the subject. `ImageCompositeMasked` then places the regenerated frames inside the matte, over the source loaded at native size (node 25, same frame count as node 20). Pixels outside the matte are copied from the source unchanged, and the source audio is kept.
+
+Install `ltx-2.5-22b-ic-lora-alpha-gen-0.9.safetensors` into `models/loras` (gated: accept the license on the model page first). Alpha-Gen accepts up to 145 frames (6 s at 24 fps), so node 20 caps the source at 145 frames. The LTX passes run at 1280x704, and the composite resizes the regenerated frames back to the source size.
 
 Image bindings accept the active shot, its predecessors, and mentioned @Asset rows only. Include soul-cast in the flow node input_tabs to resolve @CAST-01 references. The compiler supports the actual input.rows payload and the older documented structured_rows alias. param_bindings maps node_id.input_name to a context key or literal; empty context values leave the workflow default intact.
 

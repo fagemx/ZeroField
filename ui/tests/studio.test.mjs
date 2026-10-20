@@ -52,6 +52,13 @@ test('single-cell execution uses exactly one saved node and never broadens missi
   const twin={...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[2],id:'motion',title:'Previs Motion Pass'}]}};
   assert.equal(studioRunInput(twin,{...scope,match:node=>node.id==='motion'}).node_id,'motion');
   assert.equal(studioRunInput(twin,{...scope,match:node=>node.id!=='motion'}).node_id,'movie');
+  // OpenJutsu: a swap step filtered on Jutsu Mode takes Object Swap rows; other rows keep the unfiltered restyle step.
+  const swap={...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[2],id:'swap',row_source:{tab_key:'cinema',table_id:'shots',status_col:1,status:['Object Swap']}}]}};
+  assert.equal(studioRunInput(swap,{...scope,row:['VFX-02','Object Swap']}).node_id,'swap');
+  assert.equal(studioRunInput(swap,{...scope,row:['VFX-01','Motion Transfer']}).node_id,'movie');
+  assert.throws(()=>studioRunInput(swap,scope),/No unambiguous/);
+  const onlySwap={...swap,definition:{...swap.definition,nodes:swap.definition.nodes.filter(node=>node.id!=='movie')}};
+  assert.throws(()=>studioRunInput(onlySwap,{...scope,row:['VFX-01','Motion Transfer']}),/No unambiguous/);
 });
 
 test('batch execution starts with the matching sheet rather than unrelated upstream work',()=>{

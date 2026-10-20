@@ -264,6 +264,17 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
         "look": {"video_gen": comfy("ltx25_previs_look.json", output_node="12",
                                     input_bindings={"20.video": {"source": "output_video", "upload": "video"},
                                                     "2.image": {"source": "anchor_keyframe", "upload": "image"}})},
+        # OpenJutsu swap: Klein replaces the subject on the source's first frame; one LTX graph then mattes the subject
+        # (Alpha-Gen IC-LoRA), regenerates it from that frame and composites it over the untouched source pixels.
+        "swapkey": {"image_gen": comfy("flux3_klein_look_key.json", prompt_node=None, output_node="9", reference_role="anchor_keyframe",
+                                       input_bindings={"20.video": {"source": "source_video", "upload": "video"},
+                                                       "23.batch_index": {"literal": 0},
+                                                       "21.image": {"source": "asset_images.0", "upload": "image"},
+                                                       "22.image": {"source": "asset_images.1", "upload": "image", "optional": True}})},
+        "swap": {"video_gen": comfy("ltx25_openjutsu_swap.json", output_node="12",
+                                    input_bindings={"20.video": {"source": "source_video", "upload": "video"},
+                                                    "25.video": {"source": "source_video", "upload": "video"},
+                                                    "2.image": {"source": "anchor_keyframe", "upload": "image"}})},
         "extract": {"media_assemble": {"adapter": "ffmpeg", "mode": "extract_frame"}},
         "structure": {"media_assemble": {"adapter": "ffmpeg", "mode": "motion_structure", "structure_type": "edge_lineart"}},
         "assemble": {"media_assemble": {"adapter": "ffmpeg"}},
@@ -346,6 +357,7 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
         "edges": [edge for edge in legacy_edges if edge["source"] != "v2v"] + [
             {"source": a, "target": b} for a, b in zip(["extract", "structure", "v2v"], ["structure", "v2v", "split"])]})
     known = [original, legacy, without_anchor, previous, without_anchor_previous]
+    lanes = []  # (audit action, chain) appended once to a pipeline the user has rearranged
     if "motion" in registered:
         # Fourth lane: previs-driven shots (grey blockout -> motion pass -> look key -> look pass).
         known.append(normalized)
@@ -358,8 +370,26 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
         edges = edges + [{"source": a["id"], "target": b["id"]} for a, b in zip(previs_chain, previs_chain[1:])]
         graph = {"nodes": nodes, "edges": edges}
         normalized = flow_runner.validate_definition(graph)
-    if current["definition"] != normalized and current["definition"] not in known and "motion" in registered:
-        return _append_previs_lane(conn, slug, current, previs_chain, actor_id)
+        lanes.append(("studio_previs_lane_seed", previs_chain))
+    if "swap" in registered and {"Jutsu Mode", "Remastered Video"} <= set(headers):
+        # Fifth lane, Object Swap rows only: Klein swap key -> LTX matte, regenerate and composite over the source.
+        known.append(normalized)
+        table_id = reference_table["attrs"]["bid"]
+        swap_chain = [node("swapkey", "Swap Key", "image_gen", "openjutsu-lab", headers.index("Anchor Keyframe")),
+                      node("swap", "OpenJutsu Swap", "video_gen", "openjutsu-lab", headers.index("Remastered Video"))]
+        for depth, item in enumerate(swap_chain):
+            item.update(x=300 + depth * 340, y=1100)
+            item["target"]["table_id"] = table_id
+            item["row_source"] = {"tab_key": "openjutsu-lab", "table_id": table_id,
+                                  "status_col": headers.index("Jutsu Mode"), "status": ["Object Swap"]}
+        nodes = nodes + swap_chain
+        edges = edges + [{"source": "swapkey", "target": "swap"}]
+        graph = {"nodes": nodes, "edges": edges}
+        normalized = flow_runner.validate_definition(graph)
+        lanes.append(("studio_swap_lane_seed", swap_chain))
+    if current["definition"] != normalized and current["definition"] not in known and lanes:
+        appended = [_append_lane(conn, slug, chain, actor_id, action) for action, chain in lanes]
+        return any(appended)
     if current["definition"] == normalized or current["definition"] not in known:
         return False
     flow_runner.save_definition(conn, service.Identity(actor_id, "Alex Rivera", "admin"), slug, "comfy-pipeline",
@@ -367,12 +397,13 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
     return True
 
 
-def _append_previs_lane(conn, slug, current, chain, actor_id):
-    """A pipeline the user has rearranged keeps every node; the previs lane is added below it, once."""
+def _append_lane(conn, slug, chain, actor_id, action):
+    """A pipeline the user has rearranged keeps every node; a new lane is added below it, once (audited as action)."""
     with conn.cursor() as cur:
-        cur.execute("SELECT 1 FROM projectops.audit_log WHERE project_slug=%s AND action='studio_previs_lane_seed'", (slug,))
+        cur.execute("SELECT 1 FROM projectops.audit_log WHERE project_slug=%s AND action=%s", (slug, action))
         if cur.fetchone():
             return False
+    current = flow_runner.definition(conn, slug, "comfy-pipeline")
     definition = copy.deepcopy(current["definition"])
     if {n["id"] for n in definition["nodes"]} & {n["id"] for n in chain}:
         return False
@@ -383,7 +414,7 @@ def _append_previs_lane(conn, slug, current, chain, actor_id):
     definition["edges"] += [{"source": a["id"], "target": b["id"]} for a, b in zip(chain, chain[1:])]
     flow_runner.save_definition(conn, service.Identity(actor_id, "Alex Rivera", "admin"), slug, "comfy-pipeline",
                                 {"revision": current["revision"], "definition": definition})
-    repo.add_audit(conn, slug, action="studio_previs_lane_seed", actor_id=actor_id, detail={"nodes": [n["id"] for n in chain]})
+    repo.add_audit(conn, slug, action=action, actor_id=actor_id, detail={"nodes": [n["id"] for n in chain]})
     return True
 
 

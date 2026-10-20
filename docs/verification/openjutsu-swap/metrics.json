@@ -1,0 +1,16 @@
+{
+  "reencode_baseline_background_mean_abs_diff_0_255": 0.295,
+  "frames": 145,
+  "comfy_load_save_roundtrip_background_mean_abs_diff_0_255": 1.483,
+  "matte_coverage_mean": 0.2236,
+  "background_mean_abs_diff_0_255": 1.487,
+  "background_p99_abs_diff_0_255": 3.333,
+  "subject_mean_abs_diff_0_255": 60.612,
+  "lossless_frame72": {
+    "frame": 72,
+    "mask_zero_fraction": 0.725,
+    "identical_pixels_where_mask_zero": 1.0,
+    "max_abs_diff_where_mask_zero": 0,
+    "changed_pixel_fraction_where_mask_positive": 0.9936
+  }
+}

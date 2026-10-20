@@ -1,0 +1,53 @@
+{
+  "path": "run_studio.worker_configs(platform='comfy_sdk')['swap'] -> card_engine.comfyui() -> comfy-sdk -> comfy-api-proxy (127.0.0.1:8189) -> ComfyUI 0.42.1 (127.0.0.1:8188)",
+  "packages": {
+    "comfy-sdk": "0.5.0",
+    "comfy-api-proxy": "0.1.6"
+  },
+  "stage_config": {
+    "adapter": "comfyui",
+    "platform": "comfy_sdk",
+    "base_url": "http://127.0.0.1:8189",
+    "prompt_node": "6",
+    "seed_node": "3",
+    "workflow": "workflows/ltx25_openjutsu_swap.json",
+    "output_node": "12",
+    "input_bindings": {
+      "20.video": {
+        "source": "source_video",
+        "upload": "video"
+      },
+      "25.video": {
+        "source": "source_video",
+        "upload": "video"
+      },
+      "2.image": {
+        "source": "anchor_keyframe",
+        "upload": "image"
+      }
+    }
+  },
+  "row": {
+    "Clip ID": "VFX-02",
+    "Jutsu Mode": "Object Swap",
+    "Source Driving Video": "S02 shot (1280x704, 145 frames, audio)",
+    "Anchor Keyframe": "Klein swap key, seed 5502"
+  },
+  "compiled_prompt": "Mode: Object Swap.\nA woman with a platinum silver bob haircut, wearing a bright orange high-visibility flight jacket with reflective silver stripes, stands with her back to camera at the brass console, then turns her head to the right in profile.",
+  "seconds": 188,
+  "output": {
+    "codec": "h264 + aac",
+    "size": "1280x704",
+    "frames": 145,
+    "fps": 24
+  },
+  "metrics": {
+    "reencode_baseline_background_mean_abs_diff_0_255": 0.295,
+    "frames": 145,
+    "comfy_load_save_roundtrip_background_mean_abs_diff_0_255": 1.483,
+    "matte_coverage_mean": 0.2236,
+    "background_mean_abs_diff_0_255": 1.487,
+    "background_p99_abs_diff_0_255": 3.333,
+    "subject_mean_abs_diff_0_255": 74.643
+  }
+}

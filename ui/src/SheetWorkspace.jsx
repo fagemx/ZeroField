@@ -246,7 +246,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
       const flowKey=workflow||flows[0]?.key;if(!flowKey)throw new Error(uiText('studio.noPipeline'));
       const base='/projects/api/'+slug+'/tabs/'+flowKey+'/flow';
       const saved=await api.get(base);
-      const input=studioRunInput(saved,{tabKey:tab.key,tableId:parsed.tableId,columnIds,rowIds:ids,...options});
+      const input=studioRunInput(saved,{tabKey:tab.key,tableId:parsed.tableId,columnIds,rowIds:ids,row:ids.length===1?parsed.rows.find(r=>r.rid===ids[0])?.cells.map(c=>c.value):undefined,...options});
       await queueStudioRun(api,base,input,{tabKey:tab.key,revision:tab.revision});
       setSaveState('saved');onToast?.(uiText(options.singleStep?'studio.queuedReview':'studio.queued'));
     }catch(error){fail(error,()=>toFlow(ids,options));}finally{busyRef.current=false;setBusy(false);}

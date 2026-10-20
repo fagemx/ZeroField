@@ -33,7 +33,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(configs["split"]["media_assemble"]["layout"], "side_by_side")
         self.assertEqual(configs["extract"]["media_assemble"]["mode"], "extract_frame")
         self.assertEqual(configs["structure"]["media_assemble"]["mode"], "motion_structure")
-        for key in ("image", "cinema", "v2v", "motion", "lookkey", "look"):
+        for key in ("image", "cinema", "v2v", "motion", "lookkey", "look", "swapkey", "swap"):
             for config in configs[key].values():
                 self.assertTrue(Path(config["workflow"]).is_file())
 
@@ -165,16 +165,35 @@ class ShowcaseDatabaseTests(unittest.TestCase):
     def test_three_lane_showcase_pipeline_upgrades_to_the_previs_lane(self):
         configs = studio.worker_configs("http://127.0.0.1:8188")
         studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
-        older = {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look")}
+        older = {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look", "swapkey", "swap")}
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, self.slug, older, self.actor), self.actor))
         self.assertNotIn("motion", {n["id"] for n in flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]["nodes"]})
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, self.slug, configs, self.actor), self.actor))
         self.assertIn("look", {n["id"] for n in flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]["nodes"]})
 
+    def test_four_lane_pipeline_gains_the_object_swap_lane_for_swap_rows_only(self):
+        configs = studio.worker_configs("http://127.0.0.1:8188")
+        studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
+        older = studio.register_workers(self.conn, self.slug, {k: v for k, v in configs.items() if k not in ("swapkey", "swap")}, self.actor)
+        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, older, self.actor))
+        everyone = studio.register_workers(self.conn, self.slug, configs, self.actor)
+        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, everyone, self.actor))
+        graph = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]
+        nodes = {n["id"]: n for n in graph["nodes"]}
+        self.assertIn({"source": "swapkey", "target": "swap"}, graph["edges"])
+        self.assertEqual([nodes[k]["target"]["col_index"] for k in ("swapkey", "swap")], [10, 4])  # Anchor Keyframe, Remastered Video
+        self.assertEqual(len({nodes[k]["limb_id"] for k in ("swapkey", "swap", "v2v", "lookkey")}), 4)
+        for key in ("swapkey", "swap"):
+            self.assertEqual({k: nodes[key]["row_source"][k] for k in ("status_col", "status")}, {"status_col": 1, "status": ["Object Swap"]})
+        # The seeded VFX-01 row is Motion Transfer: the restyle lane takes it, the swap lane matches nothing until a row is Object Swap.
+        self.assertEqual(flow_runner._source_rows(self.conn, self.slug, nodes["swap"]["row_source"]), [])
+        self.assertEqual(len(flow_runner._source_rows(self.conn, self.slug, nodes["v2v"]["row_source"])), 1)
+        self.assertFalse(studio.seed_showcase_pipeline(self.conn, self.slug, everyone, self.actor))
+
     def test_rearranged_pipeline_gets_the_previs_lane_appended_once(self):
         configs = studio.worker_configs("http://127.0.0.1:8188")
         studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
-        older = studio.register_workers(self.conn, self.slug, {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look")}, self.actor)
+        older = studio.register_workers(self.conn, self.slug, {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look", "swapkey", "swap")}, self.actor)
         studio.seed_showcase_pipeline(self.conn, self.slug, older, self.actor)
         current = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")
         moved = copy.deepcopy(current["definition"]); moved["nodes"][0]["x"] += 37  # the user tidied the layout
@@ -186,6 +205,7 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         nodes = {n["id"]: n for n in after["definition"]["nodes"]}
         self.assertEqual(nodes[moved["nodes"][0]["id"]]["x"], moved["nodes"][0]["x"])
         self.assertGreater(nodes["motion"]["y"], max(n.get("y", 0) for n in moved["nodes"]))
+        self.assertGreater(nodes["swap"]["y"], nodes["motion"]["y"])  # each missing lane lands below the last one
         trimmed = copy.deepcopy(after["definition"])  # the user removes the lane again: it stays removed
         trimmed["nodes"] = [n for n in trimmed["nodes"] if n["id"] not in ("motion", "lookkey", "look")]
         trimmed["edges"] = [e for e in trimmed["edges"] if e["source"] not in ("motion", "lookkey") and e["target"] not in ("lookkey", "look")]
