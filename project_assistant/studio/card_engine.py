@@ -725,6 +725,8 @@ def bind_external_workflow(workflow: dict, ctx: dict, config: dict, task: dict, 
                     break
         if value is context_compiler._MISSING or value is None or value == "":
             if optional:
+                if workflow[node_id].get("class_type") in ("LoadImage", "VHS_LoadVideo", "LoadVideo", "LoadAudio"):
+                    _unlink_node_and_dependents(workflow, node_id)  # an empty optional media slot drops its loader
                 continue
             label = binding.get("label", source or target)
             if upload:

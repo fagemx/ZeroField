@@ -1,5 +1,6 @@
 """Launcher contracts and idempotent, non-destructive showcase seeding."""
 import contextlib
+import copy
 import io
 import json
 import os
@@ -32,7 +33,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(configs["split"]["media_assemble"]["layout"], "side_by_side")
         self.assertEqual(configs["extract"]["media_assemble"]["mode"], "extract_frame")
         self.assertEqual(configs["structure"]["media_assemble"]["mode"], "motion_structure")
-        for key in ("image", "cinema", "v2v"):
+        for key in ("image", "cinema", "v2v", "motion", "lookkey", "look"):
             for config in configs[key].values():
                 self.assertTrue(Path(config["workflow"]).is_file())
 
@@ -155,7 +156,63 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         self.assertTrue(all(n["write_mode"] == "proposal" for n in graph["nodes"]))
         self.assertEqual(nodes["extract"]["target"]["col_index"], 8)
         self.assertIn({"source": "structure", "target": "v2v"}, graph["edges"])
+        # Previs lane: its own workers, keyframe/shot columns, and a motion -> look key -> look chain.
+        self.assertEqual([nodes[k]["target"]["col_index"] for k in ("motion", "lookkey", "look")], [5, 4, 5])
+        self.assertEqual(len({nodes[k]["limb_id"] for k in ("motion", "lookkey", "look", "cinema")}), 4)
+        self.assertTrue({"source": "motion", "target": "lookkey"} in graph["edges"] and {"source": "lookkey", "target": "look"} in graph["edges"])
         self.assertFalse(studio.seed_showcase_pipeline(self.conn, self.slug, again, self.actor))
+
+    def test_three_lane_showcase_pipeline_upgrades_to_the_previs_lane(self):
+        configs = studio.worker_configs("http://127.0.0.1:8188")
+        studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
+        older = {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look")}
+        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, self.slug, older, self.actor), self.actor))
+        self.assertNotIn("motion", {n["id"] for n in flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]["nodes"]})
+        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, self.slug, configs, self.actor), self.actor))
+        self.assertIn("look", {n["id"] for n in flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]["nodes"]})
+
+    def test_rearranged_pipeline_gets_the_previs_lane_appended_once(self):
+        configs = studio.worker_configs("http://127.0.0.1:8188")
+        studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
+        older = studio.register_workers(self.conn, self.slug, {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look")}, self.actor)
+        studio.seed_showcase_pipeline(self.conn, self.slug, older, self.actor)
+        current = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")
+        moved = copy.deepcopy(current["definition"]); moved["nodes"][0]["x"] += 37  # the user tidied the layout
+        flow_runner.save_definition(self.conn, service.Identity(self.actor, "Alex", "admin"), self.slug, "comfy-pipeline",
+                                    {"revision": current["revision"], "definition": moved})
+        everyone = studio.register_workers(self.conn, self.slug, configs, self.actor)
+        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, everyone, self.actor))
+        after = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")
+        nodes = {n["id"]: n for n in after["definition"]["nodes"]}
+        self.assertEqual(nodes[moved["nodes"][0]["id"]]["x"], moved["nodes"][0]["x"])
+        self.assertGreater(nodes["motion"]["y"], max(n.get("y", 0) for n in moved["nodes"]))
+        trimmed = copy.deepcopy(after["definition"])  # the user removes the lane again: it stays removed
+        trimmed["nodes"] = [n for n in trimmed["nodes"] if n["id"] not in ("motion", "lookkey", "look")]
+        trimmed["edges"] = [e for e in trimmed["edges"] if e["source"] not in ("motion", "lookkey") and e["target"] not in ("lookkey", "look")]
+        flow_runner.save_definition(self.conn, service.Identity(self.actor, "Alex", "admin"), self.slug, "comfy-pipeline",
+                                    {"revision": after["revision"], "definition": trimmed})
+        self.assertFalse(studio.seed_showcase_pipeline(self.conn, self.slug, everyone, self.actor))
+
+    def test_previs_seed_appends_column_once_and_keeps_user_media(self):
+        studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
+        tab = repo.get_tab(self.conn, self.slug, "cinema-studio")
+        table = next(n for n in tab["doc"]["content"] if n["type"] == "table")
+        if "Previs" in [studio._text(c) for c in table["content"][0]["content"]]:  # fresh template already has it: drop it to test the upgrade
+            for row in table["content"]:
+                row["content"].pop()
+            table["attrs"]["column_types"].pop(); table["attrs"].pop("column_ids", None)
+            repo.save_tab_doc(self.conn, self.slug, "cinema-studio", doc=tab["doc"], title=tab["title"], actor_id=self.actor,
+                              session_id="old", base_revision=tab["revision"], force_revision=True)
+        ids = next(n for n in repo.get_tab(self.conn, self.slug, "cinema-studio")["doc"]["content"] if n["type"] == "table")["attrs"].get("column_ids")
+        self.assertTrue(studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)["seeded"])
+        table = next(n for n in repo.get_tab(self.conn, self.slug, "cinema-studio")["doc"]["content"] if n["type"] == "table")
+        self.assertEqual(studio._text(table["content"][0]["content"][-1]), "Previs")
+        self.assertEqual(table["attrs"]["column_types"][-1], "video")
+        if ids:
+            self.assertEqual(table["attrs"]["column_ids"][:len(ids)], ids)
+        s03 = next(r for r in table["content"][1:] if studio._text(r["content"][0]) == "S03")
+        self.assertTrue(studio._text(s03["content"][-1]).startswith("/projects/api/"))
+        self.assertFalse(studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)["seeded"])
 
 
 if __name__ == "__main__":

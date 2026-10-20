@@ -337,6 +337,37 @@ class ReferencePackBindingTests(unittest.TestCase):
         self.assertEqual(graph['b']['inputs'], {'video': 'edges.mp4', 'rate': 24})
 
 
+class PrevisTwoPassTests(unittest.TestCase):
+    def test_previs_column_and_built_in_two_pass_bindings(self):
+        import run_studio
+        task = studio_task()
+        task['input']['tabs'][0]['tables'][0]['headers'].append('Previs')
+        task['input']['rows'][1]['cells'].append(ASSET(9))
+        self.assertEqual(worker.resolve_studio_context(task)['previs_video'], ASSET(9))
+        cfg = run_studio.worker_configs('http://127.0.0.1:8188')
+        head, client = Mock(), Mock()
+        head.asset.side_effect = lambda task, url: (b'x', 'video/mp4' if url in (ASSET(7), ASSET(9)) else 'image/png')
+        client.upload_media.side_effect = lambda raw, mime, prefix: prefix + '.bin'
+        load = lambda stage, cap: json.loads(Path(cfg[stage][cap]['workflow']).read_text(encoding='utf-8'))
+        motion = load('motion', 'video_gen')
+        worker.bind_external_workflow(motion, {'previs_video': ASSET(9), 'compiled_prompt': 'beats', 'seed': 3},
+                                      cfg['motion']['video_gen'], task, head, client)
+        self.assertEqual((motion['20']['inputs']['video'], motion['6']['inputs']['text'], motion['3']['inputs']['denoise']),
+                         ('source_video.bin', 'beats', 0.75))
+        key = load('lookkey', 'image_gen'); instruction = key['6']['inputs']['text']
+        worker.bind_external_workflow(key, {'output_video': ASSET(7), 'asset_images': [ASSET(1)], 'compiled_prompt': 'beats', 'seed': 5},
+                                      cfg['lookkey']['image_gen'], task, head, client)
+        # Only a cast reference: the empty set slot loses its loader instead of loading a placeholder file.
+        self.assertNotIn('22', key)
+        self.assertNotIn('images.image2', key['11']['inputs'])
+        self.assertEqual(key['6']['inputs']['text'], instruction)  # the edit instruction is not replaced by shot text
+        look = load('look', 'video_gen')
+        worker.bind_external_workflow(look, {'output_video': ASSET(7), 'anchor_keyframe': ASSET(4), 'compiled_prompt': 'beats', 'seed': 3},
+                                      cfg['look']['video_gen'], task, head, client)
+        self.assertEqual((look['20']['inputs']['video'], look['2']['inputs']['image'], look['3']['inputs']['denoise']),
+                         ('source_video.bin', 'input.bin', 0.5))
+
+
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg and FFprobe are required')
 class ReferencePreparationTests(unittest.TestCase):
     @classmethod

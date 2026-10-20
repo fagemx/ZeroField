@@ -12,4 +12,6 @@ To reproduce with Pillow and FFmpeg installed:
 python samples/generate.py
 ```
 
+`previs_s03_blockout.mp4` is a grey Blender blockout of S03 (glass dome, console ring, a proxy figure reaching for the dial, a 35 mm push-in), 97 frames at 1280×704 with no audio. It is the previs input of the motion pass, not a render; the scene script is [`research/motion_lab/blockout_observatory.py`](../research/motion_lab/blockout_observatory.py).
+
 Replace these fixtures with reviewed model renders or your own footage during a production. The launcher fills only empty demo media cells once and preserves existing takes, prompts and edits.

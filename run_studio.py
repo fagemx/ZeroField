@@ -113,6 +113,31 @@ def seed_showcase_media(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=
     return {"seeded": True, "tabs": changed}
 
 
+def _append_columns(table, specs):
+    """Append missing (name, kind) columns, keeping existing column IDs. Returns (headers, changed)."""
+    rows = table.get("content", [])
+    headers = [_text(cell) for cell in rows[0].get("content", [])]
+    attrs = table.setdefault("attrs", {})
+    attrs["column_ids"] = doc_schema.column_ids(table)
+    types = attrs.setdefault("column_types", ["text"] * len(headers))
+    while len(types) < len(headers):
+        types.append("text")
+    changed = False
+    for name, kind in specs:
+        if name in headers:
+            continue
+        headers.append(name)
+        types.append(kind)
+        attrs["column_ids"].append(doc_schema.new_id("c"))
+        for index, row in enumerate(rows):
+            cell = {"type": "tableHeader" if index == 0 else "tableCell", "content": [{"type": "paragraph"}]}
+            if index == 0:
+                _set_text(cell, name)
+            row.setdefault("content", []).append(cell)
+        changed = True
+    return headers, changed
+
+
 def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
     """Append prepared reference stages once, retaining existing column IDs and media."""
     actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
@@ -135,25 +160,11 @@ def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, 
         rows = table.get("content", [])
         if not rows:
             continue
-        headers = [_text(cell) for cell in rows[0].get("content", [])]
         if not any(_text(row.get("content", [{}])[0]) == "VFX-01" for row in rows[1:]):
             continue
-        attrs = table.setdefault("attrs", {})
-        attrs["column_ids"] = doc_schema.column_ids(table)
-        types = attrs.setdefault("column_types", ["text"] * len(headers))
-        while len(types) < len(headers):
-            types.append("text")
+        headers, added = _append_columns(table, [(name, kind) for name, kind, _ in stages])
+        dirty = dirty or added
         for name, kind, filename in stages:
-            if name not in headers:
-                headers.append(name)
-                types.append(kind)
-                attrs["column_ids"].append(doc_schema.new_id("c"))
-                for index, row in enumerate(rows):
-                    cell = {"type": "tableHeader" if index == 0 else "tableCell", "content": [{"type": "paragraph"}]}
-                    if index == 0:
-                        _set_text(cell, name)
-                    row.setdefault("content", []).append(cell)
-                dirty = True
             col = headers.index(name)
             for row in rows[1:]:
                 if _text(row["content"][0]) != "VFX-01" or _text(row["content"][col]):
@@ -181,6 +192,33 @@ def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, 
     repo.add_audit(conn, slug, action="studio_reference_pack_seed", actor_id=actor_id,
                    detail={"provenance": "Source-derived first frame/edge guide; illustrative anchor, not model output"})
     return {"seeded": dirty, "tabs": ["openjutsu-lab"] if dirty else []}
+
+
+def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
+    """Add the Previs column to the cinema slate once and give S03 its grey blockout, keeping user media."""
+    actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
+    tab = repo.get_tab_for_update(conn, slug, "cinema-studio")
+    if not tab:
+        return {"seeded": False, "reason": "page_missing"}
+    root = Path(samples_dir) if samples_dir else resource_path("samples")
+    doc = copy.deepcopy(tab["doc"])
+    dirty = False
+    for table in doc.get("content", []):
+        if table["type"] != "table" or not table.get("content"):
+            continue
+        headers, dirty = _append_columns(table, [("Previs", "video")])
+        col = headers.index("Previs")
+        for row in table["content"][1:]:
+            if _text(row["content"][0]) == "S03" and not _text(row["content"][col]) and (root / "previs_s03_blockout.mp4").is_file():
+                identifier = repo.put_asset(conn, slug, data=(root / "previs_s03_blockout.mp4").read_bytes(), content_type="video/mp4", actor_id=actor_id)
+                _set_text(row["content"][col], f"/projects/api/{slug}/assets/{identifier}")
+                dirty = True
+        break
+    if dirty:
+        clean, _ = doc_schema.validate_doc(doc, slug=slug)
+        repo.save_tab_doc(conn, slug, "cinema-studio", doc=clean, title=tab["title"], actor_id=actor_id,
+                          session_id="studio-previs-seed", base_revision=tab["revision"], force_revision=True)
+    return {"seeded": dirty}
 
 
 def load_worker_configs(path, defaults):
@@ -216,6 +254,16 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
         "image": {"image_gen": comfy("flux3_klein_soul_cast.json", output_node="9")},
         "cinema": {"video_gen": comfy("ltx25_cinema_shot.json", image_node="2", output_node="12")},
         "v2v": {"video_gen": comfy("ltx25_openjutsu_v2v.json", video_node="1", image_node="2", structure_video_node="4", output_node="12")},
+        # Previs-driven shot: the grey blockout drives motion, Klein restores identity, a look pass re-renders the approved motion.
+        "motion": {"video_gen": comfy("ltx25_previs_motion.json", output_node="12",
+                                      input_bindings={"20.video": {"source": "previs_video", "upload": "video"}})},
+        "lookkey": {"image_gen": comfy("flux3_klein_look_key.json", prompt_node=None, output_node="9",
+                                       input_bindings={"20.video": {"source": "output_video", "upload": "video"},
+                                                       "21.image": {"source": "asset_images.0", "upload": "image"},
+                                                       "22.image": {"source": "asset_images.1", "upload": "image", "optional": True}})},
+        "look": {"video_gen": comfy("ltx25_previs_look.json", output_node="12",
+                                    input_bindings={"20.video": {"source": "output_video", "upload": "video"},
+                                                    "2.image": {"source": "anchor_keyframe", "upload": "image"}})},
         "extract": {"media_assemble": {"adapter": "ffmpeg", "mode": "extract_frame"}},
         "structure": {"media_assemble": {"adapter": "ffmpeg", "mode": "motion_structure", "structure_type": "edge_lineart"}},
         "assemble": {"media_assemble": {"adapter": "ffmpeg"}},
@@ -297,10 +345,45 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
     without_anchor_previous = flow_runner.validate_definition({"nodes": [n for n in snake if n["id"] != "anchor"],
         "edges": [edge for edge in legacy_edges if edge["source"] != "v2v"] + [
             {"source": a, "target": b} for a, b in zip(["extract", "structure", "v2v"], ["structure", "v2v", "split"])]})
-    if current["definition"] == normalized or current["definition"] not in (original, legacy, without_anchor, previous, without_anchor_previous):
+    known = [original, legacy, without_anchor, previous, without_anchor_previous]
+    if "motion" in registered:
+        # Fourth lane: previs-driven shots (grey blockout -> motion pass -> look key -> look pass).
+        known.append(normalized)
+        previs_chain = [node("motion", "Previs Motion Pass", "video_gen", "cinema-studio", 5),
+                        node("lookkey", "Look Key", "image_gen", "cinema-studio", 4),
+                        node("look", "Look Pass", "video_gen", "cinema-studio", 5)]
+        for depth, item in enumerate(previs_chain):
+            item.update(x=300 + depth * 340, y=840)
+        nodes = nodes + previs_chain
+        edges = edges + [{"source": a["id"], "target": b["id"]} for a, b in zip(previs_chain, previs_chain[1:])]
+        graph = {"nodes": nodes, "edges": edges}
+        normalized = flow_runner.validate_definition(graph)
+    if current["definition"] != normalized and current["definition"] not in known and "motion" in registered:
+        return _append_previs_lane(conn, slug, current, previs_chain, actor_id)
+    if current["definition"] == normalized or current["definition"] not in known:
         return False
     flow_runner.save_definition(conn, service.Identity(actor_id, "Alex Rivera", "admin"), slug, "comfy-pipeline",
                                 {"revision": current["revision"], "definition": graph})
+    return True
+
+
+def _append_previs_lane(conn, slug, current, chain, actor_id):
+    """A pipeline the user has rearranged keeps every node; the previs lane is added below it, once."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM projectops.audit_log WHERE project_slug=%s AND action='studio_previs_lane_seed'", (slug,))
+        if cur.fetchone():
+            return False
+    definition = copy.deepcopy(current["definition"])
+    if {n["id"] for n in definition["nodes"]} & {n["id"] for n in chain}:
+        return False
+    bottom = max((n.get("y", 0) for n in definition["nodes"]), default=0) + 260
+    for item in chain:
+        item["y"] = bottom
+    definition["nodes"] += chain
+    definition["edges"] += [{"source": a["id"], "target": b["id"]} for a, b in zip(chain, chain[1:])]
+    flow_runner.save_definition(conn, service.Identity(actor_id, "Alex Rivera", "admin"), slug, "comfy-pipeline",
+                                {"revision": current["revision"], "definition": definition})
+    repo.add_audit(conn, slug, action="studio_previs_lane_seed", actor_id=actor_id, detail={"nodes": [n["id"] for n in chain]})
     return True
 
 
@@ -361,6 +444,7 @@ def main(argv=None):
             if cfg["mode"] == "dev":
                 server.seed_demo_data(conn)
                 seed_showcase_media(conn)
+                seed_showcase_previs(conn)
                 configurations = worker_configs(args.router_url or args.comfy_url or os.environ.get("COMFY_BASE_URL") or
                     ("https://cloud.comfy.org" if args.platform == "comfy_sdk" else "http://127.0.0.1:8188"), platform=args.platform,
                                                api_key_env="COMFY_API_KEY" if os.environ.get("COMFY_API_KEY") else None)

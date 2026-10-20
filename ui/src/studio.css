@@ -437,3 +437,20 @@
 .flow-workspace .react-flow__controls { border-radius: 10px; overflow: hidden; box-shadow: none; }
 .flow-workspace .react-flow__controls-button { width: 30px; height: 30px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
 .flow-workspace .react-flow__controls-button svg { fill: var(--text); max-width: 12px; max-height: 12px; }
+
+/* 3D previs editor: grey blockout, scrub, render. */
+.modal.previs-dialog { width: min(1240px, 96vw); max-width: none; }
+.previs-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.previs-view { display: grid; gap: 8px; min-width: 0; }
+.previs-canvas { background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 1280 / 704; }
+.previs-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.previs-timeline { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; color: var(--faint); font-size: 12px; }
+.previs-timeline input[type=range] { flex: 1; accent-color: var(--accent); }
+.previs-summary, .previs-note { margin: 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
+.previs-controls { display: grid; gap: 12px; }
+.previs-field { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.previs-field legend { width: 100%; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.previs-field button { height: 28px; padding: 0 10px; font-size: 12px; }
+.modal.previs-dialog .previs-field button[aria-pressed=true] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.previs-render { height: 36px; }
+@media (max-width: 860px) { .previs-layout { grid-template-columns: 1fr; } }

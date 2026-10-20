@@ -74,6 +74,34 @@ Generality on the same grey-V2V setup:
 - **Atmosphere and lens**: rain on glass (scrolling streaks + droplets refracting the background inside the window
   region), horizon haze, highlight bloom, teal/amber split grade, chromatic aberration, vignette, grain; source audio kept.
 
+## Set identity, solved in the blockout
+
+Rebuilding the blockout from the SET-01 reference (meridian dome ribs meeting overhead, a continuous console ring
+hugging the glass, the opening camera tilted up at the dome) makes the motion pass produce the glass-dome observatory
+([pass 1](../verification/motion-lab/observatory_pass1.jpg), [pass 2](../verification/motion-lab/observatory_pass2.jpg),
+script [`blockout_observatory.py`](../../research/motion_lab/blockout_observatory.py)). The comp on that plate
+([before/after](../verification/motion-lab/observatory_comp_before_after.jpg), [video](../verification/motion-lab/observatory_comp.mp4))
+is now S03's cinema shot in the showcase.
+
+## In the product (same day)
+
+- **Previs column** on the cinema slate (appended last, so existing column indexes and pipelines keep working); the
+  showcase upgrade adds it once and gives S03 the Blender blockout (`samples/previs_s03_blockout.mp4`).
+- **3D previs editor** in the shot bench (three.js, lazy-loaded): set, actor action, camera move, lens, light,
+  free framing with start/end keys, scrub, and *Render previs*, which records 97 frames and writes the Previs cell
+  through the normal upload path ([editor](../verification/motion-lab/previs_editor.jpg),
+  [night light](../verification/motion-lab/previs_editor_night.jpg), [bench](../verification/motion-lab/shot_bench_previs.jpg)).
+- **Pipeline lane** *Previs Motion Pass → Look Key → Look Pass* with three graphs
+  (`ltx25_previs_motion.json`, `flux3_klein_look_key.json`, `ltx25_previs_look.json`); frames are picked inside the
+  graphs (`ImageFromBatch`), Soul Cast references bind to the Klein edit. A rearranged pipeline gets the lane appended
+  once instead of being replaced. Ran end to end in the app on S03 ([motion pass](../verification/motion-lab/app_lane_motion_pass.jpg)).
+- Fixed on the way: an optional media binding with no asset left its `LoadImage` pointing at a placeholder file; the
+  empty loader is now removed.
+
+Known gaps: the browser previs reads flatter than the Blender one ([side by side](../verification/motion-lab/previs_blender_vs_threejs.jpg))
+and MediaRecorder timing gives ~95 frames at ~21 fps (the loader resamples to 24); the Look Key cannot restore a face on a
+back-view ending; the editor plan is remembered per browser, the rendered previs is what the project stores.
+
 ## Product consequences
 
 1. Shot bench gets a **3D previs** (three.js, already proven headless): blocking, camera path, lens, key/rim lights.

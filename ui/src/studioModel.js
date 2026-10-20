@@ -8,7 +8,7 @@ export function assetReferences(row) {
   return [...new Set((row.cells.map(cell => String(cell?.value || '')).join(' ').match(/@?\b(?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?\b/gi) || []).map(id => id.replace(/^@/, '').replace('#', ':').toUpperCase()))];
 }
 function stageRole(label) {
-  if (/source.*video|driving.*video/i.test(label)) return 0;
+  if (/source.*video|driving.*video|previs|blockout/i.test(label)) return 0;
   if (/first\s*frame/i.test(label)) return 1;
   if (/motion\s*structure/i.test(label)) return 2;
   if (/anchor.*frame|key\s*frame/i.test(label)) return 3;
