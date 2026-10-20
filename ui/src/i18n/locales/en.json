@@ -2334,9 +2334,7 @@
     "open": "Open"
   },
   "previs": {
-    "title": "Previs — {{v0}}",
     "open": "Block in 3D",
-    "close": "Close",
     "viewport": "Previs viewport",
     "play": "Play",
     "pause": "Pause",
@@ -2360,12 +2358,29 @@
     "mood_grey": "Neutral grey",
     "mood_night": "Night: warm key, cool rim",
     "framing": "Framing",
-    "frameCamera": "Frame camera",
     "setStart": "Set start",
     "setEnd": "Set end",
     "resetPath": "Use preset",
     "render": "Render previs",
     "rendering": "Rendering…",
-    "note": "The motion pass follows this grey render: camera path, lens, blocking and light. Looks come from the shot prompt and Soul Cast."
+    "note": "The motion pass follows this grey render: camera path, lens, blocking and light. Looks come from the shot prompt and Soul Cast.",
+    "stage": "3D Stage",
+    "shots": "Shots",
+    "empty": "No shots to block. Add rows to the slate first.",
+    "inspector": "Shot camera and blocking",
+    "viewMode": "Viewport camera",
+    "view_lens": "Lens",
+    "view_overhead": "Overhead",
+    "view_free": "Free camera",
+    "hint_overhead": "Overhead plan of every shot camera in this set. Drag to pan, scroll to zoom.",
+    "hint_free": "Orbit to frame, then set this shot's start or end camera.",
+    "playShot": "Play shot",
+    "playScene": "Play scene",
+    "state_none": "No previs yet",
+    "state_rendered": "Previs rendered",
+    "state_edited": "Edited, not rendered",
+    "keys": "↑ ↓ switch shots · Space plays the shot",
+    "discard": "Discard edits",
+    "move_custom": "Custom path"
   }
 }

@@ -5,7 +5,7 @@ import { STATUSES, LEGACY_STATUSES, statusLabel, normalizeStatus } from './forma
 import { assetReferences, assetVariants, mediaStages, resolveAssetReference } from './studioModel.js';
 import { sceneKey } from './storyModel.js';
 
-const MODES = ['grid', 'canvas', 'gallery', 'kanban'];
+const MODES = ['grid', 'canvas', 'stage', 'gallery', 'kanban'];
 const COMMON_STATUSES = STATUSES;
 
 function viewColumns(parsed) {

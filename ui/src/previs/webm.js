@@ -24,8 +24,10 @@ function el(id, payload) {  // id: array of bytes; payload: Uint8Array or array 
   return concat([new Uint8Array(id), size(body.length), body]);
 }
 
-// chunks: [{ data: Uint8Array, timestamp: microseconds, key: boolean }]
-export function muxWebM(chunks, { width, height, fps, codec = 'vp9' }) {
+const PLAN_TAG = 'zf-plan:';  // the shot plan rides in the Segment Title, so the project keeps it with the render
+
+// chunks: [{ data: Uint8Array, timestamp: microseconds, key: boolean }]; plan: optional JSON-able shot plan
+export function muxWebM(chunks, { width, height, fps, codec = 'vp9', plan = null }) {
   const frameNs = Math.round(1e9 / fps);
   const header = el([0x1a, 0x45, 0xdf, 0xa3], [
     el([0x42, 0x86], uint(1)), el([0x42, 0xf7], uint(1)), el([0x42, 0xf2], uint(4)), el([0x42, 0xf3], uint(8)),
@@ -33,7 +35,8 @@ export function muxWebM(chunks, { width, height, fps, codec = 'vp9' }) {
   const info = el([0x15, 0x49, 0xa9, 0x66], [
     el([0x2a, 0xd7, 0xb1], uint(1000000)),  // timecodes in milliseconds
     el([0x4d, 0x80], enc.encode('ZeroField previs')), el([0x57, 0x41], enc.encode('ZeroField previs')),
-    el([0x44, 0x89], float64(chunks.length * 1000 / fps))]);
+    el([0x44, 0x89], float64(chunks.length * 1000 / fps)),
+    ...(plan ? [el([0x7b, 0xa9], enc.encode(PLAN_TAG + JSON.stringify(plan)))] : [])]);
   const tracks = el([0x16, 0x54, 0xae, 0x6b], [el([0xae], [
     el([0xd7], uint(1)), el([0x73, 0xc5], uint(1)), el([0x83], uint(1)),
     el([0x86], enc.encode(codec === 'vp8' ? 'V_VP8' : 'V_VP9')),
@@ -48,7 +51,7 @@ export function muxWebM(chunks, { width, height, fps, codec = 'vp9' }) {
 }
 
 // Encode frames drawn by draw(f) on canvas into a WebM blob with exact timestamps (WebCodecs).
-export async function encodeCanvas(canvas, frames, fps, draw, onProgress) {
+export async function encodeCanvas(canvas, frames, fps, draw, onProgress, plan = null) {
   const configs = [{ codec: 'vp09.00.31.08', name: 'vp9' }, { codec: 'vp8', name: 'vp8' }];
   let chosen = null;
   for (const c of configs) {
@@ -72,5 +75,24 @@ export async function encodeCanvas(canvas, frames, fps, draw, onProgress) {
   await encoder.flush(); encoder.close();
   if (failure) throw failure;
   chunks.sort((a, b) => a.timestamp - b.timestamp);
-  return new Blob([muxWebM(chunks, { width: canvas.width, height: canvas.height, fps, codec: chosen.name })], { type: 'video/webm' });
+  return new Blob([muxWebM(chunks, { width: canvas.width, height: canvas.height, fps, codec: chosen.name, plan })], { type: 'video/webm' });
+}
+
+// The plan stored by muxWebM, or null (other files, other writers). Reads only the head of the file.
+export function planFromWebM(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  for (let i = 0; i + 11 < b.length; i++) {
+    if (b[i] !== 0x7b || b[i + 1] !== 0xa9 || b[i + 2] !== 0x01) continue;
+    let n = 0; for (let k = 3; k < 10; k++) n = n * 256 + b[i + k];
+    const text = new TextDecoder().decode(b.subarray(i + 10, i + 10 + n));
+    if (!text.startsWith(PLAN_TAG)) continue;
+    try { return JSON.parse(text.slice(PLAN_TAG.length)); } catch { return null; }
+  }
+  return null;
+}
+
+export async function fetchPlan(url) {
+  const res = await fetch(url, { headers: { Range: 'bytes=0-8191' }, credentials: 'same-origin' });
+  if (!res.ok) return null;
+  return planFromWebM(new Uint8Array(await res.arrayBuffer()).subarray(0, 8192));
 }

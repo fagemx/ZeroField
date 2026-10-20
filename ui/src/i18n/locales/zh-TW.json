@@ -2334,9 +2334,7 @@
     "open": "待處理"
   },
   "previs": {
-    "title": "3D 預演 — {{v0}}",
     "open": "3D 排鏡",
-    "close": "關閉",
     "viewport": "預演畫面",
     "play": "播放",
     "pause": "暫停",
@@ -2360,12 +2358,29 @@
     "mood_grey": "中性灰",
     "mood_night": "夜景：暖主光、冷輪廓光",
     "framing": "取景",
-    "frameCamera": "自由取景",
     "setStart": "設為起點",
     "setEnd": "設為終點",
     "resetPath": "回到預設",
     "render": "渲染預演",
     "rendering": "渲染中…",
-    "note": "動作草稿會照這支灰模走：相機路徑、焦距、走位和燈光。外觀由鏡頭描述和 Soul Cast 決定。"
+    "note": "動作草稿會照這支灰模走：相機路徑、焦距、走位和燈光。外觀由鏡頭描述和 Soul Cast 決定。",
+    "stage": "3D 排鏡台",
+    "shots": "鏡頭",
+    "empty": "還沒有可以排的鏡頭，請先在分鏡表加列。",
+    "inspector": "鏡頭機位與走位",
+    "viewMode": "視窗鏡頭",
+    "view_lens": "鏡頭視角",
+    "view_overhead": "俯視平面",
+    "view_free": "自由鏡頭",
+    "hint_overhead": "這個場景所有鏡頭機位的俯視平面圖。拖曳平移，滾輪縮放。",
+    "hint_free": "轉動取景後，設為這個鏡頭的起點或終點機位。",
+    "playShot": "播放此鏡",
+    "playScene": "播放整場",
+    "state_none": "尚無預演",
+    "state_rendered": "已渲染預演",
+    "state_edited": "已修改，未渲染",
+    "keys": "↑ ↓ 切換鏡頭 · 空白鍵播放此鏡",
+    "discard": "放棄修改",
+    "move_custom": "自訂路徑"
   }
 }

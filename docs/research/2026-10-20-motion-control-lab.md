@@ -87,10 +87,16 @@ is now S03's cinema shot in the showcase.
 
 - **Previs column** on the cinema slate (appended last, so existing column indexes and pipelines keep working); the
   showcase upgrade adds it once and gives S03 the Blender blockout (`samples/previs_s03_blockout.mp4`).
-- **3D previs editor** in the shot bench (three.js, lazy-loaded): set, actor action, camera move, lens, light,
-  free framing with start/end keys, scrub, and *Render previs*, which records 97 frames and writes the Previs cell
-  through the normal upload path ([editor](../verification/motion-lab/previs_editor.jpg),
-  [night light](../verification/motion-lab/previs_editor_night.jpg), [bench](../verification/motion-lab/shot_bench_previs.jpg)).
+- **3D Stage** view of the slate (three.js, lazy-loaded), next to Table / Canvas / Gallery / Board: every shot in one
+  set. The shot list (keyframe thumbnails, previs state) sits beside a viewport with three cameras: **Lens** (through
+  the shot's planned camera), **Overhead** (a floor plan with every shot's camera path, glyph and label; shots on the
+  same path share one label) and **Free camera** (orbit, then set the shot's start/end key). *Play shot* loops one shot,
+  *Play scene* cuts through the following shots in slate order; ↑/↓ switch shots. A shot starts from its slate text
+  (Camera Motion, the Optical Rig lens, the action). *Render previs* writes 97 frames into the shot's Previs cell and
+  stores the plan inside the WebM (Segment Title), so the project keeps it; unrendered edits stay in the browser.
+  *Block in 3D* in the shot bench opens the stage on that shot ([workbench](../verification/motion-lab/stage_workbench.jpg),
+  [overhead plan](../verification/motion-lab/stage_overhead.jpg); the earlier per-shot dialog:
+  [editor](../verification/motion-lab/previs_editor.jpg), [night light](../verification/motion-lab/previs_editor_night.jpg)).
 - **Pipeline lane** *Previs Motion Pass → Look Key → Look Pass* with three graphs
   (`ltx25_previs_motion.json`, `flux3_klein_look_key.json`, `ltx25_previs_look.json`); frames are picked inside the
   graphs (`ImageFromBatch`), Soul Cast references bind to the Klein edit. A rearranged pipeline gets the lane appended
@@ -109,7 +115,7 @@ push-in ends on his back, and a swap on the mid-shot profile (frame 48) either c
 man ([draft, two seeds, CAST-01](../verification/motion-lab/look_key_identity_limit.jpg)); a stronger swap instruction
 and a camera end key beside him did not help (LTX still turns him to the console). The look pass is photographic and
 follows the blocking, but it is not Kael. Next candidates: an identity LoRA for the cast, or framing where the face fills
-the key. The editor plan is remembered per browser; the rendered previs is what the project stores.
+the key.
 
 ## Product consequences
 

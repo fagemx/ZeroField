@@ -1,7 +1,7 @@
 // three.js previs stage: a grey blockout the motion pass can follow. Built from primitives only (no assets),
 // so what LTX-2.5 reads is structure, camera and light, never a look.
 import * as THREE from 'three';
-import { FRAMES, WIDTH, HEIGHT, sampleActor, sampleCamera, verticalFov } from './plan.js';
+import { FRAMES, WIDTH, HEIGHT, cameraKeys, sampleActor, sampleCamera, verticalFov } from './plan.js';
 
 const ROOM = new THREE.Vector3(0, 0, -4.1);  // dome centre; the station (actor's mark) is the origin, the console is at +z
 
@@ -16,13 +16,12 @@ function observatory(group, mats) {
     add(new THREE.BoxGeometry(0.1, Z0, 0.1), mats.glass, ROOM.x + R * Math.cos(a), Z0 / 2, ROOM.z + R * Math.sin(a), -a);
   }
   for (let i = 0; i < 16; i++) {  // meridian ribs meeting at the top of the dome
-    const rib = add(new THREE.TorusGeometry(R, 0.07, 8, 96, Math.PI), mats.glass, ROOM.x, Z0, ROOM.z, 2 * Math.PI * i / 16);
-    rib.rotation.x = 0;
+    add(new THREE.TorusGeometry(R, 0.07, 8, 96, Math.PI), mats.glass, ROOM.x, Z0, ROOM.z, 2 * Math.PI * i / 16).userData.roof = true;
   }
   for (const el of [0, 18, 36, 54, 70]) {
     const t = el * Math.PI / 180;
     const ring = add(new THREE.TorusGeometry(R * Math.cos(t), 0.05, 8, 128), mats.glass, ROOM.x, Z0 + R * Math.sin(t), ROOM.z);
-    ring.rotation.x = Math.PI / 2;
+    ring.rotation.x = Math.PI / 2; ring.userData.roof = el > 0;
   }
   const seg = 40, w = 2 * Math.PI * 5.05 / seg * 0.98;
   for (let i = 0; i < seg; i++) {  // continuous console ring hugging the glass, sloped top toward the room
@@ -55,7 +54,8 @@ function actor(mats) {
   return { root, shoulder };
 }
 
-// Build a stage for a plan. Returns { scene, camera, frame(f), pose(f), shoot(f), dispose }.
+// Build a stage for a plan's set and light. Returns { scene, camera, frame(f, plan), pose(f, plan), shoot(f, plan), roof(show), dispose };
+// pose/shoot take the current plan, so only a set or light change needs a new stage.
 // The renderer must have shadowMap enabled (see prepareRenderer).
 export function prepareRenderer(renderer) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -87,22 +87,65 @@ export function buildStage(plan) {
   scene.traverse(o => { if (o.isMesh && o.material !== mats.beam) o.castShadow = o.receiveShadow = true; });
   const camera = new THREE.PerspectiveCamera(verticalFov(plan.lens), WIDTH / HEIGHT, 0.05, 200);
   const aim = new THREE.Vector3();
-  function pose(f) {  // actor and beacon at frame f
-    const a = sampleActor(plan, f);
+  function pose(f, p = plan) {  // actor and beacon at frame f
+    const a = sampleActor(p, f);
     figure.root.position.set(0, 0, -a.back);
     figure.root.rotation.y = a.yaw;
     figure.shoulder.rotation.x = -a.reach;
     beacon.scale.setScalar(f < 67 ? 0.001 : f < 71 ? (f - 67) / 4 : 1);
   }
-  function shoot(f) {  // planned camera at frame f
-    const c = sampleCamera(plan, f);
+  function shoot(f, p = plan) {  // planned camera at frame f
+    const c = sampleCamera(p, f);
     camera.position.set(...c.position); camera.lookAt(aim.set(...c.aim));
-    camera.fov = verticalFov(plan.lens); camera.updateProjectionMatrix();
+    camera.fov = verticalFov(p.lens); camera.updateProjectionMatrix();
   }
-  const frame = f => { pose(f); shoot(f); };
+  const frame = (f, p = plan) => { pose(f, p); shoot(f, p); };
+  const roof = show => set.traverse(o => { if (o.userData.roof) o.visible = show; });  // the overhead plan looks through the dome
   function dispose() {
     scene.traverse(o => { o.geometry?.dispose(); });
     Object.values(mats).forEach(m => m.dispose());
   }
-  return { scene, camera, frame, pose, shoot, dispose, frames: FRAMES };
+  return { scene, camera, frame, pose, shoot, roof, dispose, frames: FRAMES };
+}
+
+// Director's guides for the overhead and free views (never rendered into a previs): each shot's camera path,
+// a camera glyph at the current frame and its shot label. Shots on the same camera path share one glyph and label.
+// entries: [{ id, plan, selected }].
+export function shotGuides(entries) {
+  const paths = new Map();
+  for (const e of entries) {
+    const key = JSON.stringify(cameraKeys(e.plan)), at = paths.get(key);
+    if (at) { at.id += ' · ' + e.id; at.selected ||= e.selected; } else paths.set(key, { ...e });
+  }
+  const group = new THREE.Group(), parts = [];
+  const glyphGeo = new THREE.BufferGeometry().setFromPoints([[0, 0, 0], [-0.22, -0.13, 0.4], [0, 0, 0], [0.22, -0.13, 0.4], [0, 0, 0], [0.22, 0.13, 0.4],
+    [0, 0, 0], [-0.22, 0.13, 0.4], [-0.22, -0.13, 0.4], [0.22, -0.13, 0.4], [0.22, -0.13, 0.4], [0.22, 0.13, 0.4], [0.22, 0.13, 0.4], [-0.22, 0.13, 0.4],
+    [-0.22, 0.13, 0.4], [-0.22, -0.13, 0.4], [-0.08, 0.16, 0.4], [0, 0.26, 0.4], [0, 0.26, 0.4], [0.08, 0.16, 0.4]].map(v => new THREE.Vector3(...v)));
+  for (const { id, plan, selected } of paths.values()) {
+    const color = selected ? 0xf2b33d : 0x06b6d4, opacity = selected ? 1 : 0.55;
+    const line = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
+    const points = Array.from({ length: 49 }, (_, i) => new THREE.Vector3(...sampleCamera(plan, i * 2).position));
+    const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), line);
+    const glyph = new THREE.LineSegments(glyphGeo, line);
+    const canvas = document.createElement('canvas'), g = canvas.getContext('2d'), font = '600 30px system-ui, sans-serif';
+    g.font = font; canvas.width = Math.ceil(g.measureText(id).width) + 24; canvas.height = 48;
+    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = selected ? '#f2b33d' : '#67e8f9'; g.fillText(id, canvas.width / 2, 25);
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }));
+    label.scale.set(0.3 * canvas.width / 48, 0.3, 1);
+    for (const o of [path, glyph, label]) { o.renderOrder = selected ? 3 : 2; group.add(o); }
+    parts.push({ plan, glyph, label, path });
+  }
+  const target = new THREE.Vector3();
+  function update(f) {
+    for (const { plan, glyph, label } of parts) {
+      const c = sampleCamera(plan, f);
+      glyph.position.set(...c.position); glyph.lookAt(target.set(...c.aim));
+      label.position.set(c.position[0], c.position[1] + 0.4, c.position[2]);
+    }
+  }
+  function dispose() {
+    glyphGeo.dispose();
+    for (const { path, label } of parts) { path.geometry.dispose(); path.material.dispose(); label.material.map.dispose(); label.material.dispose(); }
+  }
+  return { group, update, dispose };
 }

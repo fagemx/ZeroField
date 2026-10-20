@@ -21,6 +21,21 @@ export function benchGroup(label) {
   const role = stageRole(label);
   return role === 0 ? 'input' : role >= 4 ? 'output' : 'control';
 }
+// Shots for the 3D stage: every row of a slate that has a Previs column, with the slate text the stage starts from.
+export function stageShots(parsed, rows = parsed.rows) {
+  const at = re => parsed.headers.findIndex(h => re.test(h)), types = parsed.table.attrs.column_types || [];
+  const previsCol = at(/previs|blockout/i);
+  if (previsCol < 0) return [];
+  const [motion, rig, action] = [at(/camera motion/i), at(/optical rig|lens/i), at(/action|prompt/i)];
+  const keyCol = types.findIndex((type, c) => type === 'image' && c !== previsCol);
+  const text = (row, c) => (c < 0 ? '' : String(row.cells[c]?.value || ''));
+  return rows.map(row => ({
+    rid: row.rid, r: parsed.rows.indexOf(row), shot: text(row, 0), previsCol,
+    previs: mediaOf(text(row, previsCol), 'video')?.url || null,
+    keyframe: keyCol < 0 ? null : mediaOf(text(row, keyCol), 'image')?.url || null,
+    slate: { motion: text(row, motion), rig: text(row, rig), action: text(row, action) },
+  }));
+}
 // A shot's stages as bench columns and the links between them: one source fans out to every control pass,
 // several passes merge into the first output, and outputs chain (remaster -> split-screen).
 export function benchLinks(stages) {

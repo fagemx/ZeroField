@@ -25,6 +25,16 @@ export function defaultPlan() {
   return { set: 'observatory', move: 'pushin', lens: 35, action: 'turnreach', mood: 'grey', keys: null };
 }
 
+// A shot's first plan comes from what the slate already says: Camera Motion, the lens in Optical Rig, the action text.
+export function planFromSlate({ motion = '', rig = '', action = '' } = {}) {
+  const plan = defaultPlan(), m = motion.toLowerCase(), mm = Number(rig.match(/(\d+)\s*mm/i)?.[1]);
+  plan.move = /pull|dolly out|reveal/.test(m) ? 'pullout' : /push|dolly in|zoom in/.test(m) ? 'pushin' : /orbit|arc/.test(m) ? 'orbit'
+    : /crane|jib|boom/.test(m) ? 'crane' : /track|truck|follow/.test(m) ? 'track' : /static|tripod|locked/.test(m) ? 'static' : plan.move;
+  if (mm) plan.lens = LENSES.reduce((a, b) => (Math.abs(b - mm) < Math.abs(a - mm) ? b : a));
+  plan.action = /\b(walks?|enters?|approach)/i.test(action) ? 'walkin' : /\b(turns?|reach|dial|press)/i.test(action) ? 'turnreach' : 'stand';
+  return plan;
+}
+
 export function cameraKeys(plan) {
   return plan.keys && plan.keys.length >= 2 ? plan.keys : PRESETS[plan.move] || PRESETS.pushin;
 }

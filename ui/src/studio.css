@@ -3,13 +3,13 @@
    Grid: sidebar 232 + 1px rule; canvas gutter 24px; cards 16px radius on #000, controls are 32px pills. */
 
 /* ---------- Controls ---------- */
-:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip, .react-flow__controls, .react-flow__minimap) button):not(:where(.review-stage-title, .media-compact)), button.ghost, button.primary, .story-nav button, .story-macro button,
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip, .previs-stage, .react-flow__controls, .react-flow__minimap) button):not(:where(.review-stage-title, .media-compact)), button.ghost, button.primary, .story-nav button, .story-macro button,
   .story-batch button, .batch-bar button, .sheet-stage-actions button, .sheet-panel-actions button, .sheet-review > header button, .hub-create, .canvas-button) {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 14px;
   border: 1px solid var(--control); border-radius: var(--radius-control); background: transparent; color: var(--text);
   font: 500 13px/1 var(--font); white-space: nowrap; cursor: pointer; box-shadow: none;
 }
-:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip, .react-flow__controls, .react-flow__minimap) button):not(:where(.review-stage-title, .media-compact)), button.ghost, .story-nav button, .story-macro button, .story-batch button,
+:is(.workbench-app, .hub-app, .sheet-dialog, .modal) :is(.canvas button:not(:where(.production-sheet, .sheet-gallery, .sheet-board, .media-cell, .review-stage-grid, .sheet-workspace-heading, .sheet-view-switch, .shot-strip, .previs-stage, .react-flow__controls, .react-flow__minimap) button):not(:where(.review-stage-title, .media-compact)), button.ghost, .story-nav button, .story-macro button, .story-batch button,
   .batch-bar button, .sheet-stage-actions button, .sheet-panel-actions button, .sheet-review > header button, .canvas-button):hover:not(:disabled) {
   background: var(--hover-bg); border-color: #5a5a5a;
 }
@@ -438,19 +438,46 @@
 .flow-workspace .react-flow__controls-button { width: 30px; height: 30px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
 .flow-workspace .react-flow__controls-button svg { fill: var(--text); max-width: 12px; max-height: 12px; }
 
-/* 3D previs editor: grey blockout, scrub, render. */
-.modal.previs-dialog { width: min(1240px, 96vw); max-width: none; }
-.previs-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+/* 3D stage: shot list, one set seen through a lens / overhead / free camera, and the shot's blocking. */
+.previs-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; grid-template-rows: minmax(0, 1fr); gap: 16px; padding: 16px; outline: none; }
+.previs-stage > * { min-height: 0; overflow: auto; align-content: start; }  /* each column scrolls inside the workspace */
+.previs-shots { display: grid; gap: 6px; }
+.previs-shots h2 { margin: 0 0 4px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.previs-shots button { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: center; height: auto; padding: 6px; border-radius: var(--radius-field); text-align: left; }
+.previs-shots button[aria-current=true] { border-color: var(--accent); background: var(--accent-bg); }
+.previs-shots img, .previs-thumb { display: block; width: 76px; aspect-ratio: 16 / 9; border-radius: var(--radius-chip); background: #000; object-fit: cover; }
+.previs-shots span { display: grid; gap: 2px; min-width: 0; }
+.previs-shots small { overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.previs-state::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--control); vertical-align: 1px; }
+.previs-state.rendered::before { background: var(--positive); }
+.previs-state.edited::before { background: var(--accent); }
 .previs-view { display: grid; gap: 8px; min-width: 0; }
-.previs-canvas { background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 1280 / 704; }
+.previs-viewport { position: relative; }
+.previs-canvas { background: #000; border-radius: var(--radius-panel); overflow: hidden; aspect-ratio: 1280 / 704; }
 .previs-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.previs-canvas.view-overhead { cursor: grab; }
+.previs-canvas.view-overhead:active { cursor: grabbing; }
+.previs-hud { position: absolute; left: 12px; top: 10px; color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); pointer-events: none; }
+.previs-views { position: absolute; right: 10px; top: 8px; display: flex; gap: 4px; }
+.previs-hint { position: absolute; left: 12px; bottom: 10px; margin: 0; color: #e5e5e5; font-size: 11px; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); pointer-events: none; }
 .previs-timeline { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; color: var(--faint); font-size: 12px; }
 .previs-timeline input[type=range] { flex: 1; accent-color: var(--accent); }
 .previs-summary, .previs-note { margin: 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
 .previs-controls { display: grid; gap: 12px; }
+.previs-fields { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .previs-field { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .previs-field legend { width: 100%; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
-.previs-field button { height: 28px; padding: 0 10px; font-size: 12px; }
-.modal.previs-dialog .previs-field button[aria-pressed=true] { background: var(--text); color: var(--bg); border-color: var(--text); }
 .previs-render { height: 36px; }
-@media (max-width: 860px) { .previs-layout { grid-template-columns: 1fr; } }
+/* The stage owns its compact controls (excluded from the workbench button rule); Render previs stays a primary button. */
+.previs-stage :is(.previs-views, .previs-timeline, .previs-field) button { display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 10px; border: 1px solid var(--control); border-radius: var(--radius-control); background: transparent; color: var(--text); font: 500 12px/1 var(--font); white-space: nowrap; cursor: pointer; }
+.previs-stage :is(.previs-views, .previs-timeline, .previs-field) button:hover:not(:disabled):not([aria-pressed=true]) { background: var(--hover-bg); border-color: #5a5a5a; }
+.previs-stage :is(.previs-views, .previs-timeline, .previs-field) button:disabled { opacity: .4; cursor: default; }
+.previs-stage .previs-field button[aria-pressed=true] { border-color: var(--text); background: var(--text); color: var(--ground); }
+.previs-stage .previs-views button { height: 26px; border-color: rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .55); color: #fff; }
+.previs-stage .previs-views button[aria-pressed=true] { border-color: var(--accent); background: var(--accent); color: #000; }
+@media (max-width: 1180px) {
+  .previs-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; overflow: auto; }
+  .previs-stage > * { overflow: visible; }
+  .previs-shots { grid-auto-flow: column; grid-auto-columns: 210px; overflow-x: auto; }
+  .previs-shots h2, .previs-shots .previs-note { display: none; }
+}

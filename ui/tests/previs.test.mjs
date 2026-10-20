@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, verticalFov, describePlan} from '../src/previs/plan.js';
-import {benchGroup} from '../src/studioModel.js';
+import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, verticalFov, describePlan, planFromSlate} from '../src/previs/plan.js';
+import {benchGroup, stageShots} from '../src/studioModel.js';
+import {muxWebM, planFromWebM} from '../src/previs/webm.js';
 
 const dist = (a, b) => Math.hypot(...a.map((v, k) => v - b[k]));
 
@@ -52,4 +53,38 @@ test('the WebM writer keeps every frame with its own timestamp and declares the 
   assert.equal(blocks.length, 97);
   const last = out.indexOf(0x81, out.length - 6);  // last block: track 1, relative time 4000 ms
   assert.deepEqual([...out.slice(last + 1, last + 3)], [0x0f, 0xa0]);
+});
+
+test('a shot starts from its slate: Camera Motion, the Optical Rig lens and the action', () => {
+  const s01 = planFromSlate({motion: 'Slow Dolly Push-In', rig: 'ARRI Alexa 65 / 35mm Anamorphic', action: 'Establish the empty observatory as Kael enters.'});
+  assert.deepEqual([s01.move, s01.lens, s01.action], ['pushin', 35, 'walkin']);
+  const s02 = planFromSlate({motion: 'Static Tripod', rig: 'RED V-Raptor / 85mm Prime', action: 'Kael notices the analog recorder.'});
+  assert.deepEqual([s02.move, s02.lens, s02.action], ['static', 85, 'stand']);
+  const s05 = planFromSlate({motion: 'Tracking Shot', rig: '40mm', action: 'He turns the brass dial.'});
+  assert.deepEqual([s05.move, s05.lens, s05.action], ['track', 35, 'turnreach']);
+  assert.equal(planFromSlate({motion: 'Pull-out reveal'}).move, 'pullout');
+  assert.deepEqual(planFromSlate(), {...defaultPlan(), action: 'stand'});
+});
+
+test('the rendered previs carries its plan, and other files read as no plan', () => {
+  const chunks = [{data: new Uint8Array([1, 2]), timestamp: 0, key: true}];
+  const plan = {...defaultPlan(), move: 'orbit', lens: 85, keys: [[0, [1, 2, 3], [0, 1, 0]], [96, [3, 2, 1], [0, 1, 0]]]};
+  assert.deepEqual(planFromWebM(muxWebM(chunks, {width: 1280, height: 704, fps: 24, plan})), plan);
+  assert.equal(planFromWebM(muxWebM(chunks, {width: 1280, height: 704, fps: 24})), null);
+  assert.equal(planFromWebM(new Uint8Array([0x7b, 0xa9, 0x01, 0, 0, 0, 0, 0, 0, 3, 0x61, 0x62, 0x63, 0])), null);
+});
+
+test('stage shots: rows of a slate with a Previs column, with keyframe, previs and slate text', () => {
+  const v = id => `[video](/projects/api/demo/assets/pa_${id.repeat(32)})`, i = id => `![Image](/projects/api/demo/assets/pa_${id.repeat(32)})`;
+  const parsed = {headers: ['Shot', 'Optical Rig (Camera & Lens)', 'Camera Motion', 'Action & Audio Prompt', 'Keyframe', 'Cinema Shot', 'Previs'],
+    table: {attrs: {column_types: ['text', 'text', 'text', 'text', 'image', 'video', 'video']}},
+    rows: [{rid: 'a', cells: ['S01', '35mm', 'Push-In', 'Kael enters', i('a'), v('b'), v('c')].map(value => ({value}))},
+           {rid: 'b', cells: ['S02', '85mm', 'Static', 'He waits', '', '', ''].map(value => ({value}))}]};
+  const [one, two] = stageShots(parsed);
+  assert.deepEqual([one.rid, one.r, one.shot, one.previsCol], ['a', 0, 'S01', 6]);
+  assert.match(one.previs, /pa_c{32}$/); assert.match(one.keyframe, /pa_a{32}$/);
+  assert.deepEqual(one.slate, {motion: 'Push-In', rig: '35mm', action: 'Kael enters'});
+  assert.deepEqual([two.previs, two.keyframe, two.r], [null, null, 1]);
+  assert.deepEqual(stageShots(parsed, [parsed.rows[1]]).map(s => s.r), [1]);  // a filtered view keeps table row indexes
+  assert.deepEqual(stageShots({...parsed, headers: parsed.headers.slice(0, 6).concat('Notes')}), []);
 });

@@ -1,0 +1,205 @@
+import { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { useLocale } from '../i18n/react.jsx';
+import { t as uiText } from '../i18n/index.js';
+import { ACTIONS, FPS, FRAMES, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, defaultPlan, describePlan, planFromSlate, verticalFov } from './plan.js';
+import { buildStage, prepareRenderer, shotGuides } from './scene.js';
+import { encodeCanvas, fetchPlan } from './webm.js';
+
+const VIEWS = ['lens', 'overhead', 'free'];
+const draftKey = (slug, rid) => `zf.previs:${slug}:${rid}`;
+function loadDraft(slug, rid) { try { return JSON.parse(localStorage.getItem(draftKey(slug, rid)) || 'null'); } catch { return null; } }
+function saveDraft(slug, rid, plan) {  // unrendered edits stay in this browser; a render stores its plan in the project
+  try { if (plan) localStorage.setItem(draftKey(slug, rid), JSON.stringify(plan)); else localStorage.removeItem(draftKey(slug, rid)); } catch { /* optional */ }
+}
+const pick = (label, value, options, onChange, text) => <fieldset className="previs-field"><legend>{label}</legend>
+  {options.map(o => <button type="button" key={o} aria-pressed={value === o} onClick={() => onChange(o)}>{text(o)}</button>)}</fieldset>;
+
+// The 3D stage of a slate: every shot in one set. Look through a shot's lens, see all shot cameras on an overhead
+// plan, frame custom paths in a free camera, play a shot or the whole scene, and render a shot's grey previs
+// (97 frames, 24 fps) into its Previs cell. The render carries its plan, so the project keeps it.
+export default function PrevisStage({ slug, shots, focus, writable, busy, onRender }) {
+  useLocale();
+  const [rid, setRid] = useState(() => (shots.some(s => s.rid === focus?.rid) ? focus.rid : shots[0]?.rid));
+  const [drafts, setDrafts] = useState(() => Object.fromEntries(shots.map(s => [s.rid, loadDraft(slug, s.rid)]).filter(([, p]) => p)));
+  const [stored, setStored] = useState({}), [rendered, setRendered] = useState({});  // url -> plan in that file; rid -> plan rendered here
+  const [view, setView] = useState('lens'), [frame, setFrame] = useState(0), [playing, setPlaying] = useState(false);
+  const [rendering, setRendering] = useState(false), [error, setError] = useState('');
+  const host = useRef(null), live = useRef(null), progress = useRef(null), now = useRef({});
+
+  const planOf = s => ({ ...defaultPlan(), ...(drafts[s.rid] || stored[s.previs] || rendered[s.rid] || planFromSlate(s.slate)) });
+  const shot = shots.find(s => s.rid === rid) || shots[0];
+  const plan = shot ? planOf(shot) : defaultPlan();
+  const statusOf = s => (drafts[s.rid] ? 'edited' : s.previs ? 'rendered' : 'none');
+  const edit = patch => { const next = { ...plan, ...patch }; saveDraft(slug, shot.rid, next); setDrafts(d => ({ ...d, [shot.rid]: next })); };
+  const discard = () => { saveDraft(slug, shot.rid, null); setDrafts(({ [shot.rid]: _, ...rest }) => rest); };
+
+  useEffect(() => { if (focus && shots.some(s => s.rid === focus.rid)) setRid(focus.rid); }, [focus]);
+  const previsUrls = shots.map(s => s.previs).filter(Boolean).join('|');
+  useEffect(() => {  // plans stored in the rendered previs files
+    const urls = previsUrls.split('|').filter(u => u && !(u in stored));
+    if (!urls.length) return;
+    let alive = true;
+    Promise.all(urls.map(u => fetchPlan(u).catch(() => null))).then(plans => {
+      if (alive) setStored(old => ({ ...old, ...Object.fromEntries(urls.map((u, i) => [u, plans[i]])) }));
+    });
+    return () => { alive = false; };
+  }, [previsUrls]);
+
+  useEffect(() => {  // one renderer; overhead pan/zoom drive an orthographic plan camera
+    if (!host.current) return undefined;
+    const renderer = prepareRenderer(new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }));
+    renderer.setPixelRatio(1); renderer.setSize(WIDTH, HEIGHT, false);
+    host.current.appendChild(renderer.domElement);
+    const controls = new OrbitControls(new THREE.PerspectiveCamera(), renderer.domElement);
+    const half = 5, top = new THREE.OrthographicCamera(-half * WIDTH / HEIGHT, half * WIDTH / HEIGHT, half, -half, 0.1, 80);
+    top.up.set(0, 0, 1); top.position.set(0, 40, -2.4); top.lookAt(0, 0, -2.4);  // console at the top of the plan
+    const canvas = renderer.domElement, overhead = () => now.current.view === 'overhead';
+    const pan = e => {
+      if (!overhead() || !(e.buttons & 1)) return;
+      const k = (top.right - top.left) / top.zoom / canvas.clientWidth;
+      top.position.x += e.movementX * k; top.position.z += e.movementY * k; top.updateMatrixWorld(); now.current.draw();
+    };
+    const zoom = e => {
+      if (!overhead()) return;
+      e.preventDefault(); top.zoom = Math.min(6, Math.max(0.4, top.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); top.updateProjectionMatrix(); now.current.draw();
+    };
+    canvas.addEventListener('pointermove', pan); canvas.addEventListener('wheel', zoom, { passive: false });
+    live.current = { renderer, controls, top, stage: null, guides: null };
+    return () => {
+      canvas.removeEventListener('pointermove', pan); canvas.removeEventListener('wheel', zoom);
+      controls.dispose(); live.current.guides?.dispose(); live.current.stage?.dispose(); renderer.dispose(); canvas.remove(); live.current = null;
+    };
+  }, []);
+  useEffect(() => {  // a new stage only when the set or light changes
+    const ctx = live.current; if (!ctx) return;
+    ctx.guides?.group.removeFromParent(); ctx.stage?.dispose(); ctx.stage = buildStage(plan);
+    ctx.controls.object = ctx.stage.camera;
+    if (ctx.guides) ctx.stage.scene.add(ctx.guides.group);
+  }, [plan.set, plan.mood]);
+  const guideKey = JSON.stringify(shots.map(s => [s.shot, planOf(s), s.rid === shot?.rid]));
+  useEffect(() => {  // every shot camera that shares this set
+    const ctx = live.current; if (!ctx?.stage) return;
+    if (ctx.guides) { ctx.guides.group.removeFromParent(); ctx.guides.dispose(); }
+    ctx.guides = shotGuides(shots.filter(s => planOf(s).set === plan.set).map(s => ({ id: s.shot, plan: planOf(s), selected: s.rid === shot.rid })));
+    ctx.stage.scene.add(ctx.guides.group);
+  }, [guideKey]);
+
+  const draw = () => {
+    const ctx = live.current; if (!ctx?.stage) return;
+    const top = view === 'overhead';
+    ctx.stage.pose(frame, plan); ctx.guides?.update(frame); ctx.stage.roof(!top);
+    if (ctx.guides) ctx.guides.group.visible = view !== 'lens';
+    if (view === 'lens') ctx.stage.shoot(frame, plan);
+    else if (view === 'free') { ctx.stage.camera.fov = verticalFov(plan.lens); ctx.stage.camera.updateProjectionMatrix(); }
+    ctx.renderer.render(ctx.stage.scene, top ? ctx.top : ctx.stage.camera);
+  };
+  now.current = { frame, rid: shot?.rid, shots, view, draw };
+  useEffect(() => { if (!rendering) draw(); });  // previs scale: redraw after every change
+  useEffect(() => {  // the free camera starts from the nearer key of this shot; orbiting redraws
+    const ctx = live.current; if (!ctx?.stage) return;
+    ctx.controls.enabled = view === 'free';
+    if (view !== 'free') return;
+    const keys = cameraKeys(plan), key = frame >= FRAMES / 2 ? keys[keys.length - 1] : keys[0];
+    ctx.stage.camera.position.set(...key[1]); ctx.controls.target.set(...key[2]); ctx.controls.update();
+    const redraw = () => now.current.draw();
+    ctx.controls.addEventListener('change', redraw); redraw();
+    return () => ctx.controls.removeEventListener('change', redraw);
+  }, [view, shot?.rid, plan.set, plan.mood]);
+  useEffect(() => {  // 'shot' loops one shot; 'scene' cuts through the following shots in slate order
+    if (!playing) return;
+    const id = setInterval(() => {
+      const { frame: f, rid: at, shots: list } = now.current;
+      if (f + 1 < FRAMES) { setFrame(f + 1); return; }
+      const next = list[list.findIndex(s => s.rid === at) + 1];
+      if (playing === 'shot') setFrame(0);
+      else if (next) { setRid(next.rid); setFrame(0); }
+      else setPlaying(false);
+    }, 1000 / FPS);
+    return () => clearInterval(id);
+  }, [playing]);
+
+  const step = d => { const i = shots.findIndex(s => s.rid === shot.rid), next = shots[i + d]; if (next) setRid(next.rid); };
+  const onKey = e => {
+    if (e.target.closest('input, select, textarea')) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1); }
+    else if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); setPlaying(p => (p ? false : 'shot')); }
+  };
+  const playScene = () => { setView('lens'); if (playing !== 'scene') setFrame(0); setPlaying(p => (p === 'scene' ? false : 'scene')); };
+  const capture = which => {  // the framed free camera becomes this shot's start or end key
+    const ctx = live.current;
+    const key = [which === 'start' ? 0 : FRAMES - 1, ctx.stage.camera.position.toArray().map(v => +v.toFixed(3)), ctx.controls.target.toArray().map(v => +v.toFixed(3))];
+    const keys = cameraKeys(plan);
+    edit({ keys: which === 'start' ? [key, keys[keys.length - 1]] : [keys[0], key] });
+  };
+  const render = async () => {
+    const ctx = live.current, target = shot, p = plan;
+    setPlaying(false); setRendering(true); setError('');
+    try {
+      ctx.stage.roof(true); if (ctx.guides) ctx.guides.group.visible = false;
+      // WebCodecs + a WebM writer: exact timestamps, so the clip is 97 frames at 24 fps; the plan rides in the file.
+      const blob = await encodeCanvas(ctx.renderer.domElement, FRAMES, FPS, f => {
+        ctx.stage.frame(f, p); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera);
+      }, n => { if (progress.current) progress.current.textContent = `${n}/${FRAMES}`; }, p);
+      if (await onRender(target, blob)) {
+        saveDraft(slug, target.rid, null);
+        setDrafts(({ [target.rid]: _, ...rest }) => rest); setRendered(r => ({ ...r, [target.rid]: p }));
+      }
+    } catch (e) { setError(e.message || String(e)); }
+    setRendering(false); setView('lens');
+  };
+
+  const t = key => uiText('previs.' + key);
+  if (!shot) return <div className="sheet-empty"><p>{t('empty')}</p></div>;
+  return <div className="previs-stage" tabIndex={-1} onKeyDown={onKey}>
+    <nav className="previs-shots" aria-label={t('shots')}>
+      <h2>{t('shots')}</h2>
+      {shots.map(s => {
+        const p = planOf(s), state = statusOf(s);
+        return <button type="button" key={s.rid} aria-current={s.rid === shot.rid} onClick={() => setRid(s.rid)}>
+          {s.keyframe ? <img src={s.keyframe} alt="" loading="lazy" /> : <span className="previs-thumb" />}
+          <span><b>{s.shot}</b><small>{t('move_' + (p.keys ? 'custom' : p.move))} · {p.lens}mm</small>
+            <small className={'previs-state ' + state}>{t('state_' + state)}</small></span>
+        </button>;
+      })}
+      <p className="previs-note">{t('keys')}</p>
+    </nav>
+    <section className="previs-view">
+      <div className="previs-viewport">
+        <div ref={host} className={'previs-canvas view-' + view} aria-label={t('viewport')} />
+        <div className="previs-hud"><b>{shot.shot}</b> · {plan.lens}mm · {(frame / FPS).toFixed(2)}s</div>
+        <div className="previs-views" role="group" aria-label={t('viewMode')}>{VIEWS.map(v =>
+          <button type="button" key={v} aria-pressed={view === v} disabled={rendering}
+            onClick={() => { setView(v); if (v !== 'lens' && playing === 'scene') setPlaying(false); }}>{t('view_' + v)}</button>)}</div>
+        {view !== 'lens' && <p className="previs-hint">{t('hint_' + view)}</p>}
+      </div>
+      <div className="previs-timeline">
+        <button type="button" onClick={() => setPlaying(p => (p === 'shot' ? false : 'shot'))} disabled={rendering}>{playing === 'shot' ? t('pause') : t('playShot')}</button>
+        <button type="button" onClick={playScene} disabled={rendering}>{playing === 'scene' ? t('pause') : t('playScene')}</button>
+        <input type="range" min="0" max={FRAMES - 1} value={frame} aria-label={t('frame')} onChange={e => { setPlaying(false); setFrame(+e.target.value); }} />
+        <span>{frame}/{FRAMES - 1}</span>
+      </div>
+      <p className="previs-summary">{describePlan(plan)}</p>
+    </section>
+    <aside className="previs-controls" aria-label={t('inspector')}>
+      <fieldset className="previs-fields" disabled={!writable || rendering}>
+        {pick(t('set'), plan.set, ['observatory', 'empty'], v => edit({ set: v }), v => t('set_' + v))}
+        {pick(t('action'), plan.action, ACTIONS, v => edit({ action: v }), v => t('action_' + v))}
+        {pick(t('move'), plan.keys ? 'custom' : plan.move, MOVES, v => edit({ move: v, keys: null }), v => t('move_' + v))}
+        {pick(t('lens'), plan.lens, LENSES, v => edit({ lens: v }), v => `${v}mm`)}
+        {pick(t('light'), plan.mood, MOODS, v => edit({ mood: v }), v => t('mood_' + v))}
+        <fieldset className="previs-field"><legend>{t('framing')}</legend>
+          <button type="button" disabled={view !== 'free'} onClick={() => capture('start')}>{t('setStart')}</button>
+          <button type="button" disabled={view !== 'free'} onClick={() => capture('end')}>{t('setEnd')}</button>
+          <button type="button" disabled={!plan.keys} onClick={() => edit({ keys: null })}>{t('resetPath')}</button>
+          <button type="button" disabled={!drafts[shot.rid]} onClick={discard}>{t('discard')}</button>
+        </fieldset>
+      </fieldset>
+      {error && <p className="sheet-save-error" role="alert">{error}</p>}
+      {writable && <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>
+        {rendering ? <>{t('rendering')} <span ref={progress} /></> : t('render')}</button>}
+      <p className="previs-note">{t('note')}</p>
+    </aside>
+  </div>;
+}
