@@ -205,6 +205,8 @@ class WorkflowTests(unittest.TestCase):
                     for value in node['inputs'].values():
                         if isinstance(value, list) and len(value) == 2 and isinstance(value[1], int):
                             self.assertIn(value[0], graph)
+                    if node['class_type'] == 'SaveVideo':  # ComfyUI 0.42 API form; nested dicts fail at save
+                        self.assertEqual((node['inputs']['format'], node['inputs']['codec']), ('mp4', 'h264'))
         h3 = json.loads((ROOT / 'workflows/minimax_h3_ref2va.json').read_text())
         self.assertIn('12', h3)
         self.assertEqual(h3['200']['class_type'], 'MiniMaxH3ReferenceToVideo')

@@ -149,12 +149,7 @@
         0
       ],
       "filename_prefix": "zerofield_openjutsu",
-      "format": {
-        "format": "mp4",
-        "codec": {
-          "codec": "h264"
-        }
-      }
+      "format": "mp4", "codec": "h264"
     }
   },
   "13": {

@@ -81,6 +81,17 @@ class SingleStepTests(unittest.TestCase):
         self.assertEqual(complete["run"]["status"], "succeeded")
         self.assertEqual(len(complete["tasks"]), 1)
 
+    def test_retry_after_rejected_take_advances_the_take(self):
+        # Retry clears the task's own output; the rejected take must still count, or the seed replays it.
+        self.save(self.graph())
+        data = flow_runner.start(self.conn, self.me, self.slug, "flow", self.request())
+        first = self.claim()
+        self.assertEqual(first["input"]["take"], 0)
+        result = self.finish(first, "take one")
+        assistant_service.dismiss_proposal(self.conn, self.me, self.slug, result["proposal_id"])
+        flow_runner.control(self.conn, self.me, self.slug, "flow", data["run"]["id"], "retry")
+        self.assertEqual(self.claim()["input"]["take"], 1)
+
     def test_result_context_retains_claimed_source_label_without_exposing_target_snapshot(self):
         self.save(self.graph(target=False))
         data = flow_runner.start(self.conn, self.me, self.slug, "flow", self.request())

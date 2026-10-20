@@ -1,5 +1,9 @@
 # Interim local workflows (4090 bring-up)
 
+> **Superseded on 2026-10-20:** the official LTX-2.5 + FLUX 3 Klein files are installed and the studio
+> uses the built-in graphs (`python run_studio.py`, no `--worker-config`). These graphs stay as a
+> fallback for machines without the gated files.
+
 Stand-ins for the official LTX-2.5 / FLUX 3 Klein graphs, using model files already on this
 workstation. They prove the full ZeroField path (Pipeline → local ComfyUI → proposal → review)
 before the gated models are downloaded. Same node bindings as the official graphs

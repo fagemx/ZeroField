@@ -861,11 +861,17 @@ def _inputs(conn, run, task, node):
     take = 0
     if task["row_id"] and task["target"].get("tab_key"):
         # Earlier outputs for this same cell: a re-shoot must not replay a locked identity seed.
+        # Retry clears a task's own output, so its rejected takes are counted from their proposals.
+        col = task["target"].get("col_index")
+        cell_ops = json.dumps([{"rid": task["row_id"], "edited_cols": [col]}]) if col is not None else None
         with conn.cursor() as cur:
-            cur.execute("""SELECT COUNT(*) FROM projectops.limb_task WHERE project_slug=%s AND row_id=%s
+            cur.execute("""SELECT GREATEST((SELECT COUNT(*) FROM projectops.limb_task WHERE project_slug=%s AND row_id=%s
                 AND target->>'tab_key'=%s AND target->>'col_index' IS NOT DISTINCT FROM %s
-                AND output IS NOT NULL AND created_at<%s""", (run["project_slug"], task["row_id"],
-                task["target"]["tab_key"], None if task["target"].get("col_index") is None else str(task["target"]["col_index"]), task["created_at"]))
+                AND output IS NOT NULL AND created_at<%s),
+                (SELECT COUNT(*) FROM projectops.assistant_proposal WHERE %s::jsonb IS NOT NULL AND project_slug=%s
+                AND action='table_edit' AND target->>'tab_key'=%s AND target->'ops' @> %s::jsonb))""",
+                (run["project_slug"], task["row_id"], task["target"]["tab_key"], None if col is None else str(col),
+                 task["created_at"], cell_ops, run["project_slug"], task["target"]["tab_key"], cell_ops))
             take = cur.fetchone()[0]
     return {"prompt": privacy.sanitize(node["prompt"], mode), "tabs": inputs, "scope": node.get("scope", "legacy"),
             "row_id": task["row_id"], "rows": structured_rows, "target": task["target"], "take": take,
