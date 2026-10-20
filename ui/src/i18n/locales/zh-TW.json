@@ -2391,6 +2391,7 @@
     "renderFirst": "請先渲染預演；動作草稿會照存好的預演影片走。",
     "facing": "面向",
     "facing_console": "控制台",
-    "facing_room": "室內（鏡頭這側）"
+    "facing_room": "室內（鏡頭這側）",
+    "duration": "時長"
   }
 }

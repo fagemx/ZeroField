@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useLocale } from '../i18n/react.jsx';
 import { t as uiText } from '../i18n/index.js';
-import { ACTIONS, FACINGS, FPS, FRAMES, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, defaultPlan, describePlan, planFromSlate, sampleCamera, verticalFov } from './plan.js';
+import { ACTIONS, DURATIONS, FACINGS, FPS, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, defaultPlan, describePlan, framesOf, planFromSlate, sampleCamera, verticalFov } from './plan.js';
 import { buildStage, prepareRenderer, shotGuides } from './scene.js';
 import { encodeCanvas, fetchPlan } from './webm.js';
 
@@ -30,7 +30,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
 
   const planOf = s => ({ ...defaultPlan(), ...(drafts[s.rid] || stored[s.previs] || rendered[s.rid] || planFromSlate(s.slate)) });
   const shot = shots.find(s => s.rid === rid) || shots[0];
-  const plan = shot ? planOf(shot) : defaultPlan();
+  const plan = shot ? planOf(shot) : defaultPlan(), frames = framesOf(plan);
   const statusOf = s => (drafts[s.rid] ? 'edited' : s.previs ? 'rendered' : 'none');
   const edit = patch => { const next = { ...plan, ...patch }; saveDraft(slug, shot.rid, next); setDrafts(d => ({ ...d, [shot.rid]: next })); };
   const discard = () => { saveDraft(slug, shot.rid, null); setDrafts(({ [shot.rid]: _, ...rest }) => rest); };
@@ -89,19 +89,20 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   const draw = () => {
     const ctx = live.current; if (!ctx?.stage) return;
     const top = view === 'overhead';
-    ctx.stage.pose(frame, plan); ctx.guides?.update(frame, top ? 1.4 / ctx.top.zoom : 1); ctx.stage.roof(!top);
+    ctx.stage.pose(frame, plan); ctx.guides?.update(frame / (frames - 1), top ? 1.4 / ctx.top.zoom : 1); ctx.stage.roof(!top);
     if (ctx.guides) ctx.guides.group.visible = view !== 'lens';
     if (view === 'lens') ctx.stage.shoot(frame, plan);
     else if (view === 'free') { ctx.stage.camera.fov = verticalFov(plan.lens); ctx.stage.camera.updateProjectionMatrix(); }
     ctx.renderer.render(ctx.stage.scene, top ? ctx.top : ctx.stage.camera);
   };
-  now.current = { frame, rid: shot?.rid, shots, view, draw };
+  now.current = { frame, frames, rid: shot?.rid, shots, view, draw };
+  useEffect(() => { if (frame > frames - 1) setFrame(frames - 1); }, [frames]);  // a shorter shot: stay on its last frame
   useEffect(() => { if (!rendering) draw(); });  // previs scale: redraw after every change
   useEffect(() => {  // the free camera starts from the nearer key of this shot; orbiting redraws
     const ctx = live.current; if (!ctx?.stage) return;
     ctx.controls.enabled = view === 'free';
     if (view !== 'free') return;
-    const keys = cameraKeys(plan), key = frame >= FRAMES / 2 ? keys[keys.length - 1] : keys[0];
+    const keys = cameraKeys(plan), key = frame >= frames / 2 ? keys[keys.length - 1] : keys[0];
     ctx.stage.camera.position.set(...key[1]); ctx.controls.target.set(...key[2]); ctx.controls.update();
     const redraw = () => now.current.draw();
     ctx.controls.addEventListener('change', redraw); redraw();
@@ -110,8 +111,8 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   useEffect(() => {  // 'shot' loops one shot; 'scene' cuts through the following shots in slate order
     if (!playing) return;
     const id = setInterval(() => {
-      const { frame: f, rid: at, shots: list } = now.current;
-      if (f + 1 < FRAMES) { setFrame(f + 1); return; }
+      const { frame: f, frames: n, rid: at, shots: list } = now.current;
+      if (f + 1 < n) { setFrame(f + 1); return; }
       const next = list[list.findIndex(s => s.rid === at) + 1];
       if (playing === 'shot') setFrame(0);
       else if (next) { setRid(next.rid); setFrame(0); }
@@ -128,7 +129,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   };
   const fitOverhead = () => {  // frame every camera of this set and the actor's mark on the plan
     const top = live.current?.top; if (!top) return;
-    const pts = shots.filter(s => planOf(s).set === plan.set).flatMap(s => [0, 24, 48, 72, 96].map(f => sampleCamera(planOf(s), f).position)).concat([[0, 0, 0.6]]);
+    const pts = shots.filter(s => planOf(s).set === plan.set).flatMap(s => [0, .25, .5, .75, 1].map(u => sampleCamera(planOf(s), u * (framesOf(planOf(s)) - 1)).position)).concat([[0, 0, 0.6]]);
     const xs = pts.map(q => q[0]), zs = pts.map(q => q[2]), [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
     top.position.x = (x0 + x1) / 2; top.position.z = (z0 + z1) / 2;
     top.zoom = Math.min(top.right / ((x1 - x0) / 2 + 1.5), top.top / ((z1 - z0) / 2 + 1.5));
@@ -138,7 +139,8 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   const playScene = () => { setView('lens'); if (playing !== 'scene') setFrame(0); setPlaying(p => (p === 'scene' ? false : 'scene')); };
   const capture = which => {  // the framed free camera becomes this shot's start or end key
     const ctx = live.current;
-    const key = [which === 'start' ? 0 : FRAMES - 1, ctx.stage.camera.position.toArray().map(v => +v.toFixed(3)), ctx.controls.target.toArray().map(v => +v.toFixed(3))];
+    const key = [which === 'start' ? 0 : 96,  // keys live on the 0..96 beat clock
+      ctx.stage.camera.position.toArray().map(v => +v.toFixed(3)), ctx.controls.target.toArray().map(v => +v.toFixed(3))];
     const keys = cameraKeys(plan);
     edit({ keys: which === 'start' ? [key, keys[keys.length - 1]] : [keys[0], key] });
   };
@@ -148,9 +150,9 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     try {
       ctx.stage.roof(true); if (ctx.guides) ctx.guides.group.visible = false;
       // WebCodecs + a WebM writer: exact timestamps, so the clip is 97 frames at 24 fps; the plan rides in the file.
-      const blob = await encodeCanvas(ctx.renderer.domElement, FRAMES, FPS, f => {
+      const n = framesOf(p), blob = await encodeCanvas(ctx.renderer.domElement, n, FPS, f => {
         ctx.stage.frame(f, p); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera);
-      }, n => { if (progress.current) progress.current.textContent = `${n}/${FRAMES}`; }, p);
+      }, done => { if (progress.current) progress.current.textContent = `${done}/${n}`; }, p);
       if (await onRender(target, blob)) {
         saveDraft(slug, target.rid, null);
         setDrafts(({ [target.rid]: _, ...rest }) => rest); setRendered(r => ({ ...r, [target.rid]: p }));
@@ -186,8 +188,8 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       <div className="previs-timeline">
         <button type="button" onClick={() => setPlaying(p => (p === 'shot' ? false : 'shot'))} disabled={rendering}>{playing === 'shot' ? t('pause') : t('playShot')}</button>
         <button type="button" onClick={playScene} disabled={rendering}>{playing === 'scene' ? t('pause') : t('playScene')}</button>
-        <input type="range" min="0" max={FRAMES - 1} value={frame} aria-label={t('frame')} onChange={e => { setPlaying(false); setFrame(+e.target.value); }} />
-        <span>{frame}/{FRAMES - 1}</span>
+        <input type="range" min="0" max={frames - 1} value={Math.min(frame, frames - 1)} aria-label={t('frame')} onChange={e => { setPlaying(false); setFrame(+e.target.value); }} />
+        <span>{Math.min(frame, frames - 1)}/{frames - 1}</span>
       </div>
       <p className="previs-summary">{describePlan(plan)}</p>
     </section>
@@ -199,6 +201,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
         {pick(t('facing'), plan.facing, FACINGS, v => edit({ facing: v }), v => t('facing_' + v))}
         {pick(t('move'), plan.keys ? 'custom' : plan.move, MOVES, v => edit({ move: v, keys: null }), v => t('move_' + v))}
         {pick(t('lens'), plan.lens, LENSES, v => edit({ lens: v }), v => `${v}mm`)}
+        {pick(t('duration'), plan.seconds, DURATIONS, v => edit({ seconds: v }), v => `${v} s`)}
         {pick(t('light'), plan.mood, MOODS, v => edit({ mood: v }), v => t('mood_' + v))}
         <fieldset className="previs-field"><legend>{t('framing')}</legend>
           <button type="button" disabled={view !== 'free'} onClick={() => capture('start')}>{t('setStart')}</button>

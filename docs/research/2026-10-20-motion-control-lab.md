@@ -101,7 +101,18 @@ is now S03's cinema shot in the showcase.
   predicate picks it among the steps that write Cinema Shot) and the take waits for review. A short *How it works* list
   sits above the controls. Presets are framed for 35 mm; another lens dollies each key along its line of sight to hold
   the shot size, stopping on the open floor inside the console ring. *Facing* turns the actor to the room (camera side).
-- **Four shots run through the stage** ([16 s side by side: previs | motion pass](../verification/motion-lab/stage_demo.mp4)):
+- **Shot length**: the stage offers 4, 6 or 8 s (97, 145 or 193 frames, LTX's 8n+1); camera keys and the actor's timing
+  run on a 0..96 beat clock, so a longer shot plays the same blocking slower. The previs graphs load up to 193 frames and
+  encode/decode the video in 64-frame chunks (`VAEEncodeTiled` / `VAEDecodeTiled`): a 145-frame clip with a one-piece
+  decode spilled out of VRAM and stalled for minutes, chunked it takes 54 s; 193 frames take 72-86 s on the 4090.
+- **Five shots re-run at 6 s, previs → motion → look key → look pass**, each step applied before the next because a
+  single-step proposal pins the page revision (proposals made before another write to the slate fail on apply)
+  ([30 s side by side: previs | final shot](../verification/motion-lab/stage_demo.mp4),
+  [S06 bench: Previs, Keyframe and Cinema Shot agree](../verification/motion-lab/stage_bench_s06_matched.jpg)).
+  S02, S05, S06 matched first time; S03 flipped to a front view on one seed (its text says the glass is "behind him")
+  and matched on a retake; S01 was re-blocked as a pull-out with Kael walking toward camera, which is what "as Kael
+  enters" asks for.
+- **Earlier 4 s run through the stage**:
   camera path, framing and timing carried over in all four (S01 push-in walk-in, S02 locked-off 85 mm, S05 track,
   S06 push-in 85 mm). Facing did not at first: a bare grey head reads as a face from behind, and LTX turned the actor
   to camera in S01, S02 and S06. Hair over the back of the head and forward shoes fixed S02 and the end of S01; S06

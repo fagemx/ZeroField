@@ -354,6 +354,11 @@ class PrevisTwoPassTests(unittest.TestCase):
                                       cfg['motion']['video_gen'], task, head, client)
         self.assertEqual((motion['20']['inputs']['video'], motion['30']['inputs']['string_a'], motion['3']['inputs']['denoise']),
                          ('source_video.bin', 'beats', 0.75))
+        # Shots up to 8 s (193 frames) load whole and decode in 64-frame chunks, so a long clip never stalls in the VAE.
+        for graph in (motion, load('look', 'video_gen')):
+            self.assertEqual((graph['20']['inputs']['frame_load_cap'], graph['21']['class_type'], graph['8']['class_type'], graph['8']['inputs']['temporal_size']),
+                             (193, 'VAEEncodeTiled', 'VAEDecodeTiled', 64))
+        self.assertEqual(load('lookkey', 'image_gen')['20']['inputs']['frame_load_cap'], 193)  # the key is the last frame of the whole shot
         # Shot beats land before the fixed live-action look lock that the encoder reads (cfg 1 ignores negatives).
         self.assertEqual(motion['6']['inputs']['text'], ['30', 0])
         self.assertIn('live-action', motion['30']['inputs']['string_b'])

@@ -1,7 +1,7 @@
 // three.js previs stage: a grey blockout the motion pass can follow. Built from primitives only (no assets),
 // so what LTX-2.5 reads is structure, camera and light, never a look.
 import * as THREE from 'three';
-import { DOME, FRAMES, WIDTH, HEIGHT, cameraKeys, sampleActor, sampleCamera, verticalFov } from './plan.js';
+import { DOME, WIDTH, HEIGHT, cameraKeys, framesOf, sampleActor, sampleCamera, verticalFov } from './plan.js';
 
 const ROOM = new THREE.Vector3(DOME.x, 0, DOME.z);  // dome centre; the station (actor's mark) is the origin, the console is at +z
 
@@ -110,7 +110,7 @@ export function buildStage(plan) {
     scene.traverse(o => { o.geometry?.dispose(); });
     Object.values(mats).forEach(m => m.dispose());
   }
-  return { scene, camera, frame, pose, shoot, roof, dispose, frames: FRAMES };
+  return { scene, camera, frame, pose, shoot, roof, dispose };
 }
 
 // Director's guides for the overhead and free views (never rendered into a previs): each shot's camera path,
@@ -129,7 +129,7 @@ export function shotGuides(entries) {
   for (const { id, plan, selected } of paths.values()) {
     const color = selected ? 0xf2b33d : 0x06b6d4, opacity = selected ? 1 : 0.55;
     const line = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
-    const points = Array.from({ length: 49 }, (_, i) => new THREE.Vector3(...sampleCamera(plan, i * 2).position));
+    const points = Array.from({ length: 49 }, (_, i) => new THREE.Vector3(...sampleCamera(plan, i * (framesOf(plan) - 1) / 48).position));
     const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), line);
     const glyph = new THREE.LineSegments(glyphGeo, line);
     const canvas = document.createElement('canvas'), g = canvas.getContext('2d'), font = '600 30px system-ui, sans-serif';
@@ -141,9 +141,10 @@ export function shotGuides(entries) {
     parts.push({ plan, glyph, label, path, base });
   }
   const target = new THREE.Vector3();
-  function update(f, size = 1) {  // size scales glyphs and labels (the overhead plan keeps them readable at any zoom)
+  // progress 0..1 through the shot (shots can differ in length); size scales glyphs and labels for the overhead plan.
+  function update(progress, size = 1) {
     for (const { plan, glyph, label, base } of parts) {
-      const c = sampleCamera(plan, f);
+      const c = sampleCamera(plan, progress * (framesOf(plan) - 1));
       glyph.position.set(...c.position); glyph.lookAt(target.set(...c.aim)); glyph.scale.setScalar(size);
       label.position.set(c.position[0], c.position[1] + 0.4 * size, c.position[2] - 0.45 * size);
       label.scale.set(base * size, 0.3 * size, 1);

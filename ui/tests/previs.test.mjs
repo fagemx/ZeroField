@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, verticalFov, describePlan, planFromSlate, DOME} from '../src/previs/plan.js';
+import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, verticalFov, describePlan, planFromSlate, DOME, framesOf} from '../src/previs/plan.js';
 import {benchGroup, stageShots} from '../src/studioModel.js';
 import {muxWebM, planFromWebM} from '../src/previs/webm.js';
 
@@ -108,4 +108,13 @@ test('a longer lens dollies the preset back along its line of sight and never le
   assert.ok(dist(at('pushin', 85)[0][1], at('pushin', 85)[0][2]) > dist(at('pushin', 35)[0][1], at('pushin', 35)[0][2]));
   const framed = {...defaultPlan(), lens: 85, keys: [[0, [1, 2, 3], [0, 1, 0]], [96, [3, 2, 1], [0, 1, 0]]]};
   assert.deepEqual(cameraKeys(framed), framed.keys);  // the user's framed keys are never moved
+});
+
+test('a longer shot plays the same blocking on more frames (LTX 8n+1: 4, 6 or 8 seconds)', () => {
+  assert.deepEqual([framesOf(defaultPlan()), framesOf({seconds: 6}), framesOf({seconds: 8}), framesOf({seconds: 5}), framesOf({})], [97, 145, 193, 97, 97]);
+  const four = defaultPlan(), six = {...four, seconds: 6};
+  assert.deepEqual(sampleCamera(six, 144).position, cameraKeys(six).at(-1)[1]);  // the end key lands on the last frame
+  assert.deepEqual(sampleCamera(six, 72), sampleCamera(four, 48));                // halfway is halfway
+  assert.deepEqual(sampleActor(six, 66), sampleActor(four, 44));                   // the reach lands at the same point of the shot
+  assert.match(describePlan(six), /35mm, 6 s/);
 });

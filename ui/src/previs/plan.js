@@ -2,7 +2,12 @@
 // Coordinates are station-local: the actor stands at the console station facing +z (toward the glass); his reaching
 // arm is on -x, which a camera behind him sees on screen right (the same screen layout as the Blender blockouts).
 
-export const FRAMES = 97, FPS = 24, WIDTH = 1280, HEIGHT = 704;
+export const FPS = 24, WIDTH = 1280, HEIGHT = 704;
+export const DURATIONS = [4, 6, 8];  // seconds; LTX-2.5 takes 8n+1 frames: 97, 145 or 193
+export const FRAMES = 97;  // the 4-second default
+export const framesOf = plan => (DURATIONS.includes(plan?.seconds) ? plan.seconds : 4) * FPS + 1;
+// Camera keys and the actor's timing are written on a 0..96 beat clock, so a longer shot plays the same blocking slower.
+const beat = (plan, f) => f * 96 / (framesOf(plan) - 1);
 export const LENSES = [24, 35, 50, 85];
 export const MOVES = ['pushin', 'pullout', 'orbit', 'crane', 'track', 'static'];
 export const ACTIONS = ['turnreach', 'stand', 'walkin'];
@@ -11,7 +16,7 @@ export const FACINGS = ['console', 'room'];  // the actor faces the console and 
 // The observatory dome: centre on the floor, glass radius, wall height, and the open floor inside the console ring.
 export const DOME = { x: 0, z: -4.1, radius: 6, base: 1.15, floor: 4.4 };
 
-// Camera keys: [frame, position [x, y, z], aim [x, y, z]], frames 0..96.
+// Camera keys: [beat, position [x, y, z], aim [x, y, z]], beats 0..96 over the shot.
 const PRESETS = {
   pushin: [[0, [1.4, 1.45, -5.8], [-0.2, 2.75, 0.4]], [48, [0.55, 1.8, -2.6], [-0.1, 1.5, 0.5]], [96, [-0.75, 1.95, -0.85], [-0.05, 1.32, 0.55]]],
   orbit: [[0, [2.3, 1.7, -1.6], [0, 1.4, 0.15]], [48, [0.1, 1.7, -2.6], [0, 1.4, 0.15]], [96, [-2.1, 1.7, -1.4], [0, 1.4, 0.15]]],
@@ -25,7 +30,7 @@ const ease = t => t * t * (3 - 2 * t);
 const lerp3 = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
 
 export function defaultPlan() {
-  return { set: 'observatory', move: 'pushin', lens: 35, action: 'turnreach', facing: 'console', mood: 'grey', keys: null };
+  return { set: 'observatory', move: 'pushin', lens: 35, action: 'turnreach', facing: 'console', mood: 'grey', seconds: 4, keys: null };
 }
 
 // A shot's first plan comes from what the slate already says: Camera Motion, the lens in Optical Rig, the action text.
@@ -54,8 +59,8 @@ function insideDome(aim, offset) {
 }
 
 // Camera at frame f: eased piecewise interpolation between keys.
-export function sampleCamera(plan, f) {
-  const keys = cameraKeys(plan), last = keys[keys.length - 1];
+export function sampleCamera(plan, frame) {
+  const keys = cameraKeys(plan), last = keys[keys.length - 1], f = beat(plan, frame);
   if (f <= keys[0][0]) return { position: keys[0][1], aim: keys[0][2] };
   if (f >= last[0]) return { position: last[1], aim: last[2] };  // land exactly on the end key
   for (let i = 0; i < keys.length - 1; i++) {
@@ -73,8 +78,8 @@ export function verticalFov(lens, aspect = WIDTH / HEIGHT) {
 // Actor at frame f: body yaw (radians, 0 = facing the console), shoulder pitch (0 = arm down) and distance back from the station.
 // Facing the room turns the actor around (the motion pass keeps who faces the camera only when the previs shows it);
 // walking in while facing the room walks from the console toward the cameras.
-export function sampleActor(plan, f) {
-  const k = (a, b, t) => a + (b - a) * ease(Math.min(1, Math.max(0, t))), room = plan.facing === 'room', turn = room ? Math.PI : 0;
+export function sampleActor(plan, frame) {
+  const f = beat(plan, frame), k = (a, b, t) => a + (b - a) * ease(Math.min(1, Math.max(0, t))), room = plan.facing === 'room', turn = room ? Math.PI : 0;
   if (plan.action === 'stand') return { yaw: turn, reach: 0, back: 0 };
   if (plan.action === 'walkin') return { yaw: turn, reach: k(0, 1.16, (f - 60) / 22), back: room ? k(0, 2.2, f / 60) : k(2.2, 0, f / 60) };
   return { yaw: k(-1.75, 0, f / 39) + turn, reach: k(0, 1.16, (f - 22) / 22), back: 0 };  // turnreach: from the glass to the dial
@@ -82,7 +87,7 @@ export function sampleActor(plan, f) {
 
 // The shot's camera move in words, for the prompt beat sheet and the Camera Motion column.
 export function describePlan(plan) {
-  const lens = `${plan.lens}mm`;
+  const lens = `${plan.lens}mm, ${(framesOf(plan) - 1) / FPS} s`;
   return {
     pushin: `Slow dolly push-in to an over-the-shoulder close shot, ${lens}`,
     pullout: `Slow dolly pull-out from an over-the-shoulder close shot to a wide view, ${lens}`,

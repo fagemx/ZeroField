@@ -60,7 +60,7 @@
       "force_rate": 24,
       "custom_width": 1280,
       "custom_height": 704,
-      "frame_load_cap": 97,
+      "frame_load_cap": 193,
       "skip_first_frames": 0,
       "select_every_nth": 1,
       "format": "AnimateDiff"

@@ -2391,6 +2391,7 @@
     "renderFirst": "Render the previs first; the motion pass follows the saved clip.",
     "facing": "Facing",
     "facing_console": "The console",
-    "facing_room": "The room (camera side)"
+    "facing_room": "The room (camera side)",
+    "duration": "Duration"
   }
 }
