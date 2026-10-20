@@ -29,7 +29,7 @@ def prepare_output(target,snapshot,output,*,conn=None,slug=None,row_id="",scope=
         asset_url = safe_href(output["asset_url"]) if output.get("asset_url") else None
         if output.get("asset_url") and not asset_url:
             raise ExecutionError(400, "Invalid document media link.")
-        preview = text + (("\n\n" if text else "") + f"[產出媒體]({asset_url})" if asset_url else "")
+        preview = text + (("\n\n" if text else "") + f"[Output media]({asset_url})" if asset_url else "")
         if not preview.strip() or len(preview) > 100000:
             raise ExecutionError(400, "Document output must contain 1–100,000 characters.")
         before = snapshot["doc"].get("content", [])
@@ -51,7 +51,7 @@ def prepare_output(target,snapshot,output,*,conn=None,slug=None,row_id="",scope=
                     raise ExecutionError(409,"The insertion point no longer exists.")
         paragraphs = [[{"type": "text", "text": line}] if line else [] for line in text.splitlines()]
         if asset_url:
-            paragraphs.append([{"type": "text", "text": "產出媒體", "marks": [{"type": "link", "attrs": {"href": asset_url}}]}])
+            paragraphs.append([{"type": "text", "text": "Output media", "marks": [{"type": "link", "attrs": {"href": asset_url}}]}])
         for content in paragraphs:
             bid = new_id("b")
             ops.append({"op": "put", "bid": bid, "base": None, "after": previous,

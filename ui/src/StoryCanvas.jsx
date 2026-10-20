@@ -68,6 +68,8 @@ function SceneNode({ data }) {
 }
 
 const nodeTypes = { media: MediaNode, asset: AssetNode, script: ScriptNode, scene: SceneNode };
+// Room for the full-screen button (top) and the hint bar (bottom) so fitting never hides a row.
+const FIT = { padding: { x: '40px', top: '64px', bottom: '56px' } };
 
 export function StoryCanvas({ storageKey, model, parsed, scenes, title, writable, busy, onOpen, onPreview, onCommit, onUpload, onRunStep }) {
   useLocale();
@@ -78,7 +80,7 @@ export function StoryCanvas({ storageKey, model, parsed, scenes, title, writable
   useEffect(() => {
     const sheet = box.current?.closest('.sheet-workspace');
     sheet?.classList.toggle('is-maximized', full);
-    const fit = setTimeout(() => flow.current?.fitView({ padding: 0.12, duration: 200 }), 80);
+    const fit = setTimeout(() => flow.current?.fitView({ ...FIT, duration: 200 }), 80);
     return () => { clearTimeout(fit); sheet?.classList.remove('is-maximized'); };
   }, [full]);
   useEffect(() => {
@@ -158,7 +160,7 @@ export function StoryCanvas({ storageKey, model, parsed, scenes, title, writable
   const shown = nodes.map(node => ({ ...node, data: { ...node.data, dim: Boolean(lit && !lit.has(node.id)) } }));
   const styled = edges.map(edge => ({ ...edge, type: 'default', className: lit ? (lit.has(edge.source) && lit.has(edge.target) ? 'is-lit' : 'is-dim') : '' }));
   return <div className="story-canvas" ref={box}>
-    <ReactFlow colorMode="dark" nodes={shown} edges={styled} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.12 }} minZoom={0.15} maxZoom={1.6}
+    <ReactFlow colorMode="dark" nodes={shown} edges={styled} nodeTypes={nodeTypes} fitView fitViewOptions={FIT} minZoom={0.15} maxZoom={1.6}
       nodesConnectable={false} proOptions={{ hideAttribution: true }} onInit={instance => { flow.current = instance; }}
       onNodesChange={changes => setNodes(current => applyNodeChanges(changes, current))}
       onNodeDragStop={(_, node) => { positions.current[node.id] = node.position; try { localStorage.setItem(storageKey, JSON.stringify(positions.current)); } catch { /* positions stay for this visit */ } }}

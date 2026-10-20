@@ -328,7 +328,7 @@
 .shot-strip-thumb { width: 100%; }
 
 /* ---------- Story canvas (Meso): the production as a wall of real cards joined by lines ---------- */
-.story-canvas { position: relative; flex: 1 1 auto; min-height: 560px; height: 100%; background: #050505; }
+.story-canvas { position: relative; flex: 1 1 auto; min-height: 420px; height: 100%; background: #050505; }
 .story-canvas .react-flow { --xy-background-color: #050505; --xy-edge-stroke: #3a3a3a; --xy-edge-stroke-width: 1.5;
   --xy-controls-button-background-color: var(--surface); --xy-controls-button-background-color-hover: var(--raised); --xy-controls-button-color: var(--text);
   --xy-controls-button-border-color: var(--line); --xy-minimap-background-color: var(--surface); --xy-node-border-radius: 12px; }

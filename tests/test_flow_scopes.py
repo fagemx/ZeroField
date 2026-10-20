@@ -276,7 +276,7 @@ class ScopedFlowTests(unittest.TestCase):
         self.assertEqual(applied["proposal"]["status"], "applied")
         paragraphs = repo.get_tab(self.conn, self.slug, "delivery")["doc"]["content"]
         self.assertEqual(paragraphs[-1]["content"][0]["marks"], [{"type": "link", "attrs": {"href": safe_href(url)}}])
-        self.assertEqual(paragraphs[-1]["content"][0]["text"], "產出媒體")
+        self.assertEqual(paragraphs[-1]["content"][0]["text"], "Output media")
         self.assertEqual(self.detail(run)["run"]["status"], "succeeded")
 
     def test_selected_aggregate_restart_filters_source_tab_but_keeps_references(self):

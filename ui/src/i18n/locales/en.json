@@ -1203,7 +1203,7 @@
     "upload": "Upload",
     "selectRowsColumns": "Select {{v0}} rows ×  {{v1}} columns",
     "clickACellDragOrUseShiftArrowKeys": "Click a cell · Drag or use Shift + arrow keys to select",
-    "tableGalleryAndBoardShareTheSameData": "Table, Gallery, and Board share the same data",
+    "tableGalleryAndBoardShareTheSameData": "Table, Canvas, Gallery, and Board share the same data",
     "typeOrPressF2ToEditCopiedFormulasRetain": "Type or press F2 to edit · Copied formulas retain their original text",
     "reviewPasteScope": "Review Paste Scope",
     "pasteDraftPreserved": "{{v0}} · paste draft preserved",

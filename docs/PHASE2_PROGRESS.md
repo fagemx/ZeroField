@@ -26,7 +26,36 @@ OpenJutsu source loader. The studio runs the built-in worker defaults (`python r
 | S02 | 88 | **89 pass** | Identity, set, locked-off camera hold — [sheet](verification/phase2/ltx25-s02-grader-89.jpg) |
 | S03 | 64 | 35 → **58** | Takes 1–5 drifted (a second figure appeared; Kael turned to the window). The grader's notes were applied: prompt rewritten, keyframe rebuilt in profile at the dial, take 6 lands push-in, single subject, rain and beacon; the hand leaves the dial late. Kept as **Retake** — [take 1](verification/phase2/ltx25-s03-take1-grader-35.jpg), [take 6](verification/phase2/ltx25-s03-take6-grader-58.jpg) |
 
-[Story canvas with the official renders](verification/phase2/story-canvas-ltx25.jpg).
+### Six-shot cut (S04–S06 added)
+
+S04–S06 were added through the table UI to finish the brief's pacing ("establish the space, reveal
+the signal, hold on the decision"). Director Cut: **24.3 s, six shots, AAC** —
+[video](verification/phase2/director-cut-ltx25-6shot.mp4), [table](verification/phase2/cinema-table-ltx25.jpg),
+[canvas](verification/phase2/story-canvas-ltx25.jpg).
+
+| Shot | Beat | Grader | Status |
+| --- | --- | --- | --- |
+| S04 | Insert: reels turn, a hand at the record key | 48 — [sheet](verification/phase2/ltx25-s04-grader-48.jpg) | Retake (hand presses and withdraws) |
+| S05 | Kael at the glass, the beacon pulses | 64 — [sheet](verification/phase2/ltx25-s05-grader-64.jpg) | Retake (exposure jump mid-shot) |
+| S06 | Recorder raised, deciding whether to speak | **84 pass** — [sheet](verification/phase2/ltx25-s06-grader-84.jpg) | Approved |
+
+S03 take 7 scored 58 again (the hand leaves the dial late); take 6 stays. Three passes (S01, S02, S06),
+three retakes with notes in the table.
+
+Prompt fixes found while adding shots (compiler, with tests):
+
+- **Seed and reference framing leaked into shot prompts.** `seed 48291` was compiled as words, and
+  reference-render framing typed into the Soul Cast lock ("waist-up portrait, grey backdrop", "no people")
+  reached every shot. The seed is stripped from appearance text; Soul Cast renders now get framing from the
+  asset kind (character portrait, environment "no people", prop), so the lock column holds appearance only.
+- **Camera brands were lettered onto props.** "Shot on RED V-Raptor / 85mm Prime" made FLUX 3 Klein print
+  "RED V-RAPTOR 8mm" on the recorder. Stills keep the lens look only.
+- **Insert shots drew a second Kael.** An insert that references `@CAST-01` gets the full character
+  description; the S04 insert references the set only and describes the sleeve
+  ([keyframe](verification/phase2/klein-s04-insert-keyframe.jpg)). A director choice, not a code change.
+- Director Cut links appended to Director Brief read "產出媒體"; now "Output media".
+- Story canvas: `min-height: 560px` overflowed the card at 1440×900, so fitting hid the last row
+  under the hint; the canvas now fits its card and fitting leaves room for the button and hint.
 
 Fixed while running the official graphs:
 
@@ -85,9 +114,9 @@ batches (workflow runs rebase per cell). Options: scope the pin to the sample ro
 ## Next
 
 1. Shoot a 3–4 s phone clip of a person for OpenJutsu VFX-01, then run it through LTX-2.5 V2V.
-2. S03 final hold (hand stays on the dial), then S04–S06 for the 5–6 shot cut.
+2. Retakes: S03/S04 hand holds (LTX-2.5 tends to withdraw the hand late in a 4 s take), S05 exposure jump.
 3. Wire the grader agent into the review flow (today `studio_inspect_frames` serves Story shots, not sheet rows).
 4. GPU sharing: LTX-2.5 and qwen do not fit together; free ComfyUI (`POST /free`) before grading and
    unload qwen (`keep_alive: 0`) after. Automate this in the grader path.
-5. Reference prompts leak into shot prompts: the Soul Cast lock text ("waist-up portrait, grey
-   backdrop", "no people") is copied verbatim into every keyframe/video prompt.
+5. Story canvas lays six shots out in one tall column, so fit-to-view shrinks the cards; wrap long shot
+   lists if the canvas is shown with more than six shots.

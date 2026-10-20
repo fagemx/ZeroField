@@ -246,6 +246,22 @@ def compile_ltx_ingredients_prompt(ctx: dict) -> str:
     return (base + "\nReference Sheet Layout: " + " ".join(panels)).strip()
 
 
+def _appearance(text):
+    """The lock text describes the subject; its seed is a parameter, not words to draw."""
+    return re.sub(r"[;,.]?\s*\bseed[:\s=]+\d+\b", "", str(text), flags=re.I).strip(" ;,.")
+
+
+def _reference_framing(asset_id):
+    """Reference renders frame by asset kind, so framing never leaks into shot prompts."""
+    kind = re.match(r"@?([A-Z]+)-", str(asset_id).upper())
+    kind = kind[1] if kind else ""
+    if kind in ("SET", "LOC", "SCENE"):
+        return "Environment reference, wide, no people."
+    if kind == "PROP":
+        return "Isolated prop reference, neutral backdrop, soft key light."
+    return "Character reference portrait, waist-up, neutral backdrop, soft key light."
+
+
 def _take_seed(base, take):
     """Take 1 keeps the asset's identity seed; each re-shoot of the same cell advances it."""
     return None if base is None else base + (take if isinstance(take, int) and take > 0 else 0)
@@ -332,12 +348,18 @@ def resolve_studio_context(task: dict) -> dict:
     parts = [f"{label}: {value.rstrip('.')}." for label, value in
              (("Optical Rig", "" if still else optical), ("Camera Movement", "" if still else motion), ("Mode", mode)) if value]
     if still and optical:
-        parts.insert(0, f"Cinematic film still, shot on {optical.rstrip('.')}; no camera equipment in frame.")
-    if resolved and row.get("tab_key") not in ("soul-cast", "assets", "asset-sheet"):
-        parts.append("References: " + "; ".join(f"{a['asset_id']} ({a['name']}): {a['appearance_prompt']}" for a in resolved) + ".")
+        # Image models letter camera brands onto props ("RED V-RAPTOR" on a recorder); keep the lens look only.
+        lens = optical.split("/")[-1].strip().rstrip(".")
+        parts.insert(0, f"Cinematic film still, {lens} lens look; no camera equipment or brand text in frame.")
+    asset_row = row.get("tab_key") in ("soul-cast", "assets", "asset-sheet")
+    if resolved and not asset_row:
+        parts.append("References: " + "; ".join(f"{a['asset_id']} ({a['name']}): {_appearance(a['appearance_prompt'])}" for a in resolved) + ".")
     # Fallback is scoped to this row; full tab text can include unrelated shots/assets.
     fallback = source.get("prompt", "") + ("\n" + " ".join(str(v) for v in cells) if row else "")
-    parts.append(action or fallback.strip() or prompt_text(task, {}))
+    if asset_row and action and cells:
+        parts.append(f"{_appearance(action)}. {_reference_framing(cells[0])}")
+    else:
+        parts.append(action or fallback.strip() or prompt_text(task, {}))
     predecessors = [p for p in source.get("predecessor_tasks", [])
                     if not row.get("row_id") or not p.get("row_id") or p["row_id"] == row["row_id"]]
     row_urls = _media_urls(cells)

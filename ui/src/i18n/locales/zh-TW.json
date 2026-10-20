@@ -1203,7 +1203,7 @@
     "upload": "上傳",
     "selectRowsColumns": "選取 {{v0}} 列 × {{v1}} 欄",
     "clickACellDragOrUseShiftArrowKeys": "單擊選格 · 拖曳或 Shift + 方向鍵選取",
-    "tableGalleryAndBoardShareTheSameData": "表格、圖庫與看板共用資料",
+    "tableGalleryAndBoardShareTheSameData": "表格、畫布、圖庫與看板共用資料",
     "typeOrPressF2ToEditCopiedFormulasRetain": "直接輸入或 F2 編輯 · 複製公式保留原文字",
     "reviewPasteScope": "核對貼上範圍",
     "pasteDraftPreserved": "{{v0}} · 貼上草稿仍保留",

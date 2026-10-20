@@ -45,6 +45,8 @@ class ContextTests(unittest.TestCase):
         self.assertLess(prompt.index('Optical Rig:'), prompt.index('Camera Movement:'))
         self.assertLess(prompt.index('Camera Movement:'), prompt.index('References:'))
         self.assertLess(prompt.index('References:'), prompt.index('@CAST-01 enters'))
+        self.assertIn('CAST-01 (Kael): original courier; SET-01', prompt)
+        self.assertNotIn('seed', prompt)  # a parameter, not words to draw
         self.assertNotIn('unrelated', prompt)
         self.assertEqual(task, before)
         task['input']['take'] = 2
@@ -52,7 +54,9 @@ class ContextTests(unittest.TestCase):
         task['capability'] = 'image_gen'  # a still keyframe has no camera move to render
         still = worker.resolve_studio_context(task)['compiled_prompt']
         self.assertNotIn('Camera Movement:', still)
-        self.assertTrue(still.startswith('Cinematic film still, shot on ARRI / 35mm'))
+        # Image models letter camera brands onto props; a still keeps only the lens look.
+        self.assertTrue(still.startswith('Cinematic film still, 35mm lens look; no camera equipment or brand text in frame.'))
+        self.assertNotIn('ARRI', still)
 
     def test_structured_rows_alias_video_column_and_zero_seed(self):
         task = studio_task()
@@ -79,8 +83,12 @@ class ContextTests(unittest.TestCase):
         task['input']['rows'] = [{'row_id': 'cast-row', 'tab_key': 'soul-cast', 'table_id': 'cast',
                                   'cells': ['CAST-01', 'Kael', 'original courier; seed 48291', ASSET(1)]}]
         ctx = worker.resolve_studio_context(task)
-        self.assertEqual(ctx['compiled_prompt'], 'original courier; seed 48291')
+        # Reference framing comes from the asset kind, so the appearance lock stays shot-safe.
+        self.assertEqual(ctx['compiled_prompt'], 'original courier. Character reference portrait, waist-up, neutral backdrop, soft key light.')
         self.assertNotIn('References:', ctx['compiled_prompt'])
+        self.assertEqual(ctx['seed'], 48291)
+        task['input']['rows'][0]['cells'] = ['SET-01', 'Observatory', 'rain on glass', ASSET(2)]
+        self.assertEqual(worker.resolve_studio_context(task)['compiled_prompt'], 'rain on glass. Environment reference, wide, no people.')
 
 
 class ComfyTests(unittest.TestCase):
