@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>three blockout</title>
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script></head>
+<body><script>
+// Same S03 blockout as blockout.py, rendered in the browser: grey model or linear depth, frame by frame.
+const W = 1280, H = 704, N = 97;
+const renderer = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+renderer.setSize(W, H); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x6b7a94);
+scene.add(new THREE.HemisphereLight(0xdde4ee, 0x303236, 0.9));
+const key = new THREE.DirectionalLight(0xffffff, 0.8); key.position.set(-4, 6, 8); scene.add(key);
+const M = c => new THREE.MeshLambertMaterial({color: c});
+const GLASS = M(0x8c949e), FLOOR = M(0x4d4f54), BRASS = M(0x9e8550), SKIN = M(0xccad94), COAT = M(0x383a40), BEAM = new THREE.MeshBasicMaterial({color: 0xfff2cc});
+// Blender is Z-up; here Y-up. Blender (x, y, z) -> three (x, z, -y).
+const P = (x, y, z) => new THREE.Vector3(x, z, -y);
+function add(geo, mat, pos, rotY = 0) { const m = new THREE.Mesh(geo, mat); m.position.copy(pos); m.rotation.y = rotY; scene.add(m); return m; }
+add(new THREE.CylinderGeometry(7, 7, .1, 96), FLOOR, P(0, 0, -.05));
+const R = 6;
+for (let i = 0; i < 28; i++) { const a = 2 * Math.PI * i / 28; add(new THREE.BoxGeometry(.1, 5.2, .1), GLASS, P(R * Math.cos(a), R * Math.sin(a), 2.6), -a); }
+for (const z of [1.0, 5.2]) { const t = add(new THREE.TorusGeometry(R, .05, 8, 96), GLASS, P(0, 0, z)); t.rotation.x = Math.PI / 2; }
+for (let i = 0; i < 14; i++) { const a = 2 * Math.PI * i / 14; const t = add(new THREE.TorusGeometry(R, .04, 6, 64, Math.PI), GLASS, P(0, 0, 5.2), -a); t.scale.y = .55; }
+for (let i = -4; i <= 4; i++) { const a = (90 + i * 9) * Math.PI / 180; const b = add(new THREE.BoxGeometry(.52, 1, .9), BRASS, P(3.1 * Math.cos(a), 3.1 * Math.sin(a), .5)); b.rotation.y = -(a - Math.PI / 2); }
+const dial = add(new THREE.CylinderGeometry(.2, .2, .12, 48), BRASS, P(0, 2.7, 1.04));
+const beacon = add(new THREE.SphereGeometry(.6, 24, 16), BEAM, P(-6, 24, 2.4));
+// Proxy actor
+const actor = new THREE.Group(); actor.position.copy(P(-.05, 2.0, 0)); scene.add(actor);
+const part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.copy(P(x, y, z)); actor.add(m); return m; };
+part(new THREE.CylinderGeometry(.09, .09, .9, 16), COAT, -.12, 0, .45); part(new THREE.CylinderGeometry(.09, .09, .9, 16), COAT, .12, 0, .45);
+part(new THREE.BoxGeometry(.48, .72, .28), COAT, 0, 0, 1.25);
+const head = part(new THREE.SphereGeometry(.13, 24, 16), SKIN, 0, 0, 1.78); head.scale.set(.92, 1.15, 1);
+part(new THREE.BoxGeometry(.05, .06, .08), SKIN, 0, .13, 1.78);
+part(new THREE.CylinderGeometry(.05, .05, .64, 12), COAT, -.3, 0, 1.25);
+const shoulder = new THREE.Group(); shoulder.position.copy(P(.3, 0, 1.55)); actor.add(shoulder);
+const arm = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .66, 12), COAT); arm.position.set(0, -.33, 0); shoulder.add(arm);
+const hand = new THREE.Mesh(new THREE.SphereGeometry(.06, 12, 8), SKIN); hand.position.set(0, -.68, 0); shoulder.add(hand);
+// Keyframes (same as blockout.py), Blender frame numbers 1..97, linear interpolation with smoothstep easing.
+const ease = t => t * t * (3 - 2 * t);
+function track(keys, f) { for (let i = 0; i < keys.length - 1; i++) { const [f0, v0] = keys[i], [f1, v1] = keys[i + 1]; if (f <= f1) { const t = ease(Math.min(1, Math.max(0, (f - f0) / (f1 - f0)))); return v0.map((v, k) => v + (v1[k] - v) * t); } } return keys[keys.length - 1][1]; }
+const D = Math.PI / 180;
+const YAW = [[1, [100 * D]], [26, [20 * D]], [40, [0]], [97, [0]]];
+const ARM = [[1, [0, .1]], [22, [10 * D, .1]], [44, [66 * D, 0]], [97, [66 * D, 0]]];
+const CAM = {pushin: [[1, [-2.6, -.8, 1.8, -.05, 2.1, 1.35]], [49, [-.4, -.2, 1.8, 0, 2.4, 1.3]], [97, [1.2, .7, 1.95, .05, 2.55, 1.32]]]};
+const camera = new THREE.PerspectiveCamera(1, W / H, .05, 200);
+let LENS = 35;
+function pose(f, move) {
+  actor.rotation.y = track(YAW, f)[0];
+  const [pitch, roll] = track(ARM, f); shoulder.rotation.set(-pitch, 0, roll); // Blender +x pitch swings the arm toward +y (three -z)
+  beacon.scale.setScalar(f < 68 ? .001 : f < 72 ? (f - 68) / 4 : 1);
+  const c = track(CAM[move], f);
+  camera.position.copy(P(c[0], c[1], c[2])); camera.lookAt(P(c[3], c[4], c[5]));
+  camera.fov = 2 * Math.atan((36 / (W / H)) / 2 / LENS) / D; camera.updateProjectionMatrix(); // 36mm sensor width, like Blender
+}
+const depthMat = new THREE.ShaderMaterial({vertexShader: 'varying float vz; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.); vz = -mv.z; gl_Position = projectionMatrix * mv; }',
+  fragmentShader: 'varying float vz; void main(){ float d = clamp((vz - .5) / 13.5, 0., 1.); gl_FragColor = vec4(vec3(1. - d), 1.); }'});
+window.renderFrame = (f, mode = 'gray', move = 'pushin', lens = 35) => {
+  LENS = lens; pose(f, move);
+  if (mode === 'depth') { scene.overrideMaterial = depthMat; scene.background = new THREE.Color(0x000000); }
+  else { scene.overrideMaterial = null; scene.background = new THREE.Color(0x6b7a94); }
+  renderer.render(scene, camera);
+  return renderer.domElement.toDataURL('image/png');
+};
+window.ready = true;
+</script></body></html>
