@@ -369,8 +369,7 @@ def media_destination(card):
     config = card['engine_config']
     driver = limb_worker.card_execution_profile(card)['driver']
     if driver in ('comfy_local', 'comfy_partner'):
-        platform = limb_worker.comfy_platform(config)
-        return config.get('base_url') or os.environ.get('COMFY_BASE_URL') or ('http://127.0.0.1:8188' if platform == 'local' else 'https://cloud.comfy.org')
+        return limb_worker.comfy_base_url(config, limb_worker.comfy_platform(config))
     if driver == 'comfy_router':
         from project_assistant.studio.comfy_router import base_url
         return base_url()

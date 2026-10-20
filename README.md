@@ -57,7 +57,15 @@ For local generation, install the models/nodes listed in [workflow setup](workfl
 python run_studio.py --port 3020 --comfy-url http://127.0.0.1:8188
 ```
 
-For the Comfy Developer Platform, install `.[comfy]`, set `COMFY_API_KEY`, and select `--platform comfy_sdk`. Use `--comfy-url` / `COMFY_BASE_URL` for a workflow-capable deployment; the SDK defaults to Comfy Cloud. Generation outputs are proposals for director review. The launcher uses `OPENBENCH_DB_URI` or `DATABASE_URL` when supplied, otherwise it starts the embedded development database. `OPENBENCH_PG_BIN` selects an installed PostgreSQL bin directory. Non-development authentication never seeds demo accounts or registers demo workers.
+For the Comfy Developer Platform, install `.[comfy]` (the official `comfy-sdk` and `comfy-api-proxy`) and select `--platform comfy_sdk`. On your own GPU, run `comfy-api-proxy` next to ComfyUI: it serves the SDK's v2 API on `http://127.0.0.1:8189` in front of ComfyUI on `8188`, and that is the default endpoint when no `COMFY_API_KEY` is set. With a key the SDK targets Comfy Cloud; `--comfy-url` / `COMFY_BASE_URL` selects any other deployment.
+
+```powershell
+python -m pip install -e ".[comfy]"
+comfy-api-proxy
+python run_studio.py --port 3020 --platform comfy_sdk
+```
+
+Generation outputs are proposals for director review. The launcher uses `OPENBENCH_DB_URI` or `DATABASE_URL` when supplied, otherwise it starts the embedded development database. `OPENBENCH_PG_BIN` selects an installed PostgreSQL bin directory. Non-development authentication never seeds demo accounts or registers demo workers.
 
 `--no-worker` lets you explore the workspace without starting model calls. To use agents, configure an appropriate model and restart without that flag. Existing `OPENBENCH_*` environment variables and CLI entry points are retained for compatibility. Configure a local open-weights, OpenAI-compatible endpoint with `OPENBENCH_PROVIDER=openai_compat`, `OPENBENCH_API_BASE`, and `OPENBENCH_MODEL`; see [worker setup](docs/WORKERS.md) for the supported settings and ACP configuration. For contest workflows, use open-weights models and open-source nodes.
 

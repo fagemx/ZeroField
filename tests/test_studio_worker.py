@@ -166,6 +166,16 @@ class ComfyTests(unittest.TestCase):
             sdk.close.assert_called_once()
             comfy.assert_called_once_with(api_key=None, timeout=60, client_info='zerofield-studio')
 
+    def test_sdk_without_a_key_targets_the_self_hosted_proxy(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(worker.comfy_base_url({}, 'comfy_sdk'), 'http://127.0.0.1:8189')  # comfy-api-proxy before local ComfyUI
+            self.assertEqual(worker.comfy_base_url({}, 'local'), 'http://127.0.0.1:8188')
+            self.assertEqual(worker.comfy_base_url({'base_url': 'https://deployment.test/'}, 'comfy_sdk'), 'https://deployment.test')
+        with patch.dict(os.environ, {'COMFY_API_KEY': 'key'}, clear=True):
+            self.assertEqual(worker.comfy_base_url({}, 'comfy_sdk'), 'https://cloud.comfy.org')
+        with patch.dict(os.environ, {'COMFY_BASE_URL': 'http://127.0.0.1:9000'}, clear=True):
+            self.assertEqual(worker.comfy_base_url({}, 'comfy_sdk'), 'http://127.0.0.1:9000')
+
     def test_sdk_output_stream_enforces_media_limit(self):
         output = types.SimpleNamespace(content_type='video/mp4', name='take.mp4', to_stream=lambda stream: stream.write(b'12345'))
         client = object.__new__(worker.ComfyPlatformClient)

@@ -43,6 +43,7 @@ __all__ = [
     'extract_studio_card_from_workflow',
     'ComfyPlatformClient',
     'comfy_platform',
+    'comfy_base_url',
     '_build_card_form_values',
     '_normalize_comfy_error',
     'comfyui',
@@ -1099,6 +1100,17 @@ def comfy_platform(config):
     return explicit or ('local' if config.get('driver')=='comfy_local' or not os.environ.get('COMFY_API_KEY') else 'comfy_sdk')
 
 
+def comfy_base_url(config, platform):
+    """Workflow endpoint: config or COMFY_BASE_URL first; else local ComfyUI, or for the SDK Comfy Cloud when a key is
+    set and otherwise comfy-api-proxy, which serves the SDK's v2 API in front of a self-hosted ComfyUI."""
+    explicit = config.get("base_url") or os.environ.get("COMFY_BASE_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    if platform != "comfy_sdk":
+        return "http://127.0.0.1:8188"
+    return "https://cloud.comfy.org" if os.environ.get("COMFY_API_KEY") else "http://127.0.0.1:8189"
+
+
 class ComfyPlatformClient:
     """Local ComfyUI v1 or official Comfy SDK API v2 execution."""
     def __init__(self, config):
@@ -1108,8 +1120,7 @@ class ComfyPlatformClient:
             raise runtime.WorkerError("Comfy Router does not execute workflow graphs; use platform=comfy_sdk and COMFY_BASE_URL")
         if self.platform not in ("local", "comfy_sdk"):
             raise runtime.WorkerError("Comfy platform must be local or comfy_sdk")
-        default_base = "https://cloud.comfy.org" if self.platform == "comfy_sdk" else "http://127.0.0.1:8188"
-        self.base_url = (config.get("base_url") or os.environ.get("COMFY_BASE_URL") or default_base).rstrip("/")
+        self.base_url = comfy_base_url(config, self.platform)
         self.token = runtime.configured_token(config)
         if config.get('driver')!='comfy_local' or self.platform!='local':
             self.token = self.token or os.environ.get('COMFY_API_KEY') or os.environ.get('COMFY_ROUTER_TOKEN')

@@ -445,8 +445,8 @@ def main(argv=None):
                 server.seed_demo_data(conn)
                 seed_showcase_media(conn)
                 seed_showcase_previs(conn)
-                configurations = worker_configs(args.router_url or args.comfy_url or os.environ.get("COMFY_BASE_URL") or
-                    ("https://cloud.comfy.org" if args.platform == "comfy_sdk" else "http://127.0.0.1:8188"), platform=args.platform,
+                configurations = worker_configs(args.router_url or args.comfy_url or limb_worker.comfy_base_url({}, args.platform),
+                                                platform=args.platform,
                                                api_key_env="COMFY_API_KEY" if os.environ.get("COMFY_API_KEY") else None)
                 configurations = load_worker_configs(args.worker_config, configurations)
                 registered = register_workers(conn, SHOWCASE_SLUG, configurations, server.DEMO_MEMBERS[0]["actor_id"])

@@ -43,6 +43,8 @@
 
 ### ③ Comfy Developer Platform 合規（Comfy Router / SDK）＋ Open Weights 核心工作流
 - 比賽規定必須建構於 **Comfy Developer Platform（Comfy Router 和／或 Comfy SDK）** 之上，不可只依賴裸打本機 `127.0.0.1:8188/prompt`。
+  - 自架 GPU 的合規路徑（2026-10-21 實測通過）：官方 `comfy-api-proxy` 在 `127.0.0.1:8189` 把本機 ComfyUI 轉成 SDK 的 v2 API，`run_studio.py --platform comfy_sdk` 在未設 `COMFY_API_KEY` 時預設接它（`card_engine.comfy_base_url`）。Open Weights Only 組只能走這條，Router 是閉源模型的轉接。
+  - 已知不相容：`comfy-api-proxy` 0.1.6 要求 `metadata` 是字串，`comfy-sdk` 0.5.0 送的是字典；worker 設定不要帶 `metadata`。
 - `workflows/` 內的預設工作流採用 100% 開放權重模型（**`LTX-2.5`** 作為核心影片模型以符合 LTX \$2,000 加碼獎資格 ＋ **`FLUX`** 作為角色／場景資產與首幀模型），同時符合 **Best Overall** 與 **Open Weights Only** 參賽條件。
 - `samples/` 與預設專案素材必須 **100% SFW、無版權爭議、無真實名人姓名或肖像**。
 
