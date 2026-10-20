@@ -27,7 +27,6 @@ const PRESETS = {
 PRESETS.pullout = PRESETS.pushin.slice().reverse().map(([, pos, aim], i, all) => [all.length === 1 ? 0 : (i * 96) / (all.length - 1), pos, aim]);
 
 const ease = t => t * t * (3 - 2 * t);
-const lerp3 = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
 
 export function defaultPlan() {
   return { set: 'observatory', move: 'pushin', lens: 35, action: 'turnreach', facing: 'console', mood: 'grey', seconds: 4, keys: null };
@@ -59,15 +58,23 @@ function insideDome(aim, offset) {
 }
 
 // Camera at frame f: eased piecewise interpolation between keys.
+// A smooth path through every key (Hermite with Catmull-Rom tangents on the key beats), eased in and out over the
+// whole shot: multi-key moves flow through their middle keys instead of stopping at each one. Two keys stay a plain ease.
 export function sampleCamera(plan, frame) {
-  const keys = cameraKeys(plan), last = keys[keys.length - 1], f = beat(plan, frame);
-  if (f <= keys[0][0]) return { position: keys[0][1], aim: keys[0][2] };
-  if (f >= last[0]) return { position: last[1], aim: last[2] };  // land exactly on the end key
-  for (let i = 0; i < keys.length - 1; i++) {
-    const [f0, p0, a0] = keys[i], [f1, p1, a1] = keys[i + 1];
-    if (f <= f1) { const t = ease((f - f0) / Math.max(1, f1 - f0)); return { position: lerp3(p0, p1, t), aim: lerp3(a0, a1, t) }; }
-  }
-  return { position: last[1], aim: last[2] };
+  const keys = cameraKeys(plan), first = keys[0][0], end = keys[keys.length - 1][0], b = beat(plan, frame);
+  if (b <= first) return { position: keys[0][1], aim: keys[0][2] };
+  if (b >= end) return { position: keys[keys.length - 1][1], aim: keys[keys.length - 1][2] };  // land exactly on the end key
+  const u = first + ease((b - first) / (end - first)) * (end - first);
+  let i = 0;
+  while (i < keys.length - 2 && u > keys[i + 1][0]) i++;
+  const k0 = keys[Math.max(0, i - 1)], k1 = keys[i], k2 = keys[i + 1], k3 = keys[Math.min(keys.length - 1, i + 2)];
+  const span = Math.max(1e-6, k2[0] - k1[0]), t = (u - k1[0]) / span;
+  const h = [2 * t ** 3 - 3 * t ** 2 + 1, t ** 3 - 2 * t ** 2 + t, -2 * t ** 3 + 3 * t ** 2, t ** 3 - t ** 2];
+  const curve = j => k1[j].map((p1, d) => {
+    const m1 = (k2[j][d] - k0[j][d]) * span / Math.max(1e-6, k2[0] - k0[0]), m2 = (k3[j][d] - k1[j][d]) * span / Math.max(1e-6, k3[0] - k1[0]);
+    return h[0] * p1 + h[1] * m1 + h[2] * k2[j][d] + h[3] * m2;
+  });
+  return { position: curve(1), aim: curve(2) };
 }
 
 // Vertical field of view for a lens on a 36 mm wide sensor at the shot aspect (same convention as Blender).

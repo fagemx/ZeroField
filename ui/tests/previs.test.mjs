@@ -118,3 +118,13 @@ test('a longer shot plays the same blocking on more frames (LTX 8n+1: 4, 6 or 8 
   assert.deepEqual(sampleActor(six, 66), sampleActor(four, 44));                   // the reach lands at the same point of the shot
   assert.match(describePlan(six), /35mm, 6 s/);
 });
+
+test('multi-key paths flow through their middle keys; two keys stay a plain ease', () => {
+  const plan = {...defaultPlan(), keys: [[0, [2, 1, -1], [0, 1.4, 0]], [48, [0, 2, -2.6], [0, 1.4, 0]], [96, [-2, 3, -1], [0, 1.3, 0]]]};
+  const at = f => sampleCamera(plan, f).position;
+  assert.ok(dist(at(47), at(49)) > 0.05, 'the camera is still moving as it passes the middle key');
+  assert.ok(Math.abs(at(48)[0]) < 0.25, 'and it passes close to it');
+  assert.deepEqual(at(96), [-2, 3, -1]);
+  const two = {...defaultPlan(), keys: [[0, [0, 0, 0], [0, 1, 1]], [96, [4, 0, 0], [0, 1, 1]]]};
+  assert.ok(Math.abs(sampleCamera(two, 48).position[0] - 2) < 1e-9 && sampleCamera(two, 24).position[0] < 1, 'eased in, halfway at the middle');
+});
