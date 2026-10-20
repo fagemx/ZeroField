@@ -117,12 +117,13 @@ export function applyPreset(value, preset) {
 }
 
 // Single-step uses the node's saved source/output. Never silently broaden a cell action.
-export function studioRunInput(flow, {tabKey, tableId, columnIds = [], rowIds, singleStep, capability, col_index}) {
+// match: optional node predicate, to name one pipeline step among several that write the same column.
+export function studioRunInput(flow, {tabKey, tableId, columnIds = [], rowIds, singleStep, capability, col_index, match}) {
   if (!rowIds.length || rowIds.length > 200 || new Set(rowIds).size !== rowIds.length) throw new Error(t('studio.invalidRows'));
   const nodes = flow.definition?.nodes || [];
   const sameTable = target => target?.tab_key === tabKey && (!target.table_id || target.table_id === tableId);
   const preparedStage = Number.isInteger(col_index) && ['image_gen','video_gen'].includes(capability);
-  const candidates = nodes.filter(node => sameTable(node.target) && (!capability || node.capability === capability || preparedStage && node.capability === 'media_assemble') &&
+  const candidates = nodes.filter(node => sameTable(node.target) && (!match || match(node)) && (!capability || node.capability === capability || preparedStage && node.capability === 'media_assemble') &&
     (col_index == null || (node.target.column_id ? node.target.column_id === columnIds[col_index] : node.target.col_index === col_index)));
   if (singleStep) {
     const matching = candidates.filter(node => node.scope === 'rows'

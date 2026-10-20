@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, verticalFov, describePlan, planFromSlate} from '../src/previs/plan.js';
+import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, verticalFov, describePlan, planFromSlate, DOME} from '../src/previs/plan.js';
 import {benchGroup, stageShots} from '../src/studioModel.js';
 import {muxWebM, planFromWebM} from '../src/previs/webm.js';
 
@@ -39,6 +39,11 @@ test('turn-and-reach turns to the console first, then reaches and holds; previs 
   assert.equal(sampleActor(plan, 40).yaw, 0);
   assert.ok(Math.abs(sampleActor(plan, 44).reach - 1.16) < 1e-9 && sampleActor(plan, 96).reach === sampleActor(plan, 44).reach);
   assert.equal(benchGroup('Previs'), 'input');
+  const room = {...plan, facing: 'room'};  // turned to the camera side: same gesture, half a turn
+  for (const f of [0, 40, 96]) assert.ok(Math.abs(sampleActor(room, f).yaw - sampleActor(plan, f).yaw - Math.PI) < 1e-9);
+  const walk = {...plan, action: 'walkin'};
+  assert.deepEqual([sampleActor(walk, 0).back, sampleActor(walk, 96).back], [2.2, 0]);
+  assert.deepEqual([sampleActor({...walk, facing: 'room'}, 0).back, sampleActor({...walk, facing: 'room'}, 96).back], [0, 2.2]);
 });
 
 test('the WebM writer keeps every frame with its own timestamp and declares the frame rate', async () => {
@@ -87,4 +92,20 @@ test('stage shots: rows of a slate with a Previs column, with keyframe, previs a
   assert.deepEqual([two.previs, two.keyframe, two.r], [null, null, 1]);
   assert.deepEqual(stageShots(parsed, [parsed.rows[1]]).map(s => s.r), [1]);  // a filtered view keeps table row indexes
   assert.deepEqual(stageShots({...parsed, headers: parsed.headers.slice(0, 6).concat('Notes')}), []);
+});
+
+test('a longer lens dollies the preset back along its line of sight and never leaves the dome', () => {
+  const at = (move, lens) => cameraKeys({...defaultPlan(), move, lens});
+  const [[, pos35, aim35]] = at('static', 35), [[, pos85, aim85]] = at('static', 85);
+  assert.deepEqual(aim85, aim35);
+  assert.ok(Math.abs(dist(pos85, aim85) / dist(pos35, aim35) - 85 / 35) < 1e-9, 'static 85mm holds the 35mm shot size');
+  for (const move of ['pushin', 'pullout', 'orbit', 'crane', 'track', 'static']) for (const lens of [24, 35, 50, 85]) {
+    for (const [, p] of at(move, lens)) {
+      const d = Math.hypot(p[0] - DOME.x, p[2] - DOME.z);
+      assert.ok(p[1] >= 0.3 && d <= DOME.floor + 1e-9, `${move} ${lens}mm key ${p} stays on the open floor`);
+    }
+  }
+  assert.ok(dist(at('pushin', 85)[0][1], at('pushin', 85)[0][2]) > dist(at('pushin', 35)[0][1], at('pushin', 35)[0][2]));
+  const framed = {...defaultPlan(), lens: 85, keys: [[0, [1, 2, 3], [0, 1, 0]], [96, [3, 2, 1], [0, 1, 0]]]};
+  assert.deepEqual(cameraKeys(framed), framed.keys);  // the user's framed keys are never moved
 });

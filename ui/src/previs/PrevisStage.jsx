@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useLocale } from '../i18n/react.jsx';
 import { t as uiText } from '../i18n/index.js';
-import { ACTIONS, FPS, FRAMES, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, defaultPlan, describePlan, planFromSlate, verticalFov } from './plan.js';
+import { ACTIONS, FACINGS, FPS, FRAMES, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, defaultPlan, describePlan, planFromSlate, sampleCamera, verticalFov } from './plan.js';
 import { buildStage, prepareRenderer, shotGuides } from './scene.js';
 import { encodeCanvas, fetchPlan } from './webm.js';
 
@@ -19,7 +19,7 @@ const pick = (label, value, options, onChange, text) => <fieldset className="pre
 // The 3D stage of a slate: every shot in one set. Look through a shot's lens, see all shot cameras on an overhead
 // plan, frame custom paths in a free camera, play a shot or the whole scene, and render a shot's grey previs
 // (97 frames, 24 fps) into its Previs cell. The render carries its plan, so the project keeps it.
-export default function PrevisStage({ slug, shots, focus, writable, busy, onRender }) {
+export default function PrevisStage({ slug, shots, focus, writable, busy, onRender, onMotion }) {
   useLocale();
   const [rid, setRid] = useState(() => (shots.some(s => s.rid === focus?.rid) ? focus.rid : shots[0]?.rid));
   const [drafts, setDrafts] = useState(() => Object.fromEntries(shots.map(s => [s.rid, loadDraft(slug, s.rid)]).filter(([, p]) => p)));
@@ -89,7 +89,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   const draw = () => {
     const ctx = live.current; if (!ctx?.stage) return;
     const top = view === 'overhead';
-    ctx.stage.pose(frame, plan); ctx.guides?.update(frame); ctx.stage.roof(!top);
+    ctx.stage.pose(frame, plan); ctx.guides?.update(frame, top ? 1.4 / ctx.top.zoom : 1); ctx.stage.roof(!top);
     if (ctx.guides) ctx.guides.group.visible = view !== 'lens';
     if (view === 'lens') ctx.stage.shoot(frame, plan);
     else if (view === 'free') { ctx.stage.camera.fov = verticalFov(plan.lens); ctx.stage.camera.updateProjectionMatrix(); }
@@ -126,6 +126,15 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1); }
     else if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); setPlaying(p => (p ? false : 'shot')); }
   };
+  const fitOverhead = () => {  // frame every camera of this set and the actor's mark on the plan
+    const top = live.current?.top; if (!top) return;
+    const pts = shots.filter(s => planOf(s).set === plan.set).flatMap(s => [0, 24, 48, 72, 96].map(f => sampleCamera(planOf(s), f).position)).concat([[0, 0, 0.6]]);
+    const xs = pts.map(q => q[0]), zs = pts.map(q => q[2]), [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+    top.position.x = (x0 + x1) / 2; top.position.z = (z0 + z1) / 2;
+    top.zoom = Math.min(top.right / ((x1 - x0) / 2 + 1.5), top.top / ((z1 - z0) / 2 + 1.5));
+    top.updateProjectionMatrix(); top.updateMatrixWorld();
+  };
+  const pickView = v => { if (v === 'overhead') fitOverhead(); setView(v); if (v !== 'lens' && playing === 'scene') setPlaying(false); };
   const playScene = () => { setView('lens'); if (playing !== 'scene') setFrame(0); setPlaying(p => (p === 'scene' ? false : 'scene')); };
   const capture = which => {  // the framed free camera becomes this shot's start or end key
     const ctx = live.current;
@@ -171,7 +180,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
         <div className="previs-hud"><b>{shot.shot}</b> · {plan.lens}mm · {(frame / FPS).toFixed(2)}s</div>
         <div className="previs-views" role="group" aria-label={t('viewMode')}>{VIEWS.map(v =>
           <button type="button" key={v} aria-pressed={view === v} disabled={rendering}
-            onClick={() => { setView(v); if (v !== 'lens' && playing === 'scene') setPlaying(false); }}>{t('view_' + v)}</button>)}</div>
+            onClick={() => pickView(v)}>{t('view_' + v)}</button>)}</div>
         {view !== 'lens' && <p className="previs-hint">{t('hint_' + view)}</p>}
       </div>
       <div className="previs-timeline">
@@ -183,9 +192,11 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       <p className="previs-summary">{describePlan(plan)}</p>
     </section>
     <aside className="previs-controls" aria-label={t('inspector')}>
+      <details className="previs-howto" open><summary>{t('howto')}</summary><ol>{[1, 2, 3, 4].map(n => <li key={n}>{t('step' + n)}</li>)}</ol></details>
       <fieldset className="previs-fields" disabled={!writable || rendering}>
         {pick(t('set'), plan.set, ['observatory', 'empty'], v => edit({ set: v }), v => t('set_' + v))}
         {pick(t('action'), plan.action, ACTIONS, v => edit({ action: v }), v => t('action_' + v))}
+        {pick(t('facing'), plan.facing, FACINGS, v => edit({ facing: v }), v => t('facing_' + v))}
         {pick(t('move'), plan.keys ? 'custom' : plan.move, MOVES, v => edit({ move: v, keys: null }), v => t('move_' + v))}
         {pick(t('lens'), plan.lens, LENSES, v => edit({ lens: v }), v => `${v}mm`)}
         {pick(t('light'), plan.mood, MOODS, v => edit({ mood: v }), v => t('mood_' + v))}
@@ -199,6 +210,8 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       {error && <p className="sheet-save-error" role="alert">{error}</p>}
       {writable && <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>
         {rendering ? <>{t('rendering')} <span ref={progress} /></> : t('render')}</button>}
+      {writable && onMotion && <button type="button" className="previs-motion" disabled={busy || rendering || !shot.previs || !!drafts[shot.rid]} onClick={() => onMotion(shot)}>{t('motion')}</button>}
+      {writable && onMotion && (!shot.previs || drafts[shot.rid]) && <p className="previs-note">{t('renderFirst')}</p>}
       <p className="previs-note">{t('note')}</p>
     </aside>
   </div>;

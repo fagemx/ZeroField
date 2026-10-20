@@ -48,6 +48,10 @@ test('single-cell execution uses exactly one saved node and never broadens missi
   assert.throws(()=>studioRunInput({...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[2],id:'duplicate'}]}},scope),/No unambiguous/);
   const foreign=structuredClone(flow);foreign.definition.nodes[2].row_source.tab_key='other';assert.throws(()=>studioRunInput(foreign,scope),/No unambiguous/);
   const legacy=structuredClone(flow);delete legacy.definition.nodes[2].scope;assert.throws(()=>studioRunInput(legacy,scope),/No unambiguous/);
+  // Two steps write the same column: a node predicate names one (the 3D stage runs the previs motion pass this way).
+  const twin={...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[2],id:'motion',title:'Previs Motion Pass'}]}};
+  assert.equal(studioRunInput(twin,{...scope,match:node=>node.id==='motion'}).node_id,'motion');
+  assert.equal(studioRunInput(twin,{...scope,match:node=>node.id!=='motion'}).node_id,'movie');
 });
 
 test('batch execution starts with the matching sheet rather than unrelated upstream work',()=>{

@@ -2372,7 +2372,7 @@
     "view_lens": "Lens",
     "view_overhead": "Overhead",
     "view_free": "Free camera",
-    "hint_overhead": "Overhead plan of every shot camera in this set. Drag to pan, scroll to zoom.",
+    "hint_overhead": "Overhead plan: amber is this shot, cyan the others; each triangle is a camera at this frame. Drag to pan, scroll to zoom.",
     "hint_free": "Orbit to frame, then set this shot's start or end camera.",
     "playShot": "Play shot",
     "playScene": "Play scene",
@@ -2381,6 +2381,16 @@
     "state_edited": "Edited, not rendered",
     "keys": "↑ ↓ switch shots · Space plays the shot",
     "discard": "Discard edits",
-    "move_custom": "Custom path"
+    "move_custom": "Custom path",
+    "howto": "How it works",
+    "step1": "Pick a shot. It starts from the slate: camera move, lens and action.",
+    "step2": "Block it below. Lens looks through the shot camera; Overhead shows every camera in the set.",
+    "step3": "Render previs: a grey 4-second clip saved to the shot's Previs cell.",
+    "step4": "Run motion pass: the AI shoots the shot along this camera and blocking, then waits for your review.",
+    "motion": "Run motion pass",
+    "renderFirst": "Render the previs first; the motion pass follows the saved clip.",
+    "facing": "Facing",
+    "facing_console": "The console",
+    "facing_room": "The room (camera side)"
   }
 }

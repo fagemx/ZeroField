@@ -7,6 +7,9 @@ export const LENSES = [24, 35, 50, 85];
 export const MOVES = ['pushin', 'pullout', 'orbit', 'crane', 'track', 'static'];
 export const ACTIONS = ['turnreach', 'stand', 'walkin'];
 export const MOODS = ['grey', 'night'];
+export const FACINGS = ['console', 'room'];  // the actor faces the console and glass, or turns to the room (the camera side)
+// The observatory dome: centre on the floor, glass radius, wall height, and the open floor inside the console ring.
+export const DOME = { x: 0, z: -4.1, radius: 6, base: 1.15, floor: 4.4 };
 
 // Camera keys: [frame, position [x, y, z], aim [x, y, z]], frames 0..96.
 const PRESETS = {
@@ -22,7 +25,7 @@ const ease = t => t * t * (3 - 2 * t);
 const lerp3 = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
 
 export function defaultPlan() {
-  return { set: 'observatory', move: 'pushin', lens: 35, action: 'turnreach', mood: 'grey', keys: null };
+  return { set: 'observatory', move: 'pushin', lens: 35, action: 'turnreach', facing: 'console', mood: 'grey', keys: null };
 }
 
 // A shot's first plan comes from what the slate already says: Camera Motion, the lens in Optical Rig, the action text.
@@ -35,8 +38,19 @@ export function planFromSlate({ motion = '', rig = '', action = '' } = {}) {
   return plan;
 }
 
+// Presets are framed for 35 mm. Another lens dollies along each key's line of sight to hold the shot size (what a DP does
+// when swapping lenses), stopping on the open floor of the dome. Framed keys are the user's own and stay as they are.
 export function cameraKeys(plan) {
-  return plan.keys && plan.keys.length >= 2 ? plan.keys : PRESETS[plan.move] || PRESETS.pushin;
+  if (plan.keys && plan.keys.length >= 2) return plan.keys;
+  const k = (plan.lens || 35) / 35;
+  return (PRESETS[plan.move] || PRESETS.pushin).map(([f, pos, aim]) => [f, insideDome(aim, pos.map((v, i) => (v - aim[i]) * k)), aim]);
+}
+function insideDome(aim, offset) {
+  for (let t = 1; t > 0; t -= 0.02) {
+    const p = aim.map((v, i) => v + offset[i] * t), d = Math.hypot(p[0] - DOME.x, p[2] - DOME.z);
+    if (p[1] >= 0.3 && d <= DOME.floor && p[1] <= DOME.base + Math.sqrt(Math.max(0, DOME.radius ** 2 - d * d)) - 0.3) return p;
+  }
+  return aim;
 }
 
 // Camera at frame f: eased piecewise interpolation between keys.
@@ -57,11 +71,13 @@ export function verticalFov(lens, aspect = WIDTH / HEIGHT) {
 }
 
 // Actor at frame f: body yaw (radians, 0 = facing the console), shoulder pitch (0 = arm down) and distance back from the station.
+// Facing the room turns the actor around (the motion pass keeps who faces the camera only when the previs shows it);
+// walking in while facing the room walks from the console toward the cameras.
 export function sampleActor(plan, f) {
-  const k = (a, b, t) => a + (b - a) * ease(Math.min(1, Math.max(0, t)));
-  if (plan.action === 'stand') return { yaw: 0, reach: 0, back: 0 };
-  if (plan.action === 'walkin') return { yaw: 0, reach: k(0, 1.16, (f - 60) / 22), back: k(2.2, 0, f / 60) };
-  return { yaw: k(-1.75, 0, f / 39), reach: k(0, 1.16, (f - 22) / 22), back: 0 };  // turnreach: from the glass to the dial
+  const k = (a, b, t) => a + (b - a) * ease(Math.min(1, Math.max(0, t))), room = plan.facing === 'room', turn = room ? Math.PI : 0;
+  if (plan.action === 'stand') return { yaw: turn, reach: 0, back: 0 };
+  if (plan.action === 'walkin') return { yaw: turn, reach: k(0, 1.16, (f - 60) / 22), back: room ? k(0, 2.2, f / 60) : k(2.2, 0, f / 60) };
+  return { yaw: k(-1.75, 0, f / 39) + turn, reach: k(0, 1.16, (f - 22) / 22), back: 0 };  // turnreach: from the glass to the dial
 }
 
 // The shot's camera move in words, for the prompt beat sheet and the Camera Motion column.

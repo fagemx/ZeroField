@@ -468,6 +468,11 @@
 .previs-field { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .previs-field legend { width: 100%; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
 .previs-render { height: 36px; }
+.previs-stage .previs-motion { height: 36px; border: 1px solid var(--accent); border-radius: var(--radius-control); background: var(--accent-bg); color: var(--accent); font: 600 13px/1 var(--font); cursor: pointer; }
+.previs-stage .previs-motion:disabled { opacity: .4; cursor: default; }
+.previs-howto { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-field); color: var(--muted); font-size: 12px; line-height: 1.5; }
+.previs-howto summary { color: var(--text); font-weight: 600; cursor: pointer; }
+.previs-howto ol { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 /* The stage owns its compact controls (excluded from the workbench button rule); Render previs stays a primary button. */
 .previs-stage :is(.previs-views, .previs-timeline, .previs-field) button { display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 10px; border: 1px solid var(--control); border-radius: var(--radius-control); background: transparent; color: var(--text); font: 500 12px/1 var(--font); white-space: nowrap; cursor: pointer; }
 .previs-stage :is(.previs-views, .previs-timeline, .previs-field) button:hover:not(:disabled):not([aria-pressed=true]) { background: var(--hover-bg); border-color: #5a5a5a; }

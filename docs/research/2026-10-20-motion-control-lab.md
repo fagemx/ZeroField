@@ -97,6 +97,17 @@ is now S03's cinema shot in the showcase.
   *Block in 3D* in the shot bench opens the stage on that shot ([workbench](../verification/motion-lab/stage_workbench.jpg),
   [overhead plan](../verification/motion-lab/stage_overhead.jpg); the earlier per-shot dialog:
   [editor](../verification/motion-lab/previs_editor.jpg), [night light](../verification/motion-lab/previs_editor_night.jpg)).
+- **Stage → AI in one place**: *Run motion pass* on the stage queues the Previs Motion Pass for that shot (a node
+  predicate picks it among the steps that write Cinema Shot) and the take waits for review. A short *How it works* list
+  sits above the controls. Presets are framed for 35 mm; another lens dollies each key along its line of sight to hold
+  the shot size, stopping on the open floor inside the console ring. *Facing* turns the actor to the room (camera side).
+- **Four shots run through the stage** ([16 s side by side: previs | motion pass](../verification/motion-lab/stage_demo.mp4)):
+  camera path, framing and timing carried over in all four (S01 push-in walk-in, S02 locked-off 85 mm, S05 track,
+  S06 push-in 85 mm). Facing did not at first: a bare grey head reads as a face from behind, and LTX turned the actor
+  to camera in S01, S02 and S06. Hair over the back of the head and forward shoes fixed S02 and the end of S01; S06
+  ("raises the recorder to his mouth") still turned, because the action text wants his face, and matched once the
+  stage set *Facing: room* ([previs | before | after](../verification/motion-lab/stage_facing_cues.jpg)). Rule of thumb:
+  the motion pass follows the previs for camera and blocking, and the text when the two disagree on who faces the lens.
 - **Pipeline lane** *Previs Motion Pass → Look Key → Look Pass* with three graphs
   (`ltx25_previs_motion.json`, `flux3_klein_look_key.json`, `ltx25_previs_look.json`); frames are picked inside the
   graphs (`ImageFromBatch`), Soul Cast references bind to the Klein edit. A rearranged pipeline gets the lane appended

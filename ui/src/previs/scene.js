@@ -1,16 +1,16 @@
 // three.js previs stage: a grey blockout the motion pass can follow. Built from primitives only (no assets),
 // so what LTX-2.5 reads is structure, camera and light, never a look.
 import * as THREE from 'three';
-import { FRAMES, WIDTH, HEIGHT, cameraKeys, sampleActor, sampleCamera, verticalFov } from './plan.js';
+import { DOME, FRAMES, WIDTH, HEIGHT, cameraKeys, sampleActor, sampleCamera, verticalFov } from './plan.js';
 
-const ROOM = new THREE.Vector3(0, 0, -4.1);  // dome centre; the station (actor's mark) is the origin, the console is at +z
+const ROOM = new THREE.Vector3(DOME.x, 0, DOME.z);  // dome centre; the station (actor's mark) is the origin, the console is at +z
 
 function lambert(color) { return new THREE.MeshLambertMaterial({ color }); }
 
 function observatory(group, mats) {
   const add = (geo, mat, x, y, z, ry = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.y = ry; group.add(m); return m; };
   add(new THREE.CylinderGeometry(6.6, 6.6, 0.1, 96), mats.floor, ROOM.x, -0.05, ROOM.z);
-  const R = 6, Z0 = 1.15;
+  const R = DOME.radius, Z0 = DOME.base;
   for (let i = 0; i < 36; i++) {
     const a = 2 * Math.PI * i / 36;
     add(new THREE.BoxGeometry(0.1, Z0, 0.1), mats.glass, ROOM.x + R * Math.cos(a), Z0 / 2, ROOM.z + R * Math.sin(a), -a);
@@ -47,6 +47,11 @@ function actor(mats) {
   part(new THREE.BoxGeometry(0.48, 0.72, 0.28), mats.coat, 0, 1.25, 0);
   part(new THREE.SphereGeometry(0.13, 24, 16), mats.skin, 0, 1.78, 0).scale.set(0.92, 1.15, 1);
   part(new THREE.BoxGeometry(0.05, 0.06, 0.08), mats.skin, 0, 1.78, 0.13);  // nose: shows facing
+  // Facing cues the motion pass can read: hair over the back of the head (a bare sphere from behind reads as a face)
+  // and shoes pointing forward.
+  part(new THREE.SphereGeometry(0.137, 24, 16, Math.PI, Math.PI, 0, Math.PI * 0.8), mats.hair, 0, 1.78, 0).scale.set(0.92, 1.15, 1);
+  part(new THREE.SphereGeometry(0.137, 24, 6, 0, Math.PI, 0, Math.PI * 0.22), mats.hair, 0, 1.78, 0).scale.set(0.92, 1.15, 1);
+  for (const x of [-0.12, 0.12]) part(new THREE.BoxGeometry(0.11, 0.08, 0.28), mats.hair, x, 0.04, 0.07);
   part(new THREE.CylinderGeometry(0.05, 0.05, 0.64, 12), mats.coat, 0.3, 1.25, 0);
   const shoulder = new THREE.Group(); shoulder.position.set(-0.3, 1.55, 0); root.add(shoulder);  // reaching arm on -x
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.66, 12), mats.coat); arm.position.set(0, -0.33, 0); shoulder.add(arm);
@@ -67,7 +72,7 @@ export function buildStage(plan) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(night ? 0x0d1219 : 0xaab4c4);  // grey mood matches the Blender blockout LTX was tested on
   const mats = { glass: lambert(0x8c949e), floor: lambert(night ? 0x24262b : 0x4d4f54), brass: lambert(0x9e8550),
-                 skin: lambert(0xccad94), coat: lambert(night ? 0x383a40 : 0x55585f), beam: new THREE.MeshBasicMaterial({ color: 0xfff2cc }) };
+                 skin: lambert(0xccad94), hair: lambert(0x3a322c), coat: lambert(night ? 0x383a40 : 0x55585f), beam: new THREE.MeshBasicMaterial({ color: 0xfff2cc }) };
   if (night) {
     scene.add(new THREE.HemisphereLight(0x2a3550, 0x0a0a0c, 0.35));
     const key = new THREE.PointLight(0xff9a4d, 9, 6, 1.6); key.position.set(0.3, 0.7, 0.4); scene.add(key);
@@ -131,16 +136,17 @@ export function shotGuides(entries) {
     g.font = font; canvas.width = Math.ceil(g.measureText(id).width) + 24; canvas.height = 48;
     g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = selected ? '#f2b33d' : '#67e8f9'; g.fillText(id, canvas.width / 2, 25);
     const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }));
-    label.scale.set(0.3 * canvas.width / 48, 0.3, 1);
+    const base = 0.3 * canvas.width / 48;
     for (const o of [path, glyph, label]) { o.renderOrder = selected ? 3 : 2; group.add(o); }
-    parts.push({ plan, glyph, label, path });
+    parts.push({ plan, glyph, label, path, base });
   }
   const target = new THREE.Vector3();
-  function update(f) {
-    for (const { plan, glyph, label } of parts) {
+  function update(f, size = 1) {  // size scales glyphs and labels (the overhead plan keeps them readable at any zoom)
+    for (const { plan, glyph, label, base } of parts) {
       const c = sampleCamera(plan, f);
-      glyph.position.set(...c.position); glyph.lookAt(target.set(...c.aim));
-      label.position.set(c.position[0], c.position[1] + 0.4, c.position[2]);
+      glyph.position.set(...c.position); glyph.lookAt(target.set(...c.aim)); glyph.scale.setScalar(size);
+      label.position.set(c.position[0], c.position[1] + 0.4 * size, c.position[2] - 0.45 * size);
+      label.scale.set(base * size, 0.3 * size, 1);
     }
   }
   function dispose() {
