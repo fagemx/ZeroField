@@ -100,7 +100,7 @@ export function buildFigure(figure = {}, tone = 0, render = null) {
   // Hair over the back of the head and a fringe: from behind a bare head reads as a face (the render look's facing cue).
   const cap = (phi0, phiLen, thetaLen, grow = 1.055) => new THREE.SphereGeometry(1, 24, 16, phi0, phiLen, 0, thetaLen).scale(0.092 * grow, 0.118 * grow, 0.103 * grow).translate(0, 0.115, 0.01);
   const chain = (start, L, r) => {
-    const js = [start]; let parent = start;
+    const js = [start]; let parent = start; start.userData.tip = L[L.length - 1];
     L.forEach((len, k) => {
       if (k) { const j = new THREE.Group(); j.position.set(0, -L[k - 1], 0); parent.add(j); js.push(j); parent = j; }
       part(parent, limb(len + r * 0.5, r * (1 - 0.08 * k), r * (0.86 - 0.08 * k), 0.04), 'finger');
@@ -108,15 +108,18 @@ export function buildFigure(figure = {}, tone = 0, render = null) {
     return js;
   };
   const hand = (wrist, side) => {  // relaxed fingers (rig.js setHand 'relax')
+    // userData.kp tags the hand's OpenPose keypoints (stage_render.py pose): wrist, then 4 per finger from the thumb.
+    const s = side > 0 ? 'R' : 'L'; wrist.userData.kp = 'wrist' + s;
+    const tag = (js, f) => { const tip = js[0].userData.tip; js.forEach((j, k) => { j.userData.kp = `f${f}_${k}${s}`; j.userData.tip = k === js.length - 1 ? tip : 0; }); };
     const base = new THREE.Group(); base.rotation.y = -Math.PI / 2 * side; wrist.add(base);
     part(base, ellipsoid(0.042, 0.05, 0.017, 0, -0.052, 0, 14, 10), 'hand');
     const tb = new THREE.Group(); tb.position.set(0.03 * side, -0.028, 0.012); tb.rotation.order = 'ZXY'; base.add(tb);
-    const thumb = chain(tb, [0.036, 0.029, 0.023], 0.0115);
+    const thumb = chain(tb, [0.036, 0.029, 0.023], 0.0115); tag(thumb, 0);
     thumb[0].rotation.set(-0.35 - 0.25 * 0.55, 0.15 * side, (0.62 - 0.25 * 0.5) * side); thumb[1].rotation.x = -0.25 * 0.7; thumb[2].rotation.x = -0.25 * 0.8;
     [[0.026, [0.041, 0.026, 0.02], 0.0095, 0.22, 0.17], [0.009, [0.045, 0.029, 0.021], 0.0098, 0.3, 0.05], [-0.009, [0.042, 0.027, 0.02], 0.0093, 0.36, -0.07], [-0.025, [0.034, 0.021, 0.018], 0.0084, 0.42, -0.19]]
-      .forEach(([fx, L, r, c, spread]) => {
+      .forEach(([fx, L, r, c, spread], f) => {
         const g = new THREE.Group(); g.position.set(fx * side, -0.097, 0); g.rotation.order = 'ZXY'; base.add(g);
-        const js = chain(g, L, r); js[0].rotation.set(-c * 1.3, 0, spread * 0.25 * side); js[1].rotation.x = -c * 1.6; js[2].rotation.x = -c * 1.15;
+        const js = chain(g, L, r); tag(js, f + 1); js[0].rotation.set(-c * 1.3, 0, spread * 0.25 * side); js[1].rotation.x = -c * 1.6; js[2].rotation.x = -c * 1.15;
       });
   };
   const pelvis = joint(body, 0, 0.95, 0, 'YXZ'); part(pelvis, ellipsoid(0.16, 0.11, 0.105, 0, -0.02, 0), 'body');
@@ -144,6 +147,7 @@ export function buildFigure(figure = {}, tone = 0, render = null) {
     const an = joint(kn, 0, -0.4, 0); part(an, ellipsoid(0.046, 0.036, 0.115, 0, -0.035, 0.055), 'foot');
     Object.assign(J, { ['shoulder' + s]: sh, ['elbow' + s]: el, ['hip' + s]: hp, ['knee' + s]: kn, ['ankle' + s]: an });
   }
+  for (const [name, g] of Object.entries(J)) g.userData.kp = name;
   root.traverse(o => { o.userData.actor = true; });
   const D = Math.PI / 180, rest = Object.fromEntries(Object.entries(REST).map(([k, v]) => [k, v.map(x => x * D)]));
   return { root, joints: J, rest, pelvisY: 0.95, mats: mats ? Object.values(mats) : [] };  // the render look's materials are the stage's

@@ -39,5 +39,55 @@
  "product_graph_follow35": {
   "s03n_text_follow35": 6.21,
   "s03n_product": 6.18
+ },
+ "pose_skeleton": {
+  "prompt": "Inside a circular glass-dome observatory at dawn, rain streaks the curved glass above a ring of brass consoles with amber instrument lights. Kael, a man in his thirties with short dark hair, light stubble and a charcoal field jacket. The camera tilts down from the dome ribs and pushes in behind his shoulder. 0.0\u20131.4s, seen in profile: Kael stands at the rain-streaked glass, listening, weight on his back foot. 1.4\u20132.8s, seen from behind: he turns from the glass to the console, shoulders squaring. 2.8\u20134.3s, seen from behind: his right hand finds the large brass dial and turns it; far beyond the glass a beacon light blinks on. 4.3\u20134.8s, seen from behind: he jerks his hand off the dial and recoils, his head snapping back, both arms flying up in front of his chest, his upper body rocking back half a step. 4.8\u20136.0s, seen from behind: he holds the recoil, arms raised, head thrown back toward the light, shoulders locked. One person only. No text.",
+  "runs": {
+   "s03q_follow35": {
+    "seconds": 127,
+    "actor_motion_after_0.72": 6.17,
+    "camera": 0.96
+   },
+   "s03q_layout_pose": {
+    "seconds": 161,
+    "actor_motion_after_0.72": 4.54,
+    "camera": 0.96
+   },
+   "s03q_pose": {
+    "seconds": 65,
+    "actor_motion_after_0.72": 4.36,
+    "camera": 0.98
+   },
+   "s03q_follow60": {
+    "seconds": 121,
+    "actor_motion_after_0.72": 6.66,
+    "camera": 0.96
+   }
+  }
+ },
+ "pose_skeleton_neutral": {
+  "prompt": "Inside a circular glass-dome observatory at dawn, rain streaks the curved glass above a ring of brass consoles with amber instrument lights. Kael, a man in his thirties with short dark hair, light stubble and a charcoal field jacket, stands with his back to the camera facing the glass. The camera tilts down from the dome ribs and pushes in behind his shoulder as he turns to the large brass dial and turns it; far beyond the glass a beacon light blinks on. One person only. No text.",
+  "runs": {
+   "s03q_neutral_follow35": {
+    "seconds": 129,
+    "actor_motion_after_0.72": 5.79,
+    "camera": 0.96
+   },
+   "s03q_neutral_layout_pose": {
+    "seconds": 158,
+    "actor_motion_after_0.72": 4.15,
+    "camera": 0.96
+   },
+   "s03q_neutral_pose": {
+    "seconds": 65,
+    "actor_motion_after_0.72": 3.19,
+    "camera": 0.98
+   },
+   "s03q_neutral_follow60": {
+    "seconds": 123,
+    "actor_motion_after_0.72": 6.66,
+    "camera": 0.96
+   }
+  }
  }
 }
