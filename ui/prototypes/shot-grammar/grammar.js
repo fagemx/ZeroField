@@ -3,6 +3,7 @@
 // data and math, no DOM, so node can test it. Obstruction by set geometry is injected by the caller (`blocked`).
 // Interaction rules: docs/specs/SPEC_09_SHOT_GRAMMAR_INTERACTION.md.
 import { DOME, LENSES, framesOf, sampleActor, verticalFov } from '../../src/previs/plan.js';
+import { BEAT_STORY, samplePerf } from './perf.js';
 
 /* ---------- vocabulary ---------- */
 // Shot size = the height of frame visible at the subject, in metres. The ladder runs wide to tight; INSERT is off-ladder.
@@ -121,7 +122,8 @@ function rnd(...xs) { let h = 0x811c9dc5; for (const x of xs) { h = Math.imul(h 
 
 /* ---------- the shot as played ---------- */
 // mark: the actor's spot as an offset from the console station [x, z]; turn: extra facing in degrees.
-export const actorPlan = b => ({ set: 'observatory', move: 'static', lens: 35, action: b.action, facing: b.facing, mood: 'grey', seconds: b.seconds, keys: null, mark: b.mark || [0, 0], turn: b.turn || 0 });
+// acts: the performance keys (SPEC_10) that drive the mannequin; the beat's own unless the director re-timed them.
+export const actorPlan = b => ({ set: 'observatory', move: 'static', lens: 35, action: b.action, facing: b.facing, mood: 'grey', seconds: b.seconds, keys: null, mark: b.mark || [0, 0], turn: b.turn || 0, acts: b.acts || BEAT_STORY[b.id]?.acts || null });
 
 // Idiom shot + the director's overrides. A dragged movement window sets the speed tier (a short window is a fast move);
 // otherwise the speed steps up when the move cannot finish in the time it has.
@@ -183,7 +185,7 @@ export function halfway(s) { for (let i = 0; i <= 400; i++) { const p = i / 400;
 /* ---------- subject points on the previs mannequin (station-local, see plan.js) ---------- */
 const DIAL = [-0.25, 1.03, 0.56];
 export function actorAt(plan, f) {
-  const a = sampleActor(plan, f), yaw = a.yaw + (plan.turn || 0) * D2R, m = plan.mark || [0, 0];
+  const a = plan.acts ? samplePerf(plan.acts, f / (framesOf(plan) - 1)) : sampleActor(plan, f), yaw = a.yaw + (plan.turn || 0) * D2R, m = plan.mark || [0, 0];
   const root = [m[0], 0, m[1] - a.back], at = v => add(root, rotY(v, yaw)), r = a.reach;
   return {
     yaw, root, fwd: rotY([0, 0, 1], yaw),
@@ -284,7 +286,7 @@ export function roomOf(beat, idiom, s, blocked) {
 
 /* ---------- choosing an idiom per beat ---------- */
 const sig = s => s.move + (s.speed === 'fast' ? '!' : '');
-export const beatOf = (b0, state) => ({ ...b0, ...(state?.beats?.[b0.id] || {}) });
+export const beatOf = (b0, state) => ({ ...b0, ...(state?.beats?.[b0.id] || {}), ...(state?.perf?.[b0.id]?.acts ? { acts: state.perf[b0.id].acts } : {}) });
 export function choose(scene, state, blocked) {
   const P = rulesOf(state), used = new Map();
   let prev = null;
@@ -367,5 +369,6 @@ export function toPlan(r, mood = 'grey') {
   const round = v => v.map(x => Math.round(x * 1000) / 1000);
   plan.keys = Array.from({ length: 17 }, (_, i) => { const u = i * 6, c = solve(s, plan, unsmooth(u / 96)); return [u, round(c.pos), round(c.aim)]; });
   if (!plan.mark[0] && !plan.mark[1] && !plan.turn) { delete plan.mark; delete plan.turn; }  // the 3D Stage plan has no mark field yet (SPEC_09 §8)
+  delete plan.acts;  // the 3D Stage animates its three canned actions; re-timed performance keys need a plan field (SPEC_10 §4)
   return plan;
 }

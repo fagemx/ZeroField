@@ -5,9 +5,11 @@ import * as THREE from 'three';
 import { buildStage, prepareRenderer, shotGuides } from '../../src/previs/scene.js';
 import { FPS, HEIGHT, WIDTH, framesOf } from '../../src/previs/plan.js';
 import * as G from './grammar.js';
+import * as P from './perf.js';
 import { bindTimeline, movePlayhead, renderTimeline } from './timeline.js';
 import { bindCurve, renderCurve } from './curve.js';
 import { bindOverlay, drawOverlay, mountOverlay } from './overhead.js';
+import { bindTrack, moveTrackHead, renderTrack } from './perftrack.js';
 
 const $ = id => document.getElementById(id);
 const $$ = sel => [...document.querySelectorAll(sel)];
@@ -19,7 +21,7 @@ const cost = k => `<span class="cost ${k}" title="${COST[k]}">${COST[k].toLowerC
 
 /* ---------- state and history: every entry carries the sentence that described it (R4, R5) ---------- */
 const STORE = 'zf.shotGrammar.v2';
-const DEF = { preset: 'standard', rules: {}, seed: 7, mood: 'grey', beats: {}, pins: {}, over: {}, custom: {}, sceneTemplates: [] };
+const DEF = { preset: 'standard', rules: {}, seed: 7, mood: 'grey', beats: {}, pins: {}, over: {}, custom: {}, sceneTemplates: [], perf: {}, sheet: {} };
 const clone = o => JSON.parse(JSON.stringify(o));
 function load() { try { return { ...clone(DEF), ...(JSON.parse(localStorage.getItem(STORE) || 'null') || {}) }; } catch { return clone(DEF); } }
 let S = load();
@@ -37,7 +39,8 @@ function travel(step) {
   if (S.mood !== stageMood) buildSet();
   refresh(); say(`${step < 0 ? 'Undone' : 'Redone'}${msg ? ': ' + msg.replace(/^Applied: /, '').replace(/\. Ctrl\+Z.*$/, '') : ''}.`);
 }
-const UI = { route: 'scene', sel: G.SCENE.beats[0].id, t: 0, frame: 'start', playing: null, speed: 1, loop: false, limit: '', scale: null };
+const UI = { route: 'scene', sel: G.SCENE.beats[0].id, t: 0, frame: 'start', playing: null, speed: 1, loop: false, limit: '', scale: null,
+  key: null, writing: null, pending: null };  // key: the selected performance key; pending: model versions waiting to be applied
 
 /* ---------- one change at a time: live preview, apply on release, Esc cancels (R3, R5) ---------- */
 const TX = {
@@ -86,18 +89,22 @@ stills.setSize(640, 352, false);
 const top = new THREE.PerspectiveCamera(42, WIDTH / HEIGHT, 0.1, 100);
 top.position.set(0, 12.5, -2.2); top.up.set(0, 0, 1); top.lookAt(0, 0, -2.2);
 const lensCam = new THREE.PerspectiveCamera(35, WIDTH / HEIGHT, 0.05, 200);
-let stage = null, stageMood = null, solids = [], figure = null, guides = null;
+let stage = null, stageMood = null, solids = [], figure = null, shoulder = null, guides = null;
 const ray = new THREE.Raycaster(), va = new THREE.Vector3(), vb = new THREE.Vector3();
 function buildSet() {
   stage?.dispose();
   stage = buildStage({ set: 'observatory', mood: S.mood, lens: 35 }); stageMood = S.mood;
-  figure = stage.scene.children.find(o => o.isGroup && o.userData.actor);
+  figure = stage.scene.children.find(o => o.isGroup && o.userData.actor); shoulder = figure.children.find(c => c.isGroup);
   solids = []; stage.scene.traverse(o => { if (o.isMesh && !o.userData.actor && !o.userData.roof && o.material.isMeshLambertMaterial) solids.push(o); });
   guides = null; STILL.clear(); ROOM.clear();
 }
 // The previs mannequin at frame f, moved to the beat's mark and turned (the product plan has no mark yet: SPEC_09 §8).
 function pose(plan, f) {
   stage.pose(f, plan);
+  if (plan.acts) {  // the performance keys drive turn, reach and walk (SPEC_10 §3.1); the product's canned curves otherwise
+    const a = P.samplePerf(plan.acts, f / (framesOf(plan) - 1));
+    figure.position.set(0, 0, -a.back); figure.rotation.y = a.yaw; shoulder.rotation.x = -a.reach;
+  }
   figure.position.x += plan.mark[0]; figure.position.z += plan.mark[1]; figure.rotation.y += plan.turn * D2R;
 }
 function blocked(pos, F) {  // something solid between the subject and the camera (consoles, glass posts)
@@ -173,7 +180,7 @@ function draw() {
   set('frame', UI.playing ? '' : hasEnd(r.pick.s) && r.beat.id === UI.sel ? (UI.frame === 'end' ? 'End frame' : 'Start frame') : '');
   set('words', G.words(r.pick.s)); set('limit', UI.limit);
   set('time', `${fmt(UI.t)} / ${fmt(TOTAL)} s · ${r.beat.id} frame ${Math.round(f)}`);
-  movePlayhead(document, ctx);
+  movePlayhead(document, ctx); moveTrackHead(ctx);
   $('vpShot').dataset.grab = String(UI.route === 'shot' && !UI.playing);
 }
 
@@ -202,7 +209,9 @@ function renderScene() {
       <div class="frames ${times.length === 1 ? 'one' : ''}">${times.map((p, k) => `<figure><img alt="${r.beat.id} ${times.length > 1 ? (k ? 'end' : 'start') : ''} frame" src="${still(r, p)}"><figcaption>${times.length > 1 ? (k ? 'End · ' + (s.end || s.size) : 'Start · ' + s.size) : s.size}</figcaption></figure>`).join('')}</div>
       <div class="meta"><span><b>${r.beat.id}</b> ${esc(r.beat.title)} ${flags.has(r.beat.id) ? '<span class="flag">· check</span>' : ''}</span>
         <span>${esc(r.pick.idiom.name)} ${r.pinned ? '<span class="tag pin">pinned</span>' : '<span class="tag auto">auto</span>'} ${r.pick.idiom.drama ? '<span class="tag show">showpiece</span>' : ''} ${r.pick.idiom.mine ? '<span class="tag mine">mine</span>' : ''}</span>
-        <span class="words">${esc(G.words(s))} · ${r.beat.seconds} s</span></div></button>`; }).join('');
+        <span class="words">${esc(G.words(s))} · ${r.beat.seconds} s</span>
+        <span class="hint">Performance ${(x => `<span class="tag ${x.source}">${SOURCE[x.source]}</span>${x.stale ? ' <span class="tag stale">out of date</span>' : ''}`)(perfRow(r))}</span></div></button>`; }).join('');
+  $('writeAll').disabled = !!UI.writing; $('writeAll').textContent = UI.writing === 'scene' ? `Writing with ${MODEL.name}…` : 'Write the performances';
   $('checks').innerHTML = G.checks(ROWS).map(c => `<li data-kind="${c.kind}" ${c.id ? `data-open="${c.id}"` : ''}>${esc(c.text)}</li>`).join('');
 }
 
@@ -249,12 +258,116 @@ function renderInspector() {
       <div class="row"><span class="label">Ending</span><span class="seg">${Object.keys(G.ENDINGS).map(v => `<button data-ending="${v}" aria-pressed="${v === s.ending}">${G.ENDING_LABEL[v]}</button>`).join('')}</span></div>
       <p class="hint">Drag the band to slide the move, its edges to start or stop it, the dot to move where it is half done. A short window is a fast move. Double-click to reset.</p></div>` : ''}
     <div class="card"><h3>Writes to Camera Motion ${cost('text')}</h3><div class="writes" id="writes">${esc(G.words(s))}</div></div>
+    <div class="card" id="perfCard"></div>
     <div class="card"><h3>Save as an idiom</h3>
       <form class="row" id="saveIdiom"><input type="text" id="idiomName" maxlength="40" placeholder="Name, e.g. Slow push past his shoulder" aria-label="Idiom name" style="flex:1"><button type="submit">Save</button></form>
       <p class="hint">Keeps this shot's framing and timing as a ${esc(G.EVENTS[b.event])} idiom you can use on any beat${mine ? ` (you have ${mine})` : ''}.</p></div>`;
   if (s.moving) renderCurve($('curveHost'), s, T0[rowIndex(b.id)]);
+  renderPerf();
 }
-function renderShot() { renderTimelines(); renderFraming(); renderMinis(); renderInspector(); }
+function renderShot() { renderTimelines(); renderFraming(); renderMinis(); renderInspector(); renderTrack($('perfTrack'), ctx); }
+
+/* ---------- Performance (SPEC_10): levels, the beat sheet and the local model that writes it ---------- */
+const MODEL = { url: 'http://127.0.0.1:11434', name: 'qwen3.8:27b-16k' };
+const WRITES = 'zf.shotGrammar.writes';  // what the model wrote, by beat and signature: levels written once come back free
+const cache = {
+  get(k) { try { return JSON.parse(localStorage.getItem(WRITES) || '{}')[k] || null; } catch { return null; } },
+  put(k, v) { try { const all = JSON.parse(localStorage.getItem(WRITES) || '{}'); all[k] = v; localStorage.setItem(WRITES, JSON.stringify(all)); } catch { /* private window */ } },
+};
+const SOURCE = { template: 'from the idiom template', agent: 'written by the model', edited: 'edited by you' };
+// Everything the performance of a row depends on. texts: one per segment (the template keys' own sentences when nobody wrote it).
+function perfRow(r, St = S) {
+  const b = r.beat, decl = P.perfOf(r.pick.idiom, b.event), L = P.levels(St.perf[b.id], decl), story = P.BEAT_STORY[b.id];
+  const segs = P.segments(b.acts || story.acts, b.seconds), camera = G.words(r.pick.s), sig = P.sigOf(L, segs, camera);
+  const sh = St.sheet[b.id], fits = !!sh && sh.texts.length === segs.length;
+  return { b, decl, L, story, segs, camera, sig, source: fits ? sh.source : 'template', stale: !!sh && (!fits || sh.sig !== sig), lost: !!sh && !fits,
+    texts: fits ? sh.texts : segs.map(g => g.text), sheet: fits ? P.writtenSheet(segs, sh.texts, story) : P.templateSheet(segs, L, story) };
+}
+const brief = x => ({ id: x.b.id, title: x.b.title, seconds: x.b.seconds, camera: x.camera, visible: P.visibleOf(rowOf(x.b.id).pick.s), levelLines: P.levelLines(x.L), segs: x.segs, story: x.story, L: x.L });
+let abort = null;
+async function ask(prompt) {
+  const res = await fetch(MODEL.url + '/api/chat', { method: 'POST', signal: abort.signal, headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: MODEL.name, stream: false, think: false, format: 'json', keep_alive: '2m', options: { temperature: 0.8 },
+      messages: [{ role: 'system', content: P.RULES }, { role: 'user', content: prompt }] }) });
+  if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 140)}`);
+  return (await res.json()).message?.content || '';
+}
+// keep_alive 0 hands the 4090 back to LTX as soon as the writing is done (the grader does the same).
+const release = () => fetch(MODEL.url + '/api/generate', { method: 'POST', body: JSON.stringify({ model: MODEL.name, keep_alive: 0 }) }).catch(() => {});
+async function run(what, job) {
+  if (UI.writing) return;
+  UI.writing = what; abort = new AbortController(); refreshPerf();
+  try { await job(); } catch (e) {
+    say(`<span class="lim">${abort.signal.aborted ? 'Stopped' : `The local model (${MODEL.name}) did not answer: ${esc(e.message)}`}; the performance text stays as it was.</span>`);
+  } finally { UI.writing = null; abort = null; release(); refreshPerf(); }
+}
+const refreshPerf = () => { if (UI.route === 'shot') renderPerf(); if (UI.route === 'scene') renderScene(); };
+function writeAll() {
+  return run('scene', async () => {
+    const xs = ROWS.map(r => perfRow(r)), todo = xs.filter(x => x.source !== 'edited'), kept = xs.length - todo.length;
+    const t0 = performance.now(), out = await P.writeScene(G.SCENE.title, todo.map(brief), ask);
+    const ok = todo.filter(x => out[x.b.id].texts && !out[x.b.id].issues.length), bad = todo.filter(x => !ok.includes(x));
+    for (const x of ok) cache.put(`${x.b.id}|${x.sig}`, out[x.b.id].texts);
+    TX.once(`the model wrote the performances in ${Math.round((performance.now() - t0) / 1000)} s: ${ok.map(x => x.b.id).join(', ') || 'none'} passed the checks`
+      + (bad.length ? `; ${bad.map(x => `${x.b.id} stays on the template (${out[x.b.id].issues[0] || 'no answer'})`).join('; ')}` : '')
+      + (kept ? `; ${kept} beat${kept > 1 ? 's' : ''} you edited kept` : ''),
+    St => { for (const x of ok) St.sheet[x.b.id] = { source: 'agent', texts: out[x.b.id].texts, sig: x.sig }; });
+  });
+}
+function writeBeat(id, n) {
+  return run(id, async () => {
+    const x = perfRow(rowOf(id));
+    const opts = n ? await P.writeVersions(G.SCENE.title, brief(x), ask, n)
+      : (o => (o?.texts ? [{ label: 'Rewritten', ...o }] : []))((await P.writeScene(G.SCENE.title, [brief(x)], ask))[id]);
+    if (!opts.length) return say(`<span class="lim">${id}: the model's answer did not have ${x.segs.length} segments; nothing changed.</span>`);
+    UI.pending = { id, sig: x.sig, opts, at: Math.max(0, opts.findIndex(o => !o.issues.length)) };
+  });
+}
+// A level change; when the model already wrote for the new levels, that text comes back from the cache.
+function setLevel(id, key, value, main) {
+  let back = false, stale = false, fit = null;
+  const fit0 = perfRow(rowOf(id)).L.fit;
+  TX.begin('perf');
+  TX.live(St => {
+    const p = (St.perf[id] ||= {});
+    if (value == null || value === '' || (Array.isArray(value) && !value.length)) delete p[key]; else p[key] = value;
+    const x = perfRow(rowOf(id), St), sh = St.sheet[id]; fit = key !== 'fit' && x.L.fit !== fit0 ? x.L : null;
+    if (sh?.source === 'agent' && sh.sig !== x.sig) { const c = cache.get(`${id}|${x.sig}`); if (c?.length === x.segs.length) { St.sheet[id] = { source: 'agent', texts: c, sig: x.sig }; back = true; } else stale = true; }
+  });
+  TX.end(true, `${id} ${main}${fit ? `; fit ${fit.fitAuto ? 'relaxes' : 'goes back'} to ${P.FITS[fit.fit].label.toLowerCase()} (${P.FITS[fit.fit].lane}) because the performance is ${fit.fitAuto ? 'bigger than' : 'back within'} what the previs is blocked for` : ''}${back ? '; the text the model wrote for these levels came back' : stale ? '; the written performance is out of date (Rewrite)' : ''}`, '', id);
+}
+function renderPerf() {
+  const host = $('perfCard'); if (!host) return;
+  const r = sel(), id = r.beat.id, x = perfRow(r), { L, decl } = x, busy = UI.writing, pend = UI.pending?.id === id ? UI.pending : null;
+  const up = (list, v, top) => list.indexOf(v) > list.indexOf(top);
+  const lv = (key, list, labels, cur, beyond) => `<span class="seg" role="group" aria-label="${key}">${list.map(v => `<button data-lv="${key}" data-v="${v}" aria-pressed="${v === cur}"
+    ${beyond(v) ? 'data-beyond="true" title="Bigger than this idiom\'s previs is blocked for"' : ''}>${esc(labels[v])}</button>`).join('')}</span>`;
+  const issues = x.source === 'template' ? [] : P.issueList(P.checkPerformance(x.texts, { segs: x.segs, L, story: x.story, line: x.story.line?.text }));
+  const tag = `<span class="tag ${x.source}">${SOURCE[x.source]}</span>${x.stale ? '<span class="tag stale" title="Levels, framing or timing changed since it was written">out of date</span>' : ''}`;
+  const cmp = pend ? pend.opts[pend.at] : null;
+  host.innerHTML = `<h3>Performance ${cost('text')}</h3>
+    <p class="hint">${esc(decl.way[0].toUpperCase() + decl.way.slice(1))}: the idiom plays it ${decl.scale}, ${{ face: 'face only', upper: 'upper body', full: 'full body' }[decl.body]}; the previs is blocked for up to ${decl.range[1]}.</p>
+    <div class="row"><span class="label">Scale</span>${lv('scale', P.SCALES, P.SCALE_LABEL, L.scale, v => up(P.SCALES, v, decl.range[1]))}</div>
+    <div class="row"><span class="label">Body</span>${lv('body', P.BODIES, P.BODY_LABEL, L.body, v => up(P.BODIES, v, decl.body))}</div>
+    <div class="row"><span class="label">Colour</span><span class="seg" role="group" aria-label="colour"><button data-lv="color" data-v="" aria-pressed="${!L.color}">None</button>${Object.entries(P.COLORS).map(([k, c]) => `<button data-lv="color" data-v="${k}" aria-pressed="${k === L.color}">${c.label}</button>`).join('')}</span></div>
+    <div class="row"><span class="label">Carried by</span><span class="seg" role="group" aria-label="focus">${Object.entries(P.FOCUS).map(([k, l]) => `<button data-focus="${k}" aria-pressed="${L.focus.includes(k)}">${l}</button>`).join('')}</span></div>
+    <div class="row"><span class="label">Note</span><input type="text" id="perfNote" maxlength="80" value="${esc(L.note)}" placeholder="One line for the actor, e.g. he has waited three years for this" style="flex:1"></div>
+    <div class="row"><span class="label">Fit</span><span class="seg" role="group" aria-label="fit"><button data-fit="" aria-pressed="${!S.perf[id]?.fit}" title="Follow the previs pose unless the performance is bigger than the previs is blocked for">Auto</button>${Object.entries(P.FITS).map(([k, f]) => `<button data-fit="${k}" aria-pressed="${k === S.perf[id]?.fit}">${f.label}</button>`).join('')}</span>${cost('render')}</div>
+    <p class="hint">${S.perf[id]?.fit ? '' : `Auto: ${esc(P.FITS[L.fit].label.toLowerCase())} · `}${esc(P.FITS[L.fit].lane)}${L.fitAuto ? ` · <span style="color:var(--warn)">relaxed from “follow the pose” because ${L.scale !== decl.scale && up(P.SCALES, L.scale, decl.range[1]) ? `${L.scale} is bigger than the previs is blocked for` : 'the body range is bigger than the previs'}</span>` : ''}</p>
+    <div class="row"><span class="label">Beat sheet</span>${tag}</div>
+    ${x.lost ? `<p class="hint" style="color:var(--warn)">Your text had ${S.sheet[id].texts.length} segments; the keys now cut ${x.segs.length}, so the template shows. Rewrite it or go back to the template.</p>` : ''}
+    <div class="segs">${x.segs.map((g, i) => `<label class="sg"><span class="t">${fmt(g.t0)}–${fmt(g.t1)} s</span><textarea data-seg="${i}" rows="2" aria-label="Segment ${i + 1}">${esc(x.texts[i])}</textarea></label>`).join('')}</div>
+    ${issues.length ? `<ul class="issues">${issues.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
+    ${pend ? `<div class="pend"><div class="row"><b>The model's ${pend.opts.length > 1 ? 'versions' : 'rewrite'}</b>${pend.opts.length > 1 ? `<span class="seg">${pend.opts.map((o, k) => `<button data-pv="${k}" aria-pressed="${k === pend.at}">${esc(o.label || `Version ${k + 1}`)}${o.issues.length ? ' ⚠' : ''}</button>`).join('')}</span>` : ''}</div>
+      ${pend.sig !== x.sig ? '<p class="hint" style="color:var(--warn)">Written before your last change; it may not fit the levels now.</p>' : ''}
+      <div class="cmp">${x.segs.map((g, i) => `<div><span class="t">${fmt(g.t0)}–${fmt(g.t1)} s</span><p class="now">${esc(x.texts[i])}</p><p class="new">${esc(cmp.texts[i] ?? '')}</p></div>`).join('')}</div>
+      ${cmp.issues.length ? `<ul class="issues">${cmp.issues.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
+      <div class="row"><button data-pvapply ${cmp.issues.length || cmp.texts.length !== x.segs.length ? 'disabled' : ''}>Apply</button><button data-pvdrop>Discard</button><span class="hint">grey: now · white: the model's</span></div></div>` : ''}
+    <div class="row">${busy ? `<span class="hint">${busy === 'scene' ? 'Writing the scene' : `Writing ${busy}`} with ${MODEL.name}…</span><button data-pstop>Stop</button>`
+      : `<button data-pwrite="1">Rewrite this beat</button><button data-pwrite="3">Write 3 versions</button>`}
+      <button data-ptemplate ${x.source === 'template' && !x.lost ? 'disabled' : ''}>Back to the template</button></div>
+    <span class="label">Writes to Action &amp; Audio Prompt</span><div class="writes pre">${esc(x.sheet)}</div>`;
+}
 
 /* ---------- Overhead ---------- */
 function renderOverhead() {
@@ -295,11 +408,13 @@ function renderTemplates() {
 
 /* ---------- Export ---------- */
 function renderExport() {
-  $('export').innerHTML = ROWS.map(r => { const s = r.pick.s, p = G.toPlan(r, S.mood), moved = 'mark' in p;
+  $('export').innerHTML = ROWS.map(r => { const s = r.pick.s, p = G.toPlan(r, S.mood), moved = 'mark' in p, x = perfRow(r);
     return `<div class="exp-card"><img alt="${r.beat.id}" src="${still(r, frameTimes(s).slice(-1)[0])}">
       <div style="display:grid;gap:8px;min-width:0"><b>${r.beat.id} · ${esc(r.beat.title)} · ${esc(r.pick.idiom.name)}</b>
-        <div class="writes">${esc(G.words(s))}</div>
-        <div class="row"><button data-copy="motion" data-for="${r.beat.id}">Copy Camera Motion</button><button data-copy="plan" data-for="${r.beat.id}">Copy 3D Stage plan</button><span class="hint">${r.beat.seconds} s = ${framesOf(r.plan)} frames · 17 camera keys</span></div>
+        <span class="label">Camera Motion</span><div class="writes">${esc(G.words(s))}</div>
+        <span class="label">Action &amp; Audio Prompt · <span class="tag ${x.source}">${SOURCE[x.source]}</span>${x.stale ? ' <span class="tag stale">out of date</span>' : ''}</span><div class="writes pre">${esc(x.sheet)}</div>
+        <div class="row"><button data-copy="motion" data-for="${r.beat.id}">Copy Camera Motion</button><button data-copy="action" data-for="${r.beat.id}">Copy Action &amp; Audio Prompt</button><button data-copy="plan" data-for="${r.beat.id}">Copy 3D Stage plan</button><span class="hint">${r.beat.seconds} s = ${framesOf(r.plan)} frames · 17 camera keys</span></div>
+        ${S.perf[r.beat.id]?.acts ? '<p class="hint" style="color:var(--warn)">The performance keys are re-timed here: the 3D Stage plan has no field for them yet, so Render previs plays the stock action (SPEC_10 §4).</p>' : ''}
         ${moved ? '<p class="hint" style="color:var(--warn)">He is off his station here: the 3D Stage plan needs a mark field before Render previs can place him (SPEC_09 §8).</p>' : ''}
         <pre>${esc(JSON.stringify(p))}</pre></div></div>`; }).join('');
 }
@@ -308,7 +423,7 @@ function renderExport() {
 function liveRender() {
   renderTimelines();
   if (UI.route === 'shot') {
-    renderFraming(); const s = sel().pick.s; $('writes') && ($('writes').textContent = G.words(s));
+    renderFraming(); renderTrack($('perfTrack'), ctx); renderPerf(); const s = sel().pick.s; $('writes') && ($('writes').textContent = G.words(s));
     if (s.moving && $('curveHost')) renderCurve($('curveHost'), s, T0[rowIndex(UI.sel)]);
     if (!UI.playing) seekFrame();
   }
@@ -332,7 +447,7 @@ window.addEventListener('hashchange', route);
 // The player rests on the frame being adjusted: the start or the end of the selected shot.
 function seekFrame() { const i = rowIndex(UI.sel), r = ROWS[i]; UI.t = T0[i] + Math.min(r.beat.seconds - 1e-3, frameP(r.pick.s, UI.frame) * r.beat.seconds); }
 function select(id, seek = true) {
-  if (UI.sel !== id) UI.frame = 'start';
+  if (UI.sel !== id) { UI.frame = 'start'; UI.key = null; }
   UI.sel = id; UI.limit = '';
   if (seek) seekFrame();
   refresh();
@@ -376,6 +491,26 @@ document.addEventListener('click', e => {
     return TX.once(`${id} lens ${r.pick.s.lens} → ${d.lens}mm (same shot size, camera ${Number(d.lens) > r.pick.s.lens ? 'farther' : 'closer'})`, St => patch(St, id, { lens: Number(d.lens) }), id);
   }
   if (d.ending) return TX.once(`${id} ending: ${G.ENDING_LABEL[d.ending].toLowerCase()}`, St => patch(St, id, { ending: d.ending }), id);
+  if (d.lv) {
+    const L = perfRow(r).L, cur = L[d.lv] || '', names = { scale: P.SCALE_LABEL, body: P.BODY_LABEL, color: Object.fromEntries(Object.entries(P.COLORS).map(([k, c]) => [k, c.label])) }[d.lv];
+    if (d.v === cur) return;
+    return setLevel(id, d.lv, d.v, `${d.lv === 'color' ? 'colour' : d.lv} ${(names[cur] || 'none').toLowerCase()} → ${(names[d.v] || 'none').toLowerCase()}`);
+  }
+  if (d.focus) { const f = perfRow(r).L.focus, on = f.includes(d.focus); return setLevel(id, 'focus', on ? f.filter(k => k !== d.focus) : [...f, d.focus], `${on ? 'no longer' : 'now'} carried by ${P.FOCUS[d.focus].toLowerCase()}`); }
+  if ('fit' in d) { const cur = S.perf[id]?.fit || ''; if (d.fit === cur) return;
+    const L = P.levels({ ...S.perf[id], fit: d.fit || undefined }, perfRow(r).decl);
+    return setLevel(id, 'fit', d.fit, `fit: ${d.fit ? P.FITS[d.fit].label.toLowerCase() : `auto (${P.FITS[L.fit].label.toLowerCase()})`} → ${P.FITS[L.fit].lane}`); }
+  if (d.pwrite) return writeBeat(id, d.pwrite === '3' ? 3 : 0);
+  if ('pwriteall' in d) return writeAll();
+  if ('pstop' in d) return abort?.abort();
+  if ('ptemplate' in d) return TX.once(`${id} performance back to the idiom template`, St => { delete St.sheet[id]; });
+  if (d.pv) { UI.pending.at = Number(d.pv); return renderPerf(); }
+  if ('pvdrop' in d) { UI.pending = null; return renderPerf(); }
+  if ('pvapply' in d) {
+    const p = UI.pending, o = p.opts[p.at], x = perfRow(r); UI.pending = null;
+    cache.put(`${id}|${x.sig}`, o.texts);
+    return TX.once(`${id} performance: the model's ${p.opts.length > 1 ? `“${o.label}”` : 'rewrite'} applied`, St => { St.sheet[id] = { source: 'agent', texts: o.texts, sig: x.sig }; });
+  }
   if (d.applyScene) {
     const t = G.sceneTemplatesFor(S).find(x => x.name === d.applyScene);
     return TX.once(`scene template “${t.name}”`, St => { for (const b of G.SCENE.beats) { const name = t.picks[b.event]; if (!name || !G.idiomsFor(St, b.event).some(i => i.name === name)) continue;
@@ -384,8 +519,8 @@ document.addEventListener('click', e => {
   if (d.delScene) return TX.once(`deleted scene template “${d.delScene}”`, St => { St.sceneTemplates = St.sceneTemplates.filter(x => x.name !== d.delScene); });
   if (d.delIdiom) return TX.once(`deleted idiom “${d.delIdiom}”`, St => { St.custom[d.event] = (St.custom[d.event] || []).filter(x => x.name !== d.delIdiom);
     for (const k of Object.keys(St.pins)) if (St.pins[k] === d.delIdiom) delete St.pins[k]; });
-  if (d.copy) { const x = rowOf(d.for); return copy(d.copy === 'plan' ? JSON.stringify(G.toPlan(x, S.mood)) : G.words(x.pick.s), el); }
-  if (el.id === 'copyAll') return copy(JSON.stringify(Object.fromEntries(ROWS.map(x => [x.beat.id, { idiom: x.pick.idiom.name, cameraMotion: G.words(x.pick.s), plan: G.toPlan(x, S.mood) }])), null, 1), el);
+  if (d.copy) { const x = rowOf(d.for); return copy(d.copy === 'plan' ? JSON.stringify(G.toPlan(x, S.mood)) : d.copy === 'action' ? perfRow(x).sheet : G.words(x.pick.s), el); }
+  if (el.id === 'copyAll') return copy(JSON.stringify(Object.fromEntries(ROWS.map(x => [x.beat.id, { idiom: x.pick.idiom.name, cameraMotion: G.words(x.pick.s), actionAudioPrompt: perfRow(x).sheet, plan: G.toPlan(x, S.mood) }])), null, 1), el);
 });
 const uniqueName = (name, taken) => { let n = name, k = 2; while (taken.includes(n)) n = `${name} (${k++})`; return n; };
 document.addEventListener('submit', e => {
@@ -410,7 +545,14 @@ document.addEventListener('input', e => {
   TX.live(St => { St.rules = { ...St.rules, [k]: v }; });
 });
 document.addEventListener('change', e => {
-  const k = e.target.dataset?.rule; if (!k || !TX.cur) return;
+  const t = e.target, id = UI.sel;
+  if (t.id === 'perfNote') return setLevel(id, 'note', t.value.trim(), t.value.trim() ? `note: “${t.value.trim()}”` : 'note cleared');
+  if (t.dataset?.seg != null) {  // a segment typed by hand: the beat's text is now the director's, the model never overwrites it
+    const x = perfRow(sel()), i = Number(t.dataset.seg), texts = x.texts.slice(); texts[i] = t.value.trim();
+    if (texts[i] === x.texts[i]) return;
+    return TX.once(`${id} segment ${i + 1} (${fmt(x.segs[i].t0)}–${fmt(x.segs[i].t1)} s) edited by you`, St => { St.sheet[id] = { source: 'edited', texts, sig: x.sig }; });
+  }
+  const k = t.dataset?.rule; if (!k || !TX.cur) return;
   TX.end(true, `${G.RULES[k].label.toLowerCase()} ${G.rulesOf(TX.cur.base)[k]} → ${e.target.value}`);
 });
 $('loop').addEventListener('change', e => { UI.loop = e.target.checked; });
@@ -485,9 +627,9 @@ const ctx = {
   rows: () => ROWS, t0: () => T0, total: () => TOTAL, state: () => S, row: sel, rowIndex,
   scale: () => UI.scale || TOTAL, freezeScale: v => { UI.scale = v; },
   room: roomOf, clear: clearWith, sideText: side,
-  select, seek(t, scrub) { if (UI.playing) stop(); UI.t = t; if (scrub) UI.frame = null; const id = at(t).r.beat.id; if (id !== UI.sel) { UI.sel = id; refresh(); } else draw(); },
+  draw: () => draw(), say, select, seek(t, scrub) { if (UI.playing) stop(); UI.t = t; if (scrub) UI.frame = null; const id = at(t).r.beat.id; if (id !== UI.sel) { UI.sel = id; refresh(); } else draw(); },
 };
-bindTimeline(ctx); bindCurve(ctx); bindOverlay(ctx);
+bindTimeline(ctx); bindCurve(ctx); bindOverlay(ctx); bindTrack(ctx);
 
 buildSet();
 plan();

@@ -32,7 +32,7 @@ test('exported keys replay the solved camera through the 3D Stage sampler', () =
   assert.equal(r.pick.idiom.name, 'Low-angle push');
   const plan = toPlan(r), n = framesOf(plan) - 1;
   for (const p of [0, 0.2, 0.5, 0.8, 1]) {
-    const c = solve(r.pick.s, plan, p), z = sampleCamera(plan, p * n);
+    const c = solve(r.pick.s, r.plan, p), z = sampleCamera(plan, p * n);  // keys were solved with the performance keys
     assert.ok(dist(c.pos, z.position) < 0.03, `p=${p} off by ${dist(c.pos, z.position)}`);
   }
   assert.ok(JSON.stringify(plan).length < 4096);  // the WebM title keeps the plan only in its first 8 KB
