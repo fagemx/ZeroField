@@ -1,6 +1,7 @@
 """Re-render a 3D Stage previs headless with the product's own scene.js / webm.js, from the plan stored in the WebM.
 
-usage: python stage_render.py PREVIS.webm OUT.webm [matte]
+usage: python stage_render.py PREVIS.webm|PLAN.json OUT.webm [matte]
+A PLAN.json renders a plan written by hand or by a lab script (performance keys, poses, cast) instead of a stored one.
 "matte" renders every cast member white on black (scene.js matte) for guide attention masks.
 """
 import base64, sys
@@ -16,8 +17,8 @@ import { framesOf, WIDTH, HEIGHT, FPS } from '/ui/src/previs/plan.js';
 import { encodeCanvas, planFromWebM } from '/ui/src/previs/webm.js';
 const renderer = prepareRenderer(new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }));
 renderer.setPixelRatio(1); renderer.setSize(WIDTH, HEIGHT, false); document.body.appendChild(renderer.domElement);
-window.render = async (b64, matte) => {
-  const plan = planFromWebM(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
+window.render = async (b64, matte, json) => {
+  const plan = json ? JSON.parse(json) : planFromWebM(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
   const stage = buildStage(plan); stage.roof(true);
   if (matte) stage.matte(true);  // every cast member white on black (scene.js tags them), whatever their coat
   const blob = await encodeCanvas(renderer.domElement, framesOf(plan), FPS, f => { stage.frame(f, plan); renderer.render(stage.scene, stage.camera); }, null, plan);
@@ -43,8 +44,9 @@ def main(src, dest, matte=False):
         page.route("http://localhost:9/**", serve)
         page.goto("http://localhost:9/")
         page.wait_for_function("window.ready === true", timeout=60000)
-        head = base64.b64encode(Path(src).read_bytes()[:8192]).decode()
-        Path(dest).write_bytes(base64.b64decode(page.evaluate("([b, m]) => window.render(b, m)", [head, matte])))
+        json_plan = Path(src).read_text(encoding="utf-8") if str(src).endswith(".json") else None
+        head = "" if json_plan else base64.b64encode(Path(src).read_bytes()[:8192]).decode()
+        Path(dest).write_bytes(base64.b64decode(page.evaluate("([b, m, j]) => window.render(b, m, j)", [head, matte, json_plan])))
         browser.close()
 
 

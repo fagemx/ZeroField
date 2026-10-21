@@ -1,8 +1,8 @@
 // three.js previs stage: a grey blockout the motion pass can follow. Built from primitives only (no assets),
 // so what LTX-2.5 reads is structure, camera and light, never a look.
 import * as THREE from 'three';
-import { DEFAULT_FIGURE, DOME, WIDTH, HEIGHT, cameraKeys, framesOf, sampleActor, sampleActs, sampleCamera, verticalFov } from './plan.js';
-import { SET, boardActor } from './board.js';
+import { DOME, WIDTH, HEIGHT, cameraKeys, framesOf, sampleActor, sampleActs, sampleCamera, verticalFov } from './plan.js';
+import { SET, buildFigure } from './figure.js';
 
 const ROOM = new THREE.Vector3(DOME.x, 0, DOME.z);  // dome centre; the station (actor's mark) is the origin, the console is at +z
 
@@ -40,61 +40,6 @@ function emptyStage(group, mats) {
   const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 0.2), mats.glass); wall.position.set(0, 2, 1.2); group.add(wall);
 }
 
-// A mannequin with adult proportions (tapered torso, round shoulders, capsule limbs, neck, a head about 1/7.6 of the
-// height): the Layout-To-Render IC-LoRA renders blockout shapes literally. A box torso came out as a brass box and a
-// 1/6.4 head as a child.
-// Jointed (SPEC_10 P2): pelvis, spine, neck, shoulders, elbows, hips, knees and ankles, so poses (lean, slump, kneel, hands
-// to the face...) bend it. Standing, every part sits where the single-piece mannequin's did; the limbs are split at the
-// elbow and knee into two capsules of the same radius.
-// Looks (SPEC_10 P3): build, outfit and hair change the silhouette, since the Layout Render reads who someone is from
-// the shapes: a woman is narrower in the shoulders and wider in the hips, a child is 0.64 of the height with a larger
-// head, an elder stoops; a long coat, a dress or a robe hangs from the waist; long hair falls to the shoulders.
-// m: the person's materials, { coat, skin, hair }.
-function actor(mats, figure = {}, m = mats) {
-  const coat = m.coat;
-  const look = { ...DEFAULT_FIGURE, ...figure }, woman = look.build === 'woman', child = look.build === 'child';
-  const root = new THREE.Group(), joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
-  const part = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
-  const limb = (r, total) => new THREE.CapsuleGeometry(r, total - 2 * r, 6, 16);  // a capsule `total` long, caps included
-  const body = joint(root, 0, 0, 0); body.scale.setScalar(child ? 0.64 : woman ? 0.94 : 1);
-  const pelvis = joint(body, 0, 0.98, 0), spine = joint(pelvis, 0, 0, 0), neck = joint(spine, 0, 0.6, 0), head = joint(neck, 0, 0.21, 0);
-  const chest = woman ? 0.2 : 0.23;
-  part(pelvis, new THREE.SphereGeometry(woman ? 0.2 : 0.18, 24, 12), coat, 0, 0, 0).scale.set(1, 0.6, woman ? 0.75 : 0.7);  // hips
-  part(spine, new THREE.CylinderGeometry(chest, 0.17, 0.58, 24), coat, 0, 0.29, 0).scale.set(1, 1, 0.6);  // chest to waist
-  part(spine, new THREE.SphereGeometry(chest, 24, 12), coat, 0, 0.58, 0).scale.set(1, 0.33, 0.6);  // shoulder line
-  part(neck, new THREE.CylinderGeometry(0.055, 0.06, 0.14, 12), m.skin, 0, 0.06, 0);
-  head.scale.setScalar(child ? 1.3 : 1);
-  part(head, new THREE.SphereGeometry(0.11, 24, 16), m.skin, 0, 0, 0).scale.set(0.92, 1.15, 1);
-  part(head, new THREE.BoxGeometry(0.05, 0.06, 0.08), m.skin, 0, 0, 0.11);  // nose: shows facing
-  // Facing cues the motion pass can read: hair over the back of the head (a bare sphere from behind reads as a face)
-  // and shoes pointing forward.
-  part(head, new THREE.SphereGeometry(0.117, 24, 16, Math.PI, Math.PI, 0, Math.PI * 0.8), m.hair, 0, 0, 0).scale.set(0.92, 1.15, 1);
-  part(head, new THREE.SphereGeometry(0.117, 24, 6, 0, Math.PI, 0, Math.PI * 0.22), m.hair, 0, 0, 0).scale.set(0.92, 1.15, 1);
-  if (look.hair === 'long') part(head, limb(0.1, 0.42), m.hair, 0, -0.14, -0.06).scale.set(1.15, 1, 0.55);
-  if (look.hair === 'bun') part(head, new THREE.SphereGeometry(0.06, 16, 12), m.hair, 0, 0.06, -0.13);
-  const hem = { longcoat: [0.21, 0.3, 0.6], dress: [0.18, 0.36, 0.78], robe: [0.2, 0.36, 0.95] }[look.outfit];
-  if (hem) part(pelvis, new THREE.CylinderGeometry(hem[0], hem[1], hem[2], 24), coat, 0, 0.06 - hem[2] / 2, 0).scale.set(1, 1, 0.8);
-  const joints = { pelvis, spine, neck };
-  for (const [side, x] of [['L', -1], ['R', 1]]) {  // left = the reaching arm, on -x
-    const narrow = woman ? 0.03 : 0;
-    const shoulder = x < 0 ? joint(spine, -0.28 + narrow, 0.55, 0) : joint(spine, 0.245 - narrow, 0.57, 0), elbow = joint(shoulder, 0, -0.33, 0);  // the hanging arm's top was at 0.245
-    part(shoulder, limb(0.05, 0.35), coat, 0, -0.165, 0);
-    part(elbow, limb(0.05, 0.35), coat, 0, -0.165, 0);
-    part(elbow, new THREE.SphereGeometry(x < 0 ? 0.06 : 0.055, 12, 8), m.skin, 0, -0.35, 0);
-    const hip = joint(pelvis, 0.11 * x, -0.06, 0), knee = joint(hip, 0, -0.45, 0), ankle = joint(knee, 0.01 * x, -0.43, 0);
-    part(hip, limb(0.075, 0.5), coat, 0, -0.22, 0);
-    part(knee, limb(0.075, 0.5), coat, 0, -0.22, 0);
-    part(ankle, new THREE.BoxGeometry(0.11, 0.08, 0.28), m.hair, 0, 0, 0.07);
-    shoulder.rotation.order = elbow.rotation.order = 'YXZ';  // pitch the arm forward first, then turn it in across the body
-    Object.assign(joints, { ['shoulder' + side]: shoulder, ['elbow' + side]: elbow, ['hip' + side]: hip, ['knee' + side]: knee, ['ankle' + side]: ankle });
-  }
-  // The hanging arm sits a little out from the body; an elder stoops.
-  const rest = { shoulderR: [0, 0, 0.08], ...(look.build === 'elder' ? { spine: [0.16, 0, 0], neck: [0.1, 0, 0] } : {}) };
-  root.traverse(o => { o.userData.actor = true; });
-  const out = { root, shoulder: joints.shoulderL, joints, rest };
-  applyPose(out, { reach: 0, pose: {} });
-  return out;
-}
 // Pose the jointed mannequin: the body pose on top of its rest, then the reach channel takes the left arm toward the console.
 function applyPose(figure, a) {
   const p = a.pose || {};
@@ -111,7 +56,7 @@ const COATS = { grey: [0x55585f, 0x6b5a4c, 0x4c5866, 0x5d5268], night: [0x383a40
 
 // Build a stage for a plan's set and light. Returns { scene, camera, frame(f, plan), pose(f, plan), shoot(f, plan), roof(show), matte(on), dispose };
 // pose/shoot take the current plan, so only a set or light change needs a new stage. opts.board: the board look for
-// blocking (board.js), never for a previs that LTX renders.
+// blocking (figure.js), never for a previs that LTX renders.
 // The renderer must have shadowMap enabled (see prepareRenderer).
 export function prepareRenderer(renderer) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -153,7 +98,7 @@ export function buildStage(plan, opts = {}) {
     for (const f of figures) Object.values(f.mats || {}).forEach(x => x.dispose());
     figures = looks.map((look, i) => {
       const tone = look.tone ?? i;  // a person keeps their colour in every shot, whoever is the subject
-      return board ? boardActor(look, tone) : actor(mats, look, { coat: coats[tone % coats.length], skin: mats.skin, hair: mats.hair });
+      return buildFigure(look, tone, board ? null : { coat: coats[tone % coats.length], skin: mats.skin, hair: mats.hair });
     });
     castKey = key;
     for (const f of figures) { scene.add(f.root); f.root.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = !o.userData.outline; }); }

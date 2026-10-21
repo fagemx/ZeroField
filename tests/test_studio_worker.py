@@ -452,11 +452,13 @@ class PrevisTwoPassTests(unittest.TestCase):
                          ('ltx\\ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors', 1.0, 1.0))
         self.assertEqual((guide['image'], guide['latent'], guide['iclora_parameters'], layout['21']['class_type']),
                          (['20', 0], ['21', 0], ['61', 0], 'EmptyLTXVLatentVideo'))
-        # Attention mask: the stage matte grown 24 px, feathered and inverted, so the layout binds all but the actor.
+        # Attention mask: the stage matte grown 24 px, feathered, scaled and inverted, so the layout binds the set fully and
+        # the actor at 0.35: enough to carry a blocked pose, too little for the mannequin's shapes (SPEC_10 §7.6).
         self.assertEqual(guide['attention_mask'], ['34', 0])
-        self.assertEqual([layout[n]['class_type'] for n in ('25', '26', '27', '28', '29', '34')],
-                         ['ImageToMask', 'GrowMask', 'MaskToImage', 'ImageBlur', 'ImageToMask', 'InvertMask'])
-        self.assertEqual(layout['26']['inputs']['expand'], 24)
+        self.assertEqual([layout[n]['class_type'] for n in ('25', '26', '27', '28', '29', '36', '34')],
+                         ['ImageToMask', 'GrowMask', 'MaskToImage', 'ImageBlur', 'ImageToMask', 'MaskComposite', 'InvertMask'])
+        self.assertEqual((layout['26']['inputs']['expand'], layout['36']['inputs']['operation'], layout['36']['inputs']['source'], layout['35']['inputs']['value']),
+                         (24, 'multiply', ['35', 0], 0.65))
         # The Klein key is an out-of-clip reference (latent_idx -1); guides are cropped before decode; distilled sampling.
         self.assertEqual((layout['41']['inputs']['guiding_latent'], layout['41']['inputs']['latent_idx'], layout['17']['inputs']['positive']),
                          (['33', 0], -1, ['41', 0]))

@@ -82,9 +82,8 @@ export function verticalFov(lens, aspect = WIDTH / HEIGHT) {
   return 2 * Math.atan((36 / aspect) / 2 / lens) * 180 / Math.PI;
 }
 
-// Mannequin looks (SPEC_10 P3). The default is the mannequin the Layout Render was validated on. tone: the person's
+// Mannequin looks (SPEC_10 P3), built by figure.js. tone: the person's
 // colour (board look) and coat shade (render look), so they read as the same person in every shot.
-export const DEFAULT_FIGURE = { build: 'man', outfit: 'jacket', hair: 'short' };
 export const FIGURE_OPTIONS = { build: ['man', 'woman', 'child', 'elder'], outfit: ['jacket', 'longcoat', 'dress', 'robe'], hair: ['short', 'long', 'bun'] };
 
 // Body poses for the jointed mannequin (SPEC_10 P2): joint rotations in radians [x, y, z] on top of standing, plus how

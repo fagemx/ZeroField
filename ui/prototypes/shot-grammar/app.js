@@ -3,7 +3,7 @@
 // Plain DOM; product integration would move this into PrevisStage.
 import * as THREE from 'three';
 import { buildStage, prepareRenderer, shotGuides } from '../../src/previs/scene.js';
-import { setPx } from '../../src/previs/board.js';
+import { setPx } from '../../src/previs/figure.js';
 import { FPS, HEIGHT, WIDTH, framesOf } from '../../src/previs/plan.js';
 import * as G from './grammar.js';
 import * as P from './perf.js';

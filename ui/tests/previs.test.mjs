@@ -154,14 +154,16 @@ test('performance keys in a plan replace its canned action; each channel eases b
   assert.deepEqual(planFromWebM(bytes.subarray(0, 8192)).acts, acts, 'the keys ride in the WebM with the plan');
 });
 
-test('the jointed mannequin stands where the single-piece one stood and bends into its poses', () => {
+test('the mannequin stands in the first mannequin\'s envelope (1.93 m, ±0.34 m) and bends into its poses', () => {
   const stage = buildStage(defaultPlan()), plan = {...defaultPlan(), action: 'stand'};
   const actor = () => { stage.scene.updateMatrixWorld(true); const box = new THREE.Box3(); stage.scene.traverse(o => { if (o.isMesh && o.userData.actor) box.union(new THREE.Box3().setFromObject(o)); }); return box; };
   stage.pose(0, plan);
   const rest = actor();
-  assert.ok(Math.abs(rest.max.y - 1.925) < 0.003 && Math.abs(rest.min.y) < 0.003 && Math.abs(rest.min.x + 0.34) < 0.003, 'same height and width standing');
+  assert.ok(Math.abs(rest.max.y - 1.93) < 0.01 && Math.abs(rest.min.y) < 0.005 && Math.abs(rest.min.x + 0.34) < 0.01, 'an adult standing on the floor');
+  let fingers = 0; stage.scene.traverse(o => { if (o.isMesh && o.userData.actor && o.geometry.type === 'LatheGeometry') fingers++; });
+  assert.ok(fingers > 30, 'hands with fingers, not balls (a 60% layout follow renders a ball as a fist)');
   stage.pose(0, {...plan, acts: [{at: 0, body: 'kneel'}]});
-  assert.ok(actor().max.y < rest.max.y - 0.3 && actor().min.y > -0.05, 'kneeling lowers him without sinking into the floor');
+  assert.ok(actor().max.y < rest.max.y - 0.3 && actor().min.y > -0.08, 'kneeling lowers him, no deeper than a shin into the floor');
   stage.pose(0, {...plan, acts: [{at: 0, body: 'lean'}]});
   assert.ok(actor().max.z > rest.max.z + 0.1, 'leaning brings the head forward');
   stage.pose(0, {...plan, acts: [{at: 0, body: 'face', reach: 1.16}]});

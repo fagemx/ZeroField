@@ -32,7 +32,7 @@ export const FOCUS = { eyes: 'Eyes', hands: 'Hands', posture: 'Posture', voice: 
 // Fit decides which render lane carries the performance (SPEC_10 §3.3).
 export const FITS = {
   pose: { label: 'Follow the previs pose', lane: 'Motion pass: the grey previs drives the body', text: 'Fit: follow the previs. Keep the blocked pose and its timing; add the feeling, not new moves.' },
-  blocking: { label: 'Blocking only', lane: 'Layout Render: the matte frees the actor', text: 'Fit: blocking only. Keep where he stands, where he faces and the order of the action; the pose, expression and size of the moves follow this text.' },
+  blocking: { label: 'Blocking only', lane: 'Layout Render: the actor follows the previs at 0.35, the text carries the rest', text: 'Fit: blocking only. Keep where he stands, where he faces and the order of the action; the pose, expression and size of the moves follow this text.' },
   free: { label: 'Free', lane: 'First frame and text only: no previs pose', text: 'Fit: free. Keep the person and the place; design the moves yourself so the feeling shows in action. Keep the must-have image and the line.' },
 };
 
@@ -68,7 +68,7 @@ export const BEAT_STORY = {
     { at: 22 / 96, hands: 'down', text: 'He turns from the glass toward the console.' },
     { at: 39 / 96, look: 'console' },
     { at: 44 / 96, hands: 'dial', text: 'His hand finds the large brass dial and turns it; far beyond the glass a beacon blinks on.' },
-    { at: 0.75, look: 'beacon', text: 'He freezes, eyes on the light.' }] },
+    { at: 0.75, look: 'beacon', text: 'He freezes, head turned to the light.' }] },
   S04: { sound: 'a mechanical clunk as the key goes down, the reels starting to turn', core: ['record key'], key: 'the record key goes down', acts: [
     { at: 0, look: 'glass', hands: 'down', text: 'He turns back from the glass.' },
     { at: 22 / 96, hands: 'down' },
@@ -97,7 +97,7 @@ export const BEAT_STORY = {
   R05: { sound: 'a low tone through the glass', core: ['beacon'], acts: [
     { at: 0, look: 'partner', hands: 'down', text: 'He shakes his head, about to answer her.' },
     { at: 0.45, look: 'beacon', text: 'Far beyond the glass the beacon blinks; he turns to it.' },
-    { at: 0.7, body: 'lean', text: 'He leans toward the glass, eyes on the light.' }],
+    { at: 0.7, body: 'lean', text: 'He leans toward the glass, head toward the light.' }],
     pacts: [{ at: 0, look: 'partner' }, { at: 0.55, look: 'beacon' }] },
   R06: { sound: 'the rain easing, the hum of the open channel', core: [], line: { who: 'Mira', text: 'Then answer it.' }, acts: [
     { at: 0, look: 'partner', hands: 'down', text: 'Mira looks from the light to him.' },
@@ -115,10 +115,29 @@ export const toActs = (acts, from, to) => acts && acts.map(k => Object.fromEntri
 // {yaw, reach, back, pose} at shot time u (0..1), sampled exactly as the 3D Stage samples a plan.
 export const samplePerf = (acts, u) => sampleActs(toActs(acts), u);
 // Beat-sheet segments: one per key with text, from its time to the next text key (or the end of the shot).
+// poses: the body poses the keys in a segment arrive at (each segment's own; the first also takes keys before its start).
 export function segments(acts, seconds) {
   const keys = acts.filter(k => k.text != null).sort((a, b) => a.at - b.at);
-  return keys.map((k, i) => ({ t0: k.at * seconds, t1: (keys[i + 1]?.at ?? 1) * seconds, text: k.text, at: k.at }));
+  return keys.map((k, i) => { const end = keys[i + 1]?.at ?? 1;
+    const poses = acts.filter(a => a.body && a.body !== 'stand' && (i ? a.at >= k.at : true) && a.at < end).sort((a, b) => a.at - b.at).map(a => a.body);
+    return { t0: k.at * seconds, t1: end * seconds, text: k.text, at: k.at, poses }; });
 }
+// What each pose looks like in the body, in words LTX can play (the 4090 pose test, SPEC_10 §7.6: a timed sentence of
+// body mechanics drives the movement; a pose in the previs alone, or an adjective, barely does). core: words the
+// written segment must keep.
+export const POSE_MECHANICS = {
+  lean: { text: 'the body leans in from the hips, the head forward', core: ['lean', 'forward'] },
+  recoil: { text: 'the head snaps back, both arms fly up in front of the chest, the upper body rocks back half a step', core: ['arm', 'back'] },
+  slump: { text: 'the shoulders drop and the head sinks forward, the back rounding', core: ['shoulder', 'slump', 'sink'] },
+  lookup: { text: 'the head tips back to look up', core: ['up', 'tips back', 'head back'] },
+  lookdown: { text: 'the head drops to look down', core: ['down', 'drops'] },
+  face: { text: 'both hands come up to cover the face', core: ['hand'] },
+  crossed: { text: 'the arms fold across the chest', core: ['arm', 'fold'] },
+  open: { text: 'both arms open wide to the sides', core: ['arm', 'open'] },
+  kneel: { text: 'the body drops to one knee', core: ['knee', 'kneel'] },
+};
+const mechanics = poses => (poses || []).filter(p => POSE_MECHANICS[p]).map(p => POSE_MECHANICS[p].text);
+const sentence = x => x[0].toUpperCase() + x.slice(1) + '.';
 
 /* ---------- the levels a beat plays at ---------- */
 // scale/body: the director's setting, else the idiom's own. Beyond: larger than the previs was blocked for, so a
@@ -147,7 +166,7 @@ const t = v => v.toFixed(1);
 // whatever the text says (the 4090 test: a freed actor turns to show the face the text describes).
 const stamp = (s, i, facing) => `${t(s.t0)}–${t(s.t1)}s${facing?.[i] ? `, ${facing[i]}` : ''}:`;
 export function templateSheet(segs, L, story, facing) {
-  const lines = segs.map((s, i) => `${stamp(s, i, facing)} ${s.text}`);
+  const lines = segs.map((s, i) => `${stamp(s, i, facing)} ${s.text}${mechanics(s.poses).map(m => ' ' + sentence(m)).join('')}`);
   const how = [{ subtle: 'subtle, the feeling in his eyes and breath', natural: 'natural', open: 'open, clearly enlarged', heightened: 'heightened, the whole body carries it' }[L.scale],
     { face: 'face only', upper: 'upper body', full: 'full body' }[L.body], L.color ? COLORS[L.color].label.toLowerCase() + ' underneath' : '', L.note].filter(Boolean).join('; ');
   lines.push(`Performance: ${how}.`);
@@ -192,6 +211,7 @@ export function checkPerformance(texts, { segs, L, story, line, facing }) {
   });
   const all = texts.join(' ');
   for (const w of story?.core || []) if (!all.toLowerCase().includes(stem(w))) add(-1, `the action skeleton is missing "${w}"`);
+  texts.forEach((x, i) => { for (const p of segs[i]?.poses || []) { const m = POSE_MECHANICS[p]; if (m && !m.core.some(w => String(x).toLowerCase().includes(w))) add(i, `the blocked ${p} is not written as body mechanics (${m.text})`); } });
   texts.forEach((x, i) => {
     if (!/from behind/.test(facing?.[i] || '')) return;
     if (FACES_CAMERA.test(x)) add(i, 'turns to face the camera, but this segment is seen from behind');
@@ -204,7 +224,9 @@ export function checkPerformance(texts, { segs, L, story, line, facing }) {
   const allowed = re => hits(all, re).filter(w => !skeleton.includes(w.toLowerCase()));
   if (L.body === 'face') { const r = [...allowed(UPPER), ...allowed(FULL)]; if (r.length) add(-1, `body is face only but it has: ${[...new Set(r)].join(', ')}`); }
   if (L.body === 'upper') { const r = allowed(FULL); if (r.length) add(-1, `body is upper body but it has: ${[...new Set(r)].join(', ')}`); }
-  if (L.color && !COLORS[L.color].words.some(w => all.toLowerCase().includes(w))) add(-1, `colour is ${COLORS[L.color].label.toLowerCase()} but none of it is written (${COLORS[L.color].words.join(', ')})`);
+  // Seen from behind the whole beat, the colour lives in the posture: its face words would turn him round.
+  const behind = facing?.length && facing.every(f => /from behind/.test(f));
+  if (L.color && !behind && !COLORS[L.color].words.some(w => all.toLowerCase().includes(w))) add(-1, `colour is ${COLORS[L.color].label.toLowerCase()} but none of it is written (${COLORS[L.color].words.join(', ')})`);
   return { byShot, ok: !Object.keys(byShot).length };
 }
 
@@ -224,13 +246,14 @@ Rules:
 9. Keep each segment to about 20 words per second of the segment.
 10. Plain present tense, short concrete sentences, like a director talking to an actor on set.
 11. Keep the action skeleton (the blocked action of each segment): play it bigger or smaller, never replace it or write its opposite.
+    Where a segment gives a body pose, write its mechanics: which part of the body moves, where to and how fast. Concrete limb movement at a time is what the video model plays; adjectives are not.
     Keep each segment's facing: when a segment is seen from behind, he never turns round to face us, and write nothing of his face (eyes, mouth, jaw): it cannot be seen, and naming it makes the model turn him round. Put the feeling into his posture, shoulders, head and hands.
 12. The levels the director set for the shot come first; when they conflict with these rules, follow the levels, but never break rules 5 and 8, the line or the must-have image.`;
 export function writerPrompt(scene, beats, versions = 0, repair = null) {
   const block = b => [
     `Shot ${b.id} "${b.title}" (${b.seconds} s). Camera, already decided: ${b.camera}. In frame: ${b.visible}.`,
     `  Levels (follow them):\n${b.levelLines.map(l => '    - ' + l).join('\n')}`,
-    `  Segments to write (keep the times, the blocked action and the facing of each):\n${b.segs.map((s, i) => `    ${i + 1}. ${s.t0.toFixed(1)}–${s.t1.toFixed(1)}s, blocked action: ${s.text}${b.facing?.[i] ? ` Facing: ${b.facing[i]}.` : ''}`).join('\n')}`,
+    `  Segments to write (keep the times, the blocked action and the facing of each):\n${b.segs.map((s, i) => `    ${i + 1}. ${s.t0.toFixed(1)}–${s.t1.toFixed(1)}s, blocked action: ${s.text}${mechanics(s.poses).length ? ` Body (play it, in these mechanics): ${mechanics(s.poses).join('; ')}.` : ''}${b.facing?.[i] ? ` Facing: ${b.facing[i]}.` : ''}`).join('\n')}`,
     b.story.line ? `  Line: ${b.story.line.who} says "${b.story.line.text}" (write how it is said, not the words).` : '',
     b.story.key ? `  Must-have image: ${b.story.key}.` : '',
     repair?.[b.id] ? `  Your last attempt failed these checks, fix them: ${repair[b.id].join('; ')}` : ''].filter(Boolean).join('\n');

@@ -1,9 +1,14 @@
-// The board look: how the director reads the stage while blocking. The mannequin, its shading and its outline are the
-// shot-idiom generator's (docs/prototypes/shot-idiom-generator/rig.js in ad_growth_data, same author): an artist's
-// drawing mannequin with an egg head, round ball joints, a full chest, tapering limbs and fingered hands, a flat
-// two-tone fill in the person's own colour, construction lines and a thick outline, on a high-key set. It never goes
-// into a previs: outlines turn the motion pass cartoon (scene.js), so Render previs keeps the grey render look.
-// Joints carry the render mannequin's names (scene.js actor), so the same poses and performance keys drive both.
+// The previs mannequin, from the shot-idiom generator (docs/prototypes/shot-idiom-generator/rig.js in ad_growth_data,
+// same author): an artist's drawing mannequin with an egg head, ball joints, a full chest, tapering limbs and fingered
+// hands. One body, two looks:
+//   board   for blocking: a flat two-tone fill in the person's own colour, construction lines and a thick outline, on a
+//           high-key set (the generator's look);
+//   render  what Render previs sends to LTX: grey coat, skin on the head, neck and hands, hair and shoes, no outlines
+//           (outlines turn the motion pass cartoon). The Layout Render renders blockout shapes literally: a box torso
+//           came out as a brass box, a 1/6.4 head as a child, and with the actor following the previs at 60% the
+//           capsule arms and ball hands of the first mannequin came out as tubes and a fist (SPEC_10 §7.6), so the
+//           body is anatomical and the hands have fingers.
+// Joint names are shared with plan.js POSES, so poses and performance keys drive either look.
 import * as THREE from 'three';
 
 // Fill and outline colour per cast member, in cast order (the first is the shot's subject).
@@ -72,18 +77,28 @@ const REST = { spine: [3, 0, 0], chest: [-3, 0, 0], neck: [8, 0, 0], head: [-6, 
   hipR: [0, 0, 3], hipL: [0, 0, -3], ankleR: [0, 0, -3], ankleL: [0, 0, 3] };
 const BUILD = { man: 1, woman: 0.94, child: 0.64, elder: 1 };
 
-// A person in the board look. figure: { build, outfit, hair } (plan.js FIGURE_OPTIONS); i: their place in the cast.
-export function boardActor(figure = {}, i = 0) {
-  const [color, line] = CAST_COLORS[i % CAST_COLORS.length], scale = 1.045 * (BUILD[figure.build] || 1);  // 1.045: the head tops out where the render mannequin's does
-  const mats = { body: fillMat(color, line), chest: fillMat(color, line, 2), head: fillMat(color, line, 1), hair: fillMat(line, line),
-    line: lineMat(line, 0.0062, scale), lineHand: lineMat(line, 0.0042, scale), lineFinger: lineMat(line, 0.0026, scale) };
+// A person. figure: { build, outfit, hair } (plan.js FIGURE_OPTIONS); tone: their colour in the board look.
+// render: { coat, skin, hair } materials for the render look (owned by the stage); without it, the board look.
+export function buildFigure(figure = {}, tone = 0, render = null) {
+  const scale = 1.045 * (BUILD[figure.build] || 1);  // 1.045: an adult's head tops out at 1.92 m, as on the first mannequin
+  let mats, fills;
+  if (render) {
+    fills = { body: render.coat, chest: render.coat, head: render.skin, nose: render.skin, neck: render.skin, hand: render.skin, finger: render.skin, foot: render.hair, hair: render.hair };
+  } else {
+    const [color, line] = CAST_COLORS[tone % CAST_COLORS.length];
+    mats = { body: fillMat(color, line), chest: fillMat(color, line, 2), head: fillMat(color, line, 1), hair: fillMat(line, line),
+      line: lineMat(line, 0.0062, scale), lineHand: lineMat(line, 0.0042, scale), lineFinger: lineMat(line, 0.0026, scale) };
+    fills = { chest: mats.chest, head: mats.head, nose: mats.head, hair: mats.hair };
+  }
   const root = new THREE.Group(), body = new THREE.Group(); body.scale.setScalar(scale); root.add(body);
   const joint = (parent, x, y, z, order = 'XZY') => { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.order = order; parent.add(g); return g; };
   const part = (parent, geo, kind) => {
-    const fill = { chest: mats.chest, head: mats.head, hair: mats.hair }[kind] || mats.body;
-    const ln = kind === 'finger' ? mats.lineFinger : kind === 'hand' ? mats.lineHand : mats.line;
-    const m = new THREE.Mesh(geo, fill), o = new THREE.Mesh(geo, ln); o.userData.outline = true; parent.add(m, o); return m;
+    const m = new THREE.Mesh(geo, fills[kind] || (render ? render.coat : mats.body)); parent.add(m);
+    if (!render) { const o = new THREE.Mesh(geo, kind === 'finger' ? mats.lineFinger : kind === 'hand' ? mats.lineHand : mats.line); o.userData.outline = true; parent.add(o); }
+    return m;
   };
+  // Hair over the back of the head and a fringe: from behind a bare head reads as a face (the render look's facing cue).
+  const cap = (phi0, phiLen, thetaLen, grow = 1.055) => new THREE.SphereGeometry(1, 24, 16, phi0, phiLen, 0, thetaLen).scale(0.092 * grow, 0.118 * grow, 0.103 * grow).translate(0, 0.115, 0.01);
   const chain = (start, L, r) => {
     const js = [start]; let parent = start;
     L.forEach((len, k) => {
@@ -105,11 +120,14 @@ export function boardActor(figure = {}, i = 0) {
       });
   };
   const pelvis = joint(body, 0, 0.95, 0, 'YXZ'); part(pelvis, ellipsoid(0.16, 0.11, 0.105, 0, -0.02, 0), 'body');
-  const spine = joint(pelvis, 0, 0.05, 0, 'YXZ'); part(spine, ellipsoid(0.125, 0.12, 0.09, 0, 0.09, 0.005), 'body');
+  // The render look closes the waist (a jacket over one torso, not the drawing mannequin's three pieces), so the
+  // segments never read as a wooden doll.
+  const spine = joint(pelvis, 0, 0.05, 0, 'YXZ'); part(spine, render ? ellipsoid(0.158, 0.2, 0.1, 0, 0.1, 0.008) : ellipsoid(0.125, 0.12, 0.09, 0, 0.09, 0.005), 'body');
   const chest = joint(spine, 0, 0.2, 0, 'YXZ'); part(chest, ellipsoid(0.175, 0.165, 0.105, 0, 0.15, 0.01), 'chest');
-  const neck = joint(chest, 0, 0.31, 0, 'YXZ'); part(neck, limb(0.12, 0.043, 0.046, 0.05, true), 'body');
+  const neck = joint(chest, 0, 0.31, 0, 'YXZ'); part(neck, limb(0.12, 0.043, 0.046, 0.05, true), 'neck');
   const head = joint(neck, 0, 0.1, 0, 'YXZ'); part(head, ellipsoid(0.092, 0.118, 0.103, 0, 0.115, 0.01), 'head');
-  part(head, ellipsoid(0.014, 0.022, 0.017, 0, 0.094, 0.113, 10, 8), 'head');  // nose
+  part(head, ellipsoid(0.014, 0.022, 0.017, 0, 0.094, 0.113, 10, 8), 'nose');
+  if (render) { part(head, cap(Math.PI, Math.PI, Math.PI * 0.8), 'hair'); part(head, cap(0, Math.PI, Math.PI * 0.22), 'hair'); }
   if (figure.hair === 'bun') part(head, ellipsoid(0.05, 0.05, 0.05, 0, 0.2, -0.07), 'hair');
   if (figure.hair === 'long') part(head, ellipsoid(0.095, 0.15, 0.05, 0, 0.02, -0.075), 'hair');
   const hem = { longcoat: [0.17, 0.25, 0.5], dress: [0.16, 0.3, 0.68], robe: [0.17, 0.3, 0.86] }[figure.outfit];
@@ -117,15 +135,16 @@ export function boardActor(figure = {}, i = 0) {
   const J = { pelvis, spine, chest, neck, head };
   for (const side of [1, -1]) {
     const s = side > 0 ? 'R' : 'L';
-    const sh = joint(chest, 0.2 * side, 0.27, 0, 'YXZ'); part(sh, ellipsoid(0.058, 0.058, 0.058), 'body'); part(sh, limb(UPPER, 0.05, 0.04, 0.15), 'body');
+    // The render look has no shoulder ball: followed at 0.6 it came out as a padded shoulder (SPEC_10 §7.6).
+    const sh = joint(chest, 0.2 * side, 0.27, 0, 'YXZ'); if (!render) part(sh, ellipsoid(0.058, 0.058, 0.058), 'body'); part(sh, limb(UPPER, 0.05, 0.04, 0.15), 'body');
     const el = joint(sh, 0, -UPPER, 0, 'YXZ'); part(el, ellipsoid(0.038, 0.038, 0.038), 'body'); part(el, limb(FORE, 0.042, 0.03, 0.12), 'body');
     hand(joint(el, 0, -FORE, 0), side);
     const hp = joint(pelvis, 0.095 * side, -0.06, 0); part(hp, ellipsoid(0.075, 0.075, 0.075), 'body'); part(hp, limb(0.42, 0.075, 0.05, 0.12), 'body');
     const kn = joint(hp, 0, -0.42, 0); part(kn, ellipsoid(0.05, 0.05, 0.05), 'body'); part(kn, limb(0.4, 0.056, 0.036, 0.14), 'body');
-    const an = joint(kn, 0, -0.4, 0); part(an, ellipsoid(0.046, 0.036, 0.115, 0, -0.035, 0.055), 'body');
+    const an = joint(kn, 0, -0.4, 0); part(an, ellipsoid(0.046, 0.036, 0.115, 0, -0.035, 0.055), 'foot');
     Object.assign(J, { ['shoulder' + s]: sh, ['elbow' + s]: el, ['hip' + s]: hp, ['knee' + s]: kn, ['ankle' + s]: an });
   }
   root.traverse(o => { o.userData.actor = true; });
   const D = Math.PI / 180, rest = Object.fromEntries(Object.entries(REST).map(([k, v]) => [k, v.map(x => x * D)]));
-  return { root, joints: J, rest, pelvisY: 0.95, mats: Object.values(mats) };
+  return { root, joints: J, rest, pelvisY: 0.95, mats: mats ? Object.values(mats) : [] };  // the render look's materials are the stage's
 }

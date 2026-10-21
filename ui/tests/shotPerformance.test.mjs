@@ -82,3 +82,12 @@ test('a beat that fails the checks is rewritten once with its issues; one that f
   const v = await writeVersions({ title: 'T', premise: 'P' }, beat('S03'), async () => JSON.stringify({ versions: [{ label: 'Held breath', segments: good }, { label: 'Short', segments: ['x'] }] }));
   assert.deepEqual(v.map(x => [x.label, x.issues.length]), [['Held breath', 0]]);
 });
+
+test('a pose on a key is written into its segment as body mechanics, and a writer who drops it is told', () => {
+  const acts = [...BEAT_STORY.S03.acts, { at: 0.85, body: 'recoil' }], segs = segments(acts, 6), L = levels({}, perfOf(null, 'reveal'));
+  assert.deepEqual(segs.map(s => s.poses), [[], [], [], ['recoil']]);
+  assert.match(templateSheet(segs, L, BEAT_STORY.S03), /4\.5–6\.0s: He freezes, head turned to the light\. The head snaps back, both arms fly up/);
+  const texts = ['He listens at the glass.', 'He turns from the glass toward the console.', 'His hand finds the dial and turns it; far beyond the glass a beacon blinks on.'];
+  assert.match(checkPerformance([...texts, 'He freezes, staring at the light.'], { segs, L, story: BEAT_STORY.S03 }).byShot[3].join(), /blocked recoil is not written/);
+  assert.ok(!checkPerformance([...texts, 'He jerks back, both arms flying up as he stares at the light.'], { segs, L, story: BEAT_STORY.S03 }).byShot[3]);
+});

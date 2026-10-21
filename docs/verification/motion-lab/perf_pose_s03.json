@@ -1,0 +1,43 @@
+{
+ "prompt": "Inside a circular glass-dome observatory at dawn, rain streaks the curved glass above a ring of brass consoles with amber instrument lights. Kael, a man in his thirties with short dark hair, light stubble and a charcoal field jacket, stands with his back to the camera facing the glass. The camera tilts down from the dome ribs and pushes in behind his shoulder as he turns to the large brass dial and turns it; far beyond the glass a beacon light blinks on. One person only. No text.",
+ "recoil_keys": [
+  {
+   "at": 0.72,
+   "reach": 1.16,
+   "body": "stand"
+  },
+  {
+   "at": 0.8,
+   "reach": 0,
+   "body": "recoil"
+  }
+ ],
+ "actor_motion_energy_after_0.72": {
+  "s03b_motion": 4.25,
+  "s03b_layout": 4.6,
+  "s03b_layout_mask": 4.78,
+  "s03p_motion": 4.5,
+  "s03p_layout": 5.92,
+  "s03p_layout_mask": 5.7
+ },
+ "actor_follow": {
+  "s03p_follow35": 5.09,
+  "s03p_follow60": 5.85
+ },
+ "detailed_prompt": "Inside a circular glass-dome observatory at dawn, rain streaks the curved glass above a ring of brass consoles with amber instrument lights. Kael, a man in his thirties with short dark hair, light stubble and a charcoal field jacket. The camera tilts down from the dome ribs and pushes in behind his shoulder. 0.0\u20131.4s, seen in profile: Kael stands at the rain-streaked glass, listening, weight on his back foot. 1.4\u20132.8s, seen from behind: he turns from the glass to the console, shoulders squaring. 2.8\u20134.3s, seen from behind: his left hand finds the large brass dial and turns it; far beyond the glass a beacon light blinks on. 4.3\u20134.8s, seen from behind: he jerks his hand off the dial and recoils, his head snapping back, both arms flying up in front of his chest, his upper body rocking back half a step. 4.8\u20136.0s, seen from behind: he holds the recoil, arms raised, head thrown back toward the light, shoulders locked. One person only. No text.",
+ "pose_and_text": {
+  "s03b_text_layout_mask": 5.17,
+  "s03p_text_layout_mask": 5.99,
+  "s03p_text_motion": 5.66,
+  "s03p_text_follow35": 5.63
+ },
+ "anatomical_mannequin": {
+  "s03n_text_layout_mask": 6.27,
+  "s03n_text_follow35": 6.21,
+  "s03n_text_follow60": 6.8
+ },
+ "product_graph_follow35": {
+  "s03n_text_follow35": 6.21,
+  "s03n_product": 6.18
+ }
+}
