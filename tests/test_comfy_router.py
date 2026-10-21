@@ -312,7 +312,9 @@ class RouterHTTPTests(unittest.TestCase):
     def test_actual_queued_poll_timeout_is_one_submission_and_uncertain(self):
         self.settings(comfy_router_budget_mode='estimate_soft')
         type(self).poll_forever=True
-        card=worker.load_studio_card(self.card);card['engine_config']['timeout']=.8
+        # The card timeout also covers the governed submit, whose authority checks open fresh PG connections
+        # (~0.1 s each on Windows); a sub-second budget expires before the first /status poll.
+        card=worker.load_studio_card(self.card);card['engine_config']['timeout']=3
         with hub._OPENAPI_LOCK:hub._OPENAPI_CARDS[self.card]=(card,None)
         self.addCleanup(lambda:hub._OPENAPI_CARDS.pop(self.card,None))
         self.assertEqual(self.quote_v2()[0],200)

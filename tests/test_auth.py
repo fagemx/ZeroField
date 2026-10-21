@@ -44,6 +44,27 @@ class AuthTests(unittest.TestCase):
         finally:
             first.server_close()
 
+    def test_early_error_response_survives_a_late_request_body(self):
+        import socket, threading, time
+        from http.client import HTTPResponse
+        from server import OpenBenchHTTPServer, OpenBenchHandler
+        class Quiet(OpenBenchHandler):
+            def log_message(self, *args):
+                pass
+        server = OpenBenchHTTPServer(("127.0.0.1", 0), Quiet)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            with socket.create_connection(("127.0.0.1", server.server_port), timeout=5) as client:
+                client.sendall(b"PUT /not-a-story-route HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\n\r\n")
+                time.sleep(.1)  # The 405 is decided from the headers; the body arrives afterwards, as under load.
+                client.sendall(b"{}")
+                response = HTTPResponse(client)
+                response.begin()
+                self.assertEqual(response.status, 405)
+        finally:
+            server.shutdown()
+            server.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()
