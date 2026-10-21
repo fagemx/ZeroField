@@ -123,7 +123,29 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
     def read_json_body(self):
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b"{}"
+        self._body_consumed = True
         return json.loads(raw.decode("utf-8"))
+
+    def _drain_unread_body(self) -> None:
+        # A response sent before the body was read (an early 401/404) leaves request bytes unread at close, and the
+        # socket reset can discard the response before the client reads it (seen on Windows under load).
+        if getattr(self, "_body_consumed", False):
+            return
+        self._body_consumed = True
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return
+        if not 0 < length <= projects_http.MAX_JSON_BODY:
+            return
+        previous = self.connection.gettimeout()
+        self.connection.settimeout(1)
+        try:
+            self.rfile.read(length)
+        except OSError:
+            pass
+        finally:
+            self.connection.settimeout(previous)
 
     def send_json(self, status: int, payload: dict) -> None:
         if status >= 400:
@@ -135,6 +157,7 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
     def send_skillops_bytes(self, status: int, content_type: str, data: bytes, *,
                             cache_control: str = "no-store", etag: str | None = None,
                             disposition: str | None = None, extra_headers: dict | None = None) -> None:
+        self._drain_unread_body()
         total, content_range = len(data), None
         if status == 200 and content_type.startswith(("audio/", "video/")) and self.headers.get("Range"):
             match = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers["Range"])
@@ -249,7 +272,9 @@ class OpenBenchHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
             if not 0 <= length <= 8192:
                 raise ValueError()
-            data = parse_qs(self.rfile.read(length).decode("utf-8"))
+            raw = self.rfile.read(length)
+            self._body_consumed = True
+            data = parse_qs(raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             self.send_json(400, {"error": "Invalid sign-in request."})
             return

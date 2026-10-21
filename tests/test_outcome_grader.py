@@ -47,7 +47,7 @@ class OutcomeJourneyTests(OrchestrationFixture,unittest.TestCase):
                         with owner.factory() as conn:
                             cp.cancel_dispatch(conn,owner.me,owner.slug,owner.cancel_claim['handle'],'Cancel during independent grading')
                     if expire:
-                        time.sleep(1.2)
+                        time.sleep(expire)
                     if revoke:
                         with owner.factory() as conn: agent_registry.save_agent(conn,owner.me,owner.slug,{'agent_key':'sheet_ops','enabled':False})
                 elif system == grading.REVISION_INSTRUCTIONS:
@@ -231,11 +231,13 @@ class OutcomeJourneyTests(OrchestrationFixture,unittest.TestCase):
 
     def test_whole_chat_deadline_includes_grader_and_prevents_revision(self):
         from dataclasses import replace
-        self.fixture(expire=True);self.enable(revisions=3)
+        # The governed worker turn opens ~10 fresh PG connections before the grader is admitted (~1 s on Windows),
+        # so the budget must leave room to reach the grader; grading then outlasts the whole budget.
+        self.fixture(expire=3.2);self.enable(revisions=3)
         sent=service.send(self.conn,self.me,self.slug,{'text':'Deadline objective','agent_key':'sheet_ops'})
         self.assertEqual(sent[0],200)
         claim=store.claim_next(self.conn,'deadline-grader',worker.LEASE_SECONDS);self.conn.commit()
-        worker.execute(self.factory,claim,replace(worker.settings_from_env(),timeout=1),'deadline-grader')
+        worker.execute(self.factory,claim,replace(worker.settings_from_env(),timeout=3),'deadline-grader')
         reply=store.message(self.conn,claim['id'])
         self.assertEqual(reply['status'],'failed')
         self.assertEqual(len(self.requests),2)
