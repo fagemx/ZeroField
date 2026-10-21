@@ -14,6 +14,7 @@ dependencies = ["psycopg[binary]>=3.2,<4", "openpyxl>=3.1,<4", "python-docx>=1.1
 [project.optional-dependencies]
 comfy = ["comfy-sdk>=0.5,<0.6", "comfy-api-proxy>=0.1.6,<0.2"]
 embedded = ["pgserver>=0.1.4,<0.2"]
+fidelity = ["opencv-python-headless>=4.8,<5", "numpy>=1.26"]
 
 [project.scripts]
 zerofield-studio = "run_studio:main"

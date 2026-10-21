@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { api } from './api.js';
 import { useLocale } from './i18n/react.jsx';
 import { t as uiText } from './i18n/index.js';
 import { MediaCell } from './MediaCell.jsx';
@@ -9,9 +11,11 @@ export function ShotBench({ stages, assets, activeColumn, writable, busy, onSele
   useLocale();
   const groups = { input: [], control: [], output: [] };
   for (const stage of stages) groups[benchGroup(stage.label)].push(stage);
+  const previs = stages.find(stage => stage.media && /previs|blockout/i.test(stage.label));
   const card = (stage, big) => <section key={stage.column} className={'bench-stage' + (big ? ' is-output' : '') + (activeColumn === stage.column ? ' is-active' : '')}>
     <button className="review-stage-title" aria-pressed={activeColumn === stage.column} onClick={() => onSelect(stage)}>{stage.label}</button>
     {stage.media ? <MediaCell value={stage.value} type={stage.type} label={stage.label} /> : <p className="bench-empty">{uiText('studio.emptyStage')}</p>}
+    {big && previs && stage.media && stage.type === 'video' && <CameraFidelity previs={previs.media.url} take={stage.media.url} />}
     {writable && <div className="sheet-stage-actions">{onPrevis && /previs|blockout/i.test(stage.label) && <button className="primary" disabled={busy} onClick={() => onPrevis(stage)}>{uiText('previs.open')}</button>}<button disabled={busy} onClick={() => onUpload(stage)}>{uiText('sheetWorkspace.upload')}</button>{!/previs|blockout/i.test(stage.label) && <button disabled={busy} onClick={() => onRun(stage)}>{uiText('studio.runStage')}</button>}</div>}
   </section>;
   const hasInput = groups.input.length > 0 || assets.length > 0;
@@ -40,4 +44,38 @@ export function ShotStrip({ rows, parsed, currentRid, onJump }) {
       <span className="shot-strip-label">{String(row.cells[0]?.value || '—')}</span>
     </button>;
   })}</nav>;
+}
+
+const ASSET_URL = /^\/projects\/api\/([a-z0-9-]+)\/assets\/(pa_[0-9a-f]{32})$/;
+
+// How closely a take follows its previs camera: the server scores each (previs, take) pair once, in the background.
+export function CameraFidelity({ previs, take }) {
+  useLocale();
+  const [, slug, previsId] = ASSET_URL.exec(previs) || [], [, , takeId] = ASSET_URL.exec(take) || [];
+  const path = slug && previsId && takeId && previsId !== takeId ? `/projects/api/${slug}/camera-fidelity/${previsId}/${takeId}` : null;
+  const [result, setResult] = useState(null);
+  useEffect(() => {
+    if (!path) return undefined;
+    let alive = true, timer;
+    setResult(null);
+    const load = tries => api.get(path).then(data => {
+      if (!alive) return;
+      setResult(data);
+      if (data.status === 'pending' && tries > 0) timer = setTimeout(() => load(tries - 1), 2000);
+    }, error => { if (alive) setResult({ status: 'failed', error: error.message }); });
+    load(30);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [path]);
+  return path && result ? <FidelityReadout result={result} /> : null;
+}
+
+export function FidelityReadout({ result }) {
+  useLocale();
+  if (result.status !== 'done') return <p className="camera-fidelity is-muted" role="status" title={result.error}>{uiText(result.status === 'pending' ? 'studio.fidelityPending' : 'studio.fidelityFailed')}</p>;
+  return <section className="camera-fidelity" aria-label={uiText('studio.fidelityTitle')}>
+    <p><strong>{uiText('studio.fidelityTitle')}</strong><span className="camera-fidelity-score">{result.score.toFixed(2)}</span></p>
+    <dl>{['tilt', 'pan', 'zoom'].map(axis => <div key={axis}><dt>{uiText('studio.fidelity_' + axis)}</dt>
+      <dd>{typeof result[axis]?.travel === 'number' ? result[axis].travel.toFixed(2) + '×' : uiText('studio.fidelityHeld')}</dd></div>)}</dl>
+    <small>{uiText('studio.fidelityHint')}</small>
+  </section>;
 }
