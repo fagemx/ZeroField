@@ -71,7 +71,7 @@ def main():
 def partial(shot, follow):
     """The stage matte as a grey attention mask: the actor follows the previs by `follow` (0 = freed, 1 = the layout)."""
     import cv2, numpy as np
-    out, kernel = L.IC / f"{shot}_follow{round(follow * 100)}.mp4", cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (49, 49))
+    out, kernel = L.IC / f"{shot}_follow{round(follow * 100)}_mask.mp4", cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (49, 49))
     cap, frames = cv2.VideoCapture(str(L.IC / f"{shot}_matte.webm")), []
     while (f := cap.read())[0]:
         m = cv2.GaussianBlur(cv2.dilate((cv2.cvtColor(f[1], cv2.COLOR_BGR2GRAY) > 127).astype(np.uint8), kernel).astype(np.float32), (31, 31), 0)
