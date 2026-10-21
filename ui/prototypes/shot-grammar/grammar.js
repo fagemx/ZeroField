@@ -2,7 +2,7 @@
 // camera on the ZeroField previs stage, relative to the subject. Ported from the shot-idiom generator prototype; plain
 // data and math, no DOM, so node can test it. Obstruction by set geometry is injected by the caller (`blocked`).
 // Interaction rules: docs/specs/SPEC_09_SHOT_GRAMMAR_INTERACTION.md.
-import { DOME, LENSES, framesOf, sampleActor, verticalFov } from '../../src/previs/plan.js';
+import { DOME, HEIGHT, LENSES, WIDTH, framesOf, sampleActor, verticalFov } from '../../src/previs/plan.js';
 import { BEAT_STORY, toActs } from './perf.js';
 // Height of each build relative to the default mannequin (scene.js actor scales the body the same way).
 const BUILD_SCALE = { man: 1, woman: 0.94, child: 0.64, elder: 1 };
@@ -190,12 +190,13 @@ export function effShot(beat, idiom, over = {}) {
   // reverse on Mira mirror each other), unless the director set the side by hand. Over the partner's shoulder when close to the axis.
   // The nearest side to the idiom's that stands clear of the line (the mirror first, then 5° steps either way); a subject
   // who turns away from the partner can leave both the idiom's side and its mirror on the line.
-  if (beat.partner && (s.subj === 'actor' || s.subj === 'wide')) {
+  if (beat.partner && s.subj !== 'pair') {  // a two-shot already faces the line from the scene's side
     const plan = actorPlan(beat);
     // Over the shoulder: just off the line, so the near shoulder (about 0.3 m out from the line at the partner) frames the
     // subject; a push past the shoulder runs 0.45 m out so the camera slides by the partner instead of through them.
     if (s.ots && over.az == null) { const [a, b] = [plan.mark, beat.partner.mark]; s.az = Math.sign(s.az || 1) * Math.round(Math.atan2(s.moving ? 0.45 : 0.3, Math.hypot(b[0] - a[0], b[1] - a[1])) / D2R); }
-    const ok = az => { const c = solve({ ...s, az, az2: s.az2 != null ? s.az2 + az - (s.az || 0) : undefined }, plan, 0); return lineDist(plan, c.pos) * plan.side > 0.15; };
+    // On the scene's side at the start, the middle and the end: an orbit can start on it and finish across.
+    const ok = az => [0, 0.5, 1].every(p => lineDist(plan, solve({ ...s, az, az2: s.az2 != null ? s.az2 + az - (s.az || 0) : undefined }, plan, p).pos) * plan.side > 0.15);
     if (over.az == null && !ok(s.az || 0)) {
       const a0 = s.az || 0, tries = [-a0, ...Array.from({ length: 24 }, (_, i) => (i % 2 ? -1 : 1) * 5 * (1 + (i >> 1))).flatMap(d => [a0 + d, -a0 + d])];
       const az = tries.find(ok);
@@ -308,11 +309,25 @@ export function solve(s, plan, p) {
   // Headroom: the top of the head sits a tenth of the frame below the top edge, at every size (a wide never centres below the knees).
   if (top != null && ['face', 'body'].includes(s.focus)) aim[1] = Math.max(0.9, top - 0.4 * H);
   const elev = elevOf(s), dir = rotY(fwd, az * D2R);
+  // Over the shoulder: the camera stays put and the frame turns a sixth of its width toward the partner, so the subject
+  // sits on the far third and the near shoulder comes into the frame (the camera alone, just off the line, can miss it).
+  if (s.ots && plan.cast?.[0]) {
+    const B = plan.cast[0].mark, side = leftOfCam(dir), toB = (B[0] - aim[0]) * side[0] + (B[1] - aim[2]) * side[2];
+    look = add(look, scale(side, Math.sign(toB) * (WIDTH / HEIGHT) * H / 6));
+  }
   let pos = add(aim, scale(dir, d * Math.cos(elev * D2R)));
   pos[1] += d * Math.sin(elev * D2R) + lift;
   if (lateral) pos = add(pos, scale(leftOfCam(dir), lateral));
   const target = lateral ? add(aim, scale(leftOfCam(dir), lateral)) : add(add(aim, look), [0, lift * 0.35, 0]);
   return { pos, aim: target, fov, F, az, H };
+}
+// How far the partner's nearer shoulder sits from the frame's centre, as a share of the half width (under 1: in the frame).
+export function shoulderIn(s, plan, p) {
+  const B = plan.cast?.[0]?.mark, A = plan.mark || [0, 0]; if (!B) return null;
+  const c = solve(s, plan, p), half = Math.atan(Math.tan(c.fov / 2 * D2R) * WIDTH / HEIGHT), view = sub(c.aim, c.pos);
+  const ax = [B[0] - A[0], B[1] - A[1]], l = Math.hypot(...ax) || 1;
+  return Math.min(...[-0.2, 0.2].map(o => { const v = sub([B[0] - ax[1] / l * o, 1.45, B[1] + ax[0] / l * o], c.pos);
+    return Math.abs(Math.atan2(view[0] * v[2] - view[2] * v[0], view[0] * v[0] + view[2] * v[2])) / half; }));
 }
 // The inverse for the overhead view: a camera dragged to ground point [x, z] reads as a side and a frame height.
 export function fromGround(s, plan, [x, z]) {
@@ -427,6 +442,7 @@ export function checks(rows) {
     if (!r.pick.usable) out.push({ kind: 'warn', id, text: `${id}: ${r.pick.why.text}; reframe or pick another idiom` });
     if (s.autoFaster) out.push({ kind: 'info', id, text: `${id}: ${MOVE_LABEL[s.move]} could not finish slowly in ${s.dur} s, so it runs ${s.speed}` });
     if (r.quotaSwap) out.push({ kind: 'info', id, text: `${id}: the scene already used its anchor breaks, so it uses "${r.pick.idiom.name}"` });
+    if (r.beat.partner && s.ots && shoulderIn(s, r.plan, 0) > 1) out.push({ kind: 'warn', id, text: `${id}: “${r.pick.idiom.name}” cannot show ${r.beat.partner.name}'s shoulder here: the camera has no room behind ${r.beat.partner.name}. Move them apart, give ${r.beat.partner.name} space behind, or pick another idiom` });
     if (r.beat.partner) {
       const crossed = [0, 1].some(p => sideOf(r.plan, solve(s, r.plan, p).pos) !== r.plan.side);
       if (crossed) out.push({ kind: 'warn', id, text: `${id}: the camera crosses the 180° line between ${r.beat.name} and ${r.beat.partner.name}; on the cut they swap sides of the frame. Keep it on the scene's side or flip the side for the whole scene` });

@@ -91,3 +91,24 @@ test('fine framing stays relative to the subject: a nudge moves the camera with 
   assert.ok(Math.abs(shift(fine, moved)[0] - shift(fine, plan)[0] - 0.6) < 1e-9, 'he steps 0.6 m right, the fine-framed camera follows');
   assert.equal(G.nearestHeight(8), 'eye'); assert.equal(G.nearestHeight(20), 'high');
 });
+
+test('an over-the-shoulder frames the subject on a third with the partner\'s near shoulder in the frame', () => {
+  const scene = G.RELIEF, b = G.beatOf(scene.beats.find(x => x.id === 'R02'), {}, scene), idiom = G.IDIOMS.turn.find(i => i.name === 'Over the shoulder');
+  const s = G.effShot(b, idiom), plan = G.actorPlan(b), c = G.solve(s, plan, 0.5), fov = c.fov * Math.PI / 180, hfov = 2 * Math.atan(Math.tan(fov / 2) * 1280 / 704);
+  const view = c.aim.map((v, i) => v - c.pos[i]), across = (p) => {  // horizontal angle of point p from the frame's centre line
+    const v = p.map((x, i) => x - c.pos[i]); return Math.atan2(view[0] * v[2] - view[2] * v[0], view[0] * v[0] + view[2] * v[2]);
+  };
+  const B = b.partner.mark, shoulders = [-0.2, 0.2].map(o => { const ax = [B[0] - b.mark[0], B[1] - b.mark[1]], l = Math.hypot(...ax); return [B[0] - ax[1] / l * o, 1.45, B[1] + ax[0] / l * o]; });
+  assert.ok(shoulders.some(p => Math.abs(across(p)) < hfov / 2), 'a shoulder of the partner is inside the frame');
+  const face = Math.abs(across(c.F)) / (hfov / 2);
+  assert.ok(face > 0.2 && face < 0.55, `the subject sits off centre, near a third (${face.toFixed(2)} of the half width)`);
+  assert.ok(G.sideOf(plan, c.pos) === plan.side, 'and the camera keeps the scene\'s side of the line');
+});
+
+test('every shot of the two-hander keeps the camera on one side of the line, orbits included, on either side', () => {
+  for (const side of [1, -1]) {
+    const rows = G.choose(G.RELIEF, { scene: 'relief', side: { relief: side } }, () => false);
+    for (const r of rows) for (const p of [0, 0.5, 1]) assert.equal(G.sideOf(r.plan, G.solve(r.pick.s, r.plan, p).pos), side, `${r.beat.id} ${r.pick.idiom.name} at ${p}`);
+    assert.ok(!G.checks(rows).some(c => /180° line/.test(c.text)));
+  }
+});
