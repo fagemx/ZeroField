@@ -419,6 +419,49 @@ class PrevisTwoPassTests(unittest.TestCase):
         # The matte's near-zero VAE noise is gated to exactly 0, so the source outside it is copied bit for bit.
         self.assertEqual((swap['61']['inputs']['mask'], swap['62']['inputs']['source'], swap['62']['inputs']['operation']), (['59', 0], ['61', 0], 'multiply'))
 
+    def test_layout_render_follows_the_previs_and_frees_the_actor_with_the_stage_matte(self):
+        import run_studio
+        task = studio_task()
+        task['input']['tabs'][0]['tables'][0]['headers'] += ['Previs', 'Actor Matte']
+        task['input']['rows'][1]['cells'] += [ASSET(9), ASSET(8)]
+        ctx = worker.resolve_studio_context(task)
+        self.assertEqual((ctx['previs_video'], ctx['actor_matte']), (ASSET(9), ASSET(8)))
+        cfg = run_studio.worker_configs('http://127.0.0.1:8188')
+        head, client = Mock(), Mock()
+        head.asset.side_effect = lambda task, url: (url.encode(), 'video/webm' if url in (ASSET(8), ASSET(9)) else 'image/png')
+        client.upload_media.side_effect = lambda raw, mime, prefix: raw.decode()[-2:] + '.' + prefix
+        load = lambda stage, cap: json.loads(Path(cfg[stage][cap]['workflow']).read_text(encoding='utf-8'))
+        key = load('layoutkey', 'image_gen')
+        worker.bind_external_workflow(key, {'previs_video': ASSET(9), 'asset_images': [ASSET(1), ASSET(2)], 'compiled_prompt': 'beats', 'seed': 5},
+                                      cfg['layoutkey']['image_gen'], task, head, client)
+        # Klein paints previs frame 0 (only that frame is loaded) with the cast and set, under the blockout-to-photo edit.
+        self.assertEqual((key['20']['inputs']['video'], key['20']['inputs']['frame_load_cap'], key['23']['inputs']['batch_index']), ('09.source_video', 1, 0))
+        self.assertEqual((key['21']['inputs']['image'], key['22']['inputs']['image']), ('01.reference', '02.reference'))
+        self.assertEqual(key['6']['inputs']['text'], run_studio.LAYOUT_KEY_PROMPT)
+        self.assertEqual(cfg['layoutkey']['image_gen']['reference_role'], 'anchor_keyframe')  # the render step reads it as its key
+        layout = load('layout', 'video_gen')
+        worker.bind_external_workflow(layout, {'previs_video': ASSET(9), 'actor_matte': ASSET(8), 'anchor_keyframe': ASSET(4), 'compiled_prompt': 'beats', 'seed': 7},
+                                      cfg['layout']['video_gen'], task, head, client)
+        self.assertEqual((layout['20']['inputs']['video'], layout['24']['inputs']['video'], layout['2']['inputs']['image']),
+                         ('09.source_video', '08.source_video', '04.input'))
+        self.assertEqual((layout['30']['inputs']['string_a'], layout['50']['inputs']['noise_seed']), ('beats', 7))
+        self.assertEqual(layout['24']['inputs']['frame_load_cap'], ['20', 1])  # the matte has the previs' frames
+        # Both strengths stay 1.0 (lower copies the grey model); the previs is the IC-LoRA reference on an empty latent.
+        guide = layout['40']['inputs']
+        self.assertEqual((layout['60']['inputs']['lora_name'], layout['60']['inputs']['strength_model'], guide['strength']),
+                         ('ltx\\ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors', 1.0, 1.0))
+        self.assertEqual((guide['image'], guide['latent'], guide['iclora_parameters'], layout['21']['class_type']),
+                         (['20', 0], ['21', 0], ['61', 0], 'EmptyLTXVLatentVideo'))
+        # Attention mask: the stage matte grown 24 px, feathered and inverted, so the layout binds all but the actor.
+        self.assertEqual(guide['attention_mask'], ['34', 0])
+        self.assertEqual([layout[n]['class_type'] for n in ('25', '26', '27', '28', '29', '34')],
+                         ['ImageToMask', 'GrowMask', 'MaskToImage', 'ImageBlur', 'ImageToMask', 'InvertMask'])
+        self.assertEqual(layout['26']['inputs']['expand'], 24)
+        # The Klein key is an out-of-clip reference (latent_idx -1); guides are cropped before decode; distilled sampling.
+        self.assertEqual((layout['41']['inputs']['guiding_latent'], layout['41']['inputs']['latent_idx'], layout['17']['inputs']['positive']),
+                         (['33', 0], -1, ['41', 0]))
+        self.assertEqual((layout['8']['inputs']['samples'], layout['53']['inputs']['cfg'], layout['51']['inputs']['sampler_name']), (['17', 2], 1.0, 'euler_ancestral'))
+
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg and FFprobe are required')
 class ReferencePreparationTests(unittest.TestCase):

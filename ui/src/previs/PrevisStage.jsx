@@ -18,8 +18,9 @@ const pick = (label, value, options, onChange, text) => <fieldset className="pre
 
 // The 3D stage of a slate: every shot in one set. Look through a shot's lens, see all shot cameras on an overhead
 // plan, frame custom paths in a free camera, play a shot or the whole scene, and render a shot's grey previs
-// (97 frames, 24 fps) into its Previs cell. The render carries its plan, so the project keeps it.
-export default function PrevisStage({ slug, shots, focus, writable, busy, onRender, onMotion }) {
+// (97 frames, 24 fps) into its Previs cell, and its actor matte into Actor Matte. The render carries its plan, so the
+// project keeps it.
+export default function PrevisStage({ slug, shots, focus, writable, busy, onRender, onMotion, onLayout }) {
   useLocale();
   const [rid, setRid] = useState(() => (shots.some(s => s.rid === focus?.rid) ? focus.rid : shots[0]?.rid));
   const [drafts, setDrafts] = useState(() => Object.fromEntries(shots.map(s => [s.rid, loadDraft(slug, s.rid)]).filter(([, p]) => p)));
@@ -150,10 +151,15 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     try {
       ctx.stage.roof(true); if (ctx.guides) ctx.guides.group.visible = false;
       // WebCodecs + a WebM writer: exact timestamps, so the clip is 97 frames at 24 fps; the plan rides in the file.
-      const n = framesOf(p), blob = await encodeCanvas(ctx.renderer.domElement, n, FPS, f => {
+      // A slate with an Actor Matte column also gets the same plan with the actor white on black (Layout Render mask).
+      const n = framesOf(p), passes = target.matteCol >= 0 ? 2 : 1;
+      const encode = pass => encodeCanvas(ctx.renderer.domElement, n, FPS, f => {
         ctx.stage.frame(f, p); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera);
-      }, done => { if (progress.current) progress.current.textContent = `${done}/${n}`; }, p);
-      if (await onRender(target, blob)) {
+      }, done => { if (progress.current) progress.current.textContent = `${pass * n + done}/${passes * n}`; }, pass ? null : p);
+      const blob = await encode(0);
+      let matte = null;
+      if (passes > 1) { ctx.stage.matte(true); try { matte = await encode(1); } finally { ctx.stage.matte(false); } }
+      if (await onRender(target, blob, matte)) {
         saveDraft(slug, target.rid, null);
         setDrafts(({ [target.rid]: _, ...rest }) => rest); setRendered(r => ({ ...r, [target.rid]: p }));
       }
@@ -194,7 +200,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       <p className="previs-summary">{describePlan(plan)}</p>
     </section>
     <aside className="previs-controls" aria-label={t('inspector')}>
-      <details className="previs-howto" open><summary>{t('howto')}</summary><ol>{[1, 2, 3, 4].map(n => <li key={n}>{t('step' + n)}</li>)}</ol></details>
+      <details className="previs-howto" open><summary>{t('howto')}</summary><ol>{[1, 2, 3, 4, 5].map(n => <li key={n}>{t('step' + n)}</li>)}</ol></details>
       <fieldset className="previs-fields" disabled={!writable || rendering}>
         {pick(t('set'), plan.set, ['observatory', 'empty'], v => edit({ set: v }), v => t('set_' + v))}
         {pick(t('action'), plan.action, ACTIONS, v => edit({ action: v }), v => t('action_' + v))}
@@ -214,7 +220,10 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       {writable && <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>
         {rendering ? <>{t('rendering')} <span ref={progress} /></> : t('render')}</button>}
       {writable && onMotion && <button type="button" className="previs-motion" disabled={busy || rendering || !shot.previs || !!drafts[shot.rid]} onClick={() => onMotion(shot)}>{t('motion')}</button>}
+      {writable && onLayout && shot.matteCol >= 0 && <button type="button" className="previs-motion" title={t('layoutHint')}
+        disabled={busy || rendering || !shot.matte || !!drafts[shot.rid]} onClick={() => onLayout(shot)}>{t('layout')}</button>}
       {writable && onMotion && (!shot.previs || drafts[shot.rid]) && <p className="previs-note">{t('renderFirst')}</p>}
+      {writable && onLayout && shot.matteCol >= 0 && shot.previs && !shot.matte && !drafts[shot.rid] && <p className="previs-note">{t('renderMatte')}</p>}
       <p className="previs-note">{t('note')}</p>
     </aside>
   </div>;

@@ -2385,13 +2385,17 @@
     "howto": "使用步驟",
     "step1": "選一個鏡頭。預設的運鏡、焦距和表演來自分鏡表。",
     "step2": "在下方排鏡。「鏡頭視角」從攝影機看出去；「俯視平面」看整個場景所有機位。",
-    "step3": "渲染預演：產生 4 秒灰模影片，存進這個鏡頭的 Previs 欄位。",
+    "step3": "渲染預演：灰模影片存進這個鏡頭的 Previs 欄位，演員遮罩存進 Actor Matte。",
     "step4": "執行動作草稿：AI 照這條運鏡和走位拍出這個鏡頭，交給你審片。",
     "motion": "執行動作草稿",
     "renderFirst": "請先渲染預演；動作草稿會照存好的預演影片走。",
     "facing": "面向",
     "facing_console": "控制台",
     "facing_room": "室內（鏡頭這側）",
-    "duration": "時長"
+    "duration": "時長",
+    "step5": "或執行版面渲染：FLUX 3 Klein 先把第 0 幀畫成實拍畫面交給你審，再由 Layout-To-Render IC-LoRA 照這個場景和運鏡拍出鏡頭。",
+    "layout": "執行版面渲染",
+    "layoutHint": "Layout Key（FLUX 3 Klein 改畫預演第 0 幀，需審核）接 Layout Render（LTX-2.5 Layout-To-Render IC-LoRA，演員遮罩讓演員自由生成）。RTX 4090 約 3 分鐘。",
+    "renderMatte": "請重新渲染預演以存下演員遮罩；版面渲染需要它。"
   }
 }

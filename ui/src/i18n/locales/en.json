@@ -2385,13 +2385,17 @@
     "howto": "How it works",
     "step1": "Pick a shot. It starts from the slate: camera move, lens and action.",
     "step2": "Block it below. Lens looks through the shot camera; Overhead shows every camera in the set.",
-    "step3": "Render previs: a grey 4-second clip saved to the shot's Previs cell.",
+    "step3": "Render previs: a grey clip saved to the shot's Previs cell, with its actor matte in Actor Matte.",
     "step4": "Run motion pass: the AI shoots the shot along this camera and blocking, then waits for your review.",
     "motion": "Run motion pass",
     "renderFirst": "Render the previs first; the motion pass follows the saved clip.",
     "facing": "Facing",
     "facing_console": "The console",
     "facing_room": "The room (camera side)",
-    "duration": "Duration"
+    "duration": "Duration",
+    "step5": "Or run layout render: FLUX 3 Klein paints frame 0 for your review, then the Layout-To-Render IC-LoRA shoots the shot on this set and camera.",
+    "layout": "Run layout render",
+    "layoutHint": "Layout Key (FLUX 3 Klein on previs frame 0, reviewed) then Layout Render (LTX-2.5 Layout-To-Render IC-LoRA, the actor matte frees the actor). About 3 minutes on an RTX 4090.",
+    "renderMatte": "Render the previs again to save the actor matte; the layout render needs it."
   }
 }

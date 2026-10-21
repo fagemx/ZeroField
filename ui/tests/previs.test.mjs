@@ -92,6 +92,11 @@ test('stage shots: rows of a slate with a Previs column, with keyframe, previs a
   assert.deepEqual([two.previs, two.keyframe, two.r], [null, null, 1]);
   assert.deepEqual(stageShots(parsed, [parsed.rows[1]]).map(s => s.r), [1]);  // a filtered view keeps table row indexes
   assert.deepEqual(stageShots({...parsed, headers: parsed.headers.slice(0, 6).concat('Notes')}), []);
+  assert.deepEqual([one.matteCol, one.matte], [-1, null]);  // an older slate: the stage renders no matte
+  const matted = {...parsed, headers: [...parsed.headers, 'Actor Matte'], rows: parsed.rows.map((row, k) => ({...row, cells: [...row.cells, {value: k ? '' : v('d')}]}))};
+  const [withMatte, without] = stageShots(matted);
+  assert.equal(withMatte.matteCol, 7); assert.match(withMatte.matte, /pa_d{32}$/); assert.equal(without.matte, null);
+  assert.equal(benchGroup('Actor Matte'), 'control');  // a control pass on the bench, never the shot's input or output
 });
 
 test('a longer lens dollies the preset back along its line of sight and never leaves the dome', () => {

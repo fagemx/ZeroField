@@ -39,27 +39,35 @@ function emptyStage(group, mats) {
   const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 0.2), mats.glass); wall.position.set(0, 2, 1.2); group.add(wall);
 }
 
+// A mannequin with adult proportions (tapered torso, round shoulders, capsule limbs, neck, a head about 1/7.6 of the
+// height): the Layout-To-Render IC-LoRA renders blockout shapes literally. A box torso came out as a brass box and a
+// 1/6.4 head as a child.
 function actor(mats) {
   const root = new THREE.Group();
   const part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); return m; };
-  part(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 16), mats.coat, -0.12, 0.45, 0);
-  part(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 16), mats.coat, 0.12, 0.45, 0);
-  part(new THREE.BoxGeometry(0.48, 0.72, 0.28), mats.coat, 0, 1.25, 0);
-  part(new THREE.SphereGeometry(0.13, 24, 16), mats.skin, 0, 1.78, 0).scale.set(0.92, 1.15, 1);
-  part(new THREE.BoxGeometry(0.05, 0.06, 0.08), mats.skin, 0, 1.78, 0.13);  // nose: shows facing
+  const limb = (r, length) => new THREE.CapsuleGeometry(r, length, 6, 16);
+  part(limb(0.075, 0.78), mats.coat, -0.11, 0.47, 0);
+  part(limb(0.075, 0.78), mats.coat, 0.11, 0.47, 0);
+  part(new THREE.SphereGeometry(0.18, 24, 12), mats.coat, 0, 0.98, 0).scale.set(1, 0.6, 0.7);  // hips
+  part(new THREE.CylinderGeometry(0.23, 0.17, 0.58, 24), mats.coat, 0, 1.27, 0).scale.set(1, 1, 0.6);  // chest to waist
+  part(new THREE.SphereGeometry(0.23, 24, 12), mats.coat, 0, 1.56, 0).scale.set(1, 0.33, 0.6);  // shoulder line
+  part(new THREE.CylinderGeometry(0.055, 0.06, 0.14, 12), mats.skin, 0, 1.64, 0);  // neck
+  part(new THREE.SphereGeometry(0.11, 24, 16), mats.skin, 0, 1.79, 0).scale.set(0.92, 1.15, 1);
+  part(new THREE.BoxGeometry(0.05, 0.06, 0.08), mats.skin, 0, 1.79, 0.11);  // nose: shows facing
   // Facing cues the motion pass can read: hair over the back of the head (a bare sphere from behind reads as a face)
   // and shoes pointing forward.
-  part(new THREE.SphereGeometry(0.137, 24, 16, Math.PI, Math.PI, 0, Math.PI * 0.8), mats.hair, 0, 1.78, 0).scale.set(0.92, 1.15, 1);
-  part(new THREE.SphereGeometry(0.137, 24, 6, 0, Math.PI, 0, Math.PI * 0.22), mats.hair, 0, 1.78, 0).scale.set(0.92, 1.15, 1);
+  part(new THREE.SphereGeometry(0.117, 24, 16, Math.PI, Math.PI, 0, Math.PI * 0.8), mats.hair, 0, 1.79, 0).scale.set(0.92, 1.15, 1);
+  part(new THREE.SphereGeometry(0.117, 24, 6, 0, Math.PI, 0, Math.PI * 0.22), mats.hair, 0, 1.79, 0).scale.set(0.92, 1.15, 1);
   for (const x of [-0.12, 0.12]) part(new THREE.BoxGeometry(0.11, 0.08, 0.28), mats.hair, x, 0.04, 0.07);
-  part(new THREE.CylinderGeometry(0.05, 0.05, 0.64, 12), mats.coat, 0.3, 1.25, 0);
-  const shoulder = new THREE.Group(); shoulder.position.set(-0.3, 1.55, 0); root.add(shoulder);  // reaching arm on -x
-  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.66, 12), mats.coat); arm.position.set(0, -0.33, 0); shoulder.add(arm);
+  part(limb(0.05, 0.56), mats.coat, 0.27, 1.22, 0).rotation.z = 0.08;
+  part(new THREE.SphereGeometry(0.055, 12, 8), mats.skin, 0.295, 0.88, 0);
+  const shoulder = new THREE.Group(); shoulder.position.set(-0.28, 1.53, 0); root.add(shoulder);  // reaching arm on -x
+  const arm = new THREE.Mesh(limb(0.05, 0.56), mats.coat); arm.position.set(0, -0.33, 0); shoulder.add(arm);
   const hand = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), mats.skin); hand.position.set(0, -0.68, 0); shoulder.add(hand);
   return { root, shoulder };
 }
 
-// Build a stage for a plan's set and light. Returns { scene, camera, frame(f, plan), pose(f, plan), shoot(f, plan), roof(show), dispose };
+// Build a stage for a plan's set and light. Returns { scene, camera, frame(f, plan), pose(f, plan), shoot(f, plan), roof(show), matte(on), dispose };
 // pose/shoot take the current plan, so only a set or light change needs a new stage.
 // The renderer must have shadowMap enabled (see prepareRenderer).
 export function prepareRenderer(renderer) {
@@ -88,6 +96,7 @@ export function buildStage(plan) {
   (plan.set === 'empty' ? emptyStage : observatory)(set, mats);
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.8, 24, 16), mats.beam); beacon.position.set(-2, 3, 28); scene.add(beacon);
   const figure = actor(mats); scene.add(figure.root);
+  figure.root.traverse(o => { o.userData.actor = true; });
   // Shadows everywhere. No outline/crease lines: drawn edges read as a toon render and the motion pass turns cartoon.
   scene.traverse(o => { if (o.isMesh && o.material !== mats.beam) o.castShadow = o.receiveShadow = true; });
   const camera = new THREE.PerspectiveCamera(verticalFov(plan.lens), WIDTH / HEIGHT, 0.05, 200);
@@ -106,11 +115,21 @@ export function buildStage(plan) {
   }
   const frame = (f, p = plan) => { pose(f, p); shoot(f, p); };
   const roof = show => set.traverse(o => { if (o.userData.roof) o.visible = show; });  // the overhead plan looks through the dome
+  // Actor matte for the Layout Render's attention mask: the same plan and camera, the actor white on black.
+  const flat = { on: new THREE.MeshBasicMaterial({ color: 0xffffff }), off: new THREE.MeshBasicMaterial({ color: 0x000000 }) }, background = scene.background;
+  function matte(on) {
+    scene.background = on ? new THREE.Color(0x000000) : background;
+    scene.traverse(o => {
+      if (!o.isMesh) return;
+      o.userData.material ??= o.material;
+      o.material = !on ? o.userData.material : o.userData.actor ? flat.on : flat.off;
+    });
+  }
   function dispose() {
     scene.traverse(o => { o.geometry?.dispose(); });
-    Object.values(mats).forEach(m => m.dispose());
+    Object.values(mats).concat(Object.values(flat)).forEach(m => m.dispose());
   }
-  return { scene, camera, frame, pose, shoot, roof, dispose };
+  return { scene, camera, frame, pose, shoot, roof, matte, dispose };
 }
 
 // Director's guides for the overhead and free views (never rendered into a previs): each shot's camera path,

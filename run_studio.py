@@ -20,6 +20,14 @@ SAMPLE_FILES = ("cast_kael.png", "set_observatory.png", "keyframe_s01.png", "sho
                 "keyframe_s02.png", "shot_s02.mp4", "openjutsu_source.mp4",
                 "openjutsu_remastered.mp4", "openjutsu_split.mp4", "first_frame_vfx01.png",
                 "motion_structure_vfx01.mp4", "anchor_keyframe_vfx01.png")
+# The Layout Key edit: previs frame 0 becomes a photographic still with the row's cast (image 2) and set (image 3).
+# Composition comes first: with a photographic portrait as the cast reference, "same face" alone made Klein copy the
+# portrait's close-up instead of the blockout's small figure.
+LAYOUT_KEY_PROMPT = ("Repaint the first image, a grey 3D blockout, as a photographic live-action film still. The first image fixes "
+                     "the composition: keep its exact camera angle, framing, horizon and set layout, and the figure's exact position, "
+                     "size, pose and facing; do not move the camera or enlarge the figure. Paint the figure as the person of the "
+                     "second image (face, hair, wardrobe) at the figure's size. Paint the set with the materials, colours and light "
+                     "of the third image. Only one person. No text.")
 
 
 def _text(node, values=None):
@@ -195,7 +203,9 @@ def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, 
 
 
 def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
-    """Add the Previs column to the cinema slate once and give S03 its grey blockout, keeping user media."""
+    """Add the Previs and Actor Matte columns to the cinema slate once and give S03 its grey blockout, keeping user media.
+
+    The 3D Stage writes both on Render previs; the matte is the Layout Render's attention mask."""
     actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
     tab = repo.get_tab_for_update(conn, slug, "cinema-studio")
     if not tab:
@@ -206,7 +216,7 @@ def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id
     for table in doc.get("content", []):
         if table["type"] != "table" or not table.get("content"):
             continue
-        headers, dirty = _append_columns(table, [("Previs", "video")])
+        headers, dirty = _append_columns(table, [("Previs", "video"), ("Actor Matte", "video")])
         col = headers.index("Previs")
         for row in table["content"][1:]:
             if _text(row["content"][0]) == "S03" and not _text(row["content"][col]) and (root / "previs_s03_blockout.mp4").is_file():
@@ -275,6 +285,21 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
                                     input_bindings={"20.video": {"source": "source_video", "upload": "video"},
                                                     "25.video": {"source": "source_video", "upload": "video"},
                                                     "2.image": {"source": "anchor_keyframe", "upload": "image"}})},
+        # Layout Render: Klein turns previs frame 0 into a photographic key; the Layout-To-Render IC-LoRA then keeps the
+        # previs set and camera and takes the look from that key. The stage's actor matte frees the actor, which the
+        # LoRA would otherwise render as the mannequin (docs/research/2026-10-20-motion-control-lab.md).
+        "layoutkey": {"image_gen": comfy("flux3_klein_look_key.json", prompt_node=None, output_node="9", reference_role="anchor_keyframe",
+                                         input_bindings={"20.video": {"source": "previs_video", "upload": "video"},
+                                                         "20.frame_load_cap": {"literal": 1},
+                                                         "23.batch_index": {"literal": 0},
+                                                         "6.text": {"literal": LAYOUT_KEY_PROMPT},
+                                                         "21.image": {"source": "asset_images.0", "upload": "image"},
+                                                         "22.image": {"source": "asset_images.1", "upload": "image", "optional": True}})},
+        "layout": {"video_gen": comfy("ltx25_layout_render.json", output_node="12", prompt_node="30", prompt_input="string_a",
+                                      seed_node="50", seed_input="noise_seed",
+                                      input_bindings={"20.video": {"source": "previs_video", "upload": "video"},
+                                                      "24.video": {"source": "actor_matte", "upload": "video"},
+                                                      "2.image": {"source": "anchor_keyframe", "upload": "image"}})},
         "extract": {"media_assemble": {"adapter": "ffmpeg", "mode": "extract_frame"}},
         "structure": {"media_assemble": {"adapter": "ffmpeg", "mode": "motion_structure", "structure_type": "edge_lineart"}},
         "assemble": {"media_assemble": {"adapter": "ffmpeg"}},
@@ -387,6 +412,18 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
         graph = {"nodes": nodes, "edges": edges}
         normalized = flow_runner.validate_definition(graph)
         lanes.append(("studio_swap_lane_seed", swap_chain))
+    if "layout" in registered:
+        # Sixth lane, from the 3D Stage like the fourth: Layout Key (Klein on previs frame 0, reviewed) -> Layout Render.
+        known.append(normalized)
+        layout_chain = [node("layoutkey", "Layout Key", "image_gen", "cinema-studio", 4),
+                        node("layout", "Layout Render", "video_gen", "cinema-studio", 5)]
+        for depth, item in enumerate(layout_chain):
+            item.update(x=300 + depth * 340, y=1360)
+        nodes = nodes + layout_chain
+        edges = edges + [{"source": "layoutkey", "target": "layout"}]
+        graph = {"nodes": nodes, "edges": edges}
+        normalized = flow_runner.validate_definition(graph)
+        lanes.append(("studio_layout_lane_seed", layout_chain))
     if current["definition"] != normalized and current["definition"] not in known and lanes:
         appended = [_append_lane(conn, slug, chain, actor_id, action) for action, chain in lanes]
         return any(appended)

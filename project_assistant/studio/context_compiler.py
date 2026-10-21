@@ -376,6 +376,7 @@ def resolve_studio_context(task: dict) -> dict:
         "ingredients_sheet": r"ingredients.*sheet|composite.*sheet|multi.*ref.*sheet|組合圖",
         "frame_sheet": r"frame.*sheet|contact.*sheet|motion.*frames|畫格總覽",
         "time_strata": r"time.*strata|onion.*skin|時間摺層",
+        "actor_matte": r"actor\s*matte",
     }
     for header, value in columns:
         urls = _media_urls(value)

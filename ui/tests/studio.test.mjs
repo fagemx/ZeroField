@@ -63,6 +63,10 @@ test('single-cell execution uses exactly one saved node and never broadens missi
 
 test('batch execution starts with the matching sheet rather than unrelated upstream work',()=>{
   assert.deepEqual(studioRunInput(flow,{...scope,singleStep:false,capability:undefined,col_index:undefined,rowIds:['r1','r2']}),{target_tab:'cinema',row_ids:['r1','r2'],definition_revision:7,start_node_id:'frame'});
+  // The 3D stage's layout render: a named first step of a lane whose key column other steps also write; the run continues downstream.
+  const lane={...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[1],id:'layoutkey',title:'Layout Key'},{...flow.definition.nodes[2],id:'layout',title:'Layout Render'}]}};
+  assert.equal(studioRunInput(lane,{...scope,singleStep:false,capability:'image_gen',col_index:undefined,match:node=>node.id==='layoutkey'}).start_node_id,'layoutkey');
+  assert.throws(()=>studioRunInput(lane,{...scope,singleStep:false,capability:'image_gen',col_index:undefined}),/No unambiguous/);
 });
 
 test('queue preserves reviewed revisions and never runs a failed or stale preflight',async()=>{

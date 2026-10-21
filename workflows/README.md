@@ -14,6 +14,7 @@ Bindings (adapter=comfyui):
 | ltx25_cinema_shot.json | 6 | 3 | 12 | image_node=2, image_input=image |
 | ltx25_openjutsu_v2v.json | 6 | 3 | 12 | video_node=1, video_input=video, reference_image_node=2, reference_image_input=image |
 | ltx25_openjutsu_swap.json | 6 | 3 | 12 | input_bindings 20.video and 25.video = source_video, 2.image = anchor_keyframe |
+| ltx25_layout_render.json | 30 (string_a) | 50 (noise_seed) | 12 | input_bindings 20.video = previs_video, 24.video = actor_matte, 2.image = anchor_keyframe |
 
 ### OpenJutsu subject replacement (Object Swap)
 
@@ -26,6 +27,15 @@ Rows whose **Jutsu Mode** is `Object Swap` run their own pipeline lane, **Swap K
    - `GrowMask` (20 px) and an `ImageBlur` feather extend the matte past the old silhouette, since the new subject's outline differs from the old one. The decoded matte carries faint VAE noise everywhere, so `ThresholdMask` (0.02) × `MaskComposite` sets it to exactly 0 outside the subject. `ImageCompositeMasked` then places the regenerated frames inside the matte, over the source loaded at native size (node 25, same frame count as node 20). Pixels outside the matte are copied from the source unchanged, and the source audio is kept.
 
 Install `ltx-2.5-22b-ic-lora-alpha-gen-0.9.safetensors` into `models/loras` (gated: accept the license on the model page first). Alpha-Gen accepts up to 145 frames (6 s at 24 fps), so node 20 caps the source at 145 frames. The LTX passes run at 1280x704, and the composite resizes the regenerated frames back to the source size.
+
+### Layout Render (3D Stage previs as an IC-LoRA layout)
+
+An optional cinema lane next to Previs Motion Pass → Look Key → Look Pass: **Layout Key → Layout Render**, queued from the 3D Stage with *Run layout render*. *Render previs* also saves the shot's **Actor Matte** (the same plan with the actor white on black).
+
+1. **Layout Key** (`flux3_klein_look_key.json`, stage `layoutkey`): FLUX 3 Klein repaints previs frame 0 (`20.frame_load_cap` 1, `23.batch_index` 0) with the row's cast and set references under a composition-first edit instruction (`LAYOUT_KEY_PROMPT` in `run_studio.py`), and writes **Keyframe** for review.
+2. **Layout Render** (`ltx25_layout_render.json`, stage `layout`): the [Layout-To-Render IC-LoRA](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render) at strength 1.0 takes the previs as its reference (`LTXVAddGuide`, frame 0, strength 1.0, on an empty latent); lower strengths copy the grey model. The approved key is an out-of-clip reference (`LTXVAddLatentGuide`, latent_idx -1) that gives the look. The actor matte is grown 24 px, blurred and inverted inside the graph (`GrowMask` / `ImageBlur` / `InvertMask`) into the guide's attention mask, so the layout binds everything except the actor; without it the mannequin is rendered literally. cfg 1, euler_ancestral on the 8 distilled sigmas, `LTXVCropGuides` before decode. It writes **Cinema Shot** for review.
+
+Install `ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors` into `models/loras/ltx/`. On the RTX 4090 a 6 s shot takes about 55 s (key) + 2-3 min (render). Findings: [motion-control lab](../docs/research/2026-10-20-motion-control-lab.md#layout-to-render-ic-lora-2026-10-21).
 
 Image bindings accept the active shot, its predecessors, and mentioned @Asset rows only. Include soul-cast in the flow node input_tabs to resolve @CAST-01 references. The compiler supports the actual input.rows payload and the older documented structured_rows alias. param_bindings maps node_id.input_name to a context key or literal; empty context values leave the workflow default intact.
 
