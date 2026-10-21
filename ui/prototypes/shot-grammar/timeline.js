@@ -6,7 +6,7 @@ import * as G from './grammar.js';
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const CURVE_H = 84, PAD = 8, SPAN = CURVE_H - 2 * PAD;
 const yOf = v => PAD + (1 - v) * SPAN;
-const base = id => G.SCENE.beats.find(b => b.id === id);
+const base = id => Object.values(G.SCENES).flatMap(sc => sc.beats).find(b => b.id === id);  // the script's own beat (ids are unique across scenes)
 
 export function renderTimeline(el, ctx) {
   const rows = ctx.rows(), T0 = ctx.t0(), scale = ctx.scale(), sel = ctx.ui.sel, drag = DRAG?.what;

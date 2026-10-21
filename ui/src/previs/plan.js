@@ -82,14 +82,59 @@ export function verticalFov(lens, aspect = WIDTH / HEIGHT) {
   return 2 * Math.atan((36 / aspect) / 2 / lens) * 180 / Math.PI;
 }
 
-// Actor at frame f: body yaw (radians, 0 = facing the console), shoulder pitch (0 = arm down) and distance back from the station.
-// Facing the room turns the actor around (the motion pass keeps who faces the camera only when the previs shows it);
-// walking in while facing the room walks from the console toward the cameras.
+// Mannequin looks (SPEC_10 P3). The default is the mannequin the Layout Render was validated on. tone: the person's
+// colour (board look) and coat shade (render look), so they read as the same person in every shot.
+export const DEFAULT_FIGURE = { build: 'man', outfit: 'jacket', hair: 'short' };
+export const FIGURE_OPTIONS = { build: ['man', 'woman', 'child', 'elder'], outfit: ['jacket', 'longcoat', 'dress', 'robe'], hair: ['short', 'long', 'bun'] };
+
+// Body poses for the jointed mannequin (SPEC_10 P2): joint rotations in radians [x, y, z] on top of standing, plus how
+// far the pelvis drops. +x pitches the spine and neck forward; -x swings an arm or a thigh forward; +x bends a knee back,
+// -x bends an elbow forward; -z takes the left arm (on -x) out to the side, +z the right; on arms y turns the raised arm
+// in (+ for the left, - for the right) after the forward pitch.
+export const POSES = {
+  stand: {},
+  lean: { spine: [0.34, 0, 0], neck: [-0.18, 0, 0], shoulderL: [-0.3, 0, 0], shoulderR: [-0.3, 0, 0] },  // arms keep hanging
+  recoil: { spine: [-0.2, 0, 0], neck: [-0.22, 0, 0], shoulderL: [-0.55, 0, -0.2], shoulderR: [-0.55, 0, 0.2], elbowL: [-1.2, 0, 0], elbowR: [-1.2, 0, 0] },
+  slump: { spine: [0.3, 0, 0], neck: [0.45, 0, 0], shoulderL: [-0.18, 0, 0.06], shoulderR: [-0.18, 0, -0.06] },
+  lookup: { spine: [-0.1, 0, 0], neck: [-0.6, 0, 0] },
+  lookdown: { neck: [0.55, 0, 0] },
+  face: { neck: [0.3, 0, 0], shoulderL: [-1.15, 0.45, 0], shoulderR: [-1.15, -0.45, 0], elbowL: [-2.3, 0, 0], elbowR: [-2.3, 0, 0] },
+  crossed: { shoulderL: [-0.25, 0, 0.12], shoulderR: [-0.25, 0, -0.12], elbowL: [-1.75, 1.2, 0], elbowR: [-1.55, -1.2, 0] },
+  open: { spine: [-0.08, 0, 0], neck: [-0.15, 0, 0], shoulderL: [-0.45, 0, -0.85], shoulderR: [-0.45, 0, 0.85], elbowL: [-0.35, 0, 0], elbowR: [-0.35, 0, 0] },
+  kneel: { drop: 0.4, kneeL: [1.57, 0, 0], ankleL: [-1.57, 0, 0], hipR: [-1.4, 0, 0], kneeR: [1.4, 0, 0], spine: [0.1, 0, 0], shoulderL: [-0.1, 0, 0], shoulderR: [-0.1, 0, 0] },  // on his left knee
+};
+const JOINTS = ['spine', 'neck', 'shoulderL', 'shoulderR', 'elbowL', 'elbowR', 'hipL', 'hipR', 'kneeL', 'kneeR', 'ankleL', 'ankleR'];
+// A pose between two named poses: joint by joint, so a slump into a kneel bends every joint at once.
+export function blendPose(from, to, t) {
+  const a = POSES[from] || {}, b = POSES[to] || a, out = { drop: (a.drop || 0) + ((b.drop || 0) - (a.drop || 0)) * t };
+  for (const j of JOINTS) if (a[j] || b[j]) out[j] = [0, 1, 2].map(i => (a[j]?.[i] || 0) + ((b[j]?.[i] || 0) - (a[j]?.[i] || 0)) * t);
+  return out;
+}
+
+// Performance keys (SPEC_10): [{at 0..1 of the shot, yaw?, reach?, back?, body?}]. Each channel eases from the key that
+// last set it to the next key that sets it; yaw is absolute (the plan's facing is not added). The shot grammar writes
+// these when the director re-times what the actor does; a plan without them plays its canned action.
+export function sampleActs(acts, u) {
+  const out = {}, at = (keys, x) => { let i = 0; while (i < keys.length - 1 && x >= keys[i + 1].at) i++; return i; };
+  for (const ch of ['yaw', 'reach', 'back', 'body']) {
+    const keys = acts.filter(k => k[ch] != null).sort((p, q) => p.at - q.at);
+    if (!keys.length) continue;
+    if (ch === 'body' && keys[0].at > 0) keys.unshift({ at: 0, body: 'stand' });  // he starts standing and arrives in the pose by its key
+    const i = at(keys, u), a = keys[i], b = keys[i + 1], t = !b || u <= a.at ? 0 : ease(Math.min(1, (u - a.at) / Math.max(1e-6, b.at - a.at)));
+    out[ch] = ch === 'body' ? blendPose(a.body, b?.body, t) : a[ch] + ((b?.[ch] ?? a[ch]) - a[ch]) * t;
+  }
+  return { yaw: out.yaw || 0, reach: out.reach || 0, back: out.back || 0, pose: out.body || {} };
+}
+
+// Actor at frame f: body yaw (radians, 0 = facing the console), shoulder pitch (0 = arm down), distance back from the
+// station and the body pose. Facing the room turns the actor around (the motion pass keeps who faces the camera only
+// when the previs shows it); walking in while facing the room walks from the console toward the cameras.
 export function sampleActor(plan, frame) {
+  if (plan.acts?.length) return sampleActs(plan.acts, frame / (framesOf(plan) - 1));
   const f = beat(plan, frame), k = (a, b, t) => a + (b - a) * ease(Math.min(1, Math.max(0, t))), room = plan.facing === 'room', turn = room ? Math.PI : 0;
-  if (plan.action === 'stand') return { yaw: turn, reach: 0, back: 0 };
-  if (plan.action === 'walkin') return { yaw: turn, reach: k(0, 1.16, (f - 60) / 22), back: room ? k(0, 2.2, f / 60) : k(2.2, 0, f / 60) };
-  return { yaw: k(-1.75, 0, f / 39) + turn, reach: k(0, 1.16, (f - 22) / 22), back: 0 };  // turnreach: from the glass to the dial
+  if (plan.action === 'stand') return { yaw: turn, reach: 0, back: 0, pose: {} };
+  if (plan.action === 'walkin') return { yaw: turn, reach: k(0, 1.16, (f - 60) / 22), back: room ? k(0, 2.2, f / 60) : k(2.2, 0, f / 60), pose: {} };
+  return { yaw: k(-1.75, 0, f / 39) + turn, reach: k(0, 1.16, (f - 22) / 22), back: 0, pose: {} };  // turnreach: from the glass to the dial
 }
 
 // The shot's camera move in words, for the prompt beat sheet and the Camera Motion column.

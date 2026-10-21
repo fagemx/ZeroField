@@ -2,13 +2,13 @@
 // both the previs mannequin and the beat sheet, so dragging "his hand finds the dial" later makes him reach later in the
 // previs and starts that segment of the Action & Audio Prompt later. Click a key to edit what it sets, double-click the
 // track to add one, arrows nudge a focused key by 0.1 s, Delete removes it.
-import { BEAT_STORY, HANDS_LABEL, LOOK_LABEL } from './perf.js';
+import { BEAT_STORY, HANDS_LABEL, LOOK_LABEL, POSE_LABEL } from './perf.js';
 
 const GAP = 0.25;  // seconds between keys: closer than this and a segment is too short to play
 const fmt = v => (Math.round(v * 10) / 10).toFixed(1);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const actsOf = r => r.beat.acts || BEAT_STORY[r.beat.id].acts;
-const short = k => (k.text ? `“${k.text.length > 34 ? k.text.slice(0, 32) + '…' : k.text}”` : [k.look && `looks at ${LOOK_LABEL[k.look]}`, k.hands && `hands ${HANDS_LABEL[k.hands]}`, k.walk != null && `${k.walk} m from his mark`].filter(Boolean).join(', ') || 'an empty key');
+const short = k => (k.text ? `“${k.text.length > 34 ? k.text.slice(0, 32) + '…' : k.text}”` : [k.look && `looks at ${LOOK_LABEL[k.look]}`, k.hands && `hands ${HANDS_LABEL[k.hands]}`, k.body && POSE_LABEL[k.body], k.walk != null && `${k.walk} m from his mark`].filter(Boolean).join(', ') || 'an empty key');
 function setActs(St, id, fn) {
   const acts = JSON.parse(JSON.stringify(St.perf[id]?.acts || BEAT_STORY[id].acts));
   fn(acts); acts.sort((a, b) => a.at - b.at); (St.perf[id] ||= {}).acts = acts;
@@ -42,6 +42,7 @@ export function renderTrack(el, ctx) {
     ${k ? `<div class="kedit"><b>${key ? `Key ${key}` : 'Start'} · ${fmt(k.at * secs)} s</b>
       <label>Looks at <select data-kf="look">${opt(LOOK_LABEL, k.look, key > 0)}</select></label>
       <label>Hands <select data-kf="hands">${opt(HANDS_LABEL, k.hands, key > 0)}</select></label>
+      <label>Body <select data-kf="body">${opt(POSE_LABEL, k.body || (key ? undefined : 'stand'), key > 0)}</select></label>
       ${walks ? `<label>From his mark <input type="number" data-kf="walk" min="0" max="4" step="0.1" value="${k.walk ?? ''}" placeholder="keeps" style="width:64px"> m</label>` : ''}
       <input type="text" data-kf="text" maxlength="160" value="${esc(k.text || '')}" placeholder="No text: this key only moves him" aria-label="What he does from this key" style="flex:1;min-width:220px">
       <button data-kdel ${key ? '' : 'disabled title="The start sets where he begins"'}>Delete key</button></div>` : ''}`;
@@ -122,7 +123,7 @@ export function bindTrack(ctx) {
     const raw = field === 'text' ? f.value.trim() : f.value, v = field === 'walk' && raw !== '' ? Math.min(4, Math.max(0, Number(raw))) : raw;
     const what = field === 'text' ? (v ? `starts segment ${segNo([...acts.slice(0, i), { text: v }], i)}: “${v}”` : 'no longer starts a segment; it only moves him')
       : field === 'walk' ? (v === '' ? 'keeps his distance from the mark' : `${v} m from his mark`)
-      : v === '' ? `${field === 'look' ? 'look' : 'hands'} keep the last key's` : field === 'look' ? `looks at ${LOOK_LABEL[v]}` : `hands ${HANDS_LABEL[v]}`;
+      : v === '' ? `${field} keeps the last key's` : field === 'look' ? `looks at ${LOOK_LABEL[v]}` : field === 'body' ? POSE_LABEL[v] : `hands ${HANDS_LABEL[v]}`;
     ctx.tx.once(`${id} key at ${fmt(acts[i].at * secs)} s ${what}${field === 'text' ? '' : '; the mannequin follows'}${stale(ctx, id, field === 'text' && !v !== (acts[i].text == null))}`,
       St => setActs(St, id, a => { if (v === '') delete a[i][field]; else a[i][field] = v; }), id);
   });

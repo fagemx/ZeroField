@@ -49,6 +49,9 @@ test('checks catch camera words, the wrong size, the wrong body range and a miss
   assert.match(checkPerformance(walks, { segs, L: L({ body: 'face' }), story }).byShot[-1].join(), /face only but it has: walks/);
   assert.ok(!checkPerformance(clean, { segs, L: L({ body: 'face' }), story }).byShot[-1], 'the blocked turn itself is allowed');
   assert.match(checkPerformance(clean, { segs, L: L({ color: 'tears' }), story }).byShot[-1].join(), /colour is tears/);
+  const back = ['seen from behind', 'seen in profile', 'seen from behind', 'seen from behind'];
+  assert.match(checkPerformance([clean[0], clean[1], clean[2], 'He turns round to face us, eyes wide.'], { segs, L: L(), story, facing: back }).byShot[3].join(), /seen from behind/);
+  assert.ok(!checkPerformance(clean, { segs, L: L(), story, facing: back }).byShot[3], 'freezing with his back to us is fine');
   const noDial = [clean[0], clean[1], 'He reaches out; far beyond the glass a beacon blinks on.', clean[3]];
   assert.match(checkPerformance(noDial, { segs, L: L(), story }).byShot[-1].join(), /missing "dial"/);
 });
@@ -67,13 +70,13 @@ test('a beat that fails the checks is rewritten once with its issues; one that f
     return prompts.length === 1 ? JSON.stringify({ shots: [{ id: 'S01', segments: entry }, { id: 'S03', segments: good.map((x, i) => i ? x : x + ' The camera pushes in.') }, { id: 'S05', segments: ['a'] }] })
       : `<think>fixing</think>${JSON.stringify({ shots: [{ id: 'S03', segments: good }] })}`; };
   const entry = ['He comes in out of the rain toward the console.', 'He stops at his station.', 'He lays a hand on the console.'];
-  const out = await writeScene('T', [beat('S01'), beat('S03'), beat('S05')], ask);
+  const out = await writeScene({ title: 'T', premise: 'P' }, [beat('S01'), beat('S03'), beat('S05')], ask);
   assert.equal(prompts.length, 2);
   assert.match(prompts[1], /Your last attempt failed these checks, fix them: segment 1: camera word/);
   assert.ok(!prompts[1].includes('Shot S01') && prompts[1].includes('Shot S05'), 'only the failures are asked again');
   assert.deepEqual(out.S01, { texts: entry, issues: [] });
   assert.deepEqual(out.S03, { texts: good, issues: [] });
   assert.equal(out.S05.texts, null);
-  const v = await writeVersions('T', beat('S03'), async () => JSON.stringify({ versions: [{ label: 'Held breath', segments: good }, { label: 'Short', segments: ['x'] }] }));
+  const v = await writeVersions({ title: 'T', premise: 'P' }, beat('S03'), async () => JSON.stringify({ versions: [{ label: 'Held breath', segments: good }, { label: 'Short', segments: ['x'] }] }));
   assert.deepEqual(v.map(x => [x.label, x.issues.length]), [['Held breath', 0]]);
 });

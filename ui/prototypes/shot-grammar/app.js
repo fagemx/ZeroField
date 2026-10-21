@@ -3,6 +3,7 @@
 // Plain DOM; product integration would move this into PrevisStage.
 import * as THREE from 'three';
 import { buildStage, prepareRenderer, shotGuides } from '../../src/previs/scene.js';
+import { setPx } from '../../src/previs/board.js';
 import { FPS, HEIGHT, WIDTH, framesOf } from '../../src/previs/plan.js';
 import * as G from './grammar.js';
 import * as P from './perf.js';
@@ -36,10 +37,10 @@ function travel(step) {
   const at = HIST.at + step; if (at < 0 || at >= HIST.list.length) return;
   const msg = (step < 0 ? HIST.list[HIST.at] : HIST.list[at]).msg;
   HIST.at = at; S = JSON.parse(HIST.list[at].json); save(HIST.list[at].json);
-  if (S.mood !== stageMood) buildSet();
+  if (S.mood !== stageMood || S.look !== stageLook) buildSet();
   refresh(); say(`${step < 0 ? 'Undone' : 'Redone'}${msg ? ': ' + msg.replace(/^Applied: /, '').replace(/\. Ctrl\+Z.*$/, '') : ''}.`);
 }
-const UI = { route: 'scene', sel: G.SCENE.beats[0].id, t: 0, frame: 'start', playing: null, speed: 1, loop: false, limit: '', scale: null,
+const UI = { route: 'scene', sel: G.sceneOf(S).beats[0].id, t: 0, frame: 'start', playing: null, speed: 1, loop: false, limit: '', scale: null,
   key: null, writing: null, pending: null };  // key: the selected performance key; pending: model versions waiting to be applied
 
 /* ---------- one change at a time: live preview, apply on release, Esc cancels (R3, R5) ---------- */
@@ -89,24 +90,17 @@ stills.setSize(640, 352, false);
 const top = new THREE.PerspectiveCamera(42, WIDTH / HEIGHT, 0.1, 100);
 top.position.set(0, 12.5, -2.2); top.up.set(0, 0, 1); top.lookAt(0, 0, -2.2);
 const lensCam = new THREE.PerspectiveCamera(35, WIDTH / HEIGHT, 0.05, 200);
-let stage = null, stageMood = null, solids = [], figure = null, shoulder = null, guides = null;
+let stage = null, stageMood = null, stageLook = null, solids = [], guides = null;
 const ray = new THREE.Raycaster(), va = new THREE.Vector3(), vb = new THREE.Vector3();
 function buildSet() {
   stage?.dispose();
-  stage = buildStage({ set: 'observatory', mood: S.mood, lens: 35 }); stageMood = S.mood;
-  figure = stage.scene.children.find(o => o.isGroup && o.userData.actor); shoulder = figure.children.find(c => c.isGroup);
+  stage = buildStage({ set: 'observatory', mood: S.mood, lens: 35 }, { board: S.look !== 'render' }); stageMood = S.mood; stageLook = S.look;
   solids = []; stage.scene.traverse(o => { if (o.isMesh && !o.userData.actor && !o.userData.roof && o.material.isMeshLambertMaterial) solids.push(o); });
   guides = null; STILL.clear(); ROOM.clear();
 }
-// The previs mannequin at frame f, moved to the beat's mark and turned (the product plan has no mark yet: SPEC_09 §8).
-function pose(plan, f) {
-  stage.pose(f, plan);
-  if (plan.acts) {  // the performance keys drive turn, reach and walk (SPEC_10 §3.1); the product's canned curves otherwise
-    const a = P.samplePerf(plan.acts, f / (framesOf(plan) - 1));
-    figure.position.set(0, 0, -a.back); figure.rotation.y = a.yaw; shoulder.rotation.x = -a.reach;
-  }
-  figure.position.x += plan.mark[0]; figure.position.z += plan.mark[1]; figure.rotation.y += plan.turn * D2R;
-}
+// The cast at frame f: the plan carries marks, looks, the other people and the performance keys (SPEC_09 §8, SPEC_10),
+// so this is exactly what Render previs plays.
+function pose(plan, f) { stage.pose(f, plan); }
 function blocked(pos, F) {  // something solid between the subject and the camera (consoles, glass posts)
   va.set(...F); vb.set(...pos).sub(va); const d = vb.length(); if (d < 0.06) return false;
   ray.set(va, vb.normalize()); ray.near = 0.03; ray.far = d;
@@ -121,7 +115,7 @@ function still(r, p, s = r.pick.s) {
   const key = JSON.stringify([r.plan, s, p, S.mood]);
   if (STILL.has(key)) return STILL.get(key);
   pose(r.plan, p * (framesOf(r.plan) - 1)); stage.roof(true); if (guides) guides.group.visible = false;
-  aim(lensCam, s, r.plan, p); stills.render(stage.scene, lensCam);
+  aim(lensCam, s, r.plan, p); setPx(lensCam, 352); stills.render(stage.scene, lensCam);
   const url = stills.domElement.toDataURL('image/jpeg', 0.82);
   if (STILL.size > 400) STILL.clear();
   STILL.set(key, url); return url;
@@ -130,13 +124,14 @@ function still(r, p, s = r.pick.s) {
 /* ---------- the plan ---------- */
 let ROWS = [], T0 = [], TOTAL = 0;
 function plan(withGuides = true) {
-  ROWS = G.choose(G.SCENE, S, blocked);
+  ROWS = G.choose(scene(), S, blocked);
   T0 = []; TOTAL = 0; for (const r of ROWS) { T0.push(TOTAL); TOTAL += r.beat.seconds; }
   if (!withGuides && guides) return;
   if (guides) { stage.scene.remove(guides.group); guides.dispose(); }
   guides = shotGuides(ROWS.map(r => ({ id: r.beat.id, plan: G.toPlan(r, S.mood), selected: r.beat.id === UI.sel })));
   stage.scene.add(guides.group);
 }
+const scene = () => G.sceneOf(S);
 const rowIndex = id => ROWS.findIndex(r => r.beat.id === id);
 const rowOf = id => ROWS[rowIndex(id)];
 const sel = () => rowOf(UI.sel);
@@ -165,12 +160,12 @@ function draw() {
   pose(r.plan, f);
   if (UI.route === 'shot') {
     aim(stage.camera, r.pick.s, r.plan, p); stage.roof(true); guides.group.visible = false;
-    renderer.render(stage.scene, stage.camera);
+    setPx(stage.camera, HEIGHT); renderer.render(stage.scene, stage.camera);
   } else {
     stage.roof(false); guides.group.visible = true; guides.update(p, 1.3);
-    renderer.render(stage.scene, top);
+    setPx(top, HEIGHT); renderer.render(stage.scene, top);
     aim(lensCam, r.pick.s, r.plan, p); stage.roof(true); guides.group.visible = false;
-    stills.render(stage.scene, lensCam);
+    setPx(lensCam, 352); stills.render(stage.scene, lensCam);
     $('lensMini').getContext('2d').drawImage(stills.domElement, 0, 0, 640, 352);
     drawOverlay(ctx);
   }
@@ -187,10 +182,17 @@ function draw() {
 /* ---------- header ---------- */
 function seg(id, items, cur, attr) { $(id).innerHTML = items.map(([v, l]) => `<button type="button" data-${attr}="${v}" aria-pressed="${v === cur}">${esc(l)}</button>`).join(''); }
 function renderHeader() {
-  $('sceneTitle').textContent = G.SCENE.title;
+  $('sceneTitle').textContent = scene().title;
+  seg('scenes', Object.values(G.SCENES).map(c => [c.id, Object.values(c.cast).map(x => x.name).join(' & ')]), scene().id, 'scenepick');
+  const two = !!scene().blocking, side = S.side?.[scene().id] || 1, [a, b] = Object.values(scene().cast).map(x => x.name);
+  $('lineSide').hidden = !two;
+  if (two) seg('lineSides', [[1, `${b}'s right`], [-1, `${b}'s left`]], side, 'lineside');
+  $$('#lineSides button').forEach(x => { x.title = `Every shot keeps the camera on this side of the line from ${a} to ${b}`; });
   seg('presets', Object.entries(G.PRESETS).map(([k, p]) => [k, p.label + (k === S.preset && Object.keys(S.rules).length ? ' *' : '')]), S.preset, 'preset');
   $$('#presets button').forEach(b => { b.title = G.PRESETS[b.dataset.preset].desc; });
   seg('moods', [['grey', 'Grey'], ['night', 'Night']], S.mood, 'mood');
+  seg('looks', [['board', 'Board'], ['render', 'Render']], S.look === 'render' ? 'render' : 'board', 'look');
+  $$('#looks button').forEach(b => { b.title = b.dataset.look === 'board' ? 'Each person in their own colour with outlines, on a bright set: for blocking' : 'Exactly what Render previs sends to LTX: the grey look the Layout Render was validated on'; });
   $('undo').disabled = HIST.at === 0; $('redo').disabled = HIST.at >= HIST.list.length - 1;
   $('undo').title = HIST.at ? `Undo: ${HIST.list[HIST.at].msg.replace(/<[^>]+>/g, '').replace(/^Applied: /, '')}` : 'Nothing to undo';
   $$('nav a').forEach(a => a.setAttribute('aria-current', a.dataset.route === UI.route ? 'page' : 'false'));
@@ -224,11 +226,12 @@ function renderFraming() {
   $('framing').innerHTML = `<b>Framing · ${r.beat.id}</b>
     ${hasEnd(s) ? `<span class="seg" role="group" aria-label="Frame to adjust"><button data-target="start" aria-pressed="${!end}">Start</button><button data-target="end" aria-pressed="${end}">End</button></span>` : ''}
     ${sizeCtl}
-    <span class="seg" role="group" aria-label="Height">${room.heights.map(h => `<button data-height="${h}" aria-pressed="${h === s.angle}">${G.HEIGHT_LABEL[h]}</button>`).join('')}</span>
+    <span class="row" title="Fine distance around ${cur}: 5% a click, up to halfway to the next size"><button data-fine="${end ? 'hk2' : 'hk'}" data-k="1.05" aria-label="A little wider">−</button><span class="hint">×${((end ? s.hk2 : s.hk) || 1).toFixed(2)}</span><button data-fine="${end ? 'hk2' : 'hk'}" data-k="0.952" aria-label="A little tighter">+</button></span>
+    <span class="seg" role="group" aria-label="Height">${room.heights.map(h => `<button data-height="${h}" aria-pressed="${h === s.angle && s.elev == null}">${G.HEIGHT_LABEL[h]}</button>`).join('')}</span>${s.elev != null ? `<span class="hint">${Math.round(s.elev)}°</span>` : ''}
     <span>Side ${side(az)} <span class="hint">· room ${side(room.az[0])} to ${side(room.az[1])}</span></span>
     <span class="seg" role="group" aria-label="Lens">${[24, 35, 50, 85].map(l => `<button data-lens="${l}" aria-pressed="${l === s.lens}">${l}</button>`).join('')}</span>
     <button id="resetFrame" ${Object.keys(S.over[r.beat.id]?.[r.pick.idiom.name] || {}).length ? '' : 'disabled'} title="Back to the idiom's framing and timing">Reset to the idiom</button>
-    ${cost('render')}<span class="hint">Drag the picture: left/right goes round him, up/down changes the height.</span>`;
+    ${cost('render')}<span class="hint">Drag the picture: left/right goes round him, up/down changes the height. Hold Shift to fine-tune (1°, any height); − / + nudge the distance.</span>`;
 }
 function renderMinis() {
   const r = sel(), s = r.pick.s, times = frameTimes(s);
@@ -236,7 +239,7 @@ function renderMinis() {
     return `<figure data-on="${times.length > 1 && UI.frame === which}"><button data-target="${which}" style="padding:0;border:0;background:none" title="Show the ${which} frame"><img alt="${which} frame" src="${still(r, p)}"></button>${times.length > 1 ? (k ? 'End' : 'Start') : 'Frame'} · ${k ? s.end || s.size : s.size}</figure>`; }).join('');
 }
 function renderInspector() {
-  const r = sel(), b = r.beat, s = r.pick.s, b0 = G.SCENE.beats.find(x => x.id === b.id), mine = (S.custom[b.event] || []).length;
+  const r = sel(), b = r.beat, s = r.pick.s, b0 = scene().beats.find(x => x.id === b.id), mine = (S.custom[b.event] || []).length;
   const tags = c => [c === r.pick && !r.pinned ? '<span class="tag auto">auto</span>' : '', c === r.pick && r.pinned ? '<span class="tag pin">pinned</span>' : '',
     c.idiom.drama ? '<span class="tag show">showpiece</span>' : '', c.s.breaks ? '<span class="tag brk">anchor break</span>' : '', c.idiom.mine ? '<span class="tag mine">mine</span>' : ''].join('');
   const moved = (b.mark && (b.mark[0] || b.mark[1])) || b.turn;
@@ -245,7 +248,8 @@ function renderInspector() {
       <span class="label">${b.id} · ${esc(G.EVENTS[b.event])}</span><h4>${esc(b.title)}</h4>
       <div class="row"><span class="label">Tension</span><b>${b.tension.toFixed(2)}</b><span class="hint">drag its point on the timeline${Math.abs(b0.tension - b.tension) > 0.01 ? ` · script ${b0.tension.toFixed(2)}` : ''}</span>${cost('repick')}</div>
       <div class="row"><span class="label">Length</span><span class="seg">${G.DURATIONS.map(n => `<button data-sec="${n}" aria-pressed="${n === b.seconds}">${n} s</button>`).join('')}</span><span class="hint">or drag its edge</span>${cost('render')}</div>
-      <div class="row"><span class="label">Blocking</span><span>${esc(b.action)}, facing ${esc(b.facing)}${moved ? ` · mark (${(b.mark || [0, 0]).map(v => v.toFixed(2)).join(', ')}) m, turned ${b.turn || 0}°` : ''}</span>${moved ? '<button id="resetMark">Back to the station</button>' : '<span class="hint">drag him in Overhead</span>'}</div>
+      ${b.partner ? `<div class="row"><span class="label">Blocking</span><span>${esc(b.name)} at (${b.mark.map(v => v.toFixed(2)).join(', ')}) facing ${esc(b.partner.name)} at (${b.partner.mark.map(v => v.toFixed(2)).join(', ')})${b.turn ? `, turned ${b.turn}°` : ''}</span><span class="hint">drag either of them in Overhead: they move for the whole scene</span></div>`
+      : `<div class="row"><span class="label">Blocking</span><span>${esc(b.action)}, facing ${esc(b.facing)}${moved ? ` · mark (${(b.mark || [0, 0]).map(v => v.toFixed(2)).join(', ')}) m, turned ${b.turn || 0}°` : ''}</span>${moved ? '<button id="resetMark">Back to the station</button>' : '<span class="hint">drag him in Overhead</span>'}</div>`}
     </div>
     <div class="card">
       <h3>Idiom ${cost('render')}</h3>
@@ -283,7 +287,16 @@ function perfRow(r, St = S) {
   return { b, decl, L, story, segs, camera, sig, source: fits ? sh.source : 'template', stale: !!sh && (!fits || sh.sig !== sig), lost: !!sh && !fits,
     texts: fits ? sh.texts : segs.map(g => g.text), sheet: fits ? P.writtenSheet(segs, sh.texts, story) : P.templateSheet(segs, L, story) };
 }
-const brief = x => ({ id: x.b.id, title: x.b.title, seconds: x.b.seconds, camera: x.camera, visible: P.visibleOf(rowOf(x.b.id).pick.s), levelLines: P.levelLines(x.L), segs: x.segs, story: x.story, L: x.L });
+const brief = x => ({ id: x.b.id, title: x.b.title, seconds: x.b.seconds, camera: x.camera, levelLines: P.levelLines(x.L), segs: x.segs, story: x.story, L: x.L,
+  visible: `${x.b.name}: ${P.visibleOf(rowOf(x.b.id).pick.s)}${x.b.partner ? `; ${x.b.partner.name} is in the shot with ${x.b.name}` : ''}`, facing: facingOf(x) });
+// Which way the subject faces the camera in each segment, from the previs (the 4090 scale test: without it the model
+// turned a man seen from behind round to face the lens).
+function facingOf(x) {
+  const r = rowOf(x.b.id), n = framesOf(r.plan) - 1;
+  return x.segs.map(g => { const u = (g.t0 + g.t1) / 2 / x.b.seconds, A = G.actorAt(r.plan, u * n), c = G.solve(r.pick.s, r.plan, u).pos;
+    const v = [c[0] - A.root[0], c[2] - A.root[2]], cos = (A.fwd[0] * v[0] + A.fwd[2] * v[1]) / (Math.hypot(...v) || 1);
+    return cos < -0.5 ? 'seen from behind' : cos > 0.5 ? 'seen from the front' : 'seen in profile'; });  // no camera words: the writer copies them
+}
 let abort = null;
 async function ask(prompt) {
   const res = await fetch(MODEL.url + '/api/chat', { method: 'POST', signal: abort.signal, headers: { 'Content-Type': 'application/json' },
@@ -305,7 +318,7 @@ const refreshPerf = () => { if (UI.route === 'shot') renderPerf(); if (UI.route 
 function writeAll() {
   return run('scene', async () => {
     const xs = ROWS.map(r => perfRow(r)), todo = xs.filter(x => x.source !== 'edited'), kept = xs.length - todo.length;
-    const t0 = performance.now(), out = await P.writeScene(G.SCENE.title, todo.map(brief), ask);
+    const t0 = performance.now(), out = await P.writeScene(scene(), todo.map(brief), ask);
     const ok = todo.filter(x => out[x.b.id].texts && !out[x.b.id].issues.length), bad = todo.filter(x => !ok.includes(x));
     for (const x of ok) cache.put(`${x.b.id}|${x.sig}`, out[x.b.id].texts);
     TX.once(`the model wrote the performances in ${Math.round((performance.now() - t0) / 1000)} s: ${ok.map(x => x.b.id).join(', ') || 'none'} passed the checks`
@@ -317,8 +330,8 @@ function writeAll() {
 function writeBeat(id, n) {
   return run(id, async () => {
     const x = perfRow(rowOf(id));
-    const opts = n ? await P.writeVersions(G.SCENE.title, brief(x), ask, n)
-      : (o => (o?.texts ? [{ label: 'Rewritten', ...o }] : []))((await P.writeScene(G.SCENE.title, [brief(x)], ask))[id]);
+    const opts = n ? await P.writeVersions(scene(), brief(x), ask, n)
+      : (o => (o?.texts ? [{ label: 'Rewritten', ...o }] : []))((await P.writeScene(scene(), [brief(x)], ask))[id]);
     if (!opts.length) return say(`<span class="lim">${id}: the model's answer did not have ${x.segs.length} segments; nothing changed.</span>`);
     UI.pending = { id, sig: x.sig, opts, at: Math.max(0, opts.findIndex(o => !o.issues.length)) };
   });
@@ -342,7 +355,7 @@ function renderPerf() {
   const up = (list, v, top) => list.indexOf(v) > list.indexOf(top);
   const lv = (key, list, labels, cur, beyond) => `<span class="seg" role="group" aria-label="${key}">${list.map(v => `<button data-lv="${key}" data-v="${v}" aria-pressed="${v === cur}"
     ${beyond(v) ? 'data-beyond="true" title="Bigger than this idiom\'s previs is blocked for"' : ''}>${esc(labels[v])}</button>`).join('')}</span>`;
-  const issues = x.source === 'template' ? [] : P.issueList(P.checkPerformance(x.texts, { segs: x.segs, L, story: x.story, line: x.story.line?.text }));
+  const issues = x.source === 'template' ? [] : P.issueList(P.checkPerformance(x.texts, { segs: x.segs, L, story: x.story, line: x.story.line?.text, facing: facingOf(x) }));
   const tag = `<span class="tag ${x.source}">${SOURCE[x.source]}</span>${x.stale ? '<span class="tag stale" title="Levels, framing or timing changed since it was written">out of date</span>' : ''}`;
   const cmp = pend ? pend.opts[pend.at] : null;
   host.innerHTML = `<h3>Performance ${cost('text')}</h3>
@@ -414,8 +427,6 @@ function renderExport() {
         <span class="label">Camera Motion</span><div class="writes">${esc(G.words(s))}</div>
         <span class="label">Action &amp; Audio Prompt · <span class="tag ${x.source}">${SOURCE[x.source]}</span>${x.stale ? ' <span class="tag stale">out of date</span>' : ''}</span><div class="writes pre">${esc(x.sheet)}</div>
         <div class="row"><button data-copy="motion" data-for="${r.beat.id}">Copy Camera Motion</button><button data-copy="action" data-for="${r.beat.id}">Copy Action &amp; Audio Prompt</button><button data-copy="plan" data-for="${r.beat.id}">Copy 3D Stage plan</button><span class="hint">${r.beat.seconds} s = ${framesOf(r.plan)} frames · 17 camera keys</span></div>
-        ${S.perf[r.beat.id]?.acts ? '<p class="hint" style="color:var(--warn)">The performance keys are re-timed here: the 3D Stage plan has no field for them yet, so Render previs plays the stock action (SPEC_10 §4).</p>' : ''}
-        ${moved ? '<p class="hint" style="color:var(--warn)">He is off his station here: the 3D Stage plan needs a mark field before Render previs can place him (SPEC_09 §8).</p>' : ''}
         <pre>${esc(JSON.stringify(p))}</pre></div></div>`; }).join('');
 }
 
@@ -460,6 +471,13 @@ document.addEventListener('click', e => {
   if (el.id === 'sayClose') { $('say').hidden = true; return; }
   if (d.preset) { const before = S.preset; return TX.once(`style ${G.PRESETS[before].label} → ${G.PRESETS[d.preset].label}`, St => { St.preset = d.preset; St.rules = {}; }); }
   if (d.mood) { S.mood = d.mood; buildSet(); return commit(`Applied: light ${d.mood}. Ctrl+Z undoes it.`); }
+  if (d.look) { if ((S.look || 'board') === d.look) return; S.look = d.look; buildSet();
+    return commit(`Applied: ${d.look === 'board' ? 'board look: each person in their own colour on a bright set (for blocking)' : 'render look: the grey previs LTX gets'}. Ctrl+Z undoes it.`); }
+  if (d.scenepick) { if (d.scenepick === scene().id) return; const to = G.SCENES[d.scenepick];
+    UI.sel = to.beats[0].id; UI.key = null; UI.pending = null; UI.frame = 'start'; UI.t = 0;
+    return TX.once(`scene: ${to.title}`, St => { St.scene = to.id; }); }
+  if (d.lineside) { const sc = scene(), v = Number(d.lineside); if (v === (S.side?.[sc.id] || 1)) return;
+    return TX.once(`the camera moves to the other side of the 180° line for every shot of ${sc.title}`, St => { (St.side ||= {})[sc.id] = v; }); }
   if (d.open) { select(d.open); location.hash = 'shot'; return; }
   if (d.pickBeat) return select(d.pickBeat);
   if (el.id === 'reroll') return TX.once('re-rolled the ties between equally good idioms', St => { St.seed = (St.seed || 7) + 1; });
@@ -484,7 +502,13 @@ document.addEventListener('click', e => {
   }
   if (d.height) {
     if (!clearWith(id, { angle: d.height })) return say(`<span class="lim">${G.HEIGHT_LABEL[d.height]} would put the camera in the set</span>`);
-    return TX.once(`${id} ${G.HEIGHT_LABEL[r.pick.s.angle].toLowerCase()} → ${G.HEIGHT_LABEL[d.height].toLowerCase()}`, St => patch(St, id, { angle: d.height }), id);
+    return TX.once(`${id} ${G.HEIGHT_LABEL[r.pick.s.angle].toLowerCase()} → ${G.HEIGHT_LABEL[d.height].toLowerCase()}`, St => patch(St, id, { angle: d.height, elev: undefined }), id);
+  }
+  if (d.fine) {
+    const s = r.pick.s, key = d.fine, k0 = s[key] || 1, k = Math.round(Math.min(G.FINE.hk[1], Math.max(G.FINE.hk[0], k0 * Number(d.k))) * 100) / 100;
+    if (k === k0) return say(`<span class="lim">fine distance stops at ×${k0.toFixed(2)}: past that it is the next shot size (Wider / Tighter)</span>`);
+    if (!clearWith(id, { [key]: k })) return say('<span class="lim">that would put the camera in the set</span>');
+    return TX.once(`${id} ${key === 'hk2' ? 'end' : 'start'} ${key === 'hk2' ? s.end : s.size} ×${k0.toFixed(2)} → ×${k.toFixed(2)} (${k > k0 ? 'wider' : 'tighter'}, fine)`, St => patch(St, id, { [key]: Math.abs(k - 1) < 0.005 ? undefined : k }), id);
   }
   if (d.lens) {
     if (!clearWith(id, { lens: Number(d.lens) })) return say(`<span class="lim">At ${d.lens}mm this framing needs more room than the dome has</span>`);
@@ -513,7 +537,7 @@ document.addEventListener('click', e => {
   }
   if (d.applyScene) {
     const t = G.sceneTemplatesFor(S).find(x => x.name === d.applyScene);
-    return TX.once(`scene template “${t.name}”`, St => { for (const b of G.SCENE.beats) { const name = t.picks[b.event]; if (!name || !G.idiomsFor(St, b.event).some(i => i.name === name)) continue;
+    return TX.once(`scene template “${t.name}”`, St => { for (const b of scene().beats) { const name = t.picks[b.event]; if (!name || !G.idiomsFor(St, b.event).some(i => i.name === name)) continue;
       St.pins[b.id] = name; if (t.over?.[b.event]) ((St.over[b.id] ||= {})[name] = clone(t.over[b.event])); } });
   }
   if (d.delScene) return TX.once(`deleted scene template “${d.delScene}”`, St => { St.sceneTemplates = St.sceneTemplates.filter(x => x.name !== d.delScene); });
@@ -534,7 +558,7 @@ document.addEventListener('submit', e => {
     const raw = $('sceneName').value.trim() || 'My scene', name = uniqueName(raw, G.sceneTemplatesFor(S).map(t => t.name));
     const picks = {}, ov = {};
     for (const r of ROWS) if (!picks[r.beat.event]) { picks[r.beat.event] = r.pick.idiom.name; const o = S.over[r.beat.id]?.[r.pick.idiom.name]; if (o && Object.keys(o).length) ov[r.beat.event] = clone(o); }
-    TX.once(`saved the scene as template “${name}”`, St => { St.sceneTemplates.push({ name, desc: `Saved from ${G.SCENE.title}`, picks, over: ov }); });
+    TX.once(`saved the scene as template “${name}”`, St => { St.sceneTemplates.push({ name, desc: `Saved from ${scene().title}`, picks, over: ov }); });
   }
 });
 // Rules sliders: live while dragging, one history step on release.
@@ -568,21 +592,28 @@ live.addEventListener('pointerdown', e => {
   if (UI.route !== 'shot' || UI.playing || e.button !== 0) return;
   const r = sel(), room = roomOf(r);
   if (at(UI.t).r !== r) seekFrame();
-  drag = { x: e.clientX, y: e.clientY, az: r.pick.s.az ?? room.az0, angle: r.pick.s.angle, room, w: live.clientWidth, main: '', why: '' };
+  drag = { x: e.clientX, y: e.clientY, az: r.pick.s.az ?? room.az0, angle: r.pick.s.angle, elev: G.elevOf(r.pick.s), room, w: live.clientWidth, main: '', why: '' };
   TX.begin('frame'); live.setPointerCapture(e.pointerId);
 });
 live.addEventListener('pointermove', e => {
   if (!drag) return;
   const id = UI.sel, { room } = drag, want = drag.az + (e.clientX - drag.x) / drag.w * 120;  // the camera goes the way you drag; full width = 120°
-  let az = Math.round(Math.min(room.az[1], Math.max(room.az[0], want)) / 5) * 5, why = '';
+  const step = e.shiftKey ? 1 : 5;  // Shift: fine framing (1°, any height)
+  let az = Math.round(Math.min(room.az[1], Math.max(room.az[0], want)) / step) * step, why = '';
   if (want > room.az[1] + 3 || want < room.az[0] - 3) why = `side stops at ${side(want > room.az[1] ? room.az[1] : room.az[0])}: ${room.blockedAz.length ? 'further round, the set blocks the camera' : 'this idiom keeps the camera inside ±30°'}`;
   const idx = room.heights.map(h => G.HEIGHTS.indexOf(h)), hi = G.HEIGHTS.indexOf(drag.angle) + Math.round(-(e.clientY - drag.y) / 70);
   let angle = G.HEIGHTS[Math.min(Math.max(...idx), Math.max(Math.min(...idx), hi))];
   if (hi > Math.max(...idx) || hi < Math.min(...idx)) why = why || `height stops at ${G.HEIGHT_LABEL[angle].toLowerCase()}: this idiom allows ${room.heights.map(h => G.HEIGHT_LABEL[h].toLowerCase()).join(', ')}`;
-  if (!clearWith(id, { az, angle })) angle = drag.angle;
-  while (az !== drag.az && !clearWith(id, { az, angle })) { az += az > drag.az ? -5 : 5; why = 'further round, the set blocks the camera'; }
-  drag.main = az === drag.az && angle === drag.angle ? '' : `${id} camera ${side(az)}${angle !== drag.angle ? `, ${G.HEIGHT_LABEL[angle].toLowerCase()}` : ''}`; drag.why = why;
-  TX.live(St => patch(St, id, { az, angle }), `${side(az)} · ${G.HEIGHT_LABEL[angle]}`, why, e);
+  let elev;  // fine: any height between the idiom's lowest and highest, 0.25° per pixel
+  if (e.shiftKey) { const lo = G.ELEV[room.heights[0]], up = G.ELEV[room.heights[room.heights.length - 1]], want = drag.elev - (e.clientY - drag.y) * 0.25;
+    elev = Math.round(Math.min(up, Math.max(lo, want))); angle = G.nearestHeight(elev);
+    if (want > up + 1 || want < lo - 1) why = why || `height stops at ${elev}°: this idiom allows ${lo}° to ${up}°`; }
+  const p0 = () => ({ az, angle, elev });
+  if (!clearWith(id, p0())) { angle = drag.angle; elev = undefined; }
+  while (az !== drag.az && !clearWith(id, p0())) { az += az > drag.az ? -step : step; why = 'further round, the set blocks the camera'; }
+  const high = elev != null ? `${elev}° ${elev >= 0 ? 'above' : 'below'} eye level` : G.HEIGHT_LABEL[angle].toLowerCase();
+  drag.main = az === drag.az && angle === drag.angle && elev == null ? '' : `${id} camera ${side(az)}, ${high}${e.shiftKey ? ' (fine)' : ''}`; drag.why = why;
+  TX.live(St => patch(St, id, { az, angle, elev }), `${side(az)} · ${high}`, why, e);
 });
 const endDrag = ok => { if (!drag) return; const d = drag; drag = null; TX.end(ok && !!d.main, d.main, d.why, UI.sel); };
 live.addEventListener('pointerup', () => endDrag(true));
@@ -623,7 +654,7 @@ $('say').addEventListener('mouseleave', () => { clearTimeout(sayT); sayT = setTi
 
 /* ---------- the context the components work through ---------- */
 const ctx = {
-  ui: UI, tx: TX, patch, topCamera: top,
+  ui: UI, tx: TX, patch, topCamera: top, scene,
   rows: () => ROWS, t0: () => T0, total: () => TOTAL, state: () => S, row: sel, rowIndex,
   scale: () => UI.scale || TOTAL, freezeScale: v => { UI.scale = v; },
   room: roomOf, clear: clearWith, sideText: side,

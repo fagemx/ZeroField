@@ -1,7 +1,8 @@
 // three.js previs stage: a grey blockout the motion pass can follow. Built from primitives only (no assets),
 // so what LTX-2.5 reads is structure, camera and light, never a look.
 import * as THREE from 'three';
-import { DOME, WIDTH, HEIGHT, cameraKeys, framesOf, sampleActor, sampleCamera, verticalFov } from './plan.js';
+import { DEFAULT_FIGURE, DOME, WIDTH, HEIGHT, cameraKeys, framesOf, sampleActor, sampleActs, sampleCamera, verticalFov } from './plan.js';
+import { SET, boardActor } from './board.js';
 
 const ROOM = new THREE.Vector3(DOME.x, 0, DOME.z);  // dome centre; the station (actor's mark) is the origin, the console is at +z
 
@@ -42,46 +43,91 @@ function emptyStage(group, mats) {
 // A mannequin with adult proportions (tapered torso, round shoulders, capsule limbs, neck, a head about 1/7.6 of the
 // height): the Layout-To-Render IC-LoRA renders blockout shapes literally. A box torso came out as a brass box and a
 // 1/6.4 head as a child.
-function actor(mats) {
-  const root = new THREE.Group();
-  const part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); return m; };
-  const limb = (r, length) => new THREE.CapsuleGeometry(r, length, 6, 16);
-  part(limb(0.075, 0.78), mats.coat, -0.11, 0.47, 0);
-  part(limb(0.075, 0.78), mats.coat, 0.11, 0.47, 0);
-  part(new THREE.SphereGeometry(0.18, 24, 12), mats.coat, 0, 0.98, 0).scale.set(1, 0.6, 0.7);  // hips
-  part(new THREE.CylinderGeometry(0.23, 0.17, 0.58, 24), mats.coat, 0, 1.27, 0).scale.set(1, 1, 0.6);  // chest to waist
-  part(new THREE.SphereGeometry(0.23, 24, 12), mats.coat, 0, 1.56, 0).scale.set(1, 0.33, 0.6);  // shoulder line
-  part(new THREE.CylinderGeometry(0.055, 0.06, 0.14, 12), mats.skin, 0, 1.64, 0);  // neck
-  part(new THREE.SphereGeometry(0.11, 24, 16), mats.skin, 0, 1.79, 0).scale.set(0.92, 1.15, 1);
-  part(new THREE.BoxGeometry(0.05, 0.06, 0.08), mats.skin, 0, 1.79, 0.11);  // nose: shows facing
+// Jointed (SPEC_10 P2): pelvis, spine, neck, shoulders, elbows, hips, knees and ankles, so poses (lean, slump, kneel, hands
+// to the face...) bend it. Standing, every part sits where the single-piece mannequin's did; the limbs are split at the
+// elbow and knee into two capsules of the same radius.
+// Looks (SPEC_10 P3): build, outfit and hair change the silhouette, since the Layout Render reads who someone is from
+// the shapes: a woman is narrower in the shoulders and wider in the hips, a child is 0.64 of the height with a larger
+// head, an elder stoops; a long coat, a dress or a robe hangs from the waist; long hair falls to the shoulders.
+// m: the person's materials, { coat, skin, hair }.
+function actor(mats, figure = {}, m = mats) {
+  const coat = m.coat;
+  const look = { ...DEFAULT_FIGURE, ...figure }, woman = look.build === 'woman', child = look.build === 'child';
+  const root = new THREE.Group(), joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+  const part = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
+  const limb = (r, total) => new THREE.CapsuleGeometry(r, total - 2 * r, 6, 16);  // a capsule `total` long, caps included
+  const body = joint(root, 0, 0, 0); body.scale.setScalar(child ? 0.64 : woman ? 0.94 : 1);
+  const pelvis = joint(body, 0, 0.98, 0), spine = joint(pelvis, 0, 0, 0), neck = joint(spine, 0, 0.6, 0), head = joint(neck, 0, 0.21, 0);
+  const chest = woman ? 0.2 : 0.23;
+  part(pelvis, new THREE.SphereGeometry(woman ? 0.2 : 0.18, 24, 12), coat, 0, 0, 0).scale.set(1, 0.6, woman ? 0.75 : 0.7);  // hips
+  part(spine, new THREE.CylinderGeometry(chest, 0.17, 0.58, 24), coat, 0, 0.29, 0).scale.set(1, 1, 0.6);  // chest to waist
+  part(spine, new THREE.SphereGeometry(chest, 24, 12), coat, 0, 0.58, 0).scale.set(1, 0.33, 0.6);  // shoulder line
+  part(neck, new THREE.CylinderGeometry(0.055, 0.06, 0.14, 12), m.skin, 0, 0.06, 0);
+  head.scale.setScalar(child ? 1.3 : 1);
+  part(head, new THREE.SphereGeometry(0.11, 24, 16), m.skin, 0, 0, 0).scale.set(0.92, 1.15, 1);
+  part(head, new THREE.BoxGeometry(0.05, 0.06, 0.08), m.skin, 0, 0, 0.11);  // nose: shows facing
   // Facing cues the motion pass can read: hair over the back of the head (a bare sphere from behind reads as a face)
   // and shoes pointing forward.
-  part(new THREE.SphereGeometry(0.117, 24, 16, Math.PI, Math.PI, 0, Math.PI * 0.8), mats.hair, 0, 1.79, 0).scale.set(0.92, 1.15, 1);
-  part(new THREE.SphereGeometry(0.117, 24, 6, 0, Math.PI, 0, Math.PI * 0.22), mats.hair, 0, 1.79, 0).scale.set(0.92, 1.15, 1);
-  for (const x of [-0.12, 0.12]) part(new THREE.BoxGeometry(0.11, 0.08, 0.28), mats.hair, x, 0.04, 0.07);
-  part(limb(0.05, 0.56), mats.coat, 0.27, 1.22, 0).rotation.z = 0.08;
-  part(new THREE.SphereGeometry(0.055, 12, 8), mats.skin, 0.295, 0.88, 0);
-  const shoulder = new THREE.Group(); shoulder.position.set(-0.28, 1.53, 0); root.add(shoulder);  // reaching arm on -x
-  const arm = new THREE.Mesh(limb(0.05, 0.56), mats.coat); arm.position.set(0, -0.33, 0); shoulder.add(arm);
-  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), mats.skin); hand.position.set(0, -0.68, 0); shoulder.add(hand);
-  return { root, shoulder };
+  part(head, new THREE.SphereGeometry(0.117, 24, 16, Math.PI, Math.PI, 0, Math.PI * 0.8), m.hair, 0, 0, 0).scale.set(0.92, 1.15, 1);
+  part(head, new THREE.SphereGeometry(0.117, 24, 6, 0, Math.PI, 0, Math.PI * 0.22), m.hair, 0, 0, 0).scale.set(0.92, 1.15, 1);
+  if (look.hair === 'long') part(head, limb(0.1, 0.42), m.hair, 0, -0.14, -0.06).scale.set(1.15, 1, 0.55);
+  if (look.hair === 'bun') part(head, new THREE.SphereGeometry(0.06, 16, 12), m.hair, 0, 0.06, -0.13);
+  const hem = { longcoat: [0.21, 0.3, 0.6], dress: [0.18, 0.36, 0.78], robe: [0.2, 0.36, 0.95] }[look.outfit];
+  if (hem) part(pelvis, new THREE.CylinderGeometry(hem[0], hem[1], hem[2], 24), coat, 0, 0.06 - hem[2] / 2, 0).scale.set(1, 1, 0.8);
+  const joints = { pelvis, spine, neck };
+  for (const [side, x] of [['L', -1], ['R', 1]]) {  // left = the reaching arm, on -x
+    const narrow = woman ? 0.03 : 0;
+    const shoulder = x < 0 ? joint(spine, -0.28 + narrow, 0.55, 0) : joint(spine, 0.245 - narrow, 0.57, 0), elbow = joint(shoulder, 0, -0.33, 0);  // the hanging arm's top was at 0.245
+    part(shoulder, limb(0.05, 0.35), coat, 0, -0.165, 0);
+    part(elbow, limb(0.05, 0.35), coat, 0, -0.165, 0);
+    part(elbow, new THREE.SphereGeometry(x < 0 ? 0.06 : 0.055, 12, 8), m.skin, 0, -0.35, 0);
+    const hip = joint(pelvis, 0.11 * x, -0.06, 0), knee = joint(hip, 0, -0.45, 0), ankle = joint(knee, 0.01 * x, -0.43, 0);
+    part(hip, limb(0.075, 0.5), coat, 0, -0.22, 0);
+    part(knee, limb(0.075, 0.5), coat, 0, -0.22, 0);
+    part(ankle, new THREE.BoxGeometry(0.11, 0.08, 0.28), m.hair, 0, 0, 0.07);
+    shoulder.rotation.order = elbow.rotation.order = 'YXZ';  // pitch the arm forward first, then turn it in across the body
+    Object.assign(joints, { ['shoulder' + side]: shoulder, ['elbow' + side]: elbow, ['hip' + side]: hip, ['knee' + side]: knee, ['ankle' + side]: ankle });
+  }
+  // The hanging arm sits a little out from the body; an elder stoops.
+  const rest = { shoulderR: [0, 0, 0.08], ...(look.build === 'elder' ? { spine: [0.16, 0, 0], neck: [0.1, 0, 0] } : {}) };
+  root.traverse(o => { o.userData.actor = true; });
+  const out = { root, shoulder: joints.shoulderL, joints, rest };
+  applyPose(out, { reach: 0, pose: {} });
+  return out;
 }
+// Pose the jointed mannequin: the body pose on top of its rest, then the reach channel takes the left arm toward the console.
+function applyPose(figure, a) {
+  const p = a.pose || {};
+  for (const [name, g] of Object.entries(figure.joints)) { const r = p[name] || [0, 0, 0], rest = figure.rest[name] || [0, 0, 0]; g.rotation.set(r[0] + rest[0], r[1] + rest[1], r[2] + rest[2]); }
+  figure.joints.pelvis.position.y = (figure.pelvisY ?? 0.98) - (p.drop || 0);
+  const w = Math.min(1, a.reach / 0.6);  // a reach blends the left arm from its pose to straight out at the dial
+  if (w > 0) {
+    const s = figure.joints.shoulderL.rotation, e = figure.joints.elbowL.rotation;
+    s.set(s.x + (-a.reach - s.x) * w, s.y * (1 - w), s.z * (1 - w)); e.set(e.x * (1 - w), e.y * (1 - w), e.z * (1 - w));
+  }
+}
+// Coats per cast member, so two people never read as one shape: grey and night tones.
+const COATS = { grey: [0x55585f, 0x6b5a4c, 0x4c5866, 0x5d5268], night: [0x383a40, 0x45392f, 0x2f3944, 0x3d3446] };
 
 // Build a stage for a plan's set and light. Returns { scene, camera, frame(f, plan), pose(f, plan), shoot(f, plan), roof(show), matte(on), dispose };
-// pose/shoot take the current plan, so only a set or light change needs a new stage.
+// pose/shoot take the current plan, so only a set or light change needs a new stage. opts.board: the board look for
+// blocking (board.js), never for a previs that LTX renders.
 // The renderer must have shadowMap enabled (see prepareRenderer).
 export function prepareRenderer(renderer) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   return renderer;
 }
 
-export function buildStage(plan) {
-  const night = plan.mood === 'night';
+export function buildStage(plan, opts = {}) {
+  const night = plan.mood === 'night', board = !!opts.board;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(night ? 0x0d1219 : 0xaab4c4);  // grey mood matches the Blender blockout LTX was tested on
-  const mats = { glass: lambert(0x8c949e), floor: lambert(night ? 0x24262b : 0x4d4f54), brass: lambert(0x9e8550),
+  scene.background = new THREE.Color(board ? (night ? SET.night : SET.background) : night ? 0x0d1219 : 0xaab4c4);  // grey mood matches the Blender blockout LTX was tested on
+  const mats = { glass: lambert(board ? SET.glass : 0x8c949e), floor: lambert(board ? SET.floor : night ? 0x24262b : 0x4d4f54), brass: lambert(board ? SET.brass : 0x9e8550),
                  skin: lambert(0xccad94), hair: lambert(0x3a322c), coat: lambert(night ? 0x383a40 : 0x55585f), beam: new THREE.MeshBasicMaterial({ color: 0xfff2cc }) };
-  if (night) {
+  if (board) {  // high-key and even, like the shot-idiom generator's stage: every shape reads
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a918d, 0.95));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(-2, 4, 3); scene.add(sun);
+  } else if (night) {
     scene.add(new THREE.HemisphereLight(0x2a3550, 0x0a0a0c, 0.35));
     const key = new THREE.PointLight(0xff9a4d, 9, 6, 1.6); key.position.set(0.3, 0.7, 0.4); scene.add(key);
     const rim = new THREE.DirectionalLight(0x8cb4ff, 1.1); rim.position.set(-3, 5, 8); scene.add(rim);
@@ -95,18 +141,36 @@ export function buildStage(plan) {
   const set = new THREE.Group(); scene.add(set);
   (plan.set === 'empty' ? emptyStage : observatory)(set, mats);
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.8, 24, 16), mats.beam); beacon.position.set(-2, 3, 28); scene.add(beacon);
-  const figure = actor(mats); scene.add(figure.root);
-  figure.root.traverse(o => { o.userData.actor = true; });
   // Shadows everywhere. No outline/crease lines: drawn edges read as a toon render and the motion pass turns cartoon.
   scene.traverse(o => { if (o.isMesh && o.material !== mats.beam) o.castShadow = o.receiveShadow = true; });
+  // The cast: the shot's subject (the plan's own actor) plus anyone in plan.cast, rebuilt only when who is in it changes.
+  let figures = [], castKey = null, matteOn = false;
+  const coats = COATS[night ? 'night' : 'grey'].map(lambert);
+  function cast(p) {
+    const looks = [p.figure || {}, ...(p.cast || []).map(c => c.figure || {})], key = JSON.stringify(looks);
+    if (key === castKey) return figures;
+    for (const f of figures) { scene.remove(f.root); f.root.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); }
+    for (const f of figures) Object.values(f.mats || {}).forEach(x => x.dispose());
+    figures = looks.map((look, i) => {
+      const tone = look.tone ?? i;  // a person keeps their colour in every shot, whoever is the subject
+      return board ? boardActor(look, tone) : actor(mats, look, { coat: coats[tone % coats.length], skin: mats.skin, hair: mats.hair });
+    });
+    castKey = key;
+    for (const f of figures) { scene.add(f.root); f.root.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = !o.userData.outline; }); }
+    if (matteOn) matte(true);
+    return figures;
+  }
+  const place = (fig, a, mark = [0, 0], turn = 0) => {
+    fig.root.position.set(mark[0], 0, mark[1] - a.back); fig.root.rotation.y = a.yaw + turn * Math.PI / 180; applyPose(fig, a);
+  };
   const camera = new THREE.PerspectiveCamera(verticalFov(plan.lens), WIDTH / HEIGHT, 0.05, 200);
   const aim = new THREE.Vector3();
-  function pose(f, p = plan) {  // actor and beacon at frame f
-    const a = sampleActor(p, f);
-    figure.root.position.set(0, 0, -a.back);
-    figure.root.rotation.y = a.yaw;
-    figure.shoulder.rotation.x = -a.reach;
-    beacon.scale.setScalar(f < 67 ? 0.001 : f < 71 ? (f - 67) / 4 : 1);
+  function pose(f, p = plan) {  // the cast and the beacon at frame f; mark [x, z] and turn (degrees) place each actor
+    const [main, ...others] = cast(p), u = f / (framesOf(p) - 1);
+    place(main, sampleActor(p, f), p.mark, p.turn);
+    (p.cast || []).forEach((c, i) => place(others[i], sampleActs(c.acts || [], u), c.mark, c.turn));
+    const b = f * 96 / (framesOf(p) - 1);  // the beacon lights on the beat clock, so a 6 or 8 s shot keeps it after the dial turn
+    beacon.scale.setScalar(b < 67 ? 0.001 : b < 71 ? (b - 67) / 4 : 1);
   }
   function shoot(f, p = plan) {  // planned camera at frame f
     const c = sampleCamera(p, f);
@@ -118,6 +182,7 @@ export function buildStage(plan) {
   // Actor matte for the Layout Render's attention mask: the same plan and camera, the actor white on black.
   const flat = { on: new THREE.MeshBasicMaterial({ color: 0xffffff }), off: new THREE.MeshBasicMaterial({ color: 0x000000 }) }, background = scene.background;
   function matte(on) {
+    matteOn = on;
     scene.background = on ? new THREE.Color(0x000000) : background;
     scene.traverse(o => {
       if (!o.isMesh) return;
@@ -127,7 +192,7 @@ export function buildStage(plan) {
   }
   function dispose() {
     scene.traverse(o => { o.geometry?.dispose(); });
-    Object.values(mats).concat(Object.values(flat)).forEach(m => m.dispose());
+    Object.values(mats).concat(Object.values(flat), coats, ...figures.map(f => Object.values(f.mats || {}))).forEach(m => m.dispose());
   }
   return { scene, camera, frame, pose, shoot, roof, matte, dispose };
 }

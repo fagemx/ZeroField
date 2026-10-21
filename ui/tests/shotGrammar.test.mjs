@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FRAME_H, IDIOMS, SCENE, actorAt, actorPlan, choose, effShot, fromGround, halfway, idiomFromShot, inDome, nearestSize, pickChanges, solve, tierFor, toPlan, whyNot } from '../prototypes/shot-grammar/grammar.js';
 import { framesOf, sampleCamera } from '../src/previs/plan.js';
+import * as G from '../prototypes/shot-grammar/grammar.js';
 
 const beat = SCENE.beats[2];  // S03, 6 s
 const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
@@ -77,4 +78,16 @@ test('the actor mark moves the subject, a saved idiom keeps the framing, and pic
   assert.deepEqual([saved.shot.az, saved.shot.size, saved.shot.start, saved.lens], [160, 'MCU', 0.2, 35]);
   const before = choose(SCENE, { preset: 'standard', seed: 7 }), after = choose(SCENE, { preset: 'standard', seed: 7, pins: { S02: 'Locked three-quarter' } });
   assert.deepEqual(pickChanges(before, after).find(c => c.id === 'S02').to, 'Locked three-quarter');
+});
+
+test('fine framing stays relative to the subject: a nudge moves the camera with him and reads in the words', () => {
+  const b = G.SCENE.beats[1], idiom = G.IDIOMS.turn.find(i => i.name === 'Locked three-quarter');
+  const plan = G.actorPlan(b), base = G.effShot(b, idiom), fine = G.effShot(b, idiom, { hk: 1.1, elev: 8, az: 143 });
+  const d = s => { const c = G.solve(s, plan, 0.5); return Math.hypot(...c.pos.map((v, i) => v - c.aim[i])); };
+  assert.ok(Math.abs(d(fine) / d(base) - 1.1) < 1e-9, 'x1.10 is 10% farther at the same lens');
+  assert.ok(G.solve(fine, plan, 0.5).pos[1] > G.solve(base, plan, 0.5).pos[1], '8° above eye level sits higher');
+  assert.match(G.words(fine), /MCU \(10% wider\), camera 8° above eye level/);
+  const moved = G.actorPlan({ ...b, mark: [0.6, -0.4] }), shift = (s, p) => G.solve(s, p, 0.5).pos;
+  assert.ok(Math.abs(shift(fine, moved)[0] - shift(fine, plan)[0] - 0.6) < 1e-9, 'he steps 0.6 m right, the fine-framed camera follows');
+  assert.equal(G.nearestHeight(8), 'eye'); assert.equal(G.nearestHeight(20), 'high');
 });

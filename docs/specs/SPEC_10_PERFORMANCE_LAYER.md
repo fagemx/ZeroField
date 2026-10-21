@@ -106,10 +106,60 @@ Sound: <聲音>                       ← 拍的聲音描述
 | 寫、檢查、沒過的重寫一次、還不行退回模板 | `perf.js` `writeScene` / `writeVersions` | 完成；已通過的拍不會被重問 |
 | 表演卡 | `app.js` `renderPerf` | 完成：檔位（超出預演的檔位虛線框）、Auto fit 與原因、逐段編輯、來源標籤、待重寫、三版並排、快取換回 |
 | 表演軌 | `perftrack.js` | 完成：拖曳、方向鍵、編輯列、雙擊新增、刪除、回到預設；段數改變時說明寫好的文字暫時不套用 |
-| 匯出 | Export 頁 | Action & Audio Prompt 每拍可複製，Copy all 也含在內；重排過關鍵點的拍會註明 3D Stage plan 還沒有對應欄位 |
+| 匯出 | Export 頁 | Action & Audio Prompt 每拍可複製，Copy all 也含在內；表演關鍵點以 plan 的 `acts` 欄位帶進 3D Stage（§7） |
 
 本機實測（RTX 4090，`qwen3.8:27b-16k`，Ollama `/api/chat`，`think: false`、`format: json`，寫完 `keep_alive: 0`）：
 
 - 單拍重寫 12 秒；三版 19 秒；整場 5 拍 20–26 秒。寫完 `/api/ps` 為空，GPU 已還給 LTX。
 - 整場第一次 2 拍沒過（heightened 沒寫大動作、open 寫了 slightly）。把這兩條直接寫進尺度指示句後，第二次 4/5 通過；剩下一拍是檢查誤判（「tilts his head」當成鏡頭字），已把鏡頭字收窄成只認鏡頭用法。
-- 尚未做：4090 上的 Layout Render 尺度對照（§5 最後一條），需要先把表演寫進 Action & Audio Prompt 欄再渲染。
+- 4090 上的 Layout Render 尺度對照見 §7.4。
+
+## 7. P2 / P3 與分鏡外觀（2026-10-21）
+
+### 7.1 plan 新欄位（產品 `ui/src/previs/plan.js`、`scene.js`）
+
+| 欄位 | 內容 | 說明 |
+|---|---|---|
+| `acts` | `[{at 0–1, yaw?, reach?, back?, body?}]` | 表演關鍵點。每個通道在設定它的關鍵點之間緩動；`body` 是姿勢名，第一個姿勢之前從站姿開始。有 `acts` 時取代 `action` 的三種固定動作，`yaw` 為絕對方向 |
+| `mark` `[x, z]`、`turn`（度） | 主體的站位與額外轉向 | SPEC_09 §8 要的欄位，Render previs 現在會照站位擺人 |
+| `figure` | `{build, outfit, hair, tone}` | 假人樣式：體型 man / woman / child / elder、服裝 jacket / longcoat / dress / robe、髮型 short / long / bun；`tone` 是這個人的顏色（分鏡外觀）與大衣色調（渲染外觀），每一鏡都一樣 |
+| `cast` | `[{figure, mark, turn, acts}]` | 同框的其他人；`stage.matte()` 把所有人都畫成白色 |
+
+全部存在 WebM 標題的 plan 裡；S03 加 `acts` 後仍遠小於 8 KB。
+
+### 7.2 P2 可動假人
+
+- 關節：骨盆、脊椎、頸、肩、肘、髖、膝、踝；手臂用 YXZ 旋轉順序（先往前抬再往內轉）。
+- 站姿時每個部件都在原本單件假人的位置（整體外框差 9 mm；只有被切成兩段的手腳中心點不同）。
+- 姿勢庫 10 種：stand、lean、recoil、slump、lookup、lookdown、face（雙手摀臉）、crossed（雙臂交叉）、open（張開雙臂）、kneel（單膝跪）。`reach` 通道從任何姿勢把左手伸向控制台。
+- **4090 驗證**：同一個 s03m plan、同一個種子與首格，用有關節的假人重渲預演與遮罩再跑 Layout Render，成片和舊假人幾乎相同（同一個成年男性、同樣背對鏡頭、同樣構圖；演員動態量 5.57 對 5.64）。[對照圖](../verification/motion-lab/perf_rig_jointed_s03.jpg)
+
+### 7.3 P3 第二演員（原型 `grammar.js` RELIEF 場）
+
+- 兩人場的站位是整場共用的（`blocking`）：在俯視圖拖任一人，整場跟著移動，正反拍才會接得起來。
+- 180 度線：俯視圖畫出兩人之間的線，鏡頭那一側打底色；每拍挑出的角度若落在另一側，會往兩邊找最接近、離線至少 0.15 m 的角度（主體轉身背對對方時，單純鏡像也可能壓在線上）。手動設定的角度不自動改，只提出越線警告；頂列可以整場換邊。
+- 兩人用的拍法：Two-shot wide、Over the shoulder、Over the shoulder onto the hands、Two-shot push、Push past the shoulder、Two-shot pull-out；有對手的拍優先挑這些。過肩鏡頭依兩人距離算角度：固定的離連線 0.3 m，推進的 0.45 m（從肩旁擦過，不穿過人）。
+- 互看：`look: 'partner'` 依兩人的站位算方向。
+- 已知缺口：固定的過肩鏡頭在高角度時，前景演員的肩膀不一定入框；要把對焦點往前景肩膀那側偏。
+
+### 7.4 表演文字的尺度：4090 對照
+
+同一個 S03 預演（有關節的假人）、同一個種子與 Klein 首格，Layout Render 加演員遮罩；只換 Action & Audio Prompt。
+
+| 版本 | 結果 |
+|---|---|
+| 原本的提示詞（明寫「背對鏡頭」） | 背對鏡頭轉轉盤 |
+| subtle 對 heightened，beat sheet 沒寫朝向 | **兩版都把他轉過來面對鏡頭**；heightened 的表情較大（張嘴、睜大眼），身體動作量幾乎一樣（演員動態量 6.85 對 6.74）。[對照圖](../verification/motion-lab/perf_scale_s03.jpg) |
+| 同上，每段附上從預演算出的朝向（「seen from behind」） | 見 [perf_scale_s03_facing](../verification/motion-lab/perf_scale_s03_facing.jpg) |
+
+結論與修正：
+
+1. 遮罩放開演員後，**朝向由文字決定**。寫法規則加上「保持每段的朝向」，說明附上每段朝向（不用 camera 這個字，模型會照抄而違反鏡頭字規則），檢查會抓「轉向鏡頭」。
+2. 尺度文字主要改變表情，不太改變身體幅度。要更大的身體動作，靠預演姿勢（P2 姿勢庫）配合 Motion pass，或用表演關鍵點排出動作。
+
+### 7.5 分鏡外觀（`ui/src/previs/board.js`）
+
+- 編輯器預設用分鏡外觀：人偶、著色器與描邊移植自影片拍法生成器的 `rig.js`（素描人偶：蛋形頭加十字輔助線、球關節、圓潤胸腔、漸細四肢、有手指的手、粗描邊），每人一種顏色，場景是明亮的高調灰。
+- 關節名稱與渲染假人相同，姿勢和表演關鍵點兩邊通用；整體放大 1.045 倍讓頭頂高度一致，取景不因外觀切換而變。
+- 送給 LTX 的預演永遠用渲染外觀（灰模、無描邊）：描邊會讓 Motion pass 變卡通。頂列 Look 可切換，隨時看實際送出去的樣子。
+- 預演亮度：Motion pass 會把預演的光線方向與明暗帶進成片；Layout Render 的明暗與色彩來自首格與提示詞（§7.4 的成片是黎明光，預演是灰藍）。

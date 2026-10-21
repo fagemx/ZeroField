@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, verticalFov, describePlan, planFromSlate, DOME, framesOf} from '../src/previs/plan.js';
+import {FRAMES, defaultPlan, cameraKeys, sampleCamera, sampleActor, sampleActs, blendPose, POSES, verticalFov, describePlan, planFromSlate, DOME, framesOf} from '../src/previs/plan.js';
+import * as THREE from 'three';
+import {buildStage} from '../src/previs/scene.js';
 import {benchGroup, stageShots} from '../src/studioModel.js';
 import {muxWebM, planFromWebM} from '../src/previs/webm.js';
 
@@ -132,4 +134,36 @@ test('multi-key paths flow through their middle keys; two keys stay a plain ease
   assert.deepEqual(at(96), [-2, 3, -1]);
   const two = {...defaultPlan(), keys: [[0, [0, 0, 0], [0, 1, 1]], [96, [4, 0, 0], [0, 1, 1]]]};
   assert.ok(Math.abs(sampleCamera(two, 48).position[0] - 2) < 1e-9 && sampleCamera(two, 24).position[0] < 1, 'eased in, halfway at the middle');
+});
+
+test('performance keys in a plan replace its canned action; each channel eases between the keys that set it', () => {
+  const acts = [{at: 0, yaw: -1.75, reach: 0, body: 'stand'}, {at: 0.25, yaw: 0}, {at: 0.5, reach: 1.16, body: 'lean'}, {at: 0.9, body: 'kneel'}];
+  const plan = {...defaultPlan(), seconds: 6, acts}, at = u => sampleActor(plan, u * 144);
+  assert.equal(at(0).yaw, -1.75); assert.equal(at(0.25).yaw, 0); assert.equal(at(1).yaw, 0);
+  assert.ok(Math.abs(at(0.25).reach - 0.58) < 1e-9, 'reach eases from the start key to the 0.5 key, ignoring the yaw-only key between');
+  assert.ok(at(0.4).reach > 0 && at(0.4).reach < 1.16); assert.equal(at(0.6).reach, 1.16);
+  assert.deepEqual(at(0.5).pose, blendPose('lean', 'kneel', 0));
+  assert.ok(at(0.7).pose.drop > 0 && at(0.7).pose.drop < POSES.kneel.drop, 'halfway into the kneel the pelvis is part way down');
+  assert.deepEqual(sampleActs(acts, 0.95).pose, blendPose('kneel', undefined, 0));
+  const late = [{at: 0, yaw: 0}, {at: 0.5, body: 'slump'}];
+  assert.ok(Object.values(sampleActs(late, 0).pose).flat().every(v => v === 0), 'standing at the start; the pose arrives by its key');
+  assert.ok(sampleActs(late, 0.25).pose.spine[0] > 0 && sampleActs(late, 0.25).pose.spine[0] < POSES.slump.spine[0]);
+  const room = {...plan, facing: 'room'};
+  assert.equal(sampleActor(room, 144).yaw, 0, 'a keyed yaw is absolute: facing is not added');
+  const bytes = muxWebM([{data: new Uint8Array(4), timestamp: 0, type: 'key'}], {width: 1280, height: 704, fps: 24, plan});
+  assert.deepEqual(planFromWebM(bytes.subarray(0, 8192)).acts, acts, 'the keys ride in the WebM with the plan');
+});
+
+test('the jointed mannequin stands where the single-piece one stood and bends into its poses', () => {
+  const stage = buildStage(defaultPlan()), plan = {...defaultPlan(), action: 'stand'};
+  const actor = () => { stage.scene.updateMatrixWorld(true); const box = new THREE.Box3(); stage.scene.traverse(o => { if (o.isMesh && o.userData.actor) box.union(new THREE.Box3().setFromObject(o)); }); return box; };
+  stage.pose(0, plan);
+  const rest = actor();
+  assert.ok(Math.abs(rest.max.y - 1.925) < 0.003 && Math.abs(rest.min.y) < 0.003 && Math.abs(rest.min.x + 0.34) < 0.003, 'same height and width standing');
+  stage.pose(0, {...plan, acts: [{at: 0, body: 'kneel'}]});
+  assert.ok(actor().max.y < rest.max.y - 0.3 && actor().min.y > -0.05, 'kneeling lowers him without sinking into the floor');
+  stage.pose(0, {...plan, acts: [{at: 0, body: 'lean'}]});
+  assert.ok(actor().max.z > rest.max.z + 0.1, 'leaning brings the head forward');
+  stage.pose(0, {...plan, acts: [{at: 0, body: 'face', reach: 1.16}]});
+  assert.ok(actor().max.z > rest.max.z + 0.3, 'a reach still takes the left arm out to the console from any pose');
 });

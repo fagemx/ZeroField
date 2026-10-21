@@ -2,6 +2,8 @@
 // performance; one timeline of performance keys drives both the previs mannequin and the timed beat sheet written into
 // the LTX Action & Audio Prompt. Ported from the shot-idiom generator's 表演調節 / perf_check; plain data, no DOM.
 
+import { sampleActs } from '../../src/previs/plan.js';
+
 /* ---------- levels: each one is a fixed instruction sentence the writer must follow ---------- */
 export const SCALES = ['subtle', 'natural', 'open', 'heightened'];
 export const SCALE_LABEL = { subtle: 'Subtle', natural: 'Natural', open: 'Open', heightened: 'Heightened' };
@@ -50,7 +52,7 @@ export const perfOf = (idiom, event) => ({ ...BY_EVENT[event], ...(idiom?.drama 
    A key sets some channels at time `at` (0..1 of the shot): look (where he faces), hands, walk (metres back from his
    mark); a key with `text` starts a beat-sheet segment. Each channel eases between the keys that set it. */
 export const LOOK = { console: 0, dial: -0.12, window: -0.6, glass: -1.75, beacon: 0.05, room: Math.PI };
-export const LOOK_LABEL = { console: 'the console', dial: 'the dial', window: 'a glance at the window', glass: 'the side glass', beacon: 'the beacon outside', room: 'the room' };
+export const LOOK_LABEL = { console: 'the console', dial: 'the dial', window: 'a glance at the window', glass: 'the side glass', beacon: 'the beacon outside', room: 'the room', partner: 'the other person' };
 export const HANDS = { down: 0, reach: 1.16, dial: 1.16, record: 0.95, raise: 2.3 };
 export const HANDS_LABEL = { down: 'at his sides', reach: 'reaching to the console', dial: 'on the dial', record: 'on the record key', raise: 'raising the recorder' };
 export const BEAT_STORY = {
@@ -79,22 +81,39 @@ export const BEAT_STORY = {
   S06: { sound: 'the rain easing, the hum of the open channel', core: ['recorder'], line: { who: 'Kael', text: 'This is Kael. I hear you.' }, acts: [
     { at: 0, look: 'room', hands: 'down', text: 'He turns to the room, the recorder on its strap.' },
     { at: 0.35, hands: 'raise', text: 'He raises the recorder to his mouth and decides to speak.' }] },
+  // The two-hander (grammar.js RELIEF). pacts: the other person's keys; they look at the subject unless told otherwise.
+  R01: { sound: 'rain on the glass, the hatch thudding shut', core: ['coat'], acts: [
+    { at: 0, look: 'partner', hands: 'down', text: 'Mira comes in shaking the rain off her coat; Kael turns from the console to face her.' },
+    { at: 0.5, text: 'They take each other in across the floor, neither speaking yet.' }] },
+  R02: { sound: 'rain, the low hum of the receivers', core: [], line: { who: 'Mira', text: 'You heard it too?' }, acts: [
+    { at: 0, look: 'partner', hands: 'down', text: 'Mira stops in front of him, studying his face.' },
+    { at: 0.4, text: 'She asks it quietly, watching for his answer.' }] },
+  R03: { sound: 'the recorded tone, thin through the small speaker', core: ['recorder'], acts: [
+    { at: 0, look: 'partner', hands: 'down', text: 'He holds her look.' },
+    { at: 0.3, hands: 'raise', text: 'He lifts the recorder between them and lets the tone play.' }] },
+  R04: { sound: 'the tone fading into static', core: [], line: { who: 'Mira', text: 'Static plays tricks at night.' }, acts: [
+    { at: 0, look: 'partner', hands: 'down', text: 'Mira listens, her face hardening.' },
+    { at: 0.5, body: 'crossed', text: 'She folds her arms, not ready to believe him.' }] },
+  R05: { sound: 'a low tone through the glass', core: ['beacon'], acts: [
+    { at: 0, look: 'partner', hands: 'down', text: 'He shakes his head, about to answer her.' },
+    { at: 0.45, look: 'beacon', text: 'Far beyond the glass the beacon blinks; he turns to it.' },
+    { at: 0.7, body: 'lean', text: 'He leans toward the glass, eyes on the light.' }],
+    pacts: [{ at: 0, look: 'partner' }, { at: 0.55, look: 'beacon' }] },
+  R06: { sound: 'the rain easing, the hum of the open channel', core: [], line: { who: 'Mira', text: 'Then answer it.' }, acts: [
+    { at: 0, look: 'partner', hands: 'down', text: 'Mira looks from the light to him.' },
+    { at: 0.4, text: 'She gives him the smallest nod, handing him the moment.' }],
+    pacts: [{ at: 0, look: 'beacon' }, { at: 0.3, look: 'partner' }] },
 };
-const smooth = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
-const chan = { look: k => LOOK[k.look], hands: k => HANDS[k.hands], walk: k => k.walk };
+export const POSE_LABEL = { stand: 'standing', lean: 'leaning in', recoil: 'recoiling', slump: 'slumped', lookup: 'looking up', lookdown: 'looking down',
+  face: 'hands to his face', crossed: 'arms crossed', open: 'arms open', kneel: 'kneeling' };
+// The keys as the 3D Stage plan stores them (plan.js sampleActs): look, hands and walk become yaw, reach and back.
 // Times written as n / 96 match plan.js's 0..96 beat clock, so the default keys replay the 3D Stage actions exactly.
-// {yaw, reach, back} at shot time u (0..1): the same shape plan.js sampleActor returns, so the solver can use either.
-export function samplePerf(acts, u) {
-  const out = {};
-  for (const [name, val] of Object.entries(chan)) {
-    const keys = acts.filter(k => k[name] != null).sort((a, b) => a.at - b.at);
-    if (!keys.length) { out[name] = 0; continue; }
-    let i = 0; while (i < keys.length - 1 && u >= keys[i + 1].at) i++;
-    const a = keys[i], b = keys[i + 1];
-    out[name] = !b || u <= a.at ? val(a) : val(a) + (val(b) - val(a)) * smooth((u - a.at) / Math.max(1e-6, b.at - a.at));
-  }
-  return { yaw: out.look, reach: out.hands, back: out.walk };
-}
+// "partner" looks from mark `from` to the other person's mark `to`.
+export const toActs = (acts, from, to) => acts && acts.map(k => Object.fromEntries(Object.entries({ at: k.at,
+  yaw: k.look === 'partner' ? (to ? Math.atan2(to[0] - from[0], to[1] - from[1]) : undefined) : LOOK[k.look], reach: HANDS[k.hands], back: k.walk, body: k.body })
+  .filter(([, v]) => v != null)));
+// {yaw, reach, back, pose} at shot time u (0..1), sampled exactly as the 3D Stage samples a plan.
+export const samplePerf = (acts, u) => sampleActs(toActs(acts), u);
 // Beat-sheet segments: one per key with text, from its time to the next text key (or the end of the shot).
 export function segments(acts, seconds) {
   const keys = acts.filter(k => k.text != null).sort((a, b) => a.at - b.at);
@@ -148,12 +167,13 @@ const RESTRAINT = /\b(subtle|subtly|slight(?:ly)?|barely|faint(?:ly)?|restrained
 const BIG = /\b(gasps?|sobs?|shouts?|yells?|laughs?|slams?|staggers?|jolts?|recoils?|lunges?|trembl\w+|shak(?:es|ing)|wide-eyed|cries|crying|tears (?:fall|stream|run)|clutch\w*|reels?|spins?|whips?|snaps?|jerks?|lurches?|bursts?|throws?|flings?|gapes?|heaves?|bellows?|roars?)\b/i;
 const STRONG = /\b(shouts?|yells?|sobs?|slams?|lunges?|staggers?|collapses?|laughs? out loud|screams?)\b/i;
 const UPPER = /\b(leans?|shrugs?|turns? (?:his )?shoulders?|bows?)\b/i;
-const FULL = /\b(steps?|walks?|crosses|stands? up|kneels?|runs?|spins? round|paces?|stumbles?)\b/i;
+const FULL = /\b(steps?|walks?|crosses|stands? up|kneels?|runs? (?:to|toward|towards|across|away|off|out|back)|spins? round|paces?|stumbles?)\b/i;  // "a tremble runs through him" is not a run
 const clauses = s => String(s || '').split(/[.;:!?\n]|,\s*(?:but|and then)\b/i).map(x => x.trim()).filter(Boolean);
 const hits = (text, re) => clauses(text).filter(c => !NEG.test(c)).map(c => c.match(re)?.[0]).filter(Boolean);
 const stem = w => w.toLowerCase().replace(/(ing|ed|es|s)$/, '');
 // Issues per segment (index) plus beat-wide ones under -1. skeleton = the template keys' text (what the previs shows).
-export function checkPerformance(texts, { segs, L, story, line }) {
+const FACES_CAMERA = /\b(turns? (?:round |around )?to (?:face )?(?:the )?(?:camera|us|lens)|faces the (?:camera|lens)|looks? (?:straight )?(?:in|at) (?:the )?(?:camera|lens)|towards? the (?:camera|lens))\b/i;
+export function checkPerformance(texts, { segs, L, story, line, facing }) {
   const byShot = {}, add = (i, m) => { (byShot[i] ||= []).push(m); };
   const skeleton = segs.map(s => s.text).join(' ').toLowerCase();
   texts.forEach((x, i) => {
@@ -168,6 +188,7 @@ export function checkPerformance(texts, { segs, L, story, line }) {
   });
   const all = texts.join(' ');
   for (const w of story?.core || []) if (!all.toLowerCase().includes(stem(w))) add(-1, `the action skeleton is missing "${w}"`);
+  texts.forEach((x, i) => { if (/from behind/.test(facing?.[i] || '') && FACES_CAMERA.test(x)) add(i, 'turns to face the camera, but this segment is seen from behind'); });
   if (story?.key) { const keyWords = story.key.toLowerCase().split(/\W+/).filter(w => w.length > 4); if (keyWords.length && !keyWords.some(w => all.toLowerCase().includes(w))) add(-1, `the must-have image is missing: ${story.key}`); }
   if (L.scale === 'open' || L.scale === 'heightened') { const r = hits(all, RESTRAINT); if (r.length) add(-1, `scale is ${L.scale} but it is written small: ${[...new Set(r)].join(', ')}`); }
   if (L.scale === 'heightened' && !hits(all, BIG).length) add(-1, 'scale is heightened but nothing big is written');
@@ -195,19 +216,20 @@ Rules:
 9. Keep each segment to about 20 words per second of the segment.
 10. Plain present tense, short concrete sentences, like a director talking to an actor on set.
 11. Keep the action skeleton (the blocked action of each segment): play it bigger or smaller, never replace it or write its opposite.
+    Keep each segment's facing: when a segment is seen from behind, he never turns round to face us; write the feeling into his posture, shoulders and head instead.
 12. The levels the director set for the shot come first; when they conflict with these rules, follow the levels, but never break rules 5 and 8, the line or the must-have image.`;
 export function writerPrompt(scene, beats, versions = 0, repair = null) {
   const block = b => [
     `Shot ${b.id} "${b.title}" (${b.seconds} s). Camera, already decided: ${b.camera}. In frame: ${b.visible}.`,
     `  Levels (follow them):\n${b.levelLines.map(l => '    - ' + l).join('\n')}`,
-    `  Segments to write (keep the times and the blocked action of each):\n${b.segs.map((s, i) => `    ${i + 1}. ${s.t0.toFixed(1)}–${s.t1.toFixed(1)}s, blocked action: ${s.text}`).join('\n')}`,
+    `  Segments to write (keep the times, the blocked action and the facing of each):\n${b.segs.map((s, i) => `    ${i + 1}. ${s.t0.toFixed(1)}–${s.t1.toFixed(1)}s, blocked action: ${s.text}${b.facing?.[i] ? ` Facing: ${b.facing[i]}.` : ''}`).join('\n')}`,
     b.story.line ? `  Line: ${b.story.line.who} says "${b.story.line.text}" (write how it is said, not the words).` : '',
     b.story.key ? `  Must-have image: ${b.story.key}.` : '',
     repair?.[b.id] ? `  Your last attempt failed these checks, fix them: ${repair[b.id].join('; ')}` : ''].filter(Boolean).join('\n');
   const shape = versions
     ? `Write ${versions} different versions of shot ${beats[0].id}, each with a different reading (where the turn comes, which small action carries it, the subtext). Reply with JSON only: {"versions": [{"label": "the reading in at most six words", "segments": ["...", "..."]}]}`
     : `Reply with JSON only: {"shots": [{"id": "${beats[0].id}", "segments": ["...", "..."]}${beats.length > 1 ? ', ...' : ''}]} with one string per segment, in order.`;
-  return `${scene.title}\nKael: a radio operator in his thirties, alone in a glass observatory during a storm, waiting for an answer to his signal.\n\n${beats.map(block).join('\n\n')}\n\n${shape}`;
+  return `${scene.title}\n${scene.premise}\n\n${beats.map(block).join('\n\n')}\n\n${shape}`;
 }
 // The model's JSON, with any <think> block removed (thinking models put reasoning first).
 export function parseWriter(answer) {
@@ -225,14 +247,14 @@ export const issueList = chk => Object.entries(chk.byShot).flatMap(([i, ms]) => 
 const checked = (b, got) => {
   const texts = Array.isArray(got) && got.length === b.segs.length ? got.map(x => String(x || '').trim()) : null;
   if (!texts) return { texts: null, issues: [`expected ${b.segs.length} segments`] };
-  return { texts, issues: issueList(checkPerformance(texts, { segs: b.segs, L: b.L, story: b.story, line: b.story.line?.text })) };
+  return { texts, issues: issueList(checkPerformance(texts, { segs: b.segs, L: b.L, story: b.story, line: b.story.line?.text, facing: b.facing })) };
 };
 // beats: [{id, title, seconds, camera, visible, levelLines, segs, story, L}]; ask(prompt) -> the model's answer.
 // Returns {id: {texts, issues}}: issues empty = passed; texts null = nothing usable came back.
-export async function writeScene(title, beats, ask) {
+export async function writeScene(scene, beats, ask) {
   const out = {}; let todo = beats, repair = null;
   for (let round = 0; round < 2 && todo.length; round++) {
-    const reply = parseWriter(await ask(writerPrompt({ title }, todo, 0, repair)));
+    const reply = parseWriter(await ask(writerPrompt(scene, todo, 0, repair)));
     repair = {};
     for (const b of todo) { out[b.id] = checked(b, reply?.shots?.find(x => x.id === b.id)?.segments); if (out[b.id].issues.length) repair[b.id] = out[b.id].issues; }
     todo = todo.filter(b => out[b.id].issues.length);
@@ -240,7 +262,7 @@ export async function writeScene(title, beats, ask) {
   return out;
 }
 // Several readings of one beat, each checked; a version that fails is shown with its issues and cannot be applied.
-export async function writeVersions(title, b, ask, n = 3) {
-  const reply = parseWriter(await ask(writerPrompt({ title }, [b], n)));
+export async function writeVersions(scene, b, ask, n = 3) {
+  const reply = parseWriter(await ask(writerPrompt(scene, [b], n)));
   return (reply?.versions || []).slice(0, n).map(v => ({ label: String(v.label || '').slice(0, 60), ...checked(b, v.segments) })).filter(v => v.texts);
 }

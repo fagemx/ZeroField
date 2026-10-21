@@ -1,0 +1,12 @@
+{
+ "actor_motion_energy": {
+  "s03m_layout_mask_ref": 5.64,
+  "s03r_layout_mask_ref": 5.57,
+  "s03r_subtle": 6.85,
+  "s03r_heightened": 6.74
+ },
+ "sheets": {
+  "subtle": "0.0\u20131.4s: He stands still, head tilted slightly up. Breath is shallow, held in the chest. Eyes fixed on the wet glass, watching the rain slide down. No other movement.\n1.4\u20132.8s: He turns slowly from the glass toward the console. Shoulders rotate gently. Head follows last. Face remains neutral, focused. No sudden jerks or shifts in posture.\n2.8\u20134.5s: His hand reaches out, fingers gripping the brass dial. He turns it slowly. Far beyond the glass, a distant beacon blinks on once. His grip tightens slightly.\n4.5\u20136.0s: He freezes completely. Eyes lock onto the distant light. Breath stops. Face remains still, only the whites of his eyes visible. No head movement, no blink.\nSound: the click of the dial, a low radio tone.",
+  "heightened": "0.0\u20131.4s: Kael stands rigid facing the glass. His shoulders hunch high. Breath is fast and shallow. He looks terrified. As if hiding from a predator.\n1.4\u20132.8s: He spins sharply toward the console. Head whips around. Eyes widen. Mouth opens in shock. Shoulders square up. He is fully alert. As if startled awake.\n2.8\u20134.5s: Hand slams onto the brass dial. Fists grip tight. He twists it hard. A bright beacon flashes far outside. He watches the light. As if confirming a threat.\n4.5\u20136.0s: He freezes completely. Stares at the blinking light. Breath stops. Eyes are wide and fixed. Fingers remain locked on the dial. Total paralysis. As if time stopped.\nSound: the click of the dial, a low radio tone."
+ }
+}

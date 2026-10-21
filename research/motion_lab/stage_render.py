@@ -1,7 +1,7 @@
 """Re-render a 3D Stage previs headless with the product's own scene.js / webm.js, from the plan stored in the WebM.
 
 usage: python stage_render.py PREVIS.webm OUT.webm [matte]
-"matte" renders the actor white on black (the actor's coat/skin/hair materials) for guide attention masks.
+"matte" renders every cast member white on black (scene.js matte) for guide attention masks.
 """
 import base64, sys
 from pathlib import Path
@@ -19,12 +19,7 @@ renderer.setPixelRatio(1); renderer.setSize(WIDTH, HEIGHT, false); document.body
 window.render = async (b64, matte) => {
   const plan = planFromWebM(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
   const stage = buildStage(plan); stage.roof(true);
-  if (matte) {  // the actor alone uses the coat, skin and hair materials
-    const actor = new Set([0x55585f, 0x383a40, 0xccad94, 0x3a322c]);
-    const white = new THREE.MeshBasicMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    stage.scene.background = new THREE.Color(0x000000);
-    stage.scene.traverse(o => { if (o.isMesh) o.material = actor.has(o.material.color?.getHex()) ? white : black; });
-  }
+  if (matte) stage.matte(true);  // every cast member white on black (scene.js tags them), whatever their coat
   const blob = await encodeCanvas(renderer.domElement, framesOf(plan), FPS, f => { stage.frame(f, plan); renderer.render(stage.scene, stage.camera); }, null, plan);
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
