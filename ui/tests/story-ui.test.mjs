@@ -31,17 +31,17 @@ test('Micro has real candidate, split, restoration and node-input surfaces',()=>
   for(const text of ['Continuity grades','Auto-grade new takes','No grades yet']) assert.ok(html.includes(text));
 });
 
-test('continuity grades show score, notes, the GPU hand-off and a retake proposal in both languages',async()=>{
+test('continuity grades show score, notes, the GPU hand-off and a one-click retake in both languages',async()=>{
   const grades=[{gradeId:'g1',assetId:'pa_1',assetUrl:'/projects/api/demo/assets/pa_1',status:'graded',score:58,passed:false,
-    feedback:'Hand leaves the dial late.',issues:['Second figure at 2.5s'],proposalId:42,sheetUrl:'/projects/api/demo/assets/pa_2',model:'qwen3.8',seconds:31.2,gpu:{comfyFreed:true}},
+    feedback:'Hand leaves the dial late.',issues:['Second figure at 2.5s'],retakePrompt:'Kael keeps his hand on the dial.',sheetUrl:'/projects/api/demo/assets/pa_2',model:'qwen3.8',seconds:31.2,gpu:{comfyFreed:true}},
     {gradeId:'g2',assetId:'pa_3',assetUrl:'/projects/api/demo/assets/pa_3',status:'waiting_gpu',auto:true}];
   const grading={grades,auto:true,busy:false,error:''};
   let html=render('TakeGrades',{grading,writable:true});
-  for(const text of ['58/100','Retake','Hand leaves the dial late.','Second figure at 2.5s','Retake proposal #42','8-frame contact sheet','GPU handed off from ComfyUI','Waiting for the GPU','Auto']) assert.ok(html.includes(text),text);
+  for(const text of ['58/100','Retake','Hand leaves the dial late.','Second figure at 2.5s','Retake with this prompt','Kael keeps his hand on the dial.','8-frame contact sheet','GPU handed off from ComfyUI','Waiting for the GPU','Auto']) assert.ok(html.includes(text),text);
   assert.match(html,/checked=""/);
   await components.setLocale('zh-TW');  // the bundle carries its own i18n instance
   html=render('TakeGrades',{grading,writable:false});
-  for(const text of ['連戲評分','重拍','重拍提案 #42','等待 GPU','8 格聯絡表']) assert.ok(html.includes(text),text);
+  for(const text of ['連戲評分','重拍','用這個提示詞重拍','等待 GPU','8 格聯絡表']) assert.ok(html.includes(text),text);
   assert.match(html,/disabled=""/);
   await components.setLocale('en');
 });

@@ -1,4 +1,4 @@
-"""Continuity grading of sheet-row takes: rubric, GPU hand-off and the director-approved retake proposal.
+"""Continuity grading of sheet-row takes: rubric, GPU hand-off and the one-click retake prompt.
 
 The vision model, Ollama and ComfyUI are one local fake HTTP server; FFmpeg and PostgreSQL are real.
 """
@@ -162,7 +162,7 @@ class GradeHTTPTests(unittest.TestCase):
             server.shutdown(); server.server_close()
         return ran, calls
 
-    def test_grade_from_shot_review_hands_off_the_gpu_and_stages_a_retake_for_approval(self):
+    def test_grade_from_shot_review_hands_off_the_gpu_and_keeps_a_one_click_retake(self):
         take = next(v for v in self.ok(f"/shots/{self.shot}/videos")["items"] if v["selected"])
         queued = self.ok(f"/shots/{self.shot}/grades", "POST", {"videoId": take["videoId"]})
         self.assertEqual((queued["status"], queued["assetUrl"], queued["auto"]), ("queued", self.take, False))
@@ -184,23 +184,21 @@ class GradeHTTPTests(unittest.TestCase):
         self.assertTrue(grade["gpu"]["comfyFreed"] and grade["gpu"]["waitedForRenders"] and grade["gpu"]["visionUnloaded"])
         self.assertEqual(self.repo.get_asset_meta(self.conn, self.slug, grade["sheetUrl"].rsplit("/", 1)[1])[0], "image/png")
 
-        from project_assistant import store
-        proposal = store.proposal(self.conn, grade["proposalId"])
-        self.assertEqual((proposal["status"], proposal["action"], proposal["message_id"]), ("pending", "table_edit", None))
+        retake = "Kael keeps his hand on the dial to the final frame. @CAST-01 @SET-01"
+        self.assertEqual(grade["retakePrompt"], retake)
+        self.assertNotIn("proposalId", grade)  # grading is information: no proposal waits for approval
         self.conn.rollback()
         row = lambda: next(r for r in self.story.table_rows(self.conn, self.slug, "cinema-studio") if r["rid"] == self.row["rid"])
-        self.assertEqual(row()["cells"][3], self.row["cells"][3])  # nothing applied before the director decides
-        code, applied, _ = self.request(f"/projects/api/{self.slug}/assistant/proposals/{grade['proposalId']}/apply", method="POST", data={})
-        self.assertEqual((code, applied["proposal"]["status"]), (200, "applied"), applied)
+        self.assertEqual(row()["cells"][3], self.row["cells"][3])  # grading alone never edits the shot
+        self.ok(f"/shots/{self.shot}", "PATCH", {"description": retake})  # Retake with this prompt, step one
         self.conn.rollback()
-        self.assertEqual(row()["cells"][3], "Kael keeps his hand on the dial to the final frame. @CAST-01 @SET-01")
-        self.assertEqual(row()["cells"][6], "Retake")
+        self.assertEqual(row()["cells"][3], retake)
 
     def test_passing_grade_stages_nothing_and_bad_answers_fail_visibly(self):
         self.ok(f"/shots/{self.shot}/grades", "POST", {"assetUrl": self.take})
         self.run_grader(answer=json.dumps({"score": 84, "passed": True, "issues": [], "feedback": "Holds.", "retake_prompt": ""}))
         grade = self.ok(f"/shots/{self.shot}/grades")["items"][0]
-        self.assertEqual((grade["score"], grade["passed"], grade["proposalId"]), (84, True, None))
+        self.assertEqual((grade["score"], grade["passed"], grade["retakePrompt"]), (84, True, ""))
         self.ok(f"/shots/{self.shot}/grades", "POST", {"assetUrl": self.take})
         self.run_grader(answer="I cannot see the image.")
         grade = self.ok(f"/shots/{self.shot}/grades")["items"][0]

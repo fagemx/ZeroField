@@ -2427,7 +2427,8 @@
     "issues": "問題",
     "sheet": "8 格聯絡表",
     "sheetAlt": "受評鏡次的 8 格時間戳聯絡表",
-    "retakeProposal": "重拍提案 #{{id}}（改寫後的提示詞）正在 Studio Assistant 等你核准。",
+    "retakePrompt": "改寫後的提示詞",
+    "retakeNow": "用這個提示詞重拍",
     "meta": "{{model}} · {{seconds}} 秒 · GPU 已從 ComfyUI 交接",
     "metaNoComfy": "{{model}} · {{seconds}} 秒"
   }

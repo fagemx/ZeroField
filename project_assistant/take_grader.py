@@ -3,7 +3,7 @@
 The Continuity Supervisor's vision model grades the product's 8-frame contact sheet of a take with the rubric the
 Phase 2 hand grading used. LTX-2.5 and a local vision model do not fit on one 24 GB GPU together, so a grade waits for
 ComfyUI to go idle (it never interrupts a render), frees ComfyUI's models, grades, then unloads the vision model.
-A failing grade may stage a retake proposal; it waits in the director's review queue like every other proposal.
+A failing grade carries the grader's rewritten prompt; Retake with it in shot review applies it and re-shoots in one click.
 """
 from __future__ import annotations
 
@@ -196,11 +196,7 @@ def _grade(conn, job):
             GPU_LOCK.release()
     card = scorecard(answer, view['description'])
     sheet_id = repo.put_asset(conn, slug, data=sheet, content_type='image/png', actor_id=job['requestedBy'])
-    proposal_id = None
-    if not card['passed'] and card['retakePrompt']:
-        _, row = story.find_row(conn, job['shotId'], 'shot')  # the director may have edited the row meanwhile
-        proposal_id = retake_proposal(conn, slug, row, job['requestedBy'], card)
-    _save(conn, job, status='graded', **card, proposalId=proposal_id, gradedAt=now(),
+    _save(conn, job, status='graded', **card, gradedAt=now(),
           sheetUrl=f'/projects/api/{slug}/assets/{sheet_id}', timing=timing, model=config.model,
           seconds=round(time.monotonic() - started, 1), gpu=gpu)
 
@@ -309,25 +305,3 @@ def scorecard(answer, prompt):
         retake = ' '.join([retake, *tags])
     return {'score': value['score'], 'passed': value['passed'], 'issues': issues,
             'feedback': str(value.get('feedback') or '')[:3000], 'retakePrompt': retake}
-
-
-def retake_proposal(conn, slug, row, owner_id, card):
-    """Stage the grader's rewritten prompt (and Retake status) as a normal table proposal for the director."""
-    from project_docs import repository as repo
-    from project_assistant import proposal_review, store, table_edits
-    tab = repo.get_tab(conn, slug, row['tabKey'])
-    headers = row['headers']
-    prompt = next((i for i, h in enumerate(headers) if re.search('prompt', h, re.I)), None)
-    if prompt is None:
-        return None
-    cells = {str(prompt): card['retakePrompt']}
-    status = next((i for i, h in enumerate(headers) if h.casefold() == 'status'), None)
-    if status is not None:
-        cells[str(status)] = 'Retake'
-    values = repo.field_values(conn, slug).get(tab['key'], {})
-    ops, fields, preview = table_edits.prepare(tab['doc'], [{'row_id': row['rid'], 'cells': cells}], [], values)
-    target = {'tab_key': tab['key'], 'tab_title': tab['title'], 'display': tab['title'], 'ops': ops, 'field_edits': fields,
-              'source_revision': tab['revision'], 'origin': 'continuity_grade'}
-    target['review'] = proposal_review.describe(target, tab)
-    note = f"Continuity grade {card['score']}/100: {card['feedback'][:300]}"
-    return store.create_proposal(conn, slug, owner_id, None, 'table_edit', target, note + '\n' + preview)

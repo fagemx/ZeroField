@@ -257,6 +257,12 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
   const selected = apps.find(a => a.appCode === app);
   const perform = fn => action.run(async wait => {if (beforeRun?.() === false) return; return fn(wait);});
   const grading = useTakeGrades(slug, id);
+  // Retake with the grader's rewritten prompt: it becomes the shot's prompt and the shot re-renders, no approval step.
+  const videoApp = selected?.capability === 'VIDEO' ? app : apps.find(a => a.capability === 'VIDEO')?.appCode;
+  const retake = g => perform(async wait => {
+    await storyRequest(`/shots/${id}`, 'PATCH', {description:g.retakePrompt});
+    await wait(await storyRequest(`/shots/${id}/video-generations`, 'POST', {appCode:videoApp}));
+  });
   return <section className="story-shot-tools">
     <h3>{t('story.candidateTakes')}</h3>
     {shot && <p>{statusLabel(reviewStatus)} · {t('allocation.complexity_' + shot.complexity.complexity_tier)}</p>}
@@ -273,7 +279,7 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
       })}>{t(take.selected ? 'story.selectedTake' : 'story.useTake')}</button>
       {kind === 'videos' && <GradeButton grade={takeGrade(grading.grades, take.url)} disabled={!writable || grading.busy} onGrade={() => grading.grade({videoId:take.videoId})}/>}</figcaption>
     </figure>)}</div>)}
-    <TakeGrades grading={grading} writable={writable}/>
+    <TakeGrades grading={grading} writable={writable} onRetake={videoApp && !disabled && !action.busy ? retake : null}/>
     <div className="sheet-panel-actions"><button disabled={!writable || disabled || action.busy} onClick={() => perform(() => storyRequest(`/shots/${id}/splits`, 'POST'))}>{t('story.splitShot')}</button>
       <button disabled={!writable || disabled || action.busy || !currentTakes.videos.some(v => v.selected)} onClick={() => perform(async wait => {
         await wait(await storyRequest(`/shots/${id}/video-generations`, 'POST', {appCode:'H3_OPTIMIZE_4K', referenceSourceVideoId:currentTakes.videos.find(v => v.selected).videoId}));
@@ -317,7 +323,7 @@ function GradeButton({grade, disabled, onGrade}) {
   </span>;
 }
 
-export function TakeGrades({grading, writable}) {
+export function TakeGrades({grading, writable, onRetake}) {
   useLocale();
   return <section className="take-grades" aria-label={t('grade.title')}>
     <h3>{t('grade.title')}</h3>
@@ -334,7 +340,10 @@ export function TakeGrades({grading, writable}) {
           {g.feedback && <p>{g.feedback}</p>}
           {g.issues?.length > 0 && <ul aria-label={t('grade.issues')}>{g.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>}
           {g.error && <p role="alert">{g.error}</p>}
-          {g.proposalId && <p className="take-grade-proposal">{t('grade.retakeProposal', {id:g.proposalId})}</p>}
+          {graded && !g.passed && g.retakePrompt && <div className="take-grade-retake">
+            <details><summary>{t('grade.retakePrompt')}</summary><p>{g.retakePrompt}</p></details>
+            <button disabled={!writable || !onRetake} onClick={() => onRetake(g)}>{t('grade.retakeNow')}</button>
+          </div>}
           {g.sheetUrl && <details><summary>{t('grade.sheet')}</summary><img src={g.sheetUrl} alt={t('grade.sheetAlt')} loading="lazy"/></details>}
           {graded && <small>{t(g.gpu?.comfyFreed ? 'grade.meta' : 'grade.metaNoComfy', {model:g.model, seconds:g.seconds})}</small>}
         </div>

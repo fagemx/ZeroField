@@ -2427,7 +2427,8 @@
     "issues": "Issues",
     "sheet": "8-frame contact sheet",
     "sheetAlt": "8-frame timestamped contact sheet of the graded take",
-    "retakeProposal": "Retake proposal #{{id}} (rewritten prompt) is waiting for your approval in Studio Assistant.",
+    "retakePrompt": "Rewritten prompt",
+    "retakeNow": "Retake with this prompt",
     "meta": "{{model}} · {{seconds}} s · GPU handed off from ComfyUI",
     "metaNoComfy": "{{model}} · {{seconds}} s"
   }

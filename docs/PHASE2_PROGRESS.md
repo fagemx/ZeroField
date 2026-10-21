@@ -116,8 +116,10 @@ same rubric and brief as the hand runs, plus one ask: a rewritten shot prompt wh
 - **Stored with the take.** Score, pass/retake, issues, notes, the contact sheet asset, model, seconds and the
   hand-off record live in `story_record` (`take_grade`), keyed by row and take asset; `GET/POST
   /aivideo/open/v1/shots/{id}/grades`, `GET/PUT /aivideo/open/v1/projects/{id}/grading`.
-- **Retake proposals wait.** A failing grade with a rewritten prompt stages a normal table proposal (prompt +
-  `Retake` status, `@asset` tags kept) in Studio Assistant; nothing changes until the director applies it.
+- **One-click retake, no approval.** A grade is information, never a gate. A failing grade keeps the grader's
+  rewritten prompt (`@asset` tags kept); **Retake with this prompt** writes it into the shot (`PATCH /shots/{id}`)
+  and re-renders with the selected video app. (Until 2026-10-21 a failing grade staged a table proposal for the
+  director to approve; the run below shows that earlier behaviour.)
 
 Real run on the 4090 (2026-10-21): an LTX-2.5 render was queued in ComfyUI, then **Grade** was pressed on the
 selected S03 take (6 s 3D Stage take). The grade showed *Waiting for the GPU* until the render finished
