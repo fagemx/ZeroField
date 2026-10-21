@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shot Grammar · ZeroField prototype</title>
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #14171c; --raised: #1b1f26; --line: #262b33; --fg: #e6e8ec; --muted: #8b93a1;
+    --amber: #f59e0b; --cyan: #06b6d4; --warn: #f2b33d; --ok: #5dc48c;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: #3a414c; }
+  button:disabled { opacity: .4; cursor: default; }
+  button[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #111; font-weight: 600; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  .seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  .label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .hint { font-size: 12px; color: var(--muted); margin: 0; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .row > .label { min-width: 70px; }
+
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 10px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 2px; }
+  nav a { color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: 6px; }
+  nav a[aria-current="page"] { color: var(--fg); background: var(--raised); box-shadow: inset 0 -2px 0 var(--amber); }
+  header .tools { margin-left: auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+  .view { padding: 16px 20px 40px; display: grid; gap: 16px; align-content: start; }
+  .view[hidden] { display: none; }
+  .view-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+  .view-head h2 { margin: 0; font-size: 18px; }
+
+  /* Scene: the storyboard */
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+  .sb { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: grid; cursor: pointer; text-align: left; padding: 0; }
+  .sb:hover { border-color: #3a414c; }
+  .sb[data-sel="true"] { border-color: var(--amber); }
+  .frames { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #000; align-self: start; }
+  .frames.one { grid-template-columns: 1fr; }
+  .frames figure { margin: 0; position: relative; }
+  .frames img { display: block; width: 100%; aspect-ratio: 1280 / 704; object-fit: cover; background: #222; }
+  .frames figcaption { position: absolute; left: 6px; bottom: 4px; font-size: 11px; background: rgba(10, 12, 15, .7); padding: 0 5px; border-radius: 3px; }
+  .sb .meta { padding: 10px 12px; display: grid; gap: 3px; }
+  .sb .meta b { font-family: var(--mono); }
+  .sb .words { font-size: 12px; color: var(--muted); }
+  .sb .flag { color: var(--warn); font-size: 12px; }
+
+  .timeline { position: relative; display: flex; height: 78px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); cursor: pointer; }
+  .tl-beat { position: relative; border-right: 1px solid var(--line); padding: 6px 8px; min-width: 0; display: grid; align-content: start; }
+  .tl-beat:last-child { border-right: 0; }
+  .tl-beat b { font-family: var(--mono); font-size: 12px; }
+  .tl-beat span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tl-beat[data-sel="true"] { background: #1f1a10; box-shadow: inset 0 -3px 0 var(--amber); }
+  .tl-beat .flag { color: var(--warn); }
+  .tl-svg { position: absolute; inset: 0; pointer-events: none; }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--cyan); pointer-events: none; }
+  .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .checks li { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+  .checks li[data-kind="warn"] { border-left-color: var(--warn); cursor: pointer; }
+  .checks li[data-kind="ok"] { border-left-color: var(--ok); }
+  .checks li[data-kind="info"] { border-left-color: var(--cyan); }
+
+  /* Live viewports (the one WebGL canvas moves between them) */
+  .viewport { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  .viewport canvas.live { display: block; width: 100%; aspect-ratio: 1280 / 704; touch-action: none; }
+  .viewport[data-grab="true"] canvas { cursor: grab; }
+  .ov { position: absolute; left: 12px; right: 12px; pointer-events: none; display: flex; justify-content: space-between; gap: 12px; }
+  .ov.top { top: 10px; } .ov.bot { bottom: 10px; }
+  .ov span:not(:empty) { background: rgba(10, 12, 15, .72); padding: 3px 8px; border-radius: 4px; font-size: 13px; }
+  .ov .limit { color: var(--warn); }
+  .transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .transport .time { font-family: var(--mono); color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* Shot: framing workbench */
+  .shotgrid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .shotgrid, .twoup { grid-template-columns: minmax(0, 1fr); } }
+  .stagecol { display: grid; gap: 12px; min-width: 0; }
+  aside { display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 10px; min-width: 0; }
+  .card h3 { font-size: 12px; margin: 0; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .card h4 { font-size: 15px; margin: 0; }
+  input[type="range"] { accent-color: var(--amber); flex: 1; min-width: 120px; }
+  .idioms { display: grid; gap: 6px; }
+  .idiom { text-align: left; display: grid; gap: 2px; padding: 8px 10px; }
+  .idiom .t { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .idiom .t span { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .idiom .w { font-size: 12px; color: var(--muted); }
+  .idiom[data-pick="true"] { border-color: var(--amber); background: #221b0e; }
+  .idiom[data-usable="false"] { opacity: .55; }
+  .chip { font-size: 11px; padding: 0 6px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); font-style: normal; }
+  .chip.drama { color: var(--amber); border-color: #5c4510; }
+  .chip.pin { color: var(--cyan); border-color: #0e4652; }
+  .words { font-family: var(--mono); font-size: 12px; background: var(--raised); border-radius: 6px; padding: 8px; overflow-wrap: anywhere; }
+  svg.curve { width: 100%; height: 56px; background: var(--raised); border-radius: 6px; }
+
+  /* Overhead: two pictures at once */
+  .twoup { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  canvas#lensMini { display: block; width: 100%; aspect-ratio: 1280 / 704; background: #000; border-radius: 8px; border: 1px solid var(--line); }
+  .shotlist { display: grid; gap: 6px; }
+  .shotlist button { text-align: left; display: grid; gap: 1px; }
+  .shotlist button span { font-size: 12px; color: var(--muted); }
+  .shotlist button[data-sel="true"] { border-color: var(--amber); }
+
+  /* Library */
+  .lib-event { display: grid; gap: 10px; }
+  .lib-event h3 { margin: 0; font-size: 15px; }
+  .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .lib-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: grid; align-content: start; }
+  .lib-card[data-used="true"] { border-color: var(--amber); }
+  .lib-card .meta { padding: 8px 10px; display: grid; gap: 4px; }
+
+  /* Export */
+  .exp { display: grid; gap: 12px; }
+  .exp-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .exp-card { grid-template-columns: minmax(0, 1fr); } }
+  .exp-card img { width: 100%; border-radius: 6px; aspect-ratio: 1280 / 704; object-fit: cover; }
+  .exp-card pre { margin: 0; max-height: 140px; overflow: auto; font-size: 11px; background: var(--raised); border-radius: 6px; padding: 8px; }
+  textarea.copybuf { position: absolute; left: -9999px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Shot Grammar</h1>
+    <div class="sub">ZeroField 3D Stage prototype · <span id="sceneTitle"></span></div>
+  </div>
+  <nav aria-label="Views">
+    <a href="#scene" data-route="scene">Storyboard</a>
+    <a href="#shot" data-route="shot">Shot</a>
+    <a href="#overhead" data-route="overhead">Overhead</a>
+    <a href="#library" data-route="library">Idiom library</a>
+    <a href="#export" data-route="export">Export</a>
+  </nav>
+  <div class="tools">
+    <div class="row"><span class="label">Style</span><div class="seg" id="presets"></div></div>
+    <div class="row"><span class="label">Light</span><div class="seg" id="moods"></div></div>
+    <button id="reroll" title="Re-roll ties between equally good idioms">Re-roll</button>
+    <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+  </div>
+</header>
+
+<section class="view" id="v-scene" hidden>
+  <div class="view-head"><h2>Storyboard</h2><p class="hint">One card per slate row: the shot's start and end frame on the grey stage. Click a card to frame it.</p></div>
+  <div class="board" id="board"></div>
+  <div class="timeline" id="tlScene" aria-label="Scene timeline"></div>
+  <ul class="checks" id="checks"></ul>
+</section>
+
+<section class="view" id="v-shot" hidden>
+  <div class="shotgrid">
+    <div class="stagecol">
+      <div class="viewport" id="vpShot">
+        <div class="ov top"><span data-ov="shot"></span></div>
+        <div class="ov bot"><span data-ov="words"></span><span class="limit" data-ov="limit"></span></div>
+      </div>
+      <div class="transport">
+        <button data-play="scene">Play scene</button>
+        <button data-play="shot">Play shot</button>
+        <button data-step="-1" title="Previous shot (←)">←</button>
+        <button data-step="1" title="Next shot (→)">→</button>
+        <span class="hint">Drag the picture to move the camera round the subject or up and down; the idiom sets how far.</span>
+        <span class="time" data-ov="time"></span>
+      </div>
+      <div class="timeline" id="tlShot" aria-label="Scene timeline"></div>
+    </div>
+    <aside id="inspector"></aside>
+  </div>
+</section>
+
+<section class="view" id="v-overhead" hidden>
+  <div class="twoup">
+    <div class="stagecol">
+      <div class="viewport" id="vpTop">
+        <div class="ov top"><span data-ov="shot"></span></div>
+      </div>
+      <div class="transport">
+        <button data-play="scene">Play scene</button>
+        <button data-play="shot">Play shot</button>
+        <span class="time" data-ov="time"></span>
+      </div>
+    </div>
+    <div class="stagecol">
+      <span class="label">Through the lens</span>
+      <canvas id="lensMini" width="640" height="352" aria-label="Lens view of the selected shot"></canvas>
+      <div class="shotlist" id="shotlist"></div>
+    </div>
+  </div>
+  <div class="timeline" id="tlTop" aria-label="Scene timeline"></div>
+</section>
+
+<section class="view" id="v-library" hidden>
+  <div class="view-head"><h2>Idiom library</h2><p class="hint">Each idiom shown on the beat in this scene that uses its event. Use one to pin it.</p></div>
+  <div id="library" class="exp"></div>
+</section>
+
+<section class="view" id="v-export" hidden>
+  <div class="view-head"><h2>Export</h2><p class="hint">Camera Motion text for the slate and the 3D Stage plan for Render previs and the Layout Render lane.</p><button id="copyAll">Copy all plans</button></div>
+  <div id="export" class="exp"></div>
+</section>
+
+<textarea class="copybuf" id="copybuf" aria-hidden="true" tabindex="-1"></textarea>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
