@@ -147,6 +147,8 @@ def _task(row, private=False):
     if not private:
         value.pop("lease_hash", None)
         value.pop("target_snapshot", None)
+        if isinstance(value.get("output"), dict):
+            value["output"].pop("provenance", None)  # served only by the take bundle
         value["lease_until"] = repo._iso(value["lease_until"])
     return value
 
@@ -878,8 +880,11 @@ def _inputs(conn, run, task, node):
             "target_tables": target_tables, "predecessors": results, "predecessor_tasks": predecessor_tasks}
 
 
-def _sanitize_output(conn, slug, original, mode):
-    output = privacy.sanitize(original, mode)
+def _sanitize_output(conn, slug, original, mode, keep_provenance=False):
+    # Take provenance (graph, hashes) would be mangled by masking; take bundles scrub secrets on export.
+    output = privacy.sanitize({k: v for k, v in original.items() if k != "provenance"}, mode)
+    if keep_provenance and isinstance(original.get("provenance"), dict):
+        output["provenance"] = original["provenance"]
     if "asset_url" in original:
         url = original["asset_url"]
         prefix = f"/projects/api/{slug}/assets/"
@@ -1007,7 +1012,7 @@ def complete(conn, worker, body):
     me = _creator(conn, run)
     if run.get("execution", {}).get("mode") == "single_step":
         _check_source_revisions(conn, run["project_slug"], run["execution"]["source_revisions"])
-    output = _sanitize_output(conn, run["project_slug"], output, privacy.mode(conn, run["project_slug"]))
+    output = _sanitize_output(conn, run["project_slug"], output, privacy.mode(conn, run["project_slug"]), keep_provenance=True)
     node = next(n for n in run["definition"]["nodes"] if n["id"] == task["node_id"])
     target, preview = _result_target(conn, run, task, output)
     if target and run.get("execution", {}).get("mode") == "single_step":

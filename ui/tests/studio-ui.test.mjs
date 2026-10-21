@@ -11,7 +11,7 @@ let components, temporary;
 const uiRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 before(async()=>{
   temporary=await mkdtemp(join(uiRoot,'tests/.studio-render-'));
-  const result=await build({stdin:{contents:"export {MediaCell} from './src/MediaCell.jsx'; export {SheetReview} from './src/SheetReview.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {ProposalRaceView} from './src/assistant/ProposalRaceView.jsx';",resolveDir:uiRoot,sourcefile:'studio-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',external:['react','react/*','react-dom','react-dom/*'],loader:{'.css':'empty'}});
+  const result=await build({stdin:{contents:"export {MediaCell} from './src/MediaCell.jsx'; export {SheetReview} from './src/SheetReview.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {ProposalRaceView} from './src/assistant/ProposalRaceView.jsx'; export {ShotBench} from './src/ShotBench.jsx';",resolveDir:uiRoot,sourcefile:'studio-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',external:['react','react/*','react-dom','react-dom/*'],loader:{'.css':'empty'}});
   const output=join(temporary,'components.mjs');await writeFile(output,result.outputFiles[0].text);components=await import(pathToFileURL(output));
 });
 after(async()=>{if(temporary){assert.ok(temporary.startsWith(join(uiRoot,'tests','.studio-render-')));await rm(temporary,{recursive:true,force:true});}});
@@ -61,4 +61,24 @@ test('Micro review displays bound assets and edits prompts with the guarded cell
   assert.match(source,/onChange=\{event=>setText\(event.target.value\)\}/);
   assert.match(source,/if\(!previewTargetValid\|\|!guardDraft\(\)\)return/);
   assert.match(source,/const closePanel=\(\)=>\{if\(!guardDraft\(\)\)return/);
+});
+
+test('generated output takes offer a take bundle download; inputs and external media do not',()=>{
+  const asset='/projects/api/film/assets/pa_'+'a'.repeat(32);
+  const stage=(column,label,url)=>({column,label,type:'video',value:`[video](${url})`,media:{url,kind:'video'}});
+  const html=render(components.ShotBench,{stages:[stage(2,'Source Driving Video',asset),stage(5,'Cinema Shot',asset)],assets:[],writable:false,onBundle:()=>{}});
+  assert.equal(html.match(/Download take bundle/g)?.length,1);
+  assert.match(html,/class="bench-bundle"/);
+  assert.doesNotMatch(render(components.ShotBench,{stages:[stage(5,'Cinema Shot','https://example.com/take.mp4')],assets:[],onBundle:()=>{}}),/Download take bundle/);
+  assert.doesNotMatch(render(components.ShotBench,{stages:[stage(5,'Cinema Shot',asset)],assets:[]}),/Download take bundle/);
+});
+
+test('sheet workspace wires per-take bundles and the approved-takes export to authenticated endpoints',async()=>{
+  const source=await readFile(join(uiRoot,'src/SheetWorkspace.jsx'),'utf8');
+  assert.match(source,/onBundle=\{stage=>run\(\(\)=>api\.download\(`\$\{stage\.media\.url\}\/bundle`/);
+  assert.match(source,/api\.download\(`\/projects\/api\/\$\{slug\}\/takes\/export`/);
+  for(const name of ['en','zh-TW']){
+    const locale=JSON.parse(await readFile(join(uiRoot,`src/i18n/locales/${name}.json`),'utf8'));
+    assert.ok(locale.studio.downloadTakeBundle&&locale.studio.takeBundleHint&&locale.sheetWorkspace.exportApprovedTakes,name);
+  }
 });

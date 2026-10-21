@@ -1237,7 +1237,8 @@
     "requestAgentRevisions": "請代理修改",
     "status": "狀態",
     "visibleRows": "{{v0}} 列",
-    "canvas": "畫布"
+    "canvas": "畫布",
+    "exportApprovedTakes": "匯出已核准的 Take（ZIP＋清單）"
   },
   "surfaces": {
     "planning": "規劃中",
@@ -1939,7 +1940,9 @@
     "canvasHint": "拖曳排列 · 滾輪縮放 · 滑過卡片追蹤上下游 · 雙擊鏡頭開啟工作台",
     "canvasOpenHint": "雙擊開啟鏡頭工作台",
     "canvasFullscreen": "全螢幕",
-    "canvasExitFullscreen": "結束全螢幕"
+    "canvasExitFullscreen": "結束全螢幕",
+    "downloadTakeBundle": "下載 Take 證據包",
+    "takeBundleHint": "ZIP：輸出檔、實際執行的 ComfyUI 工作流、Seed、輸入雜湊、模型與重跑說明"
   },
   "studioPresets": {
     "arriAlexa65": "ARRI Alexa 65／35mm 變形寬銀幕 f/1.4",

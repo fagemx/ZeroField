@@ -1237,7 +1237,8 @@
     "requestAgentRevisions": "Request Agent Revisions",
     "status": "Status",
     "visibleRows": "{{v0}} rows",
-    "canvas": "Canvas"
+    "canvas": "Canvas",
+    "exportApprovedTakes": "Export approved takes (ZIP + manifest)"
   },
   "surfaces": {
     "planning": "Planning",
@@ -1939,7 +1940,9 @@
     "canvasHint": "Drag to arrange · scroll to zoom · hover a card to trace what feeds it · double-click a shot to open its bench",
     "canvasOpenHint": "Double-click to open the shot bench",
     "canvasFullscreen": "Full screen",
-    "canvasExitFullscreen": "Exit full screen"
+    "canvasExitFullscreen": "Exit full screen",
+    "downloadTakeBundle": "Download take bundle",
+    "takeBundleHint": "ZIP with the output, the executed ComfyUI workflow, seed, input hashes, models and a re-run guide"
   },
   "studioPresets": {
     "arriAlexa65": "ARRI Alexa 65 / 35mm Anamorphic f/1.4",

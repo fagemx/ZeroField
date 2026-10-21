@@ -310,6 +310,7 @@
 .bench-stage :is(img, video, .media-video-player) { display: block; width: 100%; height: auto; max-height: 46dvh; aspect-ratio: 16 / 9; object-fit: contain; background: #050505; border-radius: 0; }
 .bench-stage .media-cell small { padding: 8px 14px 0; color: var(--faint); font-size: 12px; }
 .bench-stage .sheet-stage-actions, .bench-stage .media-cell > div { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 12px 14px 14px; }
+.bench-stage .bench-bundle { margin: 12px 14px 0; }
 .bench-empty { margin: 0 14px; aspect-ratio: 16 / 9; display: grid; place-items: center; border: 1px dashed #333; border-radius: 8px; color: var(--faint); font-size: 12px; }
 .bench-assets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .bench-assets figure { margin: 0; min-width: 0; }

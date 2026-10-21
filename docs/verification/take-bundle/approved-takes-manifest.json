@@ -1,0 +1,332 @@
+{
+  "schema": "zerofield.takes/1",
+  "project": "zerofield-showcase",
+  "exported_at": "2026-10-21T11:37:32+08:00",
+  "selection": "generated media in sheet rows whose status is Approved",
+  "takes": [
+    {
+      "folder": "soul-cast/CAST-01-Reference-Image-pa_436aa802bf05a20eb55c21cb8c9b7dda/",
+      "shot": {
+        "tab": "soul-cast",
+        "tab_title": "Soul Cast",
+        "row_id": "bUEPElzKQ",
+        "label": "CAST-01",
+        "column": "Reference Image",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.png",
+        "asset_id": "pa_436aa802bf05a20eb55c21cb8c9b7dda",
+        "content_type": "image/png",
+        "bytes": 1181240,
+        "sha256": "436aa802bf05a20eb55c21cb8c9b7dda76cdb722e2c8a8d0d6d8af70872a23bf"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 48292,
+      "models": [
+        "flux2-vae.safetensors",
+        "flux3-image-klein-base-int8-convrot.safetensors",
+        "qwen3vl_4b_int8_convrot.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / image"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T10:01:48.625194+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T10:02:39.445798+08:00"
+      }
+    },
+    {
+      "folder": "soul-cast/SET-01-Reference-Image-pa_b5c06da0a7f07c8048ee186cdf96f6a5/",
+      "shot": {
+        "tab": "soul-cast",
+        "tab_title": "Soul Cast",
+        "row_id": "bhJOO5EXI",
+        "label": "SET-01",
+        "column": "Reference Image",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.png",
+        "asset_id": "pa_b5c06da0a7f07c8048ee186cdf96f6a5",
+        "content_type": "image/png",
+        "bytes": 1530423,
+        "sha256": "b5c06da0a7f07c8048ee186cdf96f6a56f7345283c2c9720a72e0ef945f2a70c"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 98916679058506,
+      "models": [
+        "ae.safetensors",
+        "clip_l.safetensors",
+        "flux1-dev.safetensors",
+        "t5xxl_fp8_e4m3fn.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / image"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T08:32:32.000845+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T08:33:35.594243+08:00"
+      }
+    },
+    {
+      "folder": "cinema-studio/S01-Keyframe-pa_4dae50766c12d468f2e10627d8d25a84/",
+      "shot": {
+        "tab": "cinema-studio",
+        "tab_title": "Cinema Studio",
+        "row_id": "bsWkCCWf3",
+        "label": "S01",
+        "column": "Keyframe",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.png",
+        "asset_id": "pa_4dae50766c12d468f2e10627d8d25a84",
+        "content_type": "image/png",
+        "bytes": 816481,
+        "sha256": "4dae50766c12d468f2e10627d8d25a84055dd10514aa62383908a7b4174aaf2a"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 48295,
+      "models": [
+        "flux2-vae.safetensors",
+        "flux3-image-klein-base-int8-convrot.safetensors",
+        "qwen3vl_4b_int8_convrot.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / lookkey"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T17:40:47.765616+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T17:41:58.159362+08:00"
+      }
+    },
+    {
+      "folder": "cinema-studio/S01-Cinema-Shot-pa_57ead558e7c8920a8785d85de2451663/",
+      "shot": {
+        "tab": "cinema-studio",
+        "tab_title": "Cinema Studio",
+        "row_id": "bsWkCCWf3",
+        "label": "S01",
+        "column": "Cinema Shot",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.mp4",
+        "asset_id": "pa_57ead558e7c8920a8785d85de2451663",
+        "content_type": "video/mp4",
+        "bytes": 1464736,
+        "sha256": "57ead558e7c8920a8785d85de2451663229701c7709eb2181f5ce12832b02144"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 48300,
+      "models": [
+        "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+        "ltx-2.5-audio-vae-bf16.safetensors",
+        "ltx-2.5-video-vae-bf16.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / look"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T17:41:58.791713+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T17:43:39.305234+08:00"
+      }
+    },
+    {
+      "folder": "cinema-studio/S02-Keyframe-pa_46bfda3aa6070d178b94408490866607/",
+      "shot": {
+        "tab": "cinema-studio",
+        "tab_title": "Cinema Studio",
+        "row_id": "bukAlG2Rf",
+        "label": "S02",
+        "column": "Keyframe",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.png",
+        "asset_id": "pa_46bfda3aa6070d178b94408490866607",
+        "content_type": "image/png",
+        "bytes": 856060,
+        "sha256": "46bfda3aa6070d178b9440849086660797d56aa20affa0a30f7120707f561206"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 48297,
+      "models": [
+        "flux2-vae.safetensors",
+        "flux3-image-klein-base-int8-convrot.safetensors",
+        "qwen3vl_4b_int8_convrot.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / lookkey"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T17:20:36.655286+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T17:21:38.964568+08:00"
+      }
+    },
+    {
+      "folder": "cinema-studio/S02-Cinema-Shot-pa_7d88b47b0d00204c9fc6129cd47593c1/",
+      "shot": {
+        "tab": "cinema-studio",
+        "tab_title": "Cinema Studio",
+        "row_id": "bukAlG2Rf",
+        "label": "S02",
+        "column": "Cinema Shot",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.mp4",
+        "asset_id": "pa_7d88b47b0d00204c9fc6129cd47593c1",
+        "content_type": "video/mp4",
+        "bytes": 907325,
+        "sha256": "7d88b47b0d00204c9fc6129cd47593c1fecc14e2386dc32fa427ce92660da319"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 48296,
+      "models": [
+        "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+        "ltx-2.5-audio-vae-bf16.safetensors",
+        "ltx-2.5-video-vae-bf16.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / look"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T17:21:39.232938+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T17:23:16.327634+08:00"
+      }
+    },
+    {
+      "folder": "cinema-studio/S06-Keyframe-pa_190dc1c6f8c394e417da16724cc35beb/",
+      "shot": {
+        "tab": "cinema-studio",
+        "tab_title": "Cinema Studio",
+        "row_id": "bjY8oDU6d",
+        "label": "S06",
+        "column": "Keyframe",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.png",
+        "asset_id": "pa_190dc1c6f8c394e417da16724cc35beb",
+        "content_type": "image/png",
+        "bytes": 1052082,
+        "sha256": "190dc1c6f8c394e417da16724cc35beb6109757370e8798280b0422e48f4d636"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 48292,
+      "models": [
+        "flux2-vae.safetensors",
+        "flux3-image-klein-base-int8-convrot.safetensors",
+        "qwen3vl_4b_int8_convrot.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / lookkey"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T17:36:49.832116+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T17:37:59.713076+08:00"
+      }
+    },
+    {
+      "folder": "cinema-studio/S06-Cinema-Shot-pa_9851e6096644220c679ea97e1caf84f6/",
+      "shot": {
+        "tab": "cinema-studio",
+        "tab_title": "Cinema Studio",
+        "row_id": "bjY8oDU6d",
+        "label": "S06",
+        "column": "Cinema Shot",
+        "status": "Approved"
+      },
+      "output": {
+        "file": "output.mp4",
+        "asset_id": "pa_9851e6096644220c679ea97e1caf84f6",
+        "content_type": "video/mp4",
+        "bytes": 1216999,
+        "sha256": "9851e6096644220c679ea97e1caf84f675debe4935e11cde6acf8a5bddbc06a7"
+      },
+      "provenance": "embedded_in_output",
+      "seed": 48296,
+      "models": [
+        "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+        "ltx-2.5-audio-vae-bf16.safetensors",
+        "ltx-2.5-video-vae-bf16.safetensors"
+      ],
+      "platform": {
+        "platform": null,
+        "endpoint": null,
+        "comfyui_version": null,
+        "comfy_sdk_version": null,
+        "comfy_prompt_id": null,
+        "worker": "ZeroField Studio / look"
+      },
+      "timing": {
+        "queued_at": "2026-10-20T17:37:59.979780+08:00",
+        "submitted_at": null,
+        "finished_at": null,
+        "render_seconds": null,
+        "completed_at": "2026-10-20T17:39:22.729862+08:00"
+      }
+    }
+  ]
+}
