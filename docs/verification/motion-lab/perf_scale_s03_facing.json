@@ -1,0 +1,17 @@
+{
+ "actor_motion_energy": {
+  "s03r_layout_mask_ref": 5.57,
+  "s03r_subtle_facing": 6.87,
+  "s03r_heightened_facing": 5.52
+ },
+ "sheets": {
+  "subtle": "0.0\u20131.4s: Kael stands profile, still as stone. Breath shallow, shoulders tense. He listens to the rain. No head movement.\n1.4\u20132.8s: He turns slowly from the glass to the console. Back to us. Shoulders relax slightly. Head tilts down, eyes focused on the dial.\n2.8\u20134.5s: Hand finds the brass dial. Fingers turn it gently. A distant beacon blinks on through the rain-streaked glass. He watches it.\n4.5\u20136.0s: He freezes. Eyes wide on the light. Breath stops. Jaw tightens. Total stillness. He waits for the signal to arrive.\nSound: the click of the dial, a low radio tone.",
+  "heightened": "0.0\u20131.4s: Profile view. He listens hard, neck taut. Shoulders rise sharply with a sudden gasp. Fingers clench tight on the railing.\n1.4\u20132.8s: Seen from behind. He pivots shoulders hard toward the console. Head snaps forward. Chest heaves violently with quick, shallow breaths.\n2.8\u20134.5s: From behind. Hand slams onto the brass dial. He twists it with a sharp wrench. A bright beacon flashes far beyond the glass.\n4.5\u20136.0s: From behind. He freezes completely. Shoulders drop. Stares fixed at the distant light. Breath holds. Fingers remain tight on the dial.\nSound: the click of the dial, a low radio tone."
+ },
+ "facing": [
+  "seen in profile",
+  "seen from behind",
+  "seen from behind",
+  "seen from behind"
+ ]
+}

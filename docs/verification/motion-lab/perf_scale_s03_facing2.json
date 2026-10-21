@@ -1,0 +1,17 @@
+{
+ "actor_motion_energy": {
+  "s03r_layout_mask_ref": 5.57,
+  "s03r_subtle_facing2": 5.44,
+  "s03r_heightened_facing2": 5.61
+ },
+ "sheets": {
+  "subtle": "0.0\u20131.4s, seen in profile: He stands in profile, still. His breath fogs the glass slightly. He listens, head tilted, shoulders relaxed. As if waiting for a whisper.\n1.4\u20132.8s, seen from behind: He turns his back to the glass. His shoulders shift slightly toward the console. His posture stays rigid. As if bracing for impact.\n2.8\u20134.5s, seen from behind: His hand reaches out, gripping the brass dial. He turns it slowly. Far beyond the glass, a beacon blinks on. As if answering a call.\n4.5\u20136.0s, seen from behind: He freezes completely. His body locks in place. His head tilts slightly toward the light. His hands drop slowly. As if struck by lightning.\nSound: the click of the dial, a low radio tone.",
+  "heightened": "0.0\u20131.4s, seen in profile: He stands rigid in profile, head tilted toward the glass. Shoulders hunched high, breathing shallow and quick as if holding his breath.\n1.4\u20132.8s, seen from behind: He spins his upper body sharply away from the window. His back snaps toward the console, shoulders tensed and ready to act.\n2.8\u20134.5s, seen from behind: His hand slams onto the brass dial. He twists it hard, fingers digging into the metal, as a distant beacon blinks on beyond the rain.\n4.5\u20136.0s, seen from behind: He freezes completely, shoulders locked tight. His head tilts back, staring at the light, chest heaving with sudden, intense fear.\nSound: the click of the dial, a low radio tone."
+ },
+ "facing": [
+  "seen in profile",
+  "seen from behind",
+  "seen from behind",
+  "seen from behind"
+ ]
+}

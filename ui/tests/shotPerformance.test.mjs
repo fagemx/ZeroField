@@ -51,7 +51,9 @@ test('checks catch camera words, the wrong size, the wrong body range and a miss
   assert.match(checkPerformance(clean, { segs, L: L({ color: 'tears' }), story }).byShot[-1].join(), /colour is tears/);
   const back = ['seen from behind', 'seen in profile', 'seen from behind', 'seen from behind'];
   assert.match(checkPerformance([clean[0], clean[1], clean[2], 'He turns round to face us, eyes wide.'], { segs, L: L(), story, facing: back }).byShot[3].join(), /seen from behind/);
-  assert.ok(!checkPerformance(clean, { segs, L: L(), story, facing: back }).byShot[3], 'freezing with his back to us is fine');
+  assert.match(checkPerformance(clean, { segs, L: L(), story, facing: back }).byShot[3].join(), /describes his eyes/, 'no face from behind');
+  const still = [clean[0], clean[1], clean[2], 'He freezes, head tilted toward the light, shoulders locked.'];
+  assert.ok(!checkPerformance(still, { segs, L: L(), story, facing: back }).byShot[3], 'freezing with his back to us is fine');
   const noDial = [clean[0], clean[1], 'He reaches out; far beyond the glass a beacon blinks on.', clean[3]];
   assert.match(checkPerformance(noDial, { segs, L: L(), story }).byShot[-1].join(), /missing "dial"/);
 });

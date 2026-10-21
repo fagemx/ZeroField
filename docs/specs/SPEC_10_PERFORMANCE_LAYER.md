@@ -150,12 +150,13 @@ Sound: <聲音>                       ← 拍的聲音描述
 |---|---|
 | 原本的提示詞（明寫「背對鏡頭」） | 背對鏡頭轉轉盤 |
 | subtle 對 heightened，beat sheet 沒寫朝向 | **兩版都把他轉過來面對鏡頭**；heightened 的表情較大（張嘴、睜大眼），身體動作量幾乎一樣（演員動態量 6.85 對 6.74）。[對照圖](../verification/motion-lab/perf_scale_s03.jpg) |
-| 同上，每段附上從預演算出的朝向（「seen from behind」） | 見 [perf_scale_s03_facing](../verification/motion-lab/perf_scale_s03_facing.jpg) |
+| 同上，寫給模型的說明附上每段朝向（「seen from behind」） | heightened 全程背對；subtle 寫了「eyes wide」「jaw tightens」，後半段又轉成 3/4 正面。[對照圖](../verification/motion-lab/perf_scale_s03_facing.jpg) |
+| 再加上：從背後看的段落不寫臉部細節，朝向直接寫進每段時間標記（`1.4–2.8s, seen from behind:`） | **兩版都全程背對鏡頭**；身體動作量仍幾乎一樣（5.44 對 5.61）。[對照圖](../verification/motion-lab/perf_scale_s03_facing2.jpg) |
 
 結論與修正：
 
-1. 遮罩放開演員後，**朝向由文字決定**。寫法規則加上「保持每段的朝向」，說明附上每段朝向（不用 camera 這個字，模型會照抄而違反鏡頭字規則），檢查會抓「轉向鏡頭」。
-2. 尺度文字主要改變表情，不太改變身體幅度。要更大的身體動作，靠預演姿勢（P2 姿勢庫）配合 Motion pass，或用表演關鍵點排出動作。
+1. 遮罩放開演員後，**朝向由文字決定**，而且描寫看不到的臉會讓模型把人轉過來。現在：寫給模型的說明附上每段朝向（「seen from behind / in profile / from the front」，不用 camera 這個字，模型會照抄而違反鏡頭字規則）；朝向寫進 beat sheet 每段的時間標記；檢查會攔「轉向鏡頭」和「從背後看卻描寫臉」。
+2. 尺度文字主要改變表情（看得到臉時），不太改變身體幅度。要更大的身體動作，靠預演姿勢（P2 姿勢庫）配合 Motion pass，或用表演關鍵點排出動作；這是下一個要在 4090 上驗證的組合。
 
 ### 7.5 分鏡外觀（`ui/src/previs/board.js`）
 

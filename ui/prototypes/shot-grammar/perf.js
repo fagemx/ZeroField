@@ -143,14 +143,17 @@ export const sigOf = (L, segs, camera) => JSON.stringify([L.scale, L.body, L.col
 const t = v => v.toFixed(1);
 // The template sheet: the keys' own sentences, plus one line that states the levels (so the levels reach LTX even
 // before anyone writes the performance).
-export function templateSheet(segs, L, story) {
-  const lines = segs.map(s => `${t(s.t0)}–${t(s.t1)}s: ${s.text}`);
+// facing: each segment's facing from the previs ("seen from behind"...), written into its time stamp so LTX gets it
+// whatever the text says (the 4090 test: a freed actor turns to show the face the text describes).
+const stamp = (s, i, facing) => `${t(s.t0)}–${t(s.t1)}s${facing?.[i] ? `, ${facing[i]}` : ''}:`;
+export function templateSheet(segs, L, story, facing) {
+  const lines = segs.map((s, i) => `${stamp(s, i, facing)} ${s.text}`);
   const how = [{ subtle: 'subtle, the feeling in his eyes and breath', natural: 'natural', open: 'open, clearly enlarged', heightened: 'heightened, the whole body carries it' }[L.scale],
     { face: 'face only', upper: 'upper body', full: 'full body' }[L.body], L.color ? COLORS[L.color].label.toLowerCase() + ' underneath' : '', L.note].filter(Boolean).join('; ');
   lines.push(`Performance: ${how}.`);
   return finish(lines, story);
 }
-export function writtenSheet(segs, texts, story) { return finish(segs.map((s, i) => `${t(s.t0)}–${t(s.t1)}s: ${texts[i]}`), story); }
+export function writtenSheet(segs, texts, story, facing) { return finish(segs.map((s, i) => `${stamp(s, i, facing)} ${texts[i]}`), story); }
 function finish(lines, story) {
   if (story?.line) lines.push(`${story.line.who} says: "${story.line.text}"`);
   if (story?.sound) lines.push(`Sound: ${story.sound}.`);
@@ -172,6 +175,7 @@ const clauses = s => String(s || '').split(/[.;:!?\n]|,\s*(?:but|and then)\b/i).
 const hits = (text, re) => clauses(text).filter(c => !NEG.test(c)).map(c => c.match(re)?.[0]).filter(Boolean);
 const stem = w => w.toLowerCase().replace(/(ing|ed|es|s)$/, '');
 // Issues per segment (index) plus beat-wide ones under -1. skeleton = the template keys' text (what the previs shows).
+const FACE_DETAIL = /\b(eyes?|eyebrows?|brow|jaw|mouth|lips|teeth|cheeks?|nostrils?|smile|frown|tears?)\b/i;
 const FACES_CAMERA = /\b(turns? (?:round |around )?to (?:face )?(?:the )?(?:camera|us|lens)|faces the (?:camera|lens)|looks? (?:straight )?(?:in|at) (?:the )?(?:camera|lens)|towards? the (?:camera|lens))\b/i;
 export function checkPerformance(texts, { segs, L, story, line, facing }) {
   const byShot = {}, add = (i, m) => { (byShot[i] ||= []).push(m); };
@@ -188,7 +192,11 @@ export function checkPerformance(texts, { segs, L, story, line, facing }) {
   });
   const all = texts.join(' ');
   for (const w of story?.core || []) if (!all.toLowerCase().includes(stem(w))) add(-1, `the action skeleton is missing "${w}"`);
-  texts.forEach((x, i) => { if (/from behind/.test(facing?.[i] || '') && FACES_CAMERA.test(x)) add(i, 'turns to face the camera, but this segment is seen from behind'); });
+  texts.forEach((x, i) => {
+    if (!/from behind/.test(facing?.[i] || '')) return;
+    if (FACES_CAMERA.test(x)) add(i, 'turns to face the camera, but this segment is seen from behind');
+    const f = x.match(FACE_DETAIL); if (f) add(i, `describes his ${f[1].toLowerCase()}, which cannot be seen from behind (the model turns him round to show it)`);
+  });
   if (story?.key) { const keyWords = story.key.toLowerCase().split(/\W+/).filter(w => w.length > 4); if (keyWords.length && !keyWords.some(w => all.toLowerCase().includes(w))) add(-1, `the must-have image is missing: ${story.key}`); }
   if (L.scale === 'open' || L.scale === 'heightened') { const r = hits(all, RESTRAINT); if (r.length) add(-1, `scale is ${L.scale} but it is written small: ${[...new Set(r)].join(', ')}`); }
   if (L.scale === 'heightened' && !hits(all, BIG).length) add(-1, 'scale is heightened but nothing big is written');
@@ -216,7 +224,7 @@ Rules:
 9. Keep each segment to about 20 words per second of the segment.
 10. Plain present tense, short concrete sentences, like a director talking to an actor on set.
 11. Keep the action skeleton (the blocked action of each segment): play it bigger or smaller, never replace it or write its opposite.
-    Keep each segment's facing: when a segment is seen from behind, he never turns round to face us; write the feeling into his posture, shoulders and head instead.
+    Keep each segment's facing: when a segment is seen from behind, he never turns round to face us, and write nothing of his face (eyes, mouth, jaw): it cannot be seen, and naming it makes the model turn him round. Put the feeling into his posture, shoulders, head and hands.
 12. The levels the director set for the shot come first; when they conflict with these rules, follow the levels, but never break rules 5 and 8, the line or the must-have image.`;
 export function writerPrompt(scene, beats, versions = 0, repair = null) {
   const block = b => [

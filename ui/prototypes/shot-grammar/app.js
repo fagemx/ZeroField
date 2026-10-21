@@ -282,18 +282,18 @@ const SOURCE = { template: 'from the idiom template', agent: 'written by the mod
 // Everything the performance of a row depends on. texts: one per segment (the template keys' own sentences when nobody wrote it).
 function perfRow(r, St = S) {
   const b = r.beat, decl = P.perfOf(r.pick.idiom, b.event), L = P.levels(St.perf[b.id], decl), story = P.BEAT_STORY[b.id];
-  const segs = P.segments(b.acts || story.acts, b.seconds), camera = G.words(r.pick.s), sig = P.sigOf(L, segs, camera);
+  const segs = P.segments(b.acts || story.acts, b.seconds), camera = G.words(r.pick.s), sig = P.sigOf(L, segs, camera), facing = facingOf(r, segs);
   const sh = St.sheet[b.id], fits = !!sh && sh.texts.length === segs.length;
   return { b, decl, L, story, segs, camera, sig, source: fits ? sh.source : 'template', stale: !!sh && (!fits || sh.sig !== sig), lost: !!sh && !fits,
-    texts: fits ? sh.texts : segs.map(g => g.text), sheet: fits ? P.writtenSheet(segs, sh.texts, story) : P.templateSheet(segs, L, story) };
+    texts: fits ? sh.texts : segs.map(g => g.text), sheet: fits ? P.writtenSheet(segs, sh.texts, story, facing) : P.templateSheet(segs, L, story, facing), facing };
 }
 const brief = x => ({ id: x.b.id, title: x.b.title, seconds: x.b.seconds, camera: x.camera, levelLines: P.levelLines(x.L), segs: x.segs, story: x.story, L: x.L,
-  visible: `${x.b.name}: ${P.visibleOf(rowOf(x.b.id).pick.s)}${x.b.partner ? `; ${x.b.partner.name} is in the shot with ${x.b.name}` : ''}`, facing: facingOf(x) });
+  visible: `${x.b.name}: ${P.visibleOf(rowOf(x.b.id).pick.s)}${x.b.partner ? `; ${x.b.partner.name} is in the shot with ${x.b.name}` : ''}`, facing: x.facing });
 // Which way the subject faces the camera in each segment, from the previs (the 4090 scale test: without it the model
 // turned a man seen from behind round to face the lens).
-function facingOf(x) {
-  const r = rowOf(x.b.id), n = framesOf(r.plan) - 1;
-  return x.segs.map(g => { const u = (g.t0 + g.t1) / 2 / x.b.seconds, A = G.actorAt(r.plan, u * n), c = G.solve(r.pick.s, r.plan, u).pos;
+function facingOf(r, segs) {
+  const n = framesOf(r.plan) - 1;
+  return segs.map(g => { const u = (g.t0 + g.t1) / 2 / r.beat.seconds, A = G.actorAt(r.plan, u * n), c = G.solve(r.pick.s, r.plan, u).pos;
     const v = [c[0] - A.root[0], c[2] - A.root[2]], cos = (A.fwd[0] * v[0] + A.fwd[2] * v[1]) / (Math.hypot(...v) || 1);
     return cos < -0.5 ? 'seen from behind' : cos > 0.5 ? 'seen from the front' : 'seen in profile'; });  // no camera words: the writer copies them
 }
@@ -355,7 +355,7 @@ function renderPerf() {
   const up = (list, v, top) => list.indexOf(v) > list.indexOf(top);
   const lv = (key, list, labels, cur, beyond) => `<span class="seg" role="group" aria-label="${key}">${list.map(v => `<button data-lv="${key}" data-v="${v}" aria-pressed="${v === cur}"
     ${beyond(v) ? 'data-beyond="true" title="Bigger than this idiom\'s previs is blocked for"' : ''}>${esc(labels[v])}</button>`).join('')}</span>`;
-  const issues = x.source === 'template' ? [] : P.issueList(P.checkPerformance(x.texts, { segs: x.segs, L, story: x.story, line: x.story.line?.text, facing: facingOf(x) }));
+  const issues = x.source === 'template' ? [] : P.issueList(P.checkPerformance(x.texts, { segs: x.segs, L, story: x.story, line: x.story.line?.text, facing: x.facing }));
   const tag = `<span class="tag ${x.source}">${SOURCE[x.source]}</span>${x.stale ? '<span class="tag stale" title="Levels, framing or timing changed since it was written">out of date</span>' : ''}`;
   const cmp = pend ? pend.opts[pend.at] : null;
   host.innerHTML = `<h3>Performance ${cost('text')}</h3>
