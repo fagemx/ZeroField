@@ -11,7 +11,7 @@ let components, temporary;
 const uiRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 before(async()=>{
   temporary=await mkdtemp(join(uiRoot,'tests/.studio-render-'));
-  const result=await build({stdin:{contents:"export {MediaCell} from './src/MediaCell.jsx'; export {SheetReview} from './src/SheetReview.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {ProposalRaceView} from './src/assistant/ProposalRaceView.jsx';",resolveDir:uiRoot,sourcefile:'studio-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',external:['react','react/*','react-dom','react-dom/*'],loader:{'.css':'empty'}});
+  const result=await build({stdin:{contents:"export {MediaCell} from './src/MediaCell.jsx'; export {SheetReview} from './src/SheetReview.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {ProposalRaceView} from './src/assistant/ProposalRaceView.jsx'; export {ShotBench, FidelityReadout} from './src/ShotBench.jsx';",resolveDir:uiRoot,sourcefile:'studio-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',external:['react','react/*','react-dom','react-dom/*'],loader:{'.css':'empty'}});
   const output=join(temporary,'components.mjs');await writeFile(output,result.outputFiles[0].text);components=await import(pathToFileURL(output));
 });
 after(async()=>{if(temporary){assert.ok(temporary.startsWith(join(uiRoot,'tests','.studio-render-')));await rm(temporary,{recursive:true,force:true});}});
@@ -48,6 +48,17 @@ test('opening Assistant preserves review and row panels; annotation clicks open 
   assert.match(workspace,/if\(focusRow.openRow\)\{setRowOpen\(focusRow.rowId\);setPanel\('row'\)/);
   assert.doesNotMatch(app,/onPanelChange=\{onSurfacePanel\}/);
   assert.match(app,/openRow:true/);
+});
+
+test('camera fidelity shows the score and per-axis travel next to a previs-driven take',async()=>{
+  const html=render(components.FidelityReadout,{result:{status:'done',score:0.97,tilt:{travel:1.1},pan:{travel:null},zoom:{travel:0.72}}});
+  assert.match(html,/Camera fidelity<\/strong><span class="camera-fidelity-score">0.97</);
+  assert.match(html,/<dt>Tilt<\/dt><dd>1.10×<\/dd>.*<dt>Pan<\/dt><dd>held<\/dd>.*<dt>Zoom<\/dt><dd>0.72×<\/dd>/);
+  assert.match(html,/Travel = how far the take moves the camera/);
+  assert.match(render(components.FidelityReadout,{result:{status:'pending'}}),/role="status"[^>]*>Measuring the camera move against the previs/);
+  const bench=await readFile(join(uiRoot,'src/ShotBench.jsx'),'utf8');
+  assert.match(bench,/big && previs && stage.media && stage.type === 'video' && <CameraFidelity previs=\{previs.media.url\} take=\{stage.media.url\} \/>/);
+  assert.match(bench,/`\/projects\/api\/\$\{slug\}\/camera-fidelity\/\$\{previsId\}\/\$\{takeId\}`/);
 });
 
 test('Micro review displays bound assets and edits prompts with the guarded cell draft',async()=>{

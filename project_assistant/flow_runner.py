@@ -7,7 +7,7 @@ import re
 import secrets
 import uuid
 
-from project_assistant import limbs, privacy, store, table_edits
+from project_assistant import camera_fidelity, limbs, privacy, store, table_edits
 from project_docs import repository as repo, service
 from project_docs.doc_schema import column_ids
 
@@ -1025,7 +1025,23 @@ def complete(conn, worker, body):
         cur.execute("""UPDATE projectops.limb_task SET status=%s,output=%s::jsonb,proposal_id=%s,lease_hash=NULL,
                        lease_until=NULL,updated_at=NOW() WHERE id=%s""", (status, json.dumps(output), proposal_id, task["id"]))
     _advance(conn, run)
+    _measure_camera(conn, run["project_slug"], task, output)
     return {"task_id": task["id"], "status": status, "proposal_id": proposal_id}
+
+
+def _measure_camera(conn, slug, task, output):
+    """A video take in a row with a Previs is scored against it in the background; the take never waits for that."""
+    take = str(output.get("asset_url") or "").rsplit("/", 1)[-1]
+    meta = repo.get_asset_meta(conn, slug, take) if task["row_id"] and take.startswith("pa_") else None
+    if not (meta and meta[0].startswith("video/")):
+        return
+    for table in _table_data((task.get("target_snapshot") or {}).get("doc", {}), {}):
+        for row in table["rows"]:
+            if row["row_id"] == task["row_id"]:
+                previs = camera_fidelity.previs_asset(table["headers"], row["cells"])
+                if previs and previs != take:
+                    camera_fidelity.schedule(slug, previs, take)
+                return
 
 
 def fail(conn, worker, body):

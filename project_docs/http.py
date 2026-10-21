@@ -191,6 +191,7 @@ GET_ROUTES = [
     (re.compile(rf"/projects/api/{SLUG}/history"), "history"),
     (re.compile(rf"/projects/api/{SLUG}/assets/(pa_[0-9a-f]{{32}})"), "asset"),
     (re.compile(rf"/projects/api/{SLUG}/assets/(pa_[0-9a-f]{{32}})/meta"), "asset_meta"),
+    (re.compile(rf"/projects/api/{SLUG}/camera-fidelity/(pa_[0-9a-f]{{32}})/(pa_[0-9a-f]{{32}})"), "camera_fidelity"),
     (re.compile(rf"/projects/api/{SLUG}/assistant"), "assistant_state"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/manager"), "assistant_manager"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/messages/(\d{{1,18}})/document"), "assistant_document"),
@@ -323,6 +324,9 @@ def _call(name, conn, me, args, query, body, raw):
             return 200, {'agent':agent_registry.save_agent(conn,me,args[0],body)}
         except agent_registry.AgentError as exc:
             return exc.status, {'error':str(exc),'code':exc.code}
+    if name == "camera_fidelity":
+        from project_assistant import camera_fidelity
+        return camera_fidelity.status(conn, *args)
     if name == "table_schema":
         from project_docs import table_schema
         return table_schema.apply(conn, me, args[0], args[1], body)

@@ -170,7 +170,9 @@ previs frame 0 with the cast and set references.
 | **same + attention mask freeing the actor** | **adult man, real jacket**, set and camera from the layout ([S03](../verification/motion-lab/iclora_s03.jpg), [crane](../verification/motion-lab/iclora_crane.jpg), videos [S03](../verification/motion-lab/iclora_s03.mp4) / [crane](../verification/motion-lab/iclora_crane.mp4)) |
 
 Camera, from `fidelity.py`: the score saturates for every run (0.95-1.0), so the table compares **travel**, the shot's
-cumulative tilt and zoom as a fraction of the previs':
+cumulative tilt and zoom as a fraction of the previs' (now measured by the product: shot review shows score and
+tilt / pan / zoom travel for every video take in a row with a Previs, `project_assistant/camera_fidelity.py`;
+[S03](../verification/camera-fidelity/s03_shot_review.png)):
 
 | Shot | Grey-init V2V 0.75 | IC + first frame | IC + first frame + actor mask |
 | --- | --- | --- | --- |
