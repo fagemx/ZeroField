@@ -1,10 +1,10 @@
 """Per-frame person matte with SAM ViT-H: frame 1 box from the grey-model actor matte, then the previous mask's box."""
-import sys, numpy as np, torch
+import os, sys, numpy as np, torch
 from pathlib import Path
 from PIL import Image
 from segment_anything import sam_model_registry, SamPredictor
 root = Path(sys.argv[1]); seed_matte = Path(sys.argv[2])
-sam = sam_model_registry["vit_h"](checkpoint=r"E:/AITool/ComfyUI_windows_portable/ComfyUI/models/sams/sam_vit_h_4b8939.pth").to("cuda")
+sam = sam_model_registry["vit_h"](checkpoint=r"E:/AITool/ComfyUI_windows_portable/ComfyUI/models/sams/sam_vit_h_4b8939.pth").to(os.environ.get("SAM_DEVICE", "cuda"))  # cpu while LTX holds the GPU
 pred = SamPredictor(sam)
 q = np.array(Image.open(seed_matte).convert("RGBA")).astype(int); m0 = (q[:, :, 3] > 128) & (q[:, :, 0] > 128) & (q[:, :, 1] < 64) & (q[:, :, 2] < 64)
 ys, xs = np.nonzero(m0); box = np.array([xs.min(), ys.min(), xs.max(), ys.max()], float)

@@ -29,7 +29,7 @@ answers outside", 97 frames, 1280x704, 24 fps.
 | Action-start keyframe + beat sheet (no 3D) | lively, camera roughly follows the text; hand leaves the dial | text steers, nothing pins space |
 | 3 independently painted keyframes (0/48/96) | hard cuts between keyframes ([sheet](../verification/motion-lab/P1_keyframes_0_48_96.jpg)) | keyframes disagree, LTX cannot interpolate them |
 | First + last frame | end pins, arrives early and freezes ([sheet](../verification/motion-lab/P2_first_last.jpg)) | a single-image guide at strength 1 is reached too soon; its quality decides everything |
-| Grey / depth / line-worlds video as `LTXVAddGuide` | **copies the guide** - output is the grey model ([P5](../verification/motion-lab/P5_guide_gray_s50.jpg), [P4](../verification/motion-lab/P4_guide_depth_s60.jpg), [P6](../verification/motion-lab/P6_guide_lineworlds_s60.jpg)) | the guide is pixel conditioning; the official LTX-2.5 repo ships **no** depth/pose/layout IC-LoRA |
+| Grey / depth / line-worlds video as `LTXVAddGuide` | **copies the guide** - output is the grey model ([P5](../verification/motion-lab/P5_guide_gray_s50.jpg), [P4](../verification/motion-lab/P4_guide_depth_s60.jpg), [P6](../verification/motion-lab/P6_guide_lineworlds_s60.jpg)) | a plain guide is pixel conditioning. These runs loaded no IC-LoRA; Lightricks publishes them in separate HF repos (see [Layout-To-Render IC-LoRA](#layout-to-render-ic-lora-2026-10-21)) |
 | Depth video as the init latent | white blob ([sheet](../verification/motion-lab/R2e_depth_d75_nofirst.jpg)) | depth values read as image content |
 | **Grey render as the init latent, denoise 0.75** | **camera path, blocking and the hand-on-dial hold follow the 3D scene** ([draft](../verification/motion-lab/pass1_draft_grey_v2v.mp4), [sheet](../verification/motion-lab/R2a_gray_d75_nofirst.jpg)) | the grey shading seeds structure; the model repaints the look |
 
@@ -145,5 +145,60 @@ the key.
    Camera Motion and Optical Rig become authored data that renders to the grey init video.
 2. The cinema stage becomes **two-pass** (draft from the grey init, identity edit on draft frames, pass 2 from the draft).
 3. A **comp stage** with click-to-track, mattes and look layers after pass 2.
-4. line-worlds as an LTX guide is not usable on LTX-2.5 (no IC-LoRA); its value is the blocking data, rendered as a grey
-   blockout instead.
+4. line-worlds as a plain LTX guide is copied, not followed; its value is the blocking data, rendered as a grey blockout
+   instead. With an IC-LoRA the blockout can be a reference rather than the init latent (next section).
+
+## Layout-To-Render IC-LoRA (2026-10-21)
+
+**Question.** Does LTX-2.5's [Layout-To-Render IC-LoRA](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render)
+remove the denoise-0.75 trade-off (keep the blocking vs lose the grey look)? Script:
+[`iclora.py`](../../research/motion_lab/iclora.py). Same seed, 145 frames at 1280x704, S03 push-in and a crane, both
+rendered headless by the product's own `scene.js` ([`stage_render.py`](../../research/motion_lab/stage_render.py)).
+
+Graph (ComfyUI 0.42.1 core, no custom nodes): `LoraLoaderModelOnly` (LoRA 1.0) → `GetICLoRAParameters` →
+`LTXVAddGuide(previs, frame 0, strength 1.0, iclora_parameters[, attention_mask])` on an empty latent, the FLUX 3 Klein
+first frame as an out-of-clip reference (`LTXVAddLatentGuide`, latent_idx -1, as the official graph's frame_idx -1),
+cfg 1, euler_ancestral on the 8 distilled sigmas, `LTXVCropGuides` before decode. The first frame is Klein editing
+previs frame 0 with the cast and set references.
+
+| Run | Result |
+| --- | --- |
+| IC-LoRA, no first frame (text only) | **copies the grey model** ([failure modes](../verification/motion-lab/iclora_failure_modes.jpg), bottom row): the look must come from a first frame |
+| IC-LoRA 0.6, or guide strength 0.7 | copies the grey model too: both strengths must be 1.0 |
+| IC-LoRA + Klein first frame, box-torso actor | set, rain-streaked glass, console ring and camera follow; the **actor is rendered literally** (box torso → brass box) |
+| same, human-proportion mannequin | no box, but the mannequin still reads as a doll or a child |
+| **same + attention mask freeing the actor** | **adult man, real jacket**, set and camera from the layout ([S03](../verification/motion-lab/iclora_s03.jpg), [crane](../verification/motion-lab/iclora_crane.jpg), videos [S03](../verification/motion-lab/iclora_s03.mp4) / [crane](../verification/motion-lab/iclora_crane.mp4)) |
+
+Camera, from `fidelity.py`: the score saturates for every run (0.95-1.0), so the table compares **travel**, the shot's
+cumulative tilt and zoom as a fraction of the previs':
+
+| Shot | Grey-init V2V 0.75 | IC + first frame | IC + first frame + actor mask |
+| --- | --- | --- | --- |
+| S03 push-in: tilt / zoom | 0.75 / 0.66 | 1.11 / 0.65 | 1.09 / 0.63 |
+| Crane: tilt / zoom | 1.01 / 0.69 | 1.13 / 0.99 | 1.13 / 0.94 |
+| Colourfulness (previs 24-27) | 26-29 | 31-39 | 31-38 |
+
+- **Camera**: equal on the push-in, clearly better on the crane (the grey-init pass undershoots big moves by about a third).
+- **Set**: the IC pass keeps the blockout's glass dome and console ring and takes its art direction from the first frame;
+  the grey-init pass invents its own room on the crane (a brown wall with a window).
+- **Actor**: needs the attention mask. The 3D Stage gives it for free: the same plan rendered with the actor white on
+  black is pixel-exact (dilated 24 px, blurred, inverted; white = follow the layout). A SAM matte of the previs works too.
+  Inside the mask the model decides the action: the crane hand lands on the dial, the S03 hand does not.
+- **Cost on the 4090**: grey-init 55 s; Klein first frame 55 s + IC pass 116-133 s, about what the current three-step
+  lane (motion → look key → look pass) takes.
+- LTX-2.3 Union-Control (canny) also runs on LTX-2.5 and humanises the box actor without a mask, but keeps square shoulders.
+
+**Product consequence.** The 3D Stage actor is now a human-proportion mannequin (adult head, tapered torso, capsule limbs);
+the grey-init pass is unchanged by it ([S03 base row](../verification/motion-lab/iclora_s03.jpg)). The recipe is wired as
+an optional cinema lane, **Layout Key → Layout Render** (`flux3_klein_look_key.json` on previs frame 0, then
+`ltx25_layout_render.json`; [workflow notes](../../workflows/README.md#layout-render-3d-stage-previs-as-an-ic-lora-layout)).
+*Render previs* now renders the same plan a second time with the actor white on black into a new **Actor Matte** column
+(appended after Previs); the graph does the 24 px grow, blur and invert, and *Run layout render* on the stage queues the
+lane, whose key waits for review before the render runs. S03 end to end in the app on the 4090
+([board](../verification/motion-lab/app_layout_lane_s03.jpg), [previs | render](../verification/motion-lab/app_layout_lane_s03.mp4)):
+Klein 54 s, IC pass 167 s; an adult man in a charcoal jacket inside the glass dome and console ring, his hand on the
+brass dial; camera score 0.97, tilt / zoom travel 1.10 / 0.72 (lab: 1.09 / 0.63). He ends in profile where the previs
+shows his back (inside the mask the model decides the pose). One prompt change on the way: with the app's photographic
+Soul Cast portrait as image 2, the lab's `GREY_TO_PHOTO` (and a generic "same face" edit) made Klein copy the portrait's
+close-up; a composition-first instruction ("do not move the camera or enlarge the figure") kept the blockout's small
+figure on two seeds.
