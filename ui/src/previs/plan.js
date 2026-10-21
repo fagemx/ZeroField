@@ -101,7 +101,25 @@ export const POSES = {
   crossed: { shoulderL: [-0.25, 0, 0.12], shoulderR: [-0.25, 0, -0.12], elbowL: [-1.75, 1.2, 0], elbowR: [-1.55, -1.2, 0] },
   open: { spine: [-0.08, 0, 0], neck: [-0.15, 0, 0], shoulderL: [-0.45, 0, -0.85], shoulderR: [-0.45, 0, 0.85], elbowL: [-0.35, 0, 0], elbowR: [-0.35, 0, 0] },
   kneel: { drop: 0.4, kneeL: [1.57, 0, 0], ankleL: [-1.57, 0, 0], hipR: [-1.4, 0, 0], kneeR: [1.4, 0, 0], spine: [0.1, 0, 0], shoulderL: [-0.1, 0, 0], shoulderR: [-0.1, 0, 0] },  // on his left knee
+  push: { spine: [0.15, 0, 0], shoulderL: [-1.4, 0, 0.16], shoulderR: [-1.4, 0, -0.16], elbowL: [-0.2, 0, 0], elbowR: [-0.2, 0, 0] },  // both arms straight out at chest height
 };
+// Facial expressions for the pose skeleton's face points (skeleton.js), not the mannequin's head: jaw opens the mouth,
+// wide stretches it, smile lifts (+) or drops (-) the corners, brow raises (+) or lowers (-) the brows, inner lifts the
+// inner brows (grief), eyes opens (+) or squeezes (-) them.
+export const EXPRESSIONS = {
+  neutral: {},
+  tense: { wide: -0.2, brow: -0.3 },
+  rage: { jaw: 0.35, wide: 0.3, brow: -0.8, eyes: 0.3 },
+  scream: { jaw: 1, wide: 0.45, brow: -0.7, eyes: 0.25 },
+  cry: { jaw: 0.3, smile: -0.7, inner: 1, eyes: -0.6 },
+  fear: { jaw: 0.6, brow: 1, inner: 0.4, eyes: 1 },
+  shock: { jaw: 0.5, brow: 0.8, eyes: 0.8 },
+};
+export function blendFace(from, to, t) {
+  const a = EXPRESSIONS[from] || {}, b = EXPRESSIONS[to] || a, out = {};
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) out[k] = (a[k] || 0) + ((b[k] || 0) - (a[k] || 0)) * t;
+  return out;
+}
 const JOINTS = ['spine', 'neck', 'shoulderL', 'shoulderR', 'elbowL', 'elbowR', 'hipL', 'hipR', 'kneeL', 'kneeR', 'ankleL', 'ankleR'];
 // A pose between two named poses: joint by joint, so a slump into a kneel bends every joint at once.
 export function blendPose(from, to, t) {
@@ -110,19 +128,20 @@ export function blendPose(from, to, t) {
   return out;
 }
 
-// Performance keys (SPEC_10): [{at 0..1 of the shot, yaw?, reach?, back?, body?}]. Each channel eases from the key that
-// last set it to the next key that sets it; yaw is absolute (the plan's facing is not added). The shot grammar writes
+// Performance keys (SPEC_10): [{at 0..1 of the shot, yaw?, reach?, back?, body?, face?}]. Each channel eases from the key
+// that last set it to the next key that sets it; yaw is absolute (the plan's facing is not added). The shot grammar writes
 // these when the director re-times what the actor does; a plan without them plays its canned action.
 export function sampleActs(acts, u) {
   const out = {}, at = (keys, x) => { let i = 0; while (i < keys.length - 1 && x >= keys[i + 1].at) i++; return i; };
-  for (const ch of ['yaw', 'reach', 'back', 'body']) {
+  for (const ch of ['yaw', 'reach', 'back', 'body', 'face']) {
     const keys = acts.filter(k => k[ch] != null).sort((p, q) => p.at - q.at);
     if (!keys.length) continue;
     if (ch === 'body' && keys[0].at > 0) keys.unshift({ at: 0, body: 'stand' });  // he starts standing and arrives in the pose by its key
+    if (ch === 'face' && keys[0].at > 0) keys.unshift({ at: 0, face: 'neutral' });
     const i = at(keys, u), a = keys[i], b = keys[i + 1], t = !b || u <= a.at ? 0 : ease(Math.min(1, (u - a.at) / Math.max(1e-6, b.at - a.at)));
-    out[ch] = ch === 'body' ? blendPose(a.body, b?.body, t) : a[ch] + ((b?.[ch] ?? a[ch]) - a[ch]) * t;
+    out[ch] = ch === 'body' ? blendPose(a.body, b?.body, t) : ch === 'face' ? blendFace(a.face, b?.face, t) : a[ch] + ((b?.[ch] ?? a[ch]) - a[ch]) * t;
   }
-  return { yaw: out.yaw || 0, reach: out.reach || 0, back: out.back || 0, pose: out.body || {} };
+  return { yaw: out.yaw || 0, reach: out.reach || 0, back: out.back || 0, pose: out.body || {}, face: out.face || {} };
 }
 
 // Actor at frame f: body yaw (radians, 0 = facing the console), shoulder pitch (0 = arm down), distance back from the

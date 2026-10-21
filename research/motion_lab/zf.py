@@ -54,7 +54,10 @@ def run(graph, dest_stem):
 
 
 def free():
-    _call("/free", {"unload_models": True, "free_memory": True})
+    """Unload ComfyUI's models (the endpoint answers with an empty body)."""
+    req = urllib.request.Request(C + "/free", data=json.dumps({"unload_models": True, "free_memory": True}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=60).read()
 
 
 # ---------------- FLUX 3 Klein ----------------

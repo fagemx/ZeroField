@@ -105,7 +105,7 @@ export const BEAT_STORY = {
     pacts: [{ at: 0, look: 'beacon' }, { at: 0.3, look: 'partner' }] },
 };
 export const POSE_LABEL = { stand: 'standing', lean: 'leaning in', recoil: 'recoiling', slump: 'slumped', lookup: 'looking up', lookdown: 'looking down',
-  face: 'hands to his face', crossed: 'arms crossed', open: 'arms open', kneel: 'kneeling' };
+  face: 'hands to his face', crossed: 'arms crossed', open: 'arms open', kneel: 'kneeling', push: 'shoving with both hands' };
 // The keys as the 3D Stage plan stores them (plan.js sampleActs): look, hands and walk become yaw, reach and back.
 // Times written as n / 96 match plan.js's 0..96 beat clock, so the default keys replay the 3D Stage actions exactly.
 // "partner" looks from mark `from` to the other person's mark `to`.
@@ -135,6 +135,7 @@ export const POSE_MECHANICS = {
   crossed: { text: 'the arms fold across the chest', core: ['arm', 'fold'] },
   open: { text: 'both arms open wide to the sides', core: ['arm', 'open'] },
   kneel: { text: 'the body drops to one knee', core: ['knee', 'kneel'] },
+  push: { text: 'both arms drive straight out from the chest, the body stepping into the shove', core: ['arm', 'shove', 'push'] },
 };
 const mechanics = poses => (poses || []).filter(p => POSE_MECHANICS[p]).map(p => POSE_MECHANICS[p].text);
 const sentence = x => x[0].toUpperCase() + x.slice(1) + '.';

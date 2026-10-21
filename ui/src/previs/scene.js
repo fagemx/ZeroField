@@ -107,6 +107,7 @@ export function buildStage(plan, opts = {}) {
   }
   const place = (fig, a, mark = [0, 0], turn = 0) => {
     fig.root.position.set(mark[0], 0, mark[1] - a.back); fig.root.rotation.y = a.yaw + turn * Math.PI / 180; applyPose(fig, a);
+    fig.root.userData.face = a.face || {};  // the expression the skeleton's face points draw (skeleton.js)
   };
   const camera = new THREE.PerspectiveCamera(verticalFov(plan.lens), WIDTH / HEIGHT, 0.05, 200);
   const aim = new THREE.Vector3();

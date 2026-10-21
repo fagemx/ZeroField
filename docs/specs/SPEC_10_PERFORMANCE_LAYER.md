@@ -232,3 +232,55 @@ Sound: <聲音>                       ← 拍的聲音描述
 5. 實際使用時仍建議**骨架加上詳細的身體動作描述**：骨架負責準確的姿勢與時間點，文字負責幅度和力道。
 
 下一步（產品化）：Render previs 多輸出一支骨架影片（和遮罩一樣，從同一個 plan 逐格產生）；`workflows/ltx25_layout_render.json` 加上 Union-Control 與第二條引導；頭部方向的畫法另外驗證。
+
+### 7.8 骨架接進產品（`d5f48fa`）
+
+- Render previs 在表格有 Pose Skeleton 欄時多渲一道骨架（`ui/src/previs/skeleton.js`），和遮罩一樣從同一個 plan 逐格產生。
+- `workflows/ltx25_layout_render.json`：演員完全放開（不再跟預演 0.35），表演改由 Union-Control 照骨架演出，假人的外形不會滲入。
+- 修正：骨架投影前要先更新攝影機矩陣，否則沒有 WebGL 渲染夾在中間時晚一格（§7.7 的 4090 測試第 0 格是空的，差 1/24 秒）。
+
+### 7.9 高張力、正面的難題（4090 對照）
+
+之前的表演測試都是平靜、背對鏡頭（S03 轉轉盤），避開了真正的難題。這次用 Kael 與 Mira 的對質，三拍都看得到臉，每拍 6 秒：
+
+| 拍 | 鏡頭 | 內容 |
+|---|---|---|
+| tears | Kael 特寫，正面 | 忍住 → 臉崩潰、低頭 → 抬頭流淚 |
+| scream | Mira 特寫，正面 | 瞪著他 → 前傾嘶吼 → 喘著回到站姿 |
+| shove | 中景雙人，Kael 正面、Mira 過肩 | 她雙手把他推撞到控制台（肢體接觸） |
+
+驅動腳本 `research/motion_lab/hard_cases.py`。角色肖像先用 Klein 文生圖畫出（Kael、Mira）。每拍都走產品的 Layout Render（Layout-To-Render 放開演員 ＋ Union-Control 骨架，Layout Key 當片外參考），同一段依時間寫的詳細提示詞與種子，比較三種推情緒的方法：
+
+| 方法 | 說明 |
+|---|---|
+| text | 產品現況：Layout Key 不指定表情，骨架只有身體和手 |
+| key | Layout Key 畫成這拍的情緒（Klein） |
+| face | 骨架加畫 68 個臉部特徵點，依表演關鍵點的表情移動（`plan.js` `EXPRESSIONS`、`skeleton.js` `faceLandmarks`） |
+| face_neutral | 只有 scream：臉部點，但提示詞完全不提嘶吼 |
+
+評估三種：看圖；ComfyUI 內建 MediaPipe 臉部偵測量出的 ARKit 表情係數（`research/motion_lab/face_metrics.py`，逐兩格量，依劇本時間段取平均）；本機 qwen3.8 盲讀表情、比對身分、判斷肢體接觸。對照圖：[tears](../verification/motion-lab/perf_hard_tears_faces.jpg)、[scream](../verification/motion-lab/perf_hard_scream_faces.jpg)、[shove](../verification/motion-lab/perf_hard_shove_faces.jpg)，全部數據在 [perf_hard_cases.json](../verification/motion-lab/perf_hard_cases.json)。
+
+**嘶吼（下巴張開 jawOpen，0–1）**
+
+| 方法 | 瞪人 0–1.5 s（應該閉嘴） | 嘶吼 2.3–4.8 s | 盲讀 |
+|---|---|---|---|
+| text | 0.00 | **0.59** | 平靜 → 憤怒 → 憤怒，清晰度 10 |
+| key | **0.67**（提早嘶吼） | 0.11 | 三格都是極度憤怒 |
+| face | 0.00 | 0.66 | 平靜 → 憤怒 → 憤怒，清晰度 10 |
+| face_neutral | 0.00 | 0.00 | 擔憂 |
+
+**落淚**：三支都讀得出哭（盲讀「悲傷／哀傷」，清晰度 9）。MediaPipe 的內側眉毛上揚、嘴角下垂幾乎量不到（≤0.05），能用的是瞇眼：text 從 0.28 升到 0.59、face 從 0.28 升到 0.57；key 開場就是 0.60（提早哭）。
+
+**推撞**（中景雙人，用遠距離偵測器）：肢體接觸三支都可信（盲讀 9/10，沒有穿模：雙手推在胸口、他的頭往後甩、背撞上控制台）。Kael 被推之後的表情：text 幾乎沒有（下巴 0.01–0.02）、face 稍微張嘴（0.09–0.14）、key 一開場就震驚（內側眉毛 0.5）。
+
+結論：
+
+1. **LTX-2.5 演得出高張力的臉**，前提是提示詞依時間點把表情寫清楚：嘶吼的張嘴時間和劇本對齊，哭也讀得出來。特寫比中景好推；中景雙人鏡頭裡只靠文字，臉部表情很弱。
+2. **情緒不要畫進 Layout Key。** Key 是整段的片外參考，不是第 0 格：帶情緒的 key 讓整段從第一秒就在嘶吼或哭，排定的高峰反而變弱。Key 的表情應該是這拍開場的狀態；高峰要靠文字，或在高峰那一格另外加一張關鍵格引導（之後再測）。
+3. **臉部特徵點本身帶不動表情。** 提示詞不提嘶吼時全程閉嘴；配合文字時只有很小的差異（嘶吼 0.66 對 0.59、推撞後稍微張嘴）。Union-Control 看起來沒有學過臉部點，或半解析度的參考太粗。產品維持不畫（`drawSkeleton` 的 `face` 預設關），表情通道留著給文字和分鏡外觀用。
+4. **角色長相是最弱的一環，而且是在 Layout Key 掉的。** 成片的 Kael 和肖像不像同一個人（肖像長臉、灰綠眼睛；成片圓臉、較年輕），tears 和 shove 的 Kael 彼此也像兩個演員；Mira 在 text 那支頭髮從紅棕變成深棕。回頭比對 Klein 首格，臉在首格就換了，LTX 只是照首格畫。下一步要先解決：首格的身分編輯（臉部特寫加角色肖像，lab 的 `faceswap.py` 做法），以及能用的身分分數。
+5. **qwen3.8 不能當身分檢查**：每一支都回答「同一人，信心 95」，連頭髮換了顏色的也一樣，它看的是衣服和髮型。表情盲讀和肢體接觸判斷則和量測一致，可以用。
+6. 準備首格時另外發現的產品風險（[肖像與首格](../verification/motion-lab/perf_hard_keys.jpg)）：
+   - **場景參考圖會讓 Klein 照抄構圖**：拿一張完整的觀測站照片當最後一張參考時，六張首格都變成那張照片的構圖（小人站在玻璃前），完全不管預演。產品的 Layout Key 也帶場景圖（第三張），特寫鏡頭要再驗證。
+   - **假人在特寫時不像人**：光滑的蛋形正臉被 Klein 畫成後腦勺；長髮那塊橢圓被畫成浮著的一團頭髮（scream 的 Key 換了一次種子，5503）。提示詞寫明朝向可以繞過去；假人的臉和頭髮要另外改。
+   - 天文台場景寫死的信標（`scene.js`）在每一場都會亮，tears 畫面右上角出現一顆太陽。

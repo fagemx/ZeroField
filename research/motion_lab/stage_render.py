@@ -1,9 +1,10 @@
 """Re-render a 3D Stage previs headless with the product's own scene.js / webm.js, from the plan stored in the WebM.
 
-usage: python stage_render.py PREVIS.webm|PLAN.json OUT.webm|OUT.json [matte|skeleton|pose]
+usage: python stage_render.py PREVIS.webm|PLAN.json OUT.webm|OUT.json [matte|skeleton|skeletonface|pose]
 A PLAN.json renders a plan written by hand or by a lab script (performance keys, poses, cast) instead of a stored one.
 "matte" renders every cast member white on black (scene.js matte) for guide attention masks.
-"skeleton" renders the pose skeleton pass Render previs writes for the Layout Render (ui/src/previs/skeleton.js).
+"skeleton" renders the pose skeleton pass Render previs writes for the Layout Render (ui/src/previs/skeleton.js);
+"skeletonface" adds the 68 face points, moved by the performance keys' expressions.
 "pose" writes OUT.json instead of a video: per frame, every cast member's OpenPose keypoints in pixels (18 body points
 [x, y, visible], 21 per hand), the same points the skeleton draws.
 """
@@ -36,10 +37,10 @@ window.keypoints = async json => {
   for (let f = 0; f < framesOf(plan); f++) { stage.frame(f, plan); out.push(poseKeypoints(stage.scene, stage.camera)); }
   return JSON.stringify(out);
 };
-window.skeleton = async json => {
+window.skeleton = async (json, face) => {
   const plan = JSON.parse(json), stage = buildStage(plan), canvas = document.createElement('canvas');
   canvas.width = WIDTH; canvas.height = HEIGHT; const ctx = canvas.getContext('2d');
-  const blob = await encodeCanvas(canvas, framesOf(plan), FPS, f => { stage.frame(f, plan); drawSkeleton(ctx, poseKeypoints(stage.scene, stage.camera)); }, null, null);
+  const blob = await encodeCanvas(canvas, framesOf(plan), FPS, f => { stage.frame(f, plan); drawSkeleton(ctx, poseKeypoints(stage.scene, stage.camera), WIDTH, HEIGHT, face); }, null, null);
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
@@ -71,8 +72,8 @@ def main(src, dest, mode=None):
         head = "" if json_plan else base64.b64encode(Path(src).read_bytes()[:8192]).decode()
         if mode == "pose":
             Path(dest).write_text(page.evaluate("j => window.keypoints(j)", json_plan or json.dumps(plan_of(src))), encoding="utf-8")
-        elif mode == "skeleton":
-            Path(dest).write_bytes(base64.b64decode(page.evaluate("j => window.skeleton(j)", json_plan or json.dumps(plan_of(src)))))
+        elif mode in ("skeleton", "skeletonface"):
+            Path(dest).write_bytes(base64.b64decode(page.evaluate("([j, f]) => window.skeleton(j, f)", [json_plan or json.dumps(plan_of(src)), mode == "skeletonface"])))
         else:
             Path(dest).write_bytes(base64.b64decode(page.evaluate("([b, m, j]) => window.render(b, m, j)", [head, mode == "matte", json_plan])))
         browser.close()

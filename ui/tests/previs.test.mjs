@@ -195,3 +195,27 @@ test('the pose skeleton is the mannequin\'s own joints: OpenPose order, his righ
   assert.equal(front.body[0][2], 1);
   assert.ok(front.body[2][0] < front.body[5][0]);
 });
+
+test('face points: 68 landmarks in iBUG order, hidden from behind, moved by the performance keys\' expressions', async () => {
+  const {poseKeypoints, faceLandmarks} = await import('../src/previs/skeleton.js');
+  const {EXPRESSIONS} = await import('../src/previs/plan.js');
+  const rest = faceLandmarks(), scream = faceLandmarks(EXPRESSIONS.scream), cry = faceLandmarks(EXPRESSIONS.cry);
+  assert.equal(rest.length, 68);
+  const gap = f => f[66].y - f[62].y, eyeH = f => f[37].y - f[41].y;  // inner lips apart; right eye lid to lid
+  assert.ok(gap(scream) < gap(rest) - 0.025, 'a scream opens the mouth');
+  assert.ok(scream[8].y < rest[8].y - 0.02, 'and drops the chin');
+  assert.ok(eyeH(cry) < eyeH(rest) * 0.6 && cry[48].y < rest[48].y, 'crying squeezes the eyes and pulls the corners down');
+  assert.ok(cry[21].y > rest[21].y && cry[17].y - rest[17].y < cry[21].y - rest[21].y, 'grief lifts the inner brows more than the outer');
+  assert.ok(rest[36].x < rest[39].x && rest[39].x < rest[42].x && rest[42].x < rest[45].x, 'right eye outer to inner, then left eye inner to outer');
+  // Keys blend the expression like a pose, from neutral before the first key.
+  assert.ok(Object.values(sampleActs([{at: 0.5, face: 'scream'}], 0).face).every(v => v === 0));
+  assert.equal(sampleActs([{at: 0.5, face: 'scream'}], 0.25).face.jaw.toFixed(2), '0.50');
+  // Drawn only while the face is toward the camera.
+  const plan = {...defaultPlan(), acts: [{at: 0, face: 'scream'}]}, stage = buildStage(plan), f = framesOf(plan) - 1;
+  stage.frame(f, plan);
+  assert.ok(poseKeypoints(stage.scene, stage.camera)[0].face.every(p => p[2] === 0), 'S03 from behind: no face points');
+  stage.frame(f, {...plan, turn: 180});
+  const face = poseKeypoints(stage.scene, stage.camera)[0].face;
+  assert.equal(face.filter(p => p[2]).length, 68);
+  assert.ok(face[8][1] > face[30][1] && face[30][1] > face[27][1], 'on screen the chin is below the nose tip, the nose tip below the bridge');
+});

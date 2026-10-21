@@ -1,0 +1,512 @@
+{
+ "runs": {
+  "hc_tears_text": {
+   "seconds": 176,
+   "camera": 0.63,
+   "grade": {
+    "read": "{\"frames\": [\"neutral\", \"face not visible\", \"sadness\"], \"clarity\": 9}",
+    "same": "```json\n{\n  \"same\": true,\n  \"confidence\": 95,\n  \"why\": \"The facial structure is identical in both images, featuring the same strong jawline, nose shape, and eye structure. The hair is the same dark color and short style. The man is also wearing the same olive green jacket in both pictures, which strongly suggests they are the same individual.\"\n}\n```"
+   }
+  },
+  "hc_tears_key": {
+   "seconds": 162,
+   "camera": 0.72,
+   "grade": {
+    "read": "{\"frames\": [\"grief\", \"no face visible\", \"grief\"], \"clarity\": 9}",
+    "same": "```json\n{\n  \"same\": true,\n  \"confidence\": 95,\n  \"why\": \"The facial structure is identical in both images. Key features such as the shape of the eyes, the bridge and tip of the nose, the jawline, and the specific hairline match perfectly. The man in the second image is wearing the same olive-green jacket with a dark collar as seen in the reference portrait, confirming it is the same individual.\"\n}\n```"
+   }
+  },
+  "hc_tears_face": {
+   "seconds": 161,
+   "camera": 0.71,
+   "grade": {
+    "read": "{\"frames\": [\"neutral\", \"face not visible\", \"sadness\"], \"clarity\": 9}",
+    "same": "```json\n{\n \"same\": true,\n \"confidence\": 95,\n \"why\": \"The facial structure is identical in both images. Key features such as the shape of the jawline, the specific contours of the nose, the eye shape, and the hairline match perfectly. The man in the second image is wearing the same olive-green jacket as seen in the reference portrait, which strongly confirms it is the same individual.\"\n}\n```"
+   }
+  },
+  "hc_scream_text": {
+   "seconds": 168,
+   "camera": 1.0,
+   "grade": {
+    "read": "{\"frames\": [\"calm\", \"anger\", \"anger\"], \"clarity\": 10}",
+    "same": "```json\n{\n  \"same\": true,\n  \"confidence\": 95,\n  \"why\": \"The facial structure, including the oval face shape, the specific shape of the eyes, the nose, and the full lips, are consistent between the two images. The hair color (auburn/reddish-brown) and style (shoulder-length) also match. The woman in the second image is clearly the same person as the reference portrait, just in a different context and expression.\"\n}\n```"
+   }
+  },
+  "hc_scream_key": {
+   "seconds": 162,
+   "camera": 1.0,
+   "grade": {
+    "read": "{\"frames\": [\"intense anger\", \"intense anger\", \"intense anger\"], \"clarity\": 10}",
+    "same": "```json\n{\n  \"same\": true,\n  \"confidence\": 95,\n  \"why\": \"The facial structure, including the oval face shape, the specific shape of the eyes, the nose, and the full lips, are consistent between the two images. The hair color (auburn/reddish-brown) and style (shoulder-length with waves) also match. The clothing, a green coat over a cream-colored sweater, is identical in both images, strongly suggesting it is the same person in different scenes.\"\n}\n```"
+   }
+  },
+  "hc_scream_face": {
+   "seconds": 161,
+   "camera": 1.0,
+   "grade": {
+    "read": "{\"frames\": [\"calm\", \"anger\", \"anger\"], \"clarity\": 10}",
+    "same": "```json\n{\n  \"same\": true,\n  \"confidence\": 95,\n  \"why\": \"The facial structure, including the oval face shape, the specific shape of the eyes, the nose, and the full lips, are consistent between the two images. The hair color (auburn/reddish-brown) and style (shoulder-length with a side part) also match perfectly. The woman in the second image is clearly the same person as the reference portrait, just in a different context and expression.\"\n}\n```"
+   }
+  },
+  "hc_shove_text": {
+   "seconds": 169,
+   "camera": 0.93,
+   "grade": {
+    "read": "{\"frames\": [\"neutral\", \"frustrated\", \"neutral\"], \"clarity\": 7}",
+    "same": "```json\n{\n \"same\": true,\n \"confidence\": 95,\n \"why\": \"The facial structure, including the strong jawline, prominent brow ridge, and the specific shape of the eyes and nose, are highly consistent between the reference portrait and the film frame. The short dark hair and general facial features match perfectly, indicating it is the same individual.\"\n}\n```",
+    "contact": "```json\n{\"believable\": 9, \"artefacts\": \"none\"}\n```"
+   }
+  },
+  "hc_shove_key": {
+   "seconds": 161,
+   "camera": 0.96,
+   "grade": {
+    "read": "{\"frames\": [\"surprise\", \"frustration\", \"shock\"], \"clarity\": 9}",
+    "same": "```json\n{\n \"same\": true,\n \"confidence\": 95,\n \"why\": \"The facial structure, including the distinct jawline, nose shape, and eye features, are identical in both images. The man in the film frame has the same short dark hair and general appearance as the reference portrait, confirming they are the same individual.\"\n}\n```",
+    "contact": "```json\n{\"believable\": 9, \"artefacts\": \"\"}\n```"
+   }
+  },
+  "hc_shove_face": {
+   "seconds": 165,
+   "camera": 0.94,
+   "grade": {
+    "read": "{\n  \"frames\": [\n    \"Stoic and serious\",\n    \"Pained and pleading\",\n    \"Shocked and alarmed\"\n  ],\n  \"clarity\": 9\n}",
+    "same": "```json\n{\n  \"same\": true,\n  \"confidence\": 95,\n  \"why\": \"The facial structure, including the strong jawline, prominent brow ridge, and the specific shape of the eyes and nose, are identical in both images. The short dark hair and general head shape also match perfectly, indicating it is the same individual.\"\n}\n```",
+    "contact": "```json\n{\"believable\": 9, \"artefacts\": \"none\"}\n```"
+   }
+  },
+  "hc_scream_face_neutral": {
+   "seconds": 168,
+   "camera": 1.0,
+   "grade": {
+    "read": "{\"frames\": [\"concern\", \"concern\", \"concern\"], \"clarity\": 7}",
+    "same": "```json\n{\n  \"same\": true,\n  \"confidence\": 95,\n  \"why\": \"The facial structure is identical in both images, featuring the same oval face shape, strong jawline, and distinct nose. The eyes, eyebrows, and mouth shape are consistent matches. The hair color (auburn/reddish-brown) and style (shoulder-length with a side part) are also the same. The woman in the second image is wearing the same dark green coat as seen in the reference portrait.\"\n}\n```"
+   }
+  }
+ },
+ "face_metrics": {
+  "tool": "ComfyUI MediaPipe face landmarker (ARKit blendshapes, mean of left/right), research/motion_lab/face_metrics.py; detector 'short' for close-ups, 'full' for the two-shot",
+  "segments": {
+   "hc_tears_text": {
+    "hold 0-1.8s": {
+     "face_found": 1.0,
+     "jawOpen": 0.0,
+     "browInnerUp": 0.0,
+     "browDown": 0.34,
+     "eyeSquint": 0.28,
+     "eyeBlink": 0.1,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.0,
+     "noseSneer": 0.0
+    },
+    "crumple 1.8-4.3s": {
+     "face_found": 1.0,
+     "jawOpen": 0.03,
+     "browInnerUp": 0.0,
+     "browDown": 0.47,
+     "eyeSquint": 0.47,
+     "eyeBlink": 0.71,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.04,
+     "noseSneer": 0.0
+    },
+    "tears 4.3-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.02,
+     "browInnerUp": 0.0,
+     "browDown": 0.47,
+     "eyeSquint": 0.59,
+     "eyeBlink": 0.39,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.03,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_tears_key": {
+    "hold 0-1.8s": {
+     "face_found": 1.0,
+     "jawOpen": 0.04,
+     "browInnerUp": 0.01,
+     "browDown": 0.43,
+     "eyeSquint": 0.6,
+     "eyeBlink": 0.35,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.02,
+     "mouthStretch": 0.39,
+     "noseSneer": 0.0
+    },
+    "crumple 1.8-4.3s": {
+     "face_found": 1.0,
+     "jawOpen": 0.01,
+     "browInnerUp": 0.01,
+     "browDown": 0.33,
+     "eyeSquint": 0.57,
+     "eyeBlink": 0.66,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.02,
+     "mouthStretch": 0.16,
+     "noseSneer": 0.0
+    },
+    "tears 4.3-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.09,
+     "browInnerUp": 0.05,
+     "browDown": 0.15,
+     "eyeSquint": 0.56,
+     "eyeBlink": 0.31,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.25,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_tears_face": {
+    "hold 0-1.8s": {
+     "face_found": 1.0,
+     "jawOpen": 0.01,
+     "browInnerUp": 0.0,
+     "browDown": 0.33,
+     "eyeSquint": 0.28,
+     "eyeBlink": 0.09,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.0,
+     "noseSneer": 0.0
+    },
+    "crumple 1.8-4.3s": {
+     "face_found": 1.0,
+     "jawOpen": 0.01,
+     "browInnerUp": 0.01,
+     "browDown": 0.49,
+     "eyeSquint": 0.44,
+     "eyeBlink": 0.77,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.04,
+     "noseSneer": 0.0
+    },
+    "tears 4.3-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.05,
+     "browInnerUp": 0.0,
+     "browDown": 0.43,
+     "eyeSquint": 0.57,
+     "eyeBlink": 0.37,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.05,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_scream_text": {
+    "glare 0-1.5s": {
+     "face_found": 1.0,
+     "jawOpen": 0.0,
+     "browInnerUp": 0.02,
+     "browDown": 0.01,
+     "eyeSquint": 0.15,
+     "eyeBlink": 0.04,
+     "eyeWide": 0.02,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.06,
+     "noseSneer": 0.0
+    },
+    "scream 2.3-4.8s": {
+     "face_found": 1.0,
+     "jawOpen": 0.59,
+     "browInnerUp": 0.0,
+     "browDown": 0.1,
+     "eyeSquint": 0.56,
+     "eyeBlink": 0.23,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.02,
+     "noseSneer": 0.0
+    },
+    "after 4.8-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.05,
+     "browInnerUp": 0.01,
+     "browDown": 0.08,
+     "eyeSquint": 0.39,
+     "eyeBlink": 0.13,
+     "eyeWide": 0.02,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.18,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_scream_key": {
+    "glare 0-1.5s": {
+     "face_found": 1.0,
+     "jawOpen": 0.67,
+     "browInnerUp": 0.0,
+     "browDown": 0.21,
+     "eyeSquint": 0.63,
+     "eyeBlink": 0.17,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.05,
+     "noseSneer": 0.0
+    },
+    "scream 2.3-4.8s": {
+     "face_found": 1.0,
+     "jawOpen": 0.11,
+     "browInnerUp": 0.0,
+     "browDown": 0.22,
+     "eyeSquint": 0.63,
+     "eyeBlink": 0.31,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.03,
+     "noseSneer": 0.0
+    },
+    "after 4.8-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.06,
+     "browInnerUp": 0.0,
+     "browDown": 0.15,
+     "eyeSquint": 0.49,
+     "eyeBlink": 0.14,
+     "eyeWide": 0.02,
+     "mouthFrown": 0.02,
+     "mouthStretch": 0.13,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_scream_face": {
+    "glare 0-1.5s": {
+     "face_found": 1.0,
+     "jawOpen": 0.0,
+     "browInnerUp": 0.02,
+     "browDown": 0.01,
+     "eyeSquint": 0.14,
+     "eyeBlink": 0.03,
+     "eyeWide": 0.03,
+     "mouthFrown": 0.02,
+     "mouthStretch": 0.05,
+     "noseSneer": 0.0
+    },
+    "scream 2.3-4.8s": {
+     "face_found": 1.0,
+     "jawOpen": 0.66,
+     "browInnerUp": 0.01,
+     "browDown": 0.08,
+     "eyeSquint": 0.48,
+     "eyeBlink": 0.11,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.04,
+     "noseSneer": 0.0
+    },
+    "after 4.8-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.21,
+     "browInnerUp": 0.01,
+     "browDown": 0.06,
+     "eyeSquint": 0.48,
+     "eyeBlink": 0.13,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.16,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_shove_text": {
+    "before 0-1.1s": {
+     "face_found": 1.0,
+     "jawOpen": 0.08,
+     "browInnerUp": 0.01,
+     "browDown": 0.32,
+     "eyeSquint": 0.31,
+     "eyeBlink": 0.11,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.0,
+     "noseSneer": 0.0
+    },
+    "shove 1.1-1.9s": {
+     "face_found": 1.0,
+     "jawOpen": 0.1,
+     "browInnerUp": 0.03,
+     "browDown": 0.23,
+     "eyeSquint": 0.37,
+     "eyeBlink": 0.21,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.03,
+     "noseSneer": 0.0
+    },
+    "after 1.9-3.3s": {
+     "face_found": 1.0,
+     "jawOpen": 0.01,
+     "browInnerUp": 0.0,
+     "browDown": 0.23,
+     "eyeSquint": 0.31,
+     "eyeBlink": 0.19,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.02,
+     "mouthStretch": 0.04,
+     "noseSneer": 0.0
+    },
+    "hold 3.3-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.02,
+     "browInnerUp": 0.0,
+     "browDown": 0.34,
+     "eyeSquint": 0.37,
+     "eyeBlink": 0.1,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.01,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_shove_key": {
+    "before 0-1.1s": {
+     "face_found": 1.0,
+     "jawOpen": 0.22,
+     "browInnerUp": 0.5,
+     "browDown": 0.0,
+     "eyeSquint": 0.15,
+     "eyeBlink": 0.02,
+     "eyeWide": 0.03,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.03,
+     "noseSneer": 0.0
+    },
+    "shove 1.1-1.9s": {
+     "face_found": 1.0,
+     "jawOpen": 0.06,
+     "browInnerUp": 0.02,
+     "browDown": 0.07,
+     "eyeSquint": 0.46,
+     "eyeBlink": 0.14,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.04,
+     "mouthStretch": 0.03,
+     "noseSneer": 0.0
+    },
+    "after 1.9-3.3s": {
+     "face_found": 1.0,
+     "jawOpen": 0.19,
+     "browInnerUp": 0.06,
+     "browDown": 0.06,
+     "eyeSquint": 0.33,
+     "eyeBlink": 0.11,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.02,
+     "mouthStretch": 0.06,
+     "noseSneer": 0.0
+    },
+    "hold 3.3-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.34,
+     "browInnerUp": 0.01,
+     "browDown": 0.16,
+     "eyeSquint": 0.33,
+     "eyeBlink": 0.06,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.0,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_shove_face": {
+    "before 0-1.1s": {
+     "face_found": 1.0,
+     "jawOpen": 0.01,
+     "browInnerUp": 0.0,
+     "browDown": 0.25,
+     "eyeSquint": 0.31,
+     "eyeBlink": 0.12,
+     "eyeWide": 0.0,
+     "mouthFrown": 0.0,
+     "mouthStretch": 0.0,
+     "noseSneer": 0.0
+    },
+    "shove 1.1-1.9s": {
+     "face_found": 1.0,
+     "jawOpen": 0.01,
+     "browInnerUp": 0.01,
+     "browDown": 0.22,
+     "eyeSquint": 0.42,
+     "eyeBlink": 0.15,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.04,
+     "mouthStretch": 0.04,
+     "noseSneer": 0.0
+    },
+    "after 1.9-3.3s": {
+     "face_found": 1.0,
+     "jawOpen": 0.09,
+     "browInnerUp": 0.0,
+     "browDown": 0.36,
+     "eyeSquint": 0.39,
+     "eyeBlink": 0.14,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.01,
+     "noseSneer": 0.0
+    },
+    "hold 3.3-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.14,
+     "browInnerUp": 0.0,
+     "browDown": 0.41,
+     "eyeSquint": 0.43,
+     "eyeBlink": 0.08,
+     "eyeWide": 0.01,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.0,
+     "noseSneer": 0.0
+    }
+   },
+   "hc_scream_face_neutral": {
+    "glare 0-1.5s": {
+     "face_found": 1.0,
+     "jawOpen": 0.0,
+     "browInnerUp": 0.03,
+     "browDown": 0.01,
+     "eyeSquint": 0.14,
+     "eyeBlink": 0.03,
+     "eyeWide": 0.02,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.03,
+     "noseSneer": 0.0
+    },
+    "scream 2.3-4.8s": {
+     "face_found": 1.0,
+     "jawOpen": 0.0,
+     "browInnerUp": 0.02,
+     "browDown": 0.01,
+     "eyeSquint": 0.15,
+     "eyeBlink": 0.03,
+     "eyeWide": 0.03,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.03,
+     "noseSneer": 0.0
+    },
+    "after 4.8-6s": {
+     "face_found": 1.0,
+     "jawOpen": 0.0,
+     "browInnerUp": 0.04,
+     "browDown": 0.0,
+     "eyeSquint": 0.13,
+     "eyeBlink": 0.03,
+     "eyeWide": 0.03,
+     "mouthFrown": 0.01,
+     "mouthStretch": 0.04,
+     "noseSneer": 0.0
+    }
+   }
+  }
+ },
+ "notes": {
+  "scream_key": "the generic scream key is Klein seed 5503: seed 5502 painted the long-hair blockout as a floating second head of hair",
+  "vision_identity": "qwen3.8 answered 'same person, 95' for every take, including one whose hair changed colour: not usable as an identity check"
+ }
+}
