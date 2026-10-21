@@ -1298,6 +1298,7 @@ def comfyui(task, config, head):
         config['timeout'] = head.outbound_timeout(config.get('timeout',1800))
         config['probe_timeout'] = head.outbound_timeout(config.get('probe_timeout',60))
     client = legacy.ComfyPlatformClient(config)
+    gpu_lock = None
     try:
         if card is not None:
             form_values = _build_card_form_values(card, ctx, config, task, head)
@@ -1316,6 +1317,10 @@ def comfyui(task, config, head):
             workflow = bind_external_workflow(workflow, ctx, config, task, head, client)
         if profile["driver"] == "comfy_partner":
             head.paid_request_submitted = True
+        if urllib.parse.urlsplit(comfy_base_url(config, comfy_platform(config))).hostname in ("127.0.0.1", "localhost", "::1"):
+            from project_assistant.take_grader import GPU_LOCK
+            GPU_LOCK.acquire()  # a continuity grade holding the local GPU finishes first; renders queue behind it
+            gpu_lock = GPU_LOCK
         identifier = client.submit_workflow(workflow, str(task["id"]), config.get("metadata"))
         deadline = time.monotonic() + config.get("timeout", (card.get("engine_config", {}).get("timeout", 1800) if card else 1800))
         output_node = config.get("output_node") or (card.get("engine_config", {}).get("output_node") if card else None)
@@ -1364,4 +1369,6 @@ def comfyui(task, config, head):
         error = runtime.NonRetryableWorkerError if profile["driver"] == "comfy_partner" else runtime.WorkerError
         raise error("Comfy execution failed; verify deployment, workflow nodes and model files") from None
     finally:
+        if gpu_lock:
+            gpu_lock.release()
         client.close()

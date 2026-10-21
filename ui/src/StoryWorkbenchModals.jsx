@@ -7,7 +7,7 @@ import { MediaCell } from './MediaCell.jsx';
 import { episodeId, shotId, selectedTake, storyList, storyRequest, waitStoryTask } from './storyModel.js';
 import { normalizeStatus, statusLabel } from './format.js';
 import { ProposalRaceView } from './assistant/ProposalRaceView.jsx';
-import { allocationPath, escalationPath, allocationDispatchBody, approvedCompositionSource, allocationBlockerLabel } from './storyModel.js';
+import { allocationPath, escalationPath, allocationDispatchBody, approvedCompositionSource, allocationBlockerLabel, GRADE_ACTIVE, gradesActive, takeGrade } from './storyModel.js';
 import './story-workbench.css';
 import { Icon } from './Icon.jsx';
 
@@ -256,6 +256,7 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
   useEffect(() => {if(draftKey)try{sessionStorage.setItem(draftKey,JSON.stringify({app,values}));}catch{/* Mounted overrides remain available. */}}, [draftKey,app,values]);
   const selected = apps.find(a => a.appCode === app);
   const perform = fn => action.run(async wait => {if (beforeRun?.() === false) return; return fn(wait);});
+  const grading = useTakeGrades(slug, id);
   return <section className="story-shot-tools">
     <h3>{t('story.candidateTakes')}</h3>
     {shot && <p>{statusLabel(reviewStatus)} · {t('allocation.complexity_' + shot.complexity.complexity_tier)}</p>}
@@ -269,8 +270,10 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
       <figcaption><button disabled={!writable || disabled || action.busy || take.selected} aria-pressed={take.selected} onClick={() => perform(async () => {
         await storyRequest(`/shots/${id}/selected-${kind === 'images' ? 'image' : 'video'}`, 'PUT', kind === 'images' ? {imageId:take.imageId} : {videoId:take.videoId});
         setTakes(old=>({...old,[kind]:selectedTake(old[kind],take.imageId||take.videoId,kind==='images'?'image':'video')}));
-      })}>{t(take.selected ? 'story.selectedTake' : 'story.useTake')}</button></figcaption>
+      })}>{t(take.selected ? 'story.selectedTake' : 'story.useTake')}</button>
+      {kind === 'videos' && <GradeButton grade={takeGrade(grading.grades, take.url)} disabled={!writable || grading.busy} onGrade={() => grading.grade({videoId:take.videoId})}/>}</figcaption>
     </figure>)}</div>)}
+    <TakeGrades grading={grading} writable={writable}/>
     <div className="sheet-panel-actions"><button disabled={!writable || disabled || action.busy} onClick={() => perform(() => storyRequest(`/shots/${id}/splits`, 'POST'))}>{t('story.splitShot')}</button>
       <button disabled={!writable || disabled || action.busy || !currentTakes.videos.some(v => v.selected)} onClick={() => perform(async wait => {
         await wait(await storyRequest(`/shots/${id}/video-generations`, 'POST', {appCode:'H3_OPTIMIZE_4K', referenceSourceVideoId:currentTakes.videos.find(v => v.selected).videoId}));
@@ -287,6 +290,56 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
       })}>{t('story.reshootWithInputs')}</button>
     </details>
     {error && <p role="alert">{error}</p>}<ActionState action={action}/>
+  </section>;
+}
+
+// Continuity grades of this row's takes; polls while a grade is queued, waiting for the GPU or running.
+function useTakeGrades(slug, id) {
+  const [grades, setGrades] = useState([]), [auto, setAuto] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false), [tick, setTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    storyRequest(`/shots/${id}/grades?limit=100`).then(data => {if (alive) {setGrades(data.items); setAuto(data.autoGrade); setError('');}}).catch(e => {if (alive) setError(e.message);});
+    return () => {alive = false;};
+  }, [id, tick]);
+  const active = gradesActive(grades);
+  useEffect(() => {if (!active) return; const timer = setTimeout(() => setTick(n => n + 1), 3000); return () => clearTimeout(timer);}, [active, grades]);
+  const call = async fn => {setBusy(true); try {await fn(); setTick(n => n + 1); setError('');} catch (e) {setError(e.message);} finally {setBusy(false);}};
+  return {grades, auto, error, busy,
+    grade: body => call(() => storyRequest(`/shots/${id}/grades`, 'POST', body)),
+    setAuto: value => call(async () => setAuto((await storyRequest(`/projects/pj_${slug}/grading`, 'PUT', {autoGrade:value})).autoGrade))};
+}
+
+function GradeButton({grade, disabled, onGrade}) {
+  const running = grade && GRADE_ACTIVE.includes(grade.status);
+  return <span className="take-grade-action">
+    {grade?.status === 'graded' && <span className={'grade-pill ' + (grade.passed ? 'is-pass' : 'is-retake')}>{t('grade.score', {score:grade.score})}</span>}
+    <button disabled={disabled || running} onClick={onGrade}>{running ? t('grade.status_' + grade.status) : t(grade ? 'grade.regrade' : 'grade.grade')}</button>
+  </span>;
+}
+
+export function TakeGrades({grading, writable}) {
+  useLocale();
+  return <section className="take-grades" aria-label={t('grade.title')}>
+    <h3>{t('grade.title')}</h3>
+    <label className="sheet-check" title={t('grade.autoHint')}><input type="checkbox" checked={grading.auto} disabled={!writable || grading.busy} onChange={e => grading.setAuto(e.target.checked)}/>{t('grade.autoGrade')}</label>
+    {grading.error && <p role="alert">{grading.error}</p>}
+    {!grading.grades.length && <p className="sheet-subtle">{t('grade.none')}</p>}
+    {grading.grades.map(g => {
+      const graded = g.status === 'graded';
+      return <article key={g.gradeId} className={'take-grade ' + (graded ? (g.passed ? 'is-pass' : 'is-retake') : 'is-' + g.status)}>
+        <div className="take-grade-media"><MediaCell compact type="video" value={g.assetUrl} label={g.assetId}/></div>
+        <div className="take-grade-body">
+          <p className="take-grade-head">{graded ? <><strong className={'grade-pill ' + (g.passed ? 'is-pass' : 'is-retake')}>{t('grade.score', {score:g.score})}</strong> <span>{t(g.passed ? 'grade.pass' : 'grade.retake')}</span></> : <strong role="status">{t('grade.status_' + g.status)}</strong>}
+            {g.auto && <span className="grade-auto">{t('grade.auto')}</span>}</p>
+          {g.feedback && <p>{g.feedback}</p>}
+          {g.issues?.length > 0 && <ul aria-label={t('grade.issues')}>{g.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>}
+          {g.error && <p role="alert">{g.error}</p>}
+          {g.proposalId && <p className="take-grade-proposal">{t('grade.retakeProposal', {id:g.proposalId})}</p>}
+          {g.sheetUrl && <details><summary>{t('grade.sheet')}</summary><img src={g.sheetUrl} alt={t('grade.sheetAlt')} loading="lazy"/></details>}
+          {graded && <small>{t(g.gpu?.comfyFreed ? 'grade.meta' : 'grade.metaNoComfy', {model:g.model, seconds:g.seconds})}</small>}
+        </div>
+      </article>;
+    })}
   </section>;
 }
 

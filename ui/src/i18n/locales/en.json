@@ -2405,5 +2405,27 @@
     "layout": "Run layout render",
     "layoutHint": "Layout Key (FLUX 3 Klein on previs frame 0, reviewed) then Layout Render (LTX-2.5 Layout-To-Render IC-LoRA, the actor matte frees the actor). About 3 minutes on an RTX 4090.",
     "renderMatte": "Render the previs again to save the actor matte; the layout render needs it."
+  },
+  "grade": {
+    "title": "Continuity grades",
+    "grade": "Grade",
+    "regrade": "Grade again",
+    "autoGrade": "Auto-grade new takes",
+    "autoHint": "The Continuity Supervisor grades each video take when it lands. Grading waits for running renders and frees the GPU first.",
+    "none": "No grades yet. Grade a take to get an 8-frame continuity check.",
+    "status_queued": "Queued",
+    "status_waiting_gpu": "Waiting for the GPU (renders finish first)",
+    "status_grading": "Grading…",
+    "status_failed": "Grading failed",
+    "score": "{{score}}/100",
+    "pass": "Pass",
+    "retake": "Retake",
+    "auto": "Auto",
+    "issues": "Issues",
+    "sheet": "8-frame contact sheet",
+    "sheetAlt": "8-frame timestamped contact sheet of the graded take",
+    "retakeProposal": "Retake proposal #{{id}} (rewritten prompt) is waiting for your approval in Studio Assistant.",
+    "meta": "{{model}} · {{seconds}} s · GPU handed off from ComfyUI",
+    "metaNoComfy": "{{model}} · {{seconds}} s"
   }
 }

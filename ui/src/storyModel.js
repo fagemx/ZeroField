@@ -45,6 +45,11 @@ export function selectedTake(candidates, id, kind = 'video') {
   return candidates.map(item => ({...item, selected:item[kind + 'Id'] === id}));
 }
 
+// Continuity grades arrive newest first; a take shows its latest grade.
+export const GRADE_ACTIVE = ['queued', 'waiting_gpu', 'grading'];
+export const gradesActive = grades => grades.some(g => GRADE_ACTIVE.includes(g.status));
+export const takeGrade = (grades, url) => grades.find(g => g.assetUrl === url) || null;
+
 export function replaceAssetVariant(value, oldId, nextId) {
   const pattern = new RegExp('(@?\\b)' + oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(':','[:#]') + '(?![:#a-z0-9_-])', 'gi');
   return String(value).replace(pattern, (_, prefix) => prefix + nextId);

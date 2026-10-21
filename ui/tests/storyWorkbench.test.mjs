@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {assetReferences, assetVariants, buildAssetLookup, resolveAssetReference} from '../src/studioModel.js';
-import {replaceAssetVariant, sceneKey, selectedTake, episodeId, shotId} from '../src/storyModel.js';
+import {replaceAssetVariant, sceneKey, selectedTake, episodeId, shotId, takeGrade, gradesActive} from '../src/storyModel.js';
 import {sheetViewModel} from '../src/sheetViews.js';
 import {tablesOf} from '../src/sheetModel.js';
 
@@ -45,6 +45,14 @@ test('Micro take selection is immutable and leaves exactly one active candidate'
   assert.equal(takes[0].selected,true);
   assert.equal(episodeId('demo',2),'ep_demo_02');
   assert.equal(shotId('demo','brow1'),'sh_demo_brow1');
+});
+
+test('a take shows its newest grade and polling stops once grades settle', () => {
+  const grades = [{assetUrl:'/a',status:'graded',score:72},{assetUrl:'/a',status:'failed'},{assetUrl:'/b',status:'waiting_gpu'}];
+  assert.equal(takeGrade(grades,'/a').score,72);
+  assert.equal(takeGrade(grades,'/c'),null);
+  assert.equal(gradesActive(grades),true);
+  assert.equal(gradesActive(grades.slice(0,2)),false);
 });
 
 test('allocation preflight wire paths and dispatch use the reviewed immutable assignment IDs', async () => {
