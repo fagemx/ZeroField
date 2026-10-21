@@ -2397,5 +2397,27 @@
     "layout": "執行版面渲染",
     "layoutHint": "Layout Key（FLUX 3 Klein 改畫預演第 0 幀，需審核）接 Layout Render（LTX-2.5 Layout-To-Render IC-LoRA，演員遮罩讓演員自由生成）。RTX 4090 約 3 分鐘。",
     "renderMatte": "請重新渲染預演以存下演員遮罩；版面渲染需要它。"
+  },
+  "grade": {
+    "title": "連戲評分",
+    "grade": "評分",
+    "regrade": "重新評分",
+    "autoGrade": "新鏡次自動評分",
+    "autoHint": "影片鏡次一產出，連戲主管就會評分。評分會等正在跑的渲染結束，並先釋放 GPU。",
+    "none": "尚無評分。對鏡次評分即可取得 8 格連戲檢查。",
+    "status_queued": "排隊中",
+    "status_waiting_gpu": "等待 GPU（先讓渲染跑完）",
+    "status_grading": "評分中…",
+    "status_failed": "評分失敗",
+    "score": "{{score}}/100",
+    "pass": "通過",
+    "retake": "重拍",
+    "auto": "自動",
+    "issues": "問題",
+    "sheet": "8 格聯絡表",
+    "sheetAlt": "受評鏡次的 8 格時間戳聯絡表",
+    "retakeProposal": "重拍提案 #{{id}}（改寫後的提示詞）正在 Studio Assistant 等你核准。",
+    "meta": "{{model}} · {{seconds}} 秒 · GPU 已從 ComfyUI 交接",
+    "metaNoComfy": "{{model}} · {{seconds}} 秒"
   }
 }

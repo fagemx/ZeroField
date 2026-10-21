@@ -1021,6 +1021,9 @@ def complete(conn, worker, body):
         else:
             proposal_id = store.create_proposal(conn, run["project_slug"], me.actor_id, None, "table_edit", target, preview)
             status = "awaiting_approval"
+        from project_assistant import take_grader
+        if take_grader.on_take(conn, run["project_slug"], task["target"].get("tab_key"), task["target"].get("row_id"), output, me.actor_id):
+            take_grader.kick()  # the grader polls too, so it still finds the record once this transaction commits
     with conn.cursor() as cur:
         cur.execute("""UPDATE projectops.limb_task SET status=%s,output=%s::jsonb,proposal_id=%s,lease_hash=NULL,
                        lease_until=NULL,updated_at=NOW() WHERE id=%s""", (status, json.dumps(output), proposal_id, task["id"]))

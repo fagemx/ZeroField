@@ -101,6 +101,36 @@ OpenAI-compatible endpoint the grader uses.
   S03 compiled without @CAST-01/@SET-01 and rendered an unrelated room. Tags now live in the template.
 - Story canvas minimap removed (it covered the output column). Flaky ACP pid-file race fixed in its test.
 
+## Continuity grades in the product
+
+The hand grading above now runs from shot review (`project_assistant/take_grader.py`). Each take in
+**Candidate Takes** has **Grade**; **Auto-grade new takes** (off by default, per production) grades every
+video a worker delivers to a Cinema Studio / OpenJutsu Lab row while its proposal waits for review.
+The Continuity Supervisor's configured vision model (`qa_critic`, OpenAI-compatible endpoint) gets the
+same rubric and brief as the hand runs, plus one ask: a rewritten shot prompt when the take fails.
+
+- **GPU hand-off.** A grade waits until ComfyUI's queue is empty (it never interrupts a render; in-process
+  renders and grades share one lock, so later renders queue behind a grade), then `POST /free`, grades, and
+  unloads the model (`keep_alive: 0` on a local Ollama-style endpoint). The ComfyUI URL is the Local 4090
+  environment's `comfy_url`.
+- **Stored with the take.** Score, pass/retake, issues, notes, the contact sheet asset, model, seconds and the
+  hand-off record live in `story_record` (`take_grade`), keyed by row and take asset; `GET/POST
+  /aivideo/open/v1/shots/{id}/grades`, `GET/PUT /aivideo/open/v1/projects/{id}/grading`.
+- **Retake proposals wait.** A failing grade with a rewritten prompt stages a normal table proposal (prompt +
+  `Retake` status, `@asset` tags kept) in Studio Assistant; nothing changes until the director applies it.
+
+Real run on the 4090 (2026-10-21): an LTX-2.5 render was queued in ComfyUI, then **Grade** was pressed on the
+selected S03 take (6 s 3D Stage take). The grade showed *Waiting for the GPU* until the render finished
+([screenshot](verification/take-grading/s03-waiting-for-gpu.jpg)); `/free` dropped VRAM from 22.2 GB to
+2.7 GB, qwen3.8 27B loaded (21.3 GB in use), scored **58 / retake** (blocking: Kael faces the camera for frames
+1–4 and turns to the console at frame 5; no rain streaks; no anamorphic signature), and unloaded back to
+2.2 GB. Grade, notes and the pending retake proposal #259 in English and Traditional Chinese:
+[graded](verification/take-grading/s03-graded-58.jpg), [zh-TW](verification/take-grading/s03-graded-58-zh-TW.jpg),
+[sheet](verification/take-grading/s03-grader-58-sheet.jpg),
+[proposal](verification/take-grading/s03-retake-proposal-pending.jpg). That run recorded 145 s including the
+wait for the render; the stored seconds now count model load and grading only. Grader notes are model text
+in English in both interface languages.
+
 ## Open decision for the owner
 
 **Single-step proposals pin the whole source page.** Approving any change on that page bumps its
@@ -115,8 +145,8 @@ batches (workflow runs rebase per cell). Options: scope the pin to the sample ro
 
 1. Shoot a 3–4 s phone clip of a person for OpenJutsu VFX-01, then run it through LTX-2.5 V2V.
 2. Retakes: S03/S04 hand holds (LTX-2.5 tends to withdraw the hand late in a 4 s take), S05 exposure jump.
-3. Wire the grader agent into the review flow (today `studio_inspect_frames` serves Story shots, not sheet rows).
-4. GPU sharing: LTX-2.5 and qwen do not fit together; free ComfyUI (`POST /free`) before grading and
-   unload qwen (`keep_alive: 0`) after. Automate this in the grader path.
+3. ~~Wire the grader agent into the review flow~~ and 4. ~~GPU sharing~~: done, see
+   [Continuity grades in the product](#continuity-grades-in-the-product). The Agent Console's
+   `studio_inspect_frames` tool still serves episode-bound Story shots only.
 5. Story canvas lays six shots out in one tall column, so fit-to-view shrinks the cards; wrap long shot
    lists if the canvas is shown with more than six shots.

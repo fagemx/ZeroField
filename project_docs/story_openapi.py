@@ -1113,6 +1113,13 @@ def dispatch(conn, me, method, path, body, query, actions):
                     cur.execute("DELETE FROM projectops.flow_definition WHERE project_slug=%s", (slug,))
                     cur.execute("DELETE FROM projectops.project WHERE slug=%s", (slug,))
                 return {"deleted": True}
+        if len(parts) == 3 and parts[2] == "grading" and method in ("GET", "PUT"):
+            from project_assistant import take_grader
+            if method == "PUT":
+                if not isinstance(body.get("autoGrade"), bool):
+                    invalid("autoGrade must be true or false.")
+                take_grader.set_auto(conn, slug, body["autoGrade"])
+            return {"autoGrade": take_grader.auto_enabled(conn, slug)}
         if len(parts) == 3 and parts[2] == "episodes":
             if method == "GET":
                 return page([episode_view(conn, e) for e in episodes(conn, slug)], query)
@@ -1256,6 +1263,21 @@ def dispatch(conn, me, method, path, body, query, actions):
             return next(c for c in candidate_list(conn, identifier, "image") if c["url"] == url)
         if tail in ("selected-image", "selected-video") and method == "PUT":
             return select_candidate(conn, me, identifier, "image" if tail.endswith("image") else "video", body)
+        if entity == "shot" and tail == "grades":
+            from project_assistant import take_grader
+            if method == "GET":
+                return page(take_grader.grades(conn, slug, identifier), query) | {"autoGrade": take_grader.auto_enabled(conn, slug)}
+            if method == "POST":
+                # A listed take (videoId) or a worker output still waiting for approval (assetUrl).
+                take = next((c for c in candidate_list(conn, identifier, "video") if c["videoId"] == body.get("videoId")), None) if "videoId" in body else None
+                if "videoId" in body and not take:
+                    raise StoryError(404, "DRAMA_NOT_FOUND", "Take does not belong to this row.")
+                try:
+                    grade = take_grader.enqueue(conn, slug, identifier, take["url"] if take else text(body, "assetUrl"), me.actor_id)
+                except take_grader.GradeError as exc:
+                    invalid(str(exc))
+                actions.append(take_grader.kick)
+                return grade
         if entity == "asset" and tail == "variants":
             base = row["cells"][0].upper().split(":")[0]
             variants = [asset_view(slug, r) | {"variantId": "vr_" + r["rid"]} for r in table_rows(conn, slug, "soul-cast") if r["cells"][0].upper().startswith(base + ":")]
