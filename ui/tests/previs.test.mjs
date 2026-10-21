@@ -99,6 +99,11 @@ test('stage shots: rows of a slate with a Previs column, with keyframe, previs a
   const [withMatte, without] = stageShots(matted);
   assert.equal(withMatte.matteCol, 7); assert.match(withMatte.matte, /pa_d{32}$/); assert.equal(without.matte, null);
   assert.equal(benchGroup('Actor Matte'), 'control');  // a control pass on the bench, never the shot's input or output
+  assert.deepEqual([withMatte.skeletonCol, withMatte.skeleton], [-1, null]);
+  const posed = {...matted, headers: [...matted.headers, 'Pose Skeleton'], rows: matted.rows.map((row, k) => ({...row, cells: [...row.cells, {value: k ? '' : v('e')}]}))};
+  const [withSkeleton] = stageShots(posed);
+  assert.equal(withSkeleton.skeletonCol, 8); assert.match(withSkeleton.skeleton, /pa_e{32}$/);
+  assert.equal(benchGroup('Pose Skeleton'), 'control');
 });
 
 test('a longer lens dollies the preset back along its line of sight and never leaves the dome', () => {
@@ -168,4 +173,25 @@ test('the mannequin stands in the first mannequin\'s envelope (1.93 m, ±0.34 m)
   assert.ok(actor().max.z > rest.max.z + 0.1, 'leaning brings the head forward');
   stage.pose(0, {...plan, acts: [{at: 0, body: 'face', reach: 1.16}]});
   assert.ok(actor().max.z > rest.max.z + 0.3, 'a reach still takes the left arm out to the console from any pose');
+});
+
+test('the pose skeleton is the mannequin\'s own joints: OpenPose order, his right on his right, no face from behind', async () => {
+  const {poseKeypoints} = await import('../src/previs/skeleton.js');
+  const plan = defaultPlan(), stage = buildStage(plan), f = framesOf(plan) - 1;  // S03 holds behind him, at the dial
+  stage.frame(f, plan);
+  const [person, ...rest] = poseKeypoints(stage.scene, stage.camera);
+  assert.equal(rest.length, 0);
+  assert.equal(person.body.length, 18); assert.equal(person.handR.length, 21); assert.equal(person.handL.length, 21);
+  const [nose, neck, rShoulder, , rWrist, lShoulder, , lWrist] = person.body, [rEye, lEye, rEar, lEar] = person.body.slice(14);
+  assert.deepEqual([nose[2], rEye[2], lEye[2]], [0, 0, 0]);  // seen from behind: no face points
+  assert.ok(rEar[2] + lEar[2] >= 1);
+  // From behind his right is on screen right: the reaching (right) hand is the one toward the frame's right.
+  assert.ok(rShoulder[0] > lShoulder[0] && rWrist[0] > lWrist[0]);
+  assert.ok(neck[0] > lShoulder[0] && neck[0] < rShoulder[0]);  // the shoulders' 3D midpoint, projected
+  assert.ok(person.handR.every(([x, y]) => Math.hypot(x - rWrist[0], y - rWrist[1]) < 260));  // the hand hangs off its own wrist
+  // Turned to face the camera, the face points come back and his right moves to screen left.
+  stage.frame(f, {...plan, turn: 180});
+  const [front] = poseKeypoints(stage.scene, stage.camera);
+  assert.equal(front.body[0][2], 1);
+  assert.ok(front.body[2][0] < front.body[5][0]);
 });

@@ -237,20 +237,21 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         table = next(n for n in tab["doc"]["content"] if n["type"] == "table")
         if "Previs" in [studio._text(c) for c in table["content"][0]["content"]]:  # fresh template already has them: drop them to test the upgrade
             for row in table["content"]:
-                row["content"] = row["content"][:-2]
-            table["attrs"]["column_types"] = table["attrs"]["column_types"][:-2]; table["attrs"].pop("column_ids", None)
+                row["content"] = row["content"][:-3]
+            table["attrs"]["column_types"] = table["attrs"]["column_types"][:-3]; table["attrs"].pop("column_ids", None)
             repo.save_tab_doc(self.conn, self.slug, "cinema-studio", doc=tab["doc"], title=tab["title"], actor_id=self.actor,
                               session_id="old", base_revision=tab["revision"], force_revision=True)
         ids = next(n for n in repo.get_tab(self.conn, self.slug, "cinema-studio")["doc"]["content"] if n["type"] == "table")["attrs"].get("column_ids")
         self.assertTrue(studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)["seeded"])
         table = next(n for n in repo.get_tab(self.conn, self.slug, "cinema-studio")["doc"]["content"] if n["type"] == "table")
-        self.assertEqual([studio._text(c) for c in table["content"][0]["content"][-2:]], ["Previs", "Actor Matte"])
-        self.assertEqual(table["attrs"]["column_types"][-2:], ["video", "video"])
+        self.assertEqual([studio._text(c) for c in table["content"][0]["content"][-3:]], ["Previs", "Actor Matte", "Pose Skeleton"])
+        self.assertEqual(table["attrs"]["column_types"][-3:], ["video", "video", "video"])
         if ids:
             self.assertEqual(table["attrs"]["column_ids"][:len(ids)], ids)
         s03 = next(r for r in table["content"][1:] if studio._text(r["content"][0]) == "S03")
-        self.assertTrue(studio._text(s03["content"][-2]).startswith("/projects/api/"))
-        self.assertEqual(studio._text(s03["content"][-1]), "")  # the Blender blockout has no stage matte: a stage render adds it
+        self.assertTrue(studio._text(s03["content"][-3]).startswith("/projects/api/"))
+        # The Blender blockout has no stage matte or skeleton: a stage render adds them.
+        self.assertEqual([studio._text(c) for c in s03["content"][-2:]], ["", ""])
         self.assertFalse(studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)["seeded"])
 
 

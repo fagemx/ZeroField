@@ -419,16 +419,17 @@ class PrevisTwoPassTests(unittest.TestCase):
         # The matte's near-zero VAE noise is gated to exactly 0, so the source outside it is copied bit for bit.
         self.assertEqual((swap['61']['inputs']['mask'], swap['62']['inputs']['source'], swap['62']['inputs']['operation']), (['59', 0], ['61', 0], 'multiply'))
 
-    def test_layout_render_follows_the_previs_and_frees_the_actor_with_the_stage_matte(self):
+    def test_layout_render_follows_the_previs_frees_the_actor_and_takes_the_acting_from_the_skeleton(self):
         import run_studio
         task = studio_task()
-        task['input']['tabs'][0]['tables'][0]['headers'] += ['Previs', 'Actor Matte']
-        task['input']['rows'][1]['cells'] += [ASSET(9), ASSET(8)]
+        task['input']['tabs'][0]['tables'][0]['headers'] += ['Previs', 'Actor Matte', 'Pose Skeleton']
+        task['input']['rows'][1]['cells'] += [ASSET(9), ASSET(8), ASSET(7)]
         ctx = worker.resolve_studio_context(task)
-        self.assertEqual((ctx['previs_video'], ctx['actor_matte']), (ASSET(9), ASSET(8)))
+        self.assertEqual((ctx['previs_video'], ctx['actor_matte'], ctx['pose_skeleton']), (ASSET(9), ASSET(8), ASSET(7)))
+        self.assertNotEqual(ctx.get('motion_structure_video'), ASSET(7))  # "pose" in the header is the skeleton, not a structure pass
         cfg = run_studio.worker_configs('http://127.0.0.1:8188')
         head, client = Mock(), Mock()
-        head.asset.side_effect = lambda task, url: (url.encode(), 'video/webm' if url in (ASSET(8), ASSET(9)) else 'image/png')
+        head.asset.side_effect = lambda task, url: (url.encode(), 'video/webm' if url in (ASSET(7), ASSET(8), ASSET(9)) else 'image/png')
         client.upload_media.side_effect = lambda raw, mime, prefix: raw.decode()[-2:] + '.' + prefix
         load = lambda stage, cap: json.loads(Path(cfg[stage][cap]['workflow']).read_text(encoding='utf-8'))
         key = load('layoutkey', 'image_gen')
@@ -440,28 +441,35 @@ class PrevisTwoPassTests(unittest.TestCase):
         self.assertEqual(key['6']['inputs']['text'], run_studio.LAYOUT_KEY_PROMPT)
         self.assertEqual(cfg['layoutkey']['image_gen']['reference_role'], 'anchor_keyframe')  # the render step reads it as its key
         layout = load('layout', 'video_gen')
-        worker.bind_external_workflow(layout, {'previs_video': ASSET(9), 'actor_matte': ASSET(8), 'anchor_keyframe': ASSET(4), 'compiled_prompt': 'beats', 'seed': 7},
-                                      cfg['layout']['video_gen'], task, head, client)
-        self.assertEqual((layout['20']['inputs']['video'], layout['24']['inputs']['video'], layout['2']['inputs']['image']),
-                         ('09.source_video', '08.source_video', '04.input'))
+        worker.bind_external_workflow(layout, {'previs_video': ASSET(9), 'actor_matte': ASSET(8), 'pose_skeleton': ASSET(7), 'anchor_keyframe': ASSET(4),
+                                               'compiled_prompt': 'beats', 'seed': 7}, cfg['layout']['video_gen'], task, head, client)
+        self.assertEqual((layout['20']['inputs']['video'], layout['24']['inputs']['video'], layout['44']['inputs']['video'], layout['2']['inputs']['image']),
+                         ('09.source_video', '08.source_video', '07.source_video', '04.input'))
         self.assertEqual((layout['30']['inputs']['string_a'], layout['50']['inputs']['noise_seed']), ('beats', 7))
-        self.assertEqual(layout['24']['inputs']['frame_load_cap'], ['20', 1])  # the matte has the previs' frames
+        self.assertEqual((layout['24']['inputs']['frame_load_cap'], layout['44']['inputs']['frame_load_cap']), (['20', 1], ['20', 1]))  # same frames as the previs
         # Both strengths stay 1.0 (lower copies the grey model); the previs is the IC-LoRA reference on an empty latent.
         guide = layout['40']['inputs']
         self.assertEqual((layout['60']['inputs']['lora_name'], layout['60']['inputs']['strength_model'], guide['strength']),
                          ('ltx\\ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors', 1.0, 1.0))
         self.assertEqual((guide['image'], guide['latent'], guide['iclora_parameters'], layout['21']['class_type']),
                          (['20', 0], ['21', 0], ['61', 0], 'EmptyLTXVLatentVideo'))
-        # Attention mask: the stage matte grown 24 px, feathered, scaled and inverted, so the layout binds the set fully and
-        # the actor at 0.35: enough to carry a blocked pose, too little for the mannequin's shapes (SPEC_10 §7.6).
+        # Attention mask: the stage matte grown 24 px, feathered and inverted, so the layout binds the set and frees the
+        # actor entirely: none of the mannequin's shape reaches the shot (SPEC_10 §7.6-7.7).
         self.assertEqual(guide['attention_mask'], ['34', 0])
-        self.assertEqual([layout[n]['class_type'] for n in ('25', '26', '27', '28', '29', '36', '34')],
-                         ['ImageToMask', 'GrowMask', 'MaskToImage', 'ImageBlur', 'ImageToMask', 'MaskComposite', 'InvertMask'])
-        self.assertEqual((layout['26']['inputs']['expand'], layout['36']['inputs']['operation'], layout['36']['inputs']['source'], layout['35']['inputs']['value']),
-                         (24, 'multiply', ['35', 0], 0.65))
+        self.assertEqual([layout[n]['class_type'] for n in ('25', '26', '27', '28', '29', '34')],
+                         ['ImageToMask', 'GrowMask', 'MaskToImage', 'ImageBlur', 'ImageToMask', 'InvertMask'])
+        self.assertEqual((layout['26']['inputs']['expand'], layout['34']['inputs']['mask']), (24, ['29', 0]))
+        self.assertNotIn('35', layout)
+        # The acting: Union-Control stacked on Layout-To-Render, the skeleton as its own guide with its own (half-size)
+        # reference parameters, after the key; the sampler runs the model carrying both LoRAs and crops every guide.
+        pose = layout['42']['inputs']
+        self.assertEqual((layout['62']['inputs']['model'], layout['62']['inputs']['lora_name'], layout['63']['inputs']['iclora_model']),
+                         (['60', 0], 'ltx\\ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors', ['62', 0]))
+        self.assertEqual((pose['image'], pose['latent'], pose['positive'], pose['iclora_parameters'], pose['strength']), (['44', 0], ['41', 2], ['41', 0], ['63', 0], 1.0))
+        self.assertEqual((layout['53']['inputs']['model'], layout['53']['inputs']['positive'], layout['15']['inputs']['video_latent']), (['62', 0], ['42', 0], ['42', 2]))
         # The Klein key is an out-of-clip reference (latent_idx -1); guides are cropped before decode; distilled sampling.
         self.assertEqual((layout['41']['inputs']['guiding_latent'], layout['41']['inputs']['latent_idx'], layout['17']['inputs']['positive']),
-                         (['33', 0], -1, ['41', 0]))
+                         (['33', 0], -1, ['42', 0]))
         self.assertEqual((layout['8']['inputs']['samples'], layout['53']['inputs']['cfg'], layout['51']['inputs']['sampler_name']), (['17', 2], 1.0, 'euler_ancestral'))
 
 

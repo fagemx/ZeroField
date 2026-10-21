@@ -4,7 +4,8 @@ The Layout Render ties pose to shape: followed at 0.6 the pose comes through and
 the actor is a person but only the head carries the recoil. An OpenPose skeleton has joints and no body, so nothing of
 the mannequin's shape can leak. The skeleton is exact: stage_render.py pose projects the mannequin's own joints, no
 pose estimation. It goes in through LTX-2.3 Union-Control (canny + depth + pose; it runs on LTX-2.5, see the
-2026-10-20 lab), drawn the DWPose way (body, hands, black background; controlnet_aux draw_bodypose / draw_handpose).
+2026-10-20 lab), drawn the DWPose way (body, hands, black background) by the product's ui/src/previs/skeleton.js, the
+pass Render previs writes (the first 4090 runs drew it in Python, one frame late; see SPEC_10 §7.8).
 
 The S03 recoil plan (pose_motion.py s03p) re-rendered with the current render mannequin (no shoulder ball) as s03q,
 the same Klein first frame (s03n_first_grey) and seed, and one detailed prompt (the right hand turns the dial: the
@@ -44,53 +45,13 @@ PROMPT = ("Inside a circular glass-dome observatory at dawn, rain streaks the cu
           "4.8–6.0s, seen from behind: he holds the recoil, arms raised, head thrown back toward the light, shoulders locked. "
           "One person only. No text.")
 
-# controlnet_aux util.py (the DWPose drawing): 1-based body limbs zipped with 18 colours (so the last pair is dropped),
-# limbs filled at 60 %, joints at full colour; hands as HSV-coloured edges with blue points. Sizes are DWPose's at
-# ~768 px wide, scaled to 1280.
-LIMBS = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10], [10, 11], [2, 12], [12, 13], [13, 14], [2, 1], [1, 15], [15, 17], [1, 16], [16, 18], [3, 17]]
-COLORS = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85], [0, 255, 170], [0, 255, 255],
-          [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255], [255, 0, 85], [255, 0, 170]]
-HAND_EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16],
-              [0, 17], [17, 18], [18, 19], [19, 20]]
-K = 1.6
-
-
-def draw(people, w=L.W, h=L.H):
-    """One RGB frame of the skeleton."""
-    canvas = np.zeros((h, w, 3), np.uint8)
-    stick = round(4 * K)
-    for p in people:
-        b = p["body"]
-        for (i, j), color in zip(LIMBS, COLORS):
-            (x1, y1, v1), (x2, y2, v2) = b[i - 1], b[j - 1]
-            if not (v1 and v2):
-                continue
-            mx, my, length = (x1 + x2) / 2, (y1 + y2) / 2, np.hypot(x1 - x2, y1 - y2)
-            angle = np.degrees(np.arctan2(y1 - y2, x1 - x2))
-            cv2.fillConvexPoly(canvas, cv2.ellipse2Poly((int(mx), int(my)), (int(length / 2), stick), int(angle), 0, 360, 1), [int(c * 0.6) for c in color])
-        for (x, y, v), color in zip(b, COLORS):
-            if v:
-                cv2.circle(canvas, (int(x), int(y)), stick, color, -1)
-        for hand in (p["handR"], p["handL"]):
-            if not hand[0][2]:
-                continue
-            for e, (i, j) in enumerate(HAND_EDGES):
-                rgb = cv2.cvtColor(np.uint8([[[e / len(HAND_EDGES) * 180, 255, 255]]]), cv2.COLOR_HSV2RGB)[0, 0]
-                cv2.line(canvas, tuple(map(int, hand[i][:2])), tuple(map(int, hand[j][:2])), [int(c) for c in rgb], round(2 * K))
-            for x, y, _ in hand:
-                cv2.circle(canvas, (int(x), int(y)), round(2.5 * K), (0, 0, 255), -1)
-    return canvas
-
-
 def skeleton():
     """Keypoints from the plan, the skeleton video, and a check that the body keypoints land on the actor's matte."""
-    kp_path = L.IC / f"{SHOT}_keypoints.json"
-    subprocess.run([sys.executable, str(Path(__file__).with_name("stage_render.py")), str(L.IC / "s03p_plan.json"), str(kp_path), "pose"], check=True)
-    frames = json.loads(kp_path.read_text(encoding="utf-8"))
-    out = L.IC / f"{SHOT}_skeleton.mp4"
-    enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{L.W}x{L.H}", "-r", "24", "-i", "-",
-                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "12", str(out)], stdin=subprocess.PIPE)
-    enc.communicate(b"".join(draw(p).tobytes() for p in frames))
+    render, plan, kp_path, webm = Path(__file__).with_name("stage_render.py"), L.IC / "s03p_plan.json", L.IC / f"{SHOT}_keypoints.json", L.IC / f"{SHOT}_skeleton.webm"
+    subprocess.run([sys.executable, str(render), str(plan), str(kp_path), "pose"], check=True)
+    subprocess.run([sys.executable, str(render), str(plan), str(webm), "skeleton"], check=True)
+    frames, out = json.loads(kp_path.read_text(encoding="utf-8")), L.IC / f"{SHOT}_skeleton.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(webm), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "12", str(out)], check=True)
     # Self-check: projected body joints sit on the rendered actor (matte dilated 12 px for joints at the silhouette edge).
     cap, hits, total, kernel = cv2.VideoCapture(str(L.IC / f"{SHOT}_matte.webm")), 0, 0, np.ones((25, 25), np.uint8)
     for people in frames:

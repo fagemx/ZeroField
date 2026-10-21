@@ -6,6 +6,7 @@ import { t as uiText } from '../i18n/index.js';
 import { ACTIONS, DURATIONS, FACINGS, FPS, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, defaultPlan, describePlan, framesOf, planFromSlate, sampleCamera, verticalFov } from './plan.js';
 import { buildStage, prepareRenderer, shotGuides } from './scene.js';
 import { encodeCanvas, fetchPlan } from './webm.js';
+import { drawSkeleton, poseKeypoints } from './skeleton.js';
 
 const VIEWS = ['lens', 'overhead', 'free'];
 const draftKey = (slug, rid) => `zf.previs:${slug}:${rid}`;
@@ -18,7 +19,8 @@ const pick = (label, value, options, onChange, text) => <fieldset className="pre
 
 // The 3D stage of a slate: every shot in one set. Look through a shot's lens, see all shot cameras on an overhead
 // plan, frame custom paths in a free camera, play a shot or the whole scene, and render a shot's grey previs
-// (97 frames, 24 fps) into its Previs cell, and its actor matte into Actor Matte. The render carries its plan, so the
+// (97 frames, 24 fps) into its Previs cell, its actor matte into Actor Matte and its pose skeleton into Pose Skeleton
+// (the Layout Render frees the actor and takes the acting from the skeleton). The render carries its plan, so the
 // project keeps it.
 export default function PrevisStage({ slug, shots, focus, writable, busy, onRender, onMotion, onLayout }) {
   useLocale();
@@ -151,15 +153,23 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     try {
       ctx.stage.roof(true); if (ctx.guides) ctx.guides.group.visible = false;
       // WebCodecs + a WebM writer: exact timestamps, so the clip is 97 frames at 24 fps; the plan rides in the file.
-      // A slate with an Actor Matte column also gets the same plan with the actor white on black (Layout Render mask).
-      const n = framesOf(p), passes = target.matteCol >= 0 ? 2 : 1;
-      const encode = pass => encodeCanvas(ctx.renderer.domElement, n, FPS, f => {
-        ctx.stage.frame(f, p); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera);
-      }, done => { if (progress.current) progress.current.textContent = `${pass * n + done}/${passes * n}`; }, pass ? null : p);
-      const blob = await encode(0);
-      let matte = null;
-      if (passes > 1) { ctx.stage.matte(true); try { matte = await encode(1); } finally { ctx.stage.matte(false); } }
-      if (await onRender(target, blob, matte)) {
+      // A slate with an Actor Matte column also gets the same plan with the actor white on black (Layout Render mask),
+      // one with a Pose Skeleton column the cast's joints as an OpenPose drawing (the acting, without the mannequin).
+      const n = framesOf(p), passes = 1 + (target.matteCol >= 0) + (target.skeletonCol >= 0);
+      let pass = 0;
+      const encode = (canvas, draw, plan = null) => {
+        const at = pass++ * n;
+        return encodeCanvas(canvas, n, FPS, draw, done => { if (progress.current) progress.current.textContent = `${at + done}/${passes * n}`; }, plan);
+      };
+      const shoot = f => { ctx.stage.frame(f, p); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera); };
+      const blob = await encode(ctx.renderer.domElement, shoot, p);
+      let matte = null, skeleton = null;
+      if (target.matteCol >= 0) { ctx.stage.matte(true); try { matte = await encode(ctx.renderer.domElement, shoot); } finally { ctx.stage.matte(false); } }
+      if (target.skeletonCol >= 0) {
+        const canvas = Object.assign(document.createElement('canvas'), { width: WIDTH, height: HEIGHT }), pen = canvas.getContext('2d');
+        skeleton = await encode(canvas, f => { ctx.stage.frame(f, p); drawSkeleton(pen, poseKeypoints(ctx.stage.scene, ctx.stage.camera)); });
+      }
+      if (await onRender(target, blob, matte, skeleton)) {
         saveDraft(slug, target.rid, null);
         setDrafts(({ [target.rid]: _, ...rest }) => rest); setRendered(r => ({ ...r, [target.rid]: p }));
       }
@@ -169,6 +179,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
 
   const t = key => uiText('previs.' + key);
   if (!shot) return <div className="sheet-empty"><p>{t('empty')}</p></div>;
+  const layoutable = shot.matteCol >= 0 && shot.skeletonCol >= 0;  // the Layout Render binds both
   return <div className="previs-stage" tabIndex={-1} onKeyDown={onKey}>
     <nav className="previs-shots" aria-label={t('shots')}>
       <h2>{t('shots')}</h2>
@@ -220,10 +231,10 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       {writable && <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>
         {rendering ? <>{t('rendering')} <span ref={progress} /></> : t('render')}</button>}
       {writable && onMotion && <button type="button" className="previs-motion" disabled={busy || rendering || !shot.previs || !!drafts[shot.rid]} onClick={() => onMotion(shot)}>{t('motion')}</button>}
-      {writable && onLayout && shot.matteCol >= 0 && <button type="button" className="previs-motion" title={t('layoutHint')}
-        disabled={busy || rendering || !shot.matte || !!drafts[shot.rid]} onClick={() => onLayout(shot)}>{t('layout')}</button>}
+      {writable && onLayout && layoutable && <button type="button" className="previs-motion" title={t('layoutHint')}
+        disabled={busy || rendering || !shot.matte || !shot.skeleton || !!drafts[shot.rid]} onClick={() => onLayout(shot)}>{t('layout')}</button>}
       {writable && onMotion && (!shot.previs || drafts[shot.rid]) && <p className="previs-note">{t('renderFirst')}</p>}
-      {writable && onLayout && shot.matteCol >= 0 && shot.previs && !shot.matte && !drafts[shot.rid] && <p className="previs-note">{t('renderMatte')}</p>}
+      {writable && onLayout && layoutable && shot.previs && (!shot.matte || !shot.skeleton) && !drafts[shot.rid] && <p className="previs-note">{t('renderMatte')}</p>}
       <p className="previs-note">{t('note')}</p>
     </aside>
   </div>;

@@ -369,6 +369,7 @@ def resolve_studio_context(task: dict) -> dict:
     patterns = {
         "previs_video": r"previs|blockout|預演",
         "source_video": r"source.*video|driving.*video|original.*video|原片",
+        "pose_skeleton": r"pose\s*skeleton",  # before motion_structure_video, whose pattern also matches "pose"
         "first_frame": r"first\s*frame|extracted\s*frame|source\s*frame|第一幀|首幀原圖",
         "motion_structure_video": r"motion\s*structure|structure.*video|control.*video|pose|depth|動作結構",
         "anchor_keyframe": r"anchor.*frame|swapped.*frame|keyframe|關鍵幀|首幀|定錨",

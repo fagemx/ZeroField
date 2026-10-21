@@ -2406,8 +2406,8 @@
     "duration": "時長",
     "step5": "或執行版面渲染：FLUX 3 Klein 先把第 0 幀畫成實拍畫面交給你審，再由 Layout-To-Render IC-LoRA 照這個場景和運鏡拍出鏡頭。",
     "layout": "執行版面渲染",
-    "layoutHint": "Layout Key（FLUX 3 Klein 改畫預演第 0 幀，需審核）接 Layout Render（LTX-2.5 Layout-To-Render IC-LoRA，演員遮罩讓演員自由生成）。RTX 4090 約 3 分鐘。",
-    "renderMatte": "請重新渲染預演以存下演員遮罩；版面渲染需要它。"
+    "layoutHint": "Layout Key（FLUX 3 Klein 改畫預演第 0 幀，需審核）接 Layout Render（LTX-2.5 Layout-To-Render IC-LoRA 保住場景與運鏡；演員遮罩讓演員自由生成，LTX-2.3 Union-Control 照姿勢骨架演出）。RTX 4090 約 3 分鐘。",
+    "renderMatte": "請重新渲染預演以存下演員遮罩與姿勢骨架；版面渲染兩者都需要。"
   },
   "grade": {
     "title": "連戲評分",

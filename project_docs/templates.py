@@ -23,11 +23,11 @@ def tab_specs(template: str, title: str, summary: str) -> list[tuple[str, str, s
              "| SET-01 | Observatory | original circular observatory, rain on glass, cool dawn, warm instrument lights | | Wind and a soft radio pulse | {{s:Queued}} | Keep the lighting direction consistent. |\n"),
             ("cinema-studio", "Cinema Studio", "sheet",
              "# Cinema Studio Multi-Shot Slate\n\n"
-             "| Shot | Optical Rig (Camera & Lens) | Camera Motion | Action & Audio Prompt | Keyframe | Cinema Shot | Status | Director Take Notes | Previs | Actor Matte |\n"
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
-             "| S01 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Establish the empty observatory as Kael enters. Wind against the glass. @CAST-01 @SET-01 | | | {{s:Queued}} | Establish the space and light direction. | | |\n"
-             "| S02 | RED V-Raptor / 85mm Prime | Static Tripod | Kael notices the pulsing recorder. A quiet radio signal becomes audible. @CAST-01 @SET-01 | | | {{s:Queued}} | Match CAST-01 wardrobe and recorder. | | |\n"
-             "| S03 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Kael reaches for the dial as a light answers outside. Hold the final frame. @CAST-01 @SET-01 | | | {{s:Queued}} | Keep the decision readable. | | |\n"),
+             "| Shot | Optical Rig (Camera & Lens) | Camera Motion | Action & Audio Prompt | Keyframe | Cinema Shot | Status | Director Take Notes | Previs | Actor Matte | Pose Skeleton |\n"
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+             "| S01 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Establish the empty observatory as Kael enters. Wind against the glass. @CAST-01 @SET-01 | | | {{s:Queued}} | Establish the space and light direction. | | | |\n"
+             "| S02 | RED V-Raptor / 85mm Prime | Static Tripod | Kael notices the pulsing recorder. A quiet radio signal becomes audible. @CAST-01 @SET-01 | | | {{s:Queued}} | Match CAST-01 wardrobe and recorder. | | | |\n"
+             "| S03 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Kael reaches for the dial as a light answers outside. Hold the final frame. @CAST-01 @SET-01 | | | {{s:Queued}} | Keep the decision readable. | | | |\n"),
             ("openjutsu-lab", "OpenJutsu Lab", "sheet",
              "# OpenJutsu V2V Planning Matrix\n\n"
              "| Clip ID | Jutsu Mode | Source Driving Video | Target Cast / Swap Prompt | Remastered Video | Split-Screen MP4 | Status | Notes |\n"

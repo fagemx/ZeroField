@@ -203,9 +203,11 @@ def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, 
 
 
 def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
-    """Add the Previs and Actor Matte columns to the cinema slate once and give S03 its grey blockout, keeping user media.
+    """Add the Previs, Actor Matte and Pose Skeleton columns to the cinema slate once and give S03 its grey blockout,
+    keeping user media.
 
-    The 3D Stage writes both on Render previs; the matte is the Layout Render's attention mask."""
+    The 3D Stage writes all three on Render previs; the matte frees the actor in the Layout Render and the skeleton
+    carries the acting (SPEC_10 §7.7)."""
     actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
     tab = repo.get_tab_for_update(conn, slug, "cinema-studio")
     if not tab:
@@ -216,7 +218,7 @@ def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id
     for table in doc.get("content", []):
         if table["type"] != "table" or not table.get("content"):
             continue
-        headers, dirty = _append_columns(table, [("Previs", "video"), ("Actor Matte", "video")])
+        headers, dirty = _append_columns(table, [("Previs", "video"), ("Actor Matte", "video"), ("Pose Skeleton", "video")])
         col = headers.index("Previs")
         for row in table["content"][1:]:
             if _text(row["content"][0]) == "S03" and not _text(row["content"][col]) and (root / "previs_s03_blockout.mp4").is_file():
@@ -287,7 +289,8 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
                                                     "2.image": {"source": "anchor_keyframe", "upload": "image"}})},
         # Layout Render: Klein turns previs frame 0 into a photographic key; the Layout-To-Render IC-LoRA then keeps the
         # previs set and camera and takes the look from that key. The stage's actor matte frees the actor, which the
-        # LoRA would otherwise render as the mannequin (docs/research/2026-10-20-motion-control-lab.md).
+        # LoRA would otherwise render as the mannequin (docs/research/2026-10-20-motion-control-lab.md), and the
+        # Union-Control IC-LoRA takes his acting from the stage's pose skeleton (SPEC_10 §7.7).
         "layoutkey": {"image_gen": comfy("flux3_klein_look_key.json", prompt_node=None, output_node="9", reference_role="anchor_keyframe",
                                          input_bindings={"20.video": {"source": "previs_video", "upload": "video"},
                                                          "20.frame_load_cap": {"literal": 1},
@@ -299,6 +302,7 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
                                       seed_node="50", seed_input="noise_seed",
                                       input_bindings={"20.video": {"source": "previs_video", "upload": "video"},
                                                       "24.video": {"source": "actor_matte", "upload": "video"},
+                                                      "44.video": {"source": "pose_skeleton", "upload": "video"},
                                                       "2.image": {"source": "anchor_keyframe", "upload": "image"}})},
         "extract": {"media_assemble": {"adapter": "ffmpeg", "mode": "extract_frame"}},
         "structure": {"media_assemble": {"adapter": "ffmpeg", "mode": "motion_structure", "structure_type": "edge_lineart"}},

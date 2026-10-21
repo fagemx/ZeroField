@@ -24,15 +24,16 @@ export function benchGroup(label) {
 // Shots for the 3D stage: every row of a slate that has a Previs column, with the slate text the stage starts from.
 export function stageShots(parsed, rows = parsed.rows) {
   const at = re => parsed.headers.findIndex(h => re.test(h)), types = parsed.table.attrs.column_types || [];
-  const previsCol = at(/previs|blockout/i), matteCol = at(/actor\s*matte/i);
+  const previsCol = at(/previs|blockout/i), matteCol = at(/actor\s*matte/i), skeletonCol = at(/pose\s*skeleton/i);
   if (previsCol < 0) return [];
   const [motion, rig, action] = [at(/camera motion/i), at(/optical rig|lens/i), at(/action|prompt/i)];
   const keyCol = types.findIndex((type, c) => type === 'image' && c !== previsCol);
   const text = (row, c) => (c < 0 ? '' : String(row.cells[c]?.value || ''));
   return rows.map(row => ({
-    rid: row.rid, r: parsed.rows.indexOf(row), shot: text(row, 0), previsCol, matteCol,
+    rid: row.rid, r: parsed.rows.indexOf(row), shot: text(row, 0), previsCol, matteCol, skeletonCol,
     previs: mediaOf(text(row, previsCol), 'video')?.url || null,
     matte: mediaOf(text(row, matteCol), 'video')?.url || null,
+    skeleton: mediaOf(text(row, skeletonCol), 'video')?.url || null,
     keyframe: keyCol < 0 ? null : mediaOf(text(row, keyCol), 'image')?.url || null,
     slate: { motion: text(row, motion), rig: text(row, rig), action: text(row, action) },
   }));

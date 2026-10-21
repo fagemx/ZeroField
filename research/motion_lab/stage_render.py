@@ -1,12 +1,11 @@
 """Re-render a 3D Stage previs headless with the product's own scene.js / webm.js, from the plan stored in the WebM.
 
-usage: python stage_render.py PREVIS.webm|PLAN.json OUT.webm|OUT.json [matte|pose]
+usage: python stage_render.py PREVIS.webm|PLAN.json OUT.webm|OUT.json [matte|skeleton|pose]
 A PLAN.json renders a plan written by hand or by a lab script (performance keys, poses, cast) instead of a stored one.
 "matte" renders every cast member white on black (scene.js matte) for guide attention masks.
-"pose" writes OUT.json instead of a video: per frame, every cast member's OpenPose keypoints in pixels (pose_skeleton.py
-draws them): 18 body points [x, y, visible] with the eyes, nose and ears only where the face or that side faces the
-camera, and 21 per hand. figure.js names its joints by side of the screen from behind (shoulderL is at -x, his right),
-so OpenPose's right is the figure's L.
+"skeleton" renders the pose skeleton pass Render previs writes for the Layout Render (ui/src/previs/skeleton.js).
+"pose" writes OUT.json instead of a video: per frame, every cast member's OpenPose keypoints in pixels (18 body points
+[x, y, visible], 21 per hand), the same points the skeleton draws.
 """
 import base64, json, sys
 from pathlib import Path
@@ -19,6 +18,7 @@ import * as THREE from 'three';
 import { buildStage, prepareRenderer } from '/ui/src/previs/scene.js';
 import { framesOf, WIDTH, HEIGHT, FPS } from '/ui/src/previs/plan.js';
 import { encodeCanvas, planFromWebM } from '/ui/src/previs/webm.js';
+import { poseKeypoints, drawSkeleton } from '/ui/src/previs/skeleton.js';
 const renderer = prepareRenderer(new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }));
 renderer.setPixelRatio(1); renderer.setSize(WIDTH, HEIGHT, false); document.body.appendChild(renderer.domElement);
 window.render = async (b64, matte, json) => {
@@ -30,29 +30,19 @@ window.render = async (b64, matte, json) => {
   let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
 };
-const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const HEAD = { nose: V(0, 0.094, 0.13), eyeR: V(-0.035, 0.125, 0.092), eyeL: V(0.035, 0.125, 0.092), earR: V(-0.092, 0.11, 0), earL: V(0.092, 0.11, 0) };
+// Pose keypoints per frame (JSON), or the pose skeleton video the product renders (ui/src/previs/skeleton.js).
 window.keypoints = async json => {
-  const plan = JSON.parse(json), stage = buildStage(plan), cam = stage.camera, out = [];
-  for (let f = 0; f < framesOf(plan); f++) {
-    stage.frame(f, plan); stage.scene.updateMatrixWorld(true);
-    const px = w => { const n = w.clone().project(cam); return [(n.x + 1) / 2 * WIDTH, (1 - n.y) / 2 * HEIGHT, n.z < 1 && Math.abs(n.x) < 1.2 && Math.abs(n.y) < 1.2 ? 1 : 0]; };
-    const people = stage.scene.children.filter(o => o.userData.actor).map(root => {
-      const k = {}; root.traverse(o => { if (o.userData.kp) k[o.userData.kp] = o; });
-      const at = (o, local = V(0, 0, 0)) => o.localToWorld(local.clone());
-      const head = k.head, q = head.getWorldQuaternion(new THREE.Quaternion()), hp = at(head);
-      const toCam = cam.position.clone().sub(hp).normalize(), face = V(0, 0, 1).applyQuaternion(q).dot(toCam), right = V(-1, 0, 0).applyQuaternion(q).dot(toCam);
-      const shown = { nose: face > 0.05, eyeR: face > 0.1 && right > -0.65, eyeL: face > 0.1 && -right > -0.65, earR: right > -0.3, earL: -right > -0.3 };
-      const hd = n => { const p = px(at(head, HEAD[n])); p[2] &&= shown[n] ? 1 : 0; return p; };
-      const sR = at(k.shoulderL), sL = at(k.shoulderR);
-      const body = [hd('nose'), px(sR.clone().add(sL).multiplyScalar(0.5)), px(sR), px(at(k.elbowL)), px(at(k.wristL)), px(sL), px(at(k.elbowR)), px(at(k.wristR)),
-        px(at(k.hipL)), px(at(k.kneeL)), px(at(k.ankleL)), px(at(k.hipR)), px(at(k.kneeR)), px(at(k.ankleR)), hd('eyeR'), hd('eyeL'), hd('earR'), hd('earL')];
-      const hand = s => [px(at(k['wrist' + s]))].concat(...[0, 1, 2, 3, 4].map(f => [0, 1, 2].map(j => px(at(k[`f${f}_${j}${s}`]))).concat([px(at(k[`f${f}_2${s}`], V(0, -k[`f${f}_2${s}`].userData.tip, 0)))])));
-      return { body, handR: hand('L'), handL: hand('R') };
-    });
-    out.push(people);
-  }
+  const plan = JSON.parse(json), stage = buildStage(plan), out = [];
+  for (let f = 0; f < framesOf(plan); f++) { stage.frame(f, plan); out.push(poseKeypoints(stage.scene, stage.camera)); }
   return JSON.stringify(out);
+};
+window.skeleton = async json => {
+  const plan = JSON.parse(json), stage = buildStage(plan), canvas = document.createElement('canvas');
+  canvas.width = WIDTH; canvas.height = HEIGHT; const ctx = canvas.getContext('2d');
+  const blob = await encodeCanvas(canvas, framesOf(plan), FPS, f => { stage.frame(f, plan); drawSkeleton(ctx, poseKeypoints(stage.scene, stage.camera)); }, null, null);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
 };
 window.ready = true;
 </script></body>"""
@@ -81,6 +71,8 @@ def main(src, dest, mode=None):
         head = "" if json_plan else base64.b64encode(Path(src).read_bytes()[:8192]).decode()
         if mode == "pose":
             Path(dest).write_text(page.evaluate("j => window.keypoints(j)", json_plan or json.dumps(plan_of(src))), encoding="utf-8")
+        elif mode == "skeleton":
+            Path(dest).write_bytes(base64.b64decode(page.evaluate("j => window.skeleton(j)", json_plan or json.dumps(plan_of(src)))))
         else:
             Path(dest).write_bytes(base64.b64decode(page.evaluate("([b, m, j]) => window.render(b, m, j)", [head, mode == "matte", json_plan])))
         browser.close()
