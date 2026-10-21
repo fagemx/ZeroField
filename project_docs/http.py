@@ -192,6 +192,8 @@ GET_ROUTES = [
     (re.compile(rf"/projects/api/{SLUG}/assets/(pa_[0-9a-f]{{32}})"), "asset"),
     (re.compile(rf"/projects/api/{SLUG}/assets/(pa_[0-9a-f]{{32}})/meta"), "asset_meta"),
     (re.compile(rf"/projects/api/{SLUG}/camera-fidelity/(pa_[0-9a-f]{{32}})/(pa_[0-9a-f]{{32}})"), "camera_fidelity"),
+    (re.compile(rf"/projects/api/{SLUG}/assets/(pa_[0-9a-f]{{32}})/bundle"), "take_bundle"),
+    (re.compile(rf"/projects/api/{SLUG}/takes/export"), "takes_export"),
     (re.compile(rf"/projects/api/{SLUG}/assistant"), "assistant_state"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/manager"), "assistant_manager"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/messages/(\d{{1,18}})/document"), "assistant_document"),
@@ -484,6 +486,19 @@ def _api(handler, parsed, method: str) -> None:
             handler.send_skillops_bytes(200, payload["content_type"], payload["data"],
                                         cache_control="private, no-store",
                                         disposition=_attachment(args[0], payload["filename"]))
+            return
+        if name in ("take_bundle", "takes_export"):
+            from project_docs import take_bundle
+            try:
+                filename, data = (take_bundle.take_bundle(conn, args[0], args[1]) if name == "take_bundle"
+                                  else take_bundle.project_bundle(conn, args[0]))
+            except take_bundle.BundleError as exc:
+                conn.rollback()
+                handler.send_json(exc.status, {"error": str(exc)})
+                return
+            conn.rollback()
+            handler.send_skillops_bytes(200, "application/zip", data, cache_control="private, no-store",
+                                        disposition=_attachment(args[0], filename))
             return
         if name == "asset_meta":
             found = repo.get_asset_meta(conn, args[0], args[1])

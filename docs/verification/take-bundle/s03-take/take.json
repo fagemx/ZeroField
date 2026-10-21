@@ -1,0 +1,143 @@
+{
+  "schema": "zerofield.take/1",
+  "project": "zerofield-showcase",
+  "shot": {
+    "tab": "cinema-studio",
+    "tab_title": "Cinema Studio",
+    "row_id": "bg3inyccm",
+    "label": "S03",
+    "column": "Cinema Shot",
+    "status": "Retake"
+  },
+  "output": {
+    "file": "output.mp4",
+    "asset_id": "pa_0822dc0f8a28a28cfa3e198c618e92c3",
+    "content_type": "video/mp4",
+    "bytes": 3384635,
+    "sha256": "0822dc0f8a28a28cfa3e198c618e92c398b2f385b56a30cc172e4e0118186953"
+  },
+  "provenance": "embedded_in_output",
+  "workflow": "workflow.json",
+  "workflow_file": null,
+  "card_id": null,
+  "prompt": [
+    {
+      "node": "30",
+      "class_type": "StringConcatenate",
+      "input": "string_a",
+      "text": "Optical Rig: ARRI Alexa 65 / 35mm Anamorphic.\nCamera Movement: Slow Dolly Push-In.\nReferences: CAST-01 (Kael): original fictional courier in his thirties, short dark hair, light stubble, charcoal field jacket, analog recorder on a shoulder strap; SET-01 (Observatory): original circular observatory interior, curved floor-to-ceiling glass streaked with rain, cool dawn light, brass consoles with warm amber instrument lights, wet reflective floor.\nSlow dolly push-in toward Kael at the brass console. He stays facing the console, turns the brass dial with his right hand and watches it; through the rain-streaked glass behind him a single distant beacon light flickers on. He is the only person in the observatory. Hold the final frame on his hand on the dial. @CAST-01 @SET-01"
+    },
+    {
+      "node": "30",
+      "class_type": "StringConcatenate",
+      "input": "string_b",
+      "text": "Photographic live-action film footage shot on a cinema camera: realistic human proportions, natural skin texture, real fabric, glass and brass, physically based light, subtle film grain."
+    },
+    {
+      "node": "7",
+      "class_type": "CLIPTextEncode",
+      "input": "text",
+      "text": "low quality, blurry, jittery, distorted, watermark"
+    }
+  ],
+  "seed": 48315,
+  "seeds": [
+    {
+      "node": "50",
+      "input": "noise_seed",
+      "value": 48315
+    }
+  ],
+  "inputs": [
+    {
+      "node": "20",
+      "class_type": "VHS_LoadVideo",
+      "input": "video",
+      "graph_value": "source_video-7b8c0f8b19364991953f3c1dab90aa6f.webm",
+      "sha256": null,
+      "content_type": null,
+      "bytes": null
+    },
+    {
+      "node": "24",
+      "class_type": "VHS_LoadVideo",
+      "input": "video",
+      "graph_value": "source_video-5d70f0cbae8d407f9b856adc4a393068.webm",
+      "sha256": null,
+      "content_type": null,
+      "bytes": null
+    },
+    {
+      "node": "2",
+      "class_type": "LoadImage",
+      "input": "image",
+      "graph_value": "input-b1a20457cc094d85a2c93fcc2d4263a3.png",
+      "sha256": null,
+      "content_type": null,
+      "bytes": null
+    }
+  ],
+  "models": [
+    {
+      "file": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+      "node": "1",
+      "class_type": "UNETLoader",
+      "input": "unet_name",
+      "folder": "diffusion_models",
+      "source": "https://huggingface.co/Lightricks/LTX-2.5"
+    },
+    {
+      "file": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "node": "4",
+      "class_type": "CLIPLoader",
+      "input": "clip_name",
+      "folder": "text_encoders",
+      "source": "https://huggingface.co/Lightricks/LTX-2.5"
+    },
+    {
+      "file": "ltx-2.5-video-vae-bf16.safetensors",
+      "node": "5",
+      "class_type": "VAELoader",
+      "input": "vae_name",
+      "folder": "vae",
+      "source": "https://huggingface.co/Lightricks/LTX-2.5"
+    },
+    {
+      "file": "ltx-2.5-audio-vae-bf16.safetensors",
+      "node": "13",
+      "class_type": "VAELoader",
+      "input": "vae_name",
+      "folder": "vae",
+      "source": "https://huggingface.co/Lightricks/LTX-2.5"
+    },
+    {
+      "file": "ltx\\ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors",
+      "node": "60",
+      "class_type": "LoraLoaderModelOnly",
+      "input": "lora_name",
+      "folder": "loras/ltx",
+      "source": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+    }
+  ],
+  "platform": {
+    "platform": null,
+    "endpoint": null,
+    "comfyui_version": null,
+    "comfy_sdk_version": null,
+    "comfy_prompt_id": null,
+    "worker": "ZeroField Studio / layout"
+  },
+  "timing": {
+    "queued_at": "2026-10-21T09:02:01.653333+08:00",
+    "submitted_at": null,
+    "finished_at": null,
+    "render_seconds": null,
+    "completed_at": "2026-10-21T09:06:08.073026+08:00"
+  },
+  "pipeline": {
+    "pipeline": "comfy-pipeline",
+    "node_id": "layout",
+    "task_id": "1c2d50b7-1184-4b93-94d3-c6d1845237a7",
+    "status": "succeeded"
+  }
+}

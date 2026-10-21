@@ -7,7 +7,7 @@ import { benchGroup, mediaStages } from './studioModel.js';
 
 // Micro review as a left-to-right bench: inputs (source footage, @cast/@set) -> control passes
 // (first frame, motion structure, keyframes) -> output (shot / remaster and the before-after split).
-export function ShotBench({ stages, assets, activeColumn, writable, busy, onSelect, onUpload, onRun, onPrevis }) {
+export function ShotBench({ stages, assets, activeColumn, writable, busy, onSelect, onUpload, onRun, onPrevis, onBundle }) {
   useLocale();
   const groups = { input: [], control: [], output: [] };
   for (const stage of stages) groups[benchGroup(stage.label)].push(stage);
@@ -16,6 +16,7 @@ export function ShotBench({ stages, assets, activeColumn, writable, busy, onSele
     <button className="review-stage-title" aria-pressed={activeColumn === stage.column} onClick={() => onSelect(stage)}>{stage.label}</button>
     {stage.media ? <MediaCell value={stage.value} type={stage.type} label={stage.label} /> : <p className="bench-empty">{uiText('studio.emptyStage')}</p>}
     {big && previs && stage.media && stage.type === 'video' && <CameraFidelity previs={previs.media.url} take={stage.media.url} />}
+    {big && onBundle && /\/assets\/pa_[0-9a-f]{32}$/.test(stage.media?.url || '') && <button className="bench-bundle" disabled={busy} title={uiText('studio.takeBundleHint')} onClick={() => onBundle(stage)}>{uiText('studio.downloadTakeBundle')}</button>}
     {writable && <div className="sheet-stage-actions">{onPrevis && /previs|blockout/i.test(stage.label) && <button className="primary" disabled={busy} onClick={() => onPrevis(stage)}>{uiText('previs.open')}</button>}<button disabled={busy} onClick={() => onUpload(stage)}>{uiText('sheetWorkspace.upload')}</button>{!/previs|blockout/i.test(stage.label) && <button disabled={busy} onClick={() => onRun(stage)}>{uiText('studio.runStage')}</button>}</div>}
   </section>;
   const hasInput = groups.input.length > 0 || assets.length > 0;

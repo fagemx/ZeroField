@@ -6,6 +6,20 @@ These are API-format graphs derived from official ComfyUI model templates and cu
 - [LTX 2.5 guide](https://docs.comfy.org/tutorials/video/ltx/ltx-2-5), [official I2V template](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_ltx2_5_i2v.json): latest compatible ComfyUI; models/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors; models/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors; models/vae/ltx-2.5-video-vae-bf16.safetensors and ltx-2.5-audio-vae-bf16.safetensors. Accept [Lightricks model access/license](https://huggingface.co/Lightricks/LTX-2.5) first. The compact graphs omit the official two-pass upscaler; LTX latents use 1280x704, 97 frames at 24 fps, with an 8-step first-pass sampler. Tune against the official template after validating on your GPU.
 - OpenJutsu additionally requires [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite). Its VHS_LoadVideo caps and normalizes driving frames to the LTXV format (8n+1 frames, at most 97). The graph encodes the source video, denoises its latent at 0.72, and uses LTXVAddGuide for the selected character reference. This is source-guided video restyling; it does not implement SAM2 segmentation, depth masks, a guaranteed face swap, or a dedicated motion-transfer model. Source audio passes through unchanged. Mode/optics/movement are compiled prompt instructions; they are not separate physics controls.
 
+Model files (take bundles list each model a graph loads with its source from this table):
+
+| File | ComfyUI folder | Source |
+| --- | --- | --- |
+| flux3-image-klein-base-int8-convrot.safetensors | diffusion_models | [black-forest-labs/flux-3-image-klein-comfy](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy) |
+| qwen3vl_4b_int8_convrot.safetensors | text_encoders | [black-forest-labs/flux-3-image-klein-comfy](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy) |
+| flux2-vae.safetensors | vae | [black-forest-labs/flux-3-image-klein-comfy](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy) |
+| ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors | diffusion_models | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) |
+| gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors | text_encoders | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) |
+| ltx-2.5-video-vae-bf16.safetensors | vae | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) |
+| ltx-2.5-audio-vae-bf16.safetensors | vae | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) |
+| ltx-2.5-22b-ic-lora-alpha-gen-0.9.safetensors | loras | [Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen) |
+| ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors | loras/ltx | [Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render) |
+
 Bindings (adapter=comfyui):
 
 | Workflow | prompt_node | seed_node | output_node | Inputs |

@@ -1,0 +1,2 @@
+# Bundle files must keep their exact bytes, or checksums.sha256 fails after a CRLF checkout.
+* -text

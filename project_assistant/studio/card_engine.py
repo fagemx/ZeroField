@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from openbench_data import resource_path
+from datetime import datetime, timezone
 from pathlib import Path
 import copy
+import hashlib
 import io
 import json
 import mimetypes
@@ -1151,13 +1153,18 @@ class ComfyPlatformClient:
             raise runtime.WorkerError("Unsupported or oversized Comfy input media")
         filename = filename_prefix + "-" + uuid.uuid4().hex + extensions[mime]
         if self.sdk:
-            return self.sdk.assets.from_bytes(raw, filename=filename, content_type=mime)
-        boundary = "ZeroField" + uuid.uuid4().hex
-        data = (f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\nContent-Type: {mime}\r\n\r\n'.encode() + raw + f"\r\n--{boundary}--\r\n".encode())
-        result = legacy.json_fetch(self.base_url + "/upload/image", data=data, mime="multipart/form-data; boundary=" + boundary, token=self.token)
-        if not result.get("name"):
-            raise runtime.WorkerError("ComfyUI upload returned no filename")
-        return (result.get("subfolder", "").strip("/") + "/" + result["name"]).lstrip("/")
+            name = self.sdk.assets.from_bytes(raw, filename=filename, content_type=mime)
+        else:
+            boundary = "ZeroField" + uuid.uuid4().hex
+            data = (f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\nContent-Type: {mime}\r\n\r\n'.encode() + raw + f"\r\n--{boundary}--\r\n".encode())
+            result = legacy.json_fetch(self.base_url + "/upload/image", data=data, mime="multipart/form-data; boundary=" + boundary, token=self.token)
+            if not result.get("name"):
+                raise runtime.WorkerError("ComfyUI upload returned no filename")
+            name = (result.get("subfolder", "").strip("/") + "/" + result["name"]).lstrip("/")
+        # Take provenance: project assets are content-addressed, so the hash also names the source asset.
+        self.__dict__.setdefault("uploads", []).append({"name": _graph_ref(name), "sha256": hashlib.sha256(raw).hexdigest(),
+                                                        "content_type": mime, "bytes": len(raw)})
+        return name
 
     def submit_workflow(self, workflow, client_id, metadata=None):
         if getattr(self, 'config', {}).get('_lease_lost', lambda:False)():
@@ -1275,6 +1282,44 @@ def _normalize_comfy_error(result: dict) -> str:
     return "ComfyUI workflow execution failed"
 
 
+def _graph_ref(value):
+    """JSON form of a bound graph input; SDK assets are objects, local uploads are file names."""
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(getattr(value, "name", None) or getattr(value, "id", None) or value)
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _take_provenance(workflow, client, prompt_id, started_at, workflow_path, card):
+    """What a take bundle needs to re-run this exact graph. Never config, tokens or headers."""
+    real = isinstance(client, ComfyPlatformClient)
+    parts = urllib.parse.urlsplit(client.base_url) if real else None
+    version = sdk_version = None
+    if real:
+        try:
+            version = str(legacy.json_fetch(client.base_url + "/system_stats", token=client.token, timeout=5)["system"]["comfyui_version"])
+        except Exception:
+            pass  # comfy-api-proxy and Comfy Cloud need not expose /system_stats
+        if client.sdk:
+            try:
+                from importlib.metadata import version as package_version
+                sdk_version = package_version("comfy-sdk")
+            except Exception:
+                pass
+    return {
+        "workflow": json.loads(json.dumps(workflow, default=_graph_ref)),
+        "workflow_file": Path(workflow_path).name, "card_id": (card or {}).get("card_id"),
+        "prompt_id": str(prompt_id), "platform": client.platform if real else None,
+        "endpoint": f"{parts.scheme}://{parts.hostname}{':' + str(parts.port) if parts.port else ''}" if real else None,
+        "comfyui_version": version, "comfy_sdk_version": sdk_version,
+        "inputs": list(client.__dict__.get("uploads", [])) if real else [],
+        "started_at": started_at, "finished_at": _utc_now(),
+    }
+
+
 def comfyui(task, config, head):
     card = None
     card_spec = config.get("card") or config.get("card_id")
@@ -1321,6 +1366,7 @@ def comfyui(task, config, head):
             from project_assistant.take_grader import GPU_LOCK
             GPU_LOCK.acquire()  # a continuity grade holding the local GPU finishes first; renders queue behind it
             gpu_lock = GPU_LOCK
+        started_at = _utc_now()
         identifier = client.submit_workflow(workflow, str(task["id"]), config.get("metadata"))
         deadline = time.monotonic() + config.get("timeout", (card.get("engine_config", {}).get("timeout", 1800) if card else 1800))
         output_node = config.get("output_node") or (card.get("engine_config", {}).get("output_node") if card else None)
@@ -1349,14 +1395,16 @@ def comfyui(task, config, head):
             items.sort(key=lambda item: 0 if _item_name(item).endswith((".mp4", ".webm", ".mov")) else 1)
             if items:
                 data, mime = client.download_output(items[0])
+                provenance = _take_provenance(workflow, client, identifier, started_at, workflow_path, card)
                 max_sec = config.get("max_duration_sec") or config.get("duration_sec")
                 if max_sec is not None and mime == "video/mp4" and config.get("bound_to_source_duration", True):
                     data = legacy.bound_output_video_duration(data, float(max_sec), config)
+                    provenance["output_trimmed_to_sec"] = float(max_sec)
                 asset = head.upload(task, data, mime)
                 role = config.get("reference_role") or ("output_video" if task.get("capability") == "video_gen" else None)
                 if role:
                     asset = dict(asset, reference_role=role)
-                return asset
+                return dict(asset, provenance=provenance)
             if result.get("status", {}).get("completed"):
                 raise runtime.WorkerError("ComfyUI completed without a supported saved media output")
             time.sleep(config.get("poll_seconds", 2))
