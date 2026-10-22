@@ -61,9 +61,15 @@ export function StoryWorkbench({slug, tab, me, version, onReload, onNavigate, fl
       <button disabled={!writable || action.busy} onClick={() => open('import')}><Icon name="sparkle" />{t('story.startCreating')}</button>
       <button aria-current={!modal ? 'page' : undefined} onClick={() => {setModal(null); onNavigate?.('cinema-studio');}}><Icon name="clapper" />{t('story.myProjects')}</button>
       <button onClick={() => open('assets')}><Icon name="layers" />{t('story.assetVault')}</button>
-      <button onClick={() => open('toolbox')}><Icon name="toolbox" />{t('story.toolbox')}</button>
-      <button onClick={() => open('api')}><Icon name="code" />{t('story.openApi')}</button>
-      <button onClick={onConsole}><Icon name="terminal" />{t('console.entry')}</button>
+      {/* Engineering tools stay in the markup (native details), one menu instead of three standing buttons. */}
+      <details className="story-engine-menu">
+        <summary><Icon name="toolbox" />{t('story.studioEngine')}</summary>
+        <div className="story-engine-dropdown" onClick={e => {e.currentTarget.parentElement.open = false;}}>
+          <button onClick={() => open('toolbox')}><Icon name="toolbox" />{t('story.toolbox')}</button>
+          <button onClick={() => open('api')}><Icon name="code" />{t('story.openApi')}</button>
+          <button onClick={onConsole}><Icon name="terminal" />{t('console.entry')}</button>
+        </div>
+      </details>
       {episodes.length > 0 && <label>{t('story.episode')} <select value={epId} disabled={action.busy} onChange={async event => {const next=event.target.value;if(await flush?.()===false)return;onEpisode?.(next);setFilm(null);}}>{episodes.map(item => <option key={item.episodeId} value={item.episodeId}>{item.title}</option>)}</select></label>}
     </nav>
     {error && <p role="alert">{error}</p>}
@@ -200,7 +206,7 @@ export function StoryBatchBar({slug, epId = episodeId(slug), rowIds, writable, d
   useEffect(() => {setAllocation(null);}, [epId, rowIds.join('|'), mode, policy, app]);
   useEffect(() => {let alive = true; Promise.all(['IMAGE','VIDEO'].map(capability => storyList('/catalog/apps?capability=' + capability))).then(lists => {if (alive) setApps(lists.flat());}).catch(() => {}); return () => {alive = false;};}, []);
   const selected = apps.find(a => a.appCode === app);
-  return <div className="story-batch">
+  return <div className={'story-batch' + (rowIds.length ? '' : ' is-idle')}>
     <details className="story-settings"><summary aria-label={t('allocation.settings')}><span className="story-policy-badge">{t(policy === 'open_weights_only' ? 'allocation.openBadge' : 'allocation.hybridBadge')}</span><span className="story-settings-summary">{t('allocation.mode_'+mode)} · {app==='automatic' ? t('allocation.automatic') : (selected?.name || app)}</span></summary>
       <div className="story-settings-body">
     <label>{t('allocation.policy')} <select aria-label={t('allocation.policy')} value={policy} disabled={!writable || disabled || action.busy} onChange={e=>{const next=e.target.value; action.run(async()=>{const saved=await storyRequest(`/projects/pj_${slug}/production-policy`,'PUT',{productionPolicy:next});setPolicy(saved.productionPolicy);setMode(saved.productionPolicy==='hybrid_studio'?'hybrid_balanced':'lab_economical');});}}><option value="open_weights_only">{t('allocation.openPolicy')}</option><option value="hybrid_studio" disabled={ceiling==='open_weights_only'}>{t('allocation.hybridPolicy')}</option></select></label>

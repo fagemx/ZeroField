@@ -145,6 +145,20 @@ def acp_stdio(task, config, head):
     return result
 
 
+def build_msflow_command(prompt, pins=None, seconds=4, msflow_root=None):
+    """A local MSFlow (LY Corp, CC0) XYZ sampling run for a shot's action, or the built-in solver when it is not installed.
+
+    The 22-joint [T, 22, 3] result becomes plan.xyz; pins ride along unchanged because MSFlow's README documents only
+    the name/input_text overrides, so the caller maps them to its joint-control inputs (or the UI's solvePinnedXYZ).
+    """
+    frames = int(seconds) * 24 + 1  # LTX's 8n+1 at 24 fps, the previs clock
+    root = msflow_root or os.environ.get("MSFLOW_ROOT")
+    if not root or not Path(root).is_dir():
+        return {"mode": "builtin_xyz_solver", "frames": frames, "pins": pins or []}
+    return {"mode": "msflow", "cwd": str(Path(root)), "frames": frames, "pins": pins or [],
+            "argv": ["uv", "run", "python", "-m", "sample.demo_msflow_xyz", "name=MMDiT_xyz_pretrained", f"input_text={prompt}"]}
+
+
 ADAPTERS = {"openai_compat": llm, "comfyui": comfyui, "http_bridge": bridge, "acp_stdio": acp_stdio,
             "ffmpeg": ffmpeg, "openai_speech": speech}
 

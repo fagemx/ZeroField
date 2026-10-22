@@ -24,6 +24,11 @@ test('all five workbench entries render and viewers cannot start creation',()=>{
   assert.match(html,/<button disabled=""><svg[^>]*class="ico"[\s\S]*?<\/svg>Start Creating/);
 });
 
+test('Toolbox, Open API and Agent Console share one Studio Engine menu that still renders its buttons',()=>{
+  const html=render('StoryWorkbench',{slug:'demo',me:{can_write:true},tab:{key:'cinema-studio'}});
+  assert.match(html,/<details class="story-engine-menu"><summary>[\s\S]*?Studio Engine<\/summary>[\s\S]*?Toolbox[\s\S]*?Open API[\s\S]*?Agent Console[\s\S]*?<\/details>/);
+});
+
 test('Micro has real candidate, split, restoration and node-input surfaces',()=>{
   const html=render('ShotProduction',{slug:'demo',rid:'brow',writable:true});
   for(const text of ['Candidate Takes','Split Shot','2nd-Pass 4K Restore','nodeInfoList','Re-shoot with These Inputs']) assert.ok(html.includes(text));

@@ -32,6 +32,20 @@ def studio_task():
                               {'row_id': 'shot-1', 'output': {'asset_url': ASSET(98)}}]}}
 
 
+class MSFlowBridgeTests(unittest.TestCase):
+    def test_msflow_command_or_builtin_solver_fallback(self):
+        pins = [{'at': 0.45, 'joint': 'wristL', 'pos': [-0.25, 1.03, 0.56]}]
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('MSFLOW_ROOT', None)
+            self.assertEqual(worker.build_msflow_command('He turns the dial.', pins, 6),
+                             {'mode': 'builtin_xyz_solver', 'frames': 145, 'pins': pins})
+        with tempfile.TemporaryDirectory() as root:
+            run = worker.build_msflow_command('He turns the dial.', pins, msflow_root=root)
+            self.assertEqual((run['mode'], run['cwd'], run['frames'], run['pins']), ('msflow', root, 97, pins))
+            self.assertEqual(run['argv'][-3:], ['sample.demo_msflow_xyz', 'name=MMDiT_xyz_pretrained', 'input_text=He turns the dial.'])
+        self.assertEqual(worker.build_msflow_command('x', msflow_root=str(ROOT / 'missing-msflow'))['mode'], 'builtin_xyz_solver')
+
+
 class ContextTests(unittest.TestCase):
     def test_real_flow_rows_compile_mentions_and_seed_in_order_without_mutation(self):
         task = studio_task()

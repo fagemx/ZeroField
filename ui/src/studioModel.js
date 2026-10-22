@@ -22,7 +22,15 @@ export function benchGroup(label) {
   return role === 0 ? 'input' : role >= 4 ? 'output' : 'control';
 }
 // Shots for the 3D stage: every row of a slate that has a Previs column, with the slate text the stage starts from.
-export function stageShots(parsed, rows = parsed.rows) {
+// assetLookup (buildAssetLookup): the row's first @SET with an image becomes setAsset, the parallax set's far card.
+export function stageShots(parsed, rows = parsed.rows, assetLookup = null) {
+  const setAsset = row => {
+    for (const id of assetReferences(row).filter(ref => ref.startsWith('SET-'))) {
+      const media = assetLookup && resolveAssetReference(id, assetLookup).media;
+      if (media?.kind === 'image') return { id, url: media.url };
+    }
+    return null;
+  };
   const at = re => parsed.headers.findIndex(h => re.test(h)), types = parsed.table.attrs.column_types || [];
   const previsCol = at(/previs|blockout/i), matteCol = at(/actor\s*matte/i), skeletonCol = at(/pose\s*skeleton/i);
   if (previsCol < 0) return [];
@@ -36,6 +44,7 @@ export function stageShots(parsed, rows = parsed.rows) {
     skeleton: mediaOf(text(row, skeletonCol), 'video')?.url || null,
     keyframe: keyCol < 0 ? null : mediaOf(text(row, keyCol), 'image')?.url || null,
     slate: { motion: text(row, motion), rig: text(row, rig), action: text(row, action) },
+    setAsset: setAsset(row),
   }));
 }
 // A shot's stages as bench columns and the links between them: one source fans out to every control pass,

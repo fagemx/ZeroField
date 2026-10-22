@@ -219,3 +219,89 @@ test('face points: 68 landmarks in iBUG order, hidden from behind, moved by the 
   assert.equal(face.filter(p => p[2]).length, 68);
   assert.ok(face[8][1] > face[30][1] && face[30][1] > face[27][1], 'on screen the chin is below the nose tip, the nose tip below the bridge');
 });
+
+test('2.5D parallax cards: defaults by role, far to near, never in defaultPlan; billboards turn their front to the camera', async () => {
+  const {PARALLAX_DEFAULTS, parallaxLayers, billboardYaw} = await import('../src/previs/plan.js');
+  assert.deepEqual(Object.keys(defaultPlan()), ['set', 'move', 'lens', 'action', 'facing', 'mood', 'seconds', 'keys'], 'layers, beacon and pins stay optional');
+  assert.deepEqual(parallaxLayers(defaultPlan()), []);
+  const cards = parallaxLayers({...defaultPlan(), set: 'parallax'});
+  assert.deepEqual(cards, PARALLAX_DEFAULTS); cards[0].z = 99; assert.equal(PARALLAX_DEFAULTS[0].z, 4.8, 'a copy');
+  const custom = parallaxLayers({set: 'observatory', layers: [{id: 'near', src: '/x.png'}, {id: 'sky', role: 'far', z: 9}]});
+  assert.deepEqual(custom.map(l => [l.id, l.z, l.src ?? null]), [['sky', 9, null], ['near', -0.7, '/x.png']]);
+  // A card's front is -z: turned by yaw it is (-sin, -cos); it must point at the camera wherever an orbit or track takes it.
+  for (const move of ['orbit', 'track', 'pushin']) for (const f of [0, 48, 96]) for (const card of [[0, 1.8, 4.8], [0.5, 1.1, -0.7]]) {
+    const eye = sampleCamera({...defaultPlan(), move}, f).position, yaw = billboardYaw(eye, card);
+    const to = [eye[0] - card[0], eye[2] - card[2]], n = Math.hypot(...to);
+    assert.ok(Math.abs(-Math.sin(yaw) * to[0] / n - Math.cos(yaw) * to[1] / n - 1) < 1e-9, `${move} f${f}`);
+  }
+});
+
+test('the parallax set builds its cards facing the shot camera, without the sun; the observatory sun can be switched off', () => {
+  const plan = {...defaultPlan(), set: 'parallax', move: 'orbit'}, stage = buildStage(plan);
+  const find = (s, test) => { const out = []; s.scene.traverse(o => { if (test(o)) out.push(o); }); return out; };
+  const cards = find(stage, o => o.userData.parallaxLayer), [beacon] = find(stage, o => o.userData.beacon);
+  assert.deepEqual(cards.map(c => c.userData.parallaxLayer.id), ['far', 'mid', 'near']);
+  assert.ok(cards.every(c => !c.castShadow), 'flat cards cast no shadows');
+  for (const f of [0, 48, 96]) {
+    stage.frame(f, plan); stage.scene.updateMatrixWorld(true);
+    assert.equal(beacon.visible, false);
+    for (const card of cards.slice(0, 2)) {  // the far and mid cards: front (-z in world) toward the camera
+      const front = card.getWorldDirection(new THREE.Vector3()).negate(), to = stage.camera.position.clone().sub(card.position).setY(0).normalize();
+      assert.ok(front.dot(to) > 0.999, `${card.userData.parallaxLayer.id} f${f}`);
+    }
+  }
+  const far = cards[0].geometry; far.computeBoundingBox();
+  assert.ok(far.boundingBox.max.x - far.boundingBox.min.x > 10, 'the far card fills a 35 mm frame from the wide key');
+  stage.matte(true); assert.ok(cards.every(c => !c.visible), 'the actor matte drops the cards'); stage.matte(false);
+  const dome = buildStage(defaultPlan()), [sun] = find(dome, o => o.userData.beacon);
+  dome.frame(96, defaultPlan()); assert.equal(sun.visible, true, 'on by default after the dial turn');
+  dome.frame(96, {...defaultPlan(), beacon: false}); assert.equal(sun.visible, false);
+});
+
+test('a shot\'s @SET image becomes its stage setAsset (the parallax far card)', () => {
+  const img = '/projects/api/demo/assets/pa_' + 'f'.repeat(32);
+  const parsed = {headers: ['Shot', 'Action & Audio Prompt', 'Previs'], table: {attrs: {column_types: ['text', 'text', 'video']}},
+    rows: [{rid: 'a', cells: ['S01', 'Kael at the glass @CAST-01 @SET-01', ''].map(value => ({value}))}, {rid: 'b', cells: ['S02', 'No set tag', ''].map(value => ({value}))}]};
+  const [one, two] = stageShots(parsed, parsed.rows, {'SET-01': {id: 'SET-01', media: {kind: 'image', url: img}}});
+  assert.deepEqual(one.setAsset, {id: 'SET-01', url: img}); assert.equal(two.setAsset, null);
+  assert.equal(stageShots(parsed)[0].setAsset, null, 'no lookup, no image');
+});
+
+test('direct-motion-space pins land exactly on their frames, keep the limbs\' bone lengths, and the mannequin follows', async () => {
+  const {MSFLOW_JOINTS, solvePinnedXYZ, solveLimbIK} = await import('../src/previs/plan.js');
+  assert.equal(MSFLOW_JOINTS.length, 22);
+  const plan = {...defaultPlan(), action: 'stand'}, stage = buildStage(plan), {base} = stage.motion(plan), F = base.length;
+  assert.deepEqual(Object.keys(base[0]).sort(), [...MSFLOW_JOINTS].sort());
+  const pins = [{at: 0, joint: 'pelvis', pos: [0, 0.98, -1.8]}, {at: 0.45, joint: 'wristL', pos: [-0.25, 1.03, 0.56]}, {at: 0.85, joint: 'head', pos: [0, 1.65, -0.15]},
+    {at: 0.2, joint: 'ankleR', pos: [0.15, 0.12, -1.1]}, {at: 0.7, joint: 'ankleR', pos: [0.2, 0.15, 0.1]}];  // two steps of one foot
+  const frozen = JSON.stringify(base), solved = solvePinnedXYZ(base, pins);
+  assert.equal(JSON.stringify(base), frozen, 'the input motion is not changed');
+  const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
+  for (const p of pins) assert.ok(dist(solved[Math.round(p.at * (F - 1))][p.joint], p.pos) < 1e-6, `${p.joint} at ${p.at}`);
+  for (const f of [0, 20, 43, 67, 82, 96]) for (const [a, b] of [['shoulderL', 'elbowL'], ['elbowL', 'wristL'], ['hipR', 'kneeR'], ['kneeR', 'ankleR']])
+    assert.ok(Math.abs(dist(solved[f][a], solved[f][b]) - dist(base[f][a], base[f][b])) < 1e-6, `${a}-${b} keeps its length on frame ${f}`);
+  assert.ok(dist(solved[43].shoulderL, base[43].shoulderL) > 0.05, 'the dial is out of the standing arm\'s reach: the upper body leans in');
+  const local = solvePinnedXYZ(base, [{at: 0, joint: 'wristR', pos: [0.4, 1.2, 0.3], radius: 0.1}]);
+  assert.ok(MSFLOW_JOINTS.every(j => dist(local[96][j], base[96][j]) < 1e-6), 'a pin fades out in time');
+  // Two-bone IK: the law of cosines keeps both lengths; a target out of reach straightens the limb toward it.
+  const ik = solveLimbIK([0, 0, 0], [0, -0.3, 0.1], [0, -0.4, 0.2], 0.3, 0.28), side = m => -0.4 * m[2] - 0.2 * m[1];  // which side of the root-target line
+  assert.ok(Math.abs(dist([0, 0, 0], ik.mid) - 0.3) < 1e-9 && Math.abs(dist(ik.mid, [0, -0.4, 0.2]) - 0.28) < 1e-9);
+  assert.ok(side(ik.mid) * side([0, -0.3, 0.1]) > 0, 'it bends the way the current middle joint does');
+  assert.ok(Math.abs(dist([0, 0, 0], solveLimbIK([0, 0, 0], [0, -0.3, 0], [0, -2, 0], 0.3, 0.28).end) - 0.58) < 1e-9);
+  // The mannequin: its hand is on the dial and its pelvis on the mark at the pinned frames.
+  const pinned = {...plan, pins}, at = kp => { let o; stage.scene.traverse(x => { if (x.userData.kp === kp && !o) o = x; }); return o.getWorldPosition(new THREE.Vector3()).toArray(); };
+  stage.pose(43, pinned); stage.scene.updateMatrixWorld(true); assert.ok(dist(at('wristL'), pins[1].pos) < 1e-3, 'hand on the dial');
+  stage.pose(0, pinned); stage.scene.updateMatrixWorld(true); assert.ok(dist(at('pelvis'), pins[0].pos) < 1e-3, 'pelvis on its mark');
+});
+
+test('from behind the skeleton keeps a crown point, so looking up and slumping read differently; the body stays 18 points', async () => {
+  const {poseKeypoints} = await import('../src/previs/skeleton.js');
+  const crownAbove = body => {
+    const plan = {...defaultPlan(), acts: [{at: 0, body}]}, stage = buildStage(plan);
+    stage.frame(96, plan);
+    const [person] = poseKeypoints(stage.scene, stage.camera);
+    assert.equal(person.body.length, 18); assert.equal(person.body[0][2], 0, 'no nose from behind'); assert.equal(person.crown[2], 1, body);
+    return person.body[1][1] - person.crown[1];  // pixels the crown sits above the neck
+  };
+  assert.ok(crownAbove('lookup') > crownAbove('slump') + 30, 'a head thrown back puts the crown higher over the neck than a slump');
+});

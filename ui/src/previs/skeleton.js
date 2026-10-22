@@ -7,7 +7,9 @@ import { WIDTH, HEIGHT } from './plan.js';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // Face points on the head joint (figure.js head ellipsoid). His right is -x (figure.js names joints by screen side
 // from behind: shoulderL is his right), so OpenPose's right side is the figure's L.
-const HEAD = { nose: V(0, 0.094, 0.13), eyeR: V(-0.035, 0.125, 0.092), eyeL: V(0.035, 0.125, 0.092), earR: V(-0.092, 0.11, 0), earL: V(0.092, 0.11, 0) };
+// crown: the top of the head. From behind the ears alone barely show where the head points (SPEC_10 §7.7: a head thrown
+// back came out turned aside), so the crown is drawn whenever the face is not.
+const HEAD = { nose: V(0, 0.094, 0.13), eyeR: V(-0.035, 0.125, 0.092), eyeL: V(0.035, 0.125, 0.092), earR: V(-0.092, 0.11, 0), earL: V(0.092, 0.11, 0), crown: V(0, 0.22, 0.01) };
 
 // The 68 face landmarks (iBUG 300-W order: jaw, brows, nose, eyes, lips) on the head ellipsoid's front, moved by an
 // expression (plan.js EXPRESSIONS). Head-local metres, +x the person's left; nose points keep their own depth.
@@ -59,7 +61,7 @@ export function poseKeypoints(scene, camera) {
     const hand = s => [px(at(k['wrist' + s])), ...[0, 1, 2, 3, 4].flatMap(f => finger(f, s))];
     // A detector finds the whole face or none of it: all 68 points while the face is turned toward the camera.
     const faceOn = face > 0.3, f68 = faceLandmarks(root.userData.face).map(p => { const q = px(at(head, p)); q[2] = q[2] && faceOn ? 1 : 0; return q; });
-    return { body, handR: hand('L'), handL: hand('R'), face: f68 };
+    return { body, handR: hand('L'), handL: hand('R'), face: f68, crown: px(at(head, HEAD.crown)) };
   });
 }
 
@@ -85,6 +87,12 @@ export function drawSkeleton(ctx, people, w = WIDTH, h = HEIGHT, face = false) {
       ctx.fillStyle = rgb(COLORS[n].map(c => Math.floor(c * 0.6)));
       ctx.beginPath(); ctx.ellipse((x1 + x2) / 2, (y1 + y2) / 2, Math.max(Math.hypot(x1 - x2, y1 - y2) / 2, 0.5), STICK, Math.atan2(y1 - y2, x1 - x2), 0, 2 * Math.PI); ctx.fill();
     });
+    const c = p.crown;
+    if (c?.[2] && !b[0][2] && b[1][2]) {  // seen from behind: neck and ears to the crown, so the head's pitch reads as a triangle
+      ctx.fillStyle = rgb(COLORS[12].map(v => Math.floor(v * 0.6)));
+      for (const [x, y, v] of [b[1], b[16], b[17]]) if (v) { ctx.beginPath(); ctx.ellipse((x + c[0]) / 2, (y + c[1]) / 2, Math.max(Math.hypot(x - c[0], y - c[1]) / 2, 0.5), STICK, Math.atan2(y - c[1], x - c[0]), 0, 2 * Math.PI); ctx.fill(); }
+      ctx.fillStyle = rgb(COLORS[12]); ctx.beginPath(); ctx.arc(c[0], c[1], STICK, 0, 2 * Math.PI); ctx.fill();
+    }
     b.forEach(([x, y, v], n) => { if (v) { ctx.fillStyle = rgb(COLORS[n]); ctx.beginPath(); ctx.arc(x, y, STICK, 0, 2 * Math.PI); ctx.fill(); } });
     for (const hand of [p.handR, p.handL]) {
       if (!hand[0][2]) continue;

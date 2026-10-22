@@ -3,12 +3,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useLocale } from '../i18n/react.jsx';
 import { t as uiText } from '../i18n/index.js';
-import { ACTIONS, DURATIONS, FACINGS, FPS, HEIGHT, LENSES, MOODS, MOVES, WIDTH, cameraKeys, defaultPlan, describePlan, framesOf, planFromSlate, sampleCamera, verticalFov } from './plan.js';
+import { ACTIONS, DURATIONS, FACINGS, FPS, HEIGHT, LENSES, MOODS, MOVES, SETS, WIDTH, cameraKeys, defaultPlan, describePlan, framesOf, planFromSlate, sampleCamera, verticalFov } from './plan.js';
 import { buildStage, prepareRenderer, shotGuides } from './scene.js';
 import { encodeCanvas, fetchPlan } from './webm.js';
 import { drawSkeleton, poseKeypoints } from './skeleton.js';
 
-const VIEWS = ['lens', 'overhead', 'free'];
+// split: the overhead plan and the shot lens side by side on one renderer (80.lv's layout view over the camera view).
+export const VIEWS = ['split', 'lens', 'overhead', 'free'];
+const SPLIT = WIDTH / 2 - 1;  // each half of the split view, with a 2 px seam
 const draftKey = (slug, rid) => `zf.previs:${slug}:${rid}`;
 function loadDraft(slug, rid) { try { return JSON.parse(localStorage.getItem(draftKey(slug, rid)) || 'null'); } catch { return null; } }
 function saveDraft(slug, rid, plan) {  // unrendered edits stay in this browser; a render stores its plan in the project
@@ -58,29 +60,32 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     const controls = new OrbitControls(new THREE.PerspectiveCamera(), renderer.domElement);
     const half = 5, top = new THREE.OrthographicCamera(-half * WIDTH / HEIGHT, half * WIDTH / HEIGHT, half, -half, 0.1, 80);
     top.up.set(0, 0, 1); top.position.set(0, 40, -2.4); top.lookAt(0, 0, -2.4);  // console at the top of the plan
-    const canvas = renderer.domElement, overhead = () => now.current.view === 'overhead';
+    const aspect = a => { if (top.right !== half * a) { top.left = -half * a; top.right = half * a; top.updateProjectionMatrix(); } };
+    const canvas = renderer.domElement, split = () => now.current.view === 'split';
+    const onPlan = e => now.current.view === 'overhead' || (split() && e.offsetX < canvas.clientWidth / 2);  // the split's left half is the plan
     const pan = e => {
-      if (!overhead() || !(e.buttons & 1)) return;
-      const k = (top.right - top.left) / top.zoom / canvas.clientWidth;
+      if (!onPlan(e) || !(e.buttons & 1)) return;
+      const k = (top.right - top.left) / top.zoom / (canvas.clientWidth * (split() ? SPLIT / WIDTH : 1));
       top.position.x += e.movementX * k; top.position.z += e.movementY * k; top.updateMatrixWorld(); now.current.draw();
     };
     const zoom = e => {
-      if (!overhead()) return;
+      if (!onPlan(e)) return;
       e.preventDefault(); top.zoom = Math.min(6, Math.max(0.4, top.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); top.updateProjectionMatrix(); now.current.draw();
     };
     canvas.addEventListener('pointermove', pan); canvas.addEventListener('wheel', zoom, { passive: false });
-    live.current = { renderer, controls, top, stage: null, guides: null };
+    live.current = { renderer, controls, top, aspect, stage: null, guides: null };
     return () => {
       canvas.removeEventListener('pointermove', pan); canvas.removeEventListener('wheel', zoom);
       controls.dispose(); live.current.guides?.dispose(); live.current.stage?.dispose(); renderer.dispose(); canvas.remove(); live.current = null;
     };
   }, []);
-  useEffect(() => {  // a new stage only when the set or light changes
+  useEffect(() => {  // a new stage only when the set, its cards or the light change
     const ctx = live.current; if (!ctx) return;
-    ctx.guides?.group.removeFromParent(); ctx.stage?.dispose(); ctx.stage = buildStage(plan);
+    ctx.guides?.group.removeFromParent(); ctx.stage?.dispose();
+    ctx.stage = buildStage(plan, { onLoad: () => { if (!now.current.rendering) now.current.draw(); } });
     ctx.controls.object = ctx.stage.camera;
     if (ctx.guides) ctx.stage.scene.add(ctx.guides.group);
-  }, [plan.set, plan.mood]);
+  }, [plan.set, plan.mood, plan.set === 'parallax' ? JSON.stringify(plan.layers || null) : '']);
   const guideKey = JSON.stringify(shots.map(s => [s.shot, planOf(s), s.rid === shot?.rid]));
   useEffect(() => {  // every shot camera that shares this set
     const ctx = live.current; if (!ctx?.stage) return;
@@ -91,14 +96,26 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
 
   const draw = () => {
     const ctx = live.current; if (!ctx?.stage) return;
-    const top = view === 'overhead';
-    ctx.stage.pose(frame, plan); ctx.guides?.update(frame / (frames - 1), top ? 1.4 / ctx.top.zoom : 1); ctx.stage.roof(!top);
-    if (ctx.guides) ctx.guides.group.visible = view !== 'lens';
-    if (view === 'lens') ctx.stage.shoot(frame, plan);
-    else if (view === 'free') { ctx.stage.camera.fov = verticalFov(plan.lens); ctx.stage.camera.updateProjectionMatrix(); }
-    ctx.renderer.render(ctx.stage.scene, top ? ctx.top : ctx.stage.camera);
+    const { renderer, stage, guides } = ctx, split = view === 'split', top = view === 'overhead' || split;
+    stage.pose(frame, plan); guides?.update(frame / (frames - 1), top ? 1.4 / ctx.top.zoom : 1);
+    if (view === 'lens' || split) stage.shoot(frame, plan);
+    else if (view === 'free') { stage.camera.fov = verticalFov(plan.lens); stage.camera.updateProjectionMatrix(); }
+    const paint = (camera, plan, guided, x = 0, y = 0, w = WIDTH, h = HEIGHT) => {
+      renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h);
+      stage.roof(!plan); if (guides) guides.group.visible = guided;
+      renderer.render(stage.scene, camera);
+    };
+    if (split) {  // one WebGL context, two viewports: the plan on the left, the lens letterboxed on the right
+      const h = SPLIT * HEIGHT / WIDTH;
+      renderer.setScissorTest(true); renderer.setScissor(0, 0, WIDTH, HEIGHT); renderer.setClearColor(0x000000); renderer.clear();  // black seam and letterbox
+      ctx.aspect(SPLIT / HEIGHT); paint(ctx.top, true, true, 0, 0, SPLIT, HEIGHT);
+      paint(stage.camera, false, false, WIDTH - SPLIT, (HEIGHT - h) / 2, SPLIT, h);
+      renderer.setScissorTest(false); renderer.setViewport(0, 0, WIDTH, HEIGHT);
+    } else {
+      ctx.aspect(WIDTH / HEIGHT); paint(top ? ctx.top : stage.camera, top, view !== 'lens');
+    }
   };
-  now.current = { frame, frames, rid: shot?.rid, shots, view, draw };
+  now.current = { frame, frames, rid: shot?.rid, shots, view, draw, rendering };
   useEffect(() => { if (frame > frames - 1) setFrame(frames - 1); }, [frames]);  // a shorter shot: stay on its last frame
   useEffect(() => { if (!rendering) draw(); });  // previs scale: redraw after every change
   useEffect(() => {  // the free camera starts from the nearer key of this shot; orbiting redraws
@@ -130,15 +147,16 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1); }
     else if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); setPlaying(p => (p ? false : 'shot')); }
   };
-  const fitOverhead = () => {  // frame every camera of this set and the actor's mark on the plan
+  const fitOverhead = v => {  // frame every camera of this set and the actor's mark on the plan
     const top = live.current?.top; if (!top) return;
+    live.current.aspect(v === 'split' ? SPLIT / HEIGHT : WIDTH / HEIGHT);
     const pts = shots.filter(s => planOf(s).set === plan.set).flatMap(s => [0, .25, .5, .75, 1].map(u => sampleCamera(planOf(s), u * (framesOf(planOf(s)) - 1)).position)).concat([[0, 0, 0.6]]);
     const xs = pts.map(q => q[0]), zs = pts.map(q => q[2]), [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
     top.position.x = (x0 + x1) / 2; top.position.z = (z0 + z1) / 2;
     top.zoom = Math.min(top.right / ((x1 - x0) / 2 + 1.5), top.top / ((z1 - z0) / 2 + 1.5));
     top.updateProjectionMatrix(); top.updateMatrixWorld();
   };
-  const pickView = v => { if (v === 'overhead') fitOverhead(); setView(v); if (v !== 'lens' && playing === 'scene') setPlaying(false); };
+  const pickView = v => { if (v === 'overhead' || v === 'split') fitOverhead(v); setView(v); if (v !== 'lens' && playing === 'scene') setPlaying(false); };
   const playScene = () => { setView('lens'); if (playing !== 'scene') setFrame(0); setPlaying(p => (p === 'scene' ? false : 'scene')); };
   const capture = which => {  // the framed free camera becomes this shot's start or end key
     const ctx = live.current;
@@ -151,6 +169,8 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     const ctx = live.current, target = shot, p = plan;
     setPlaying(false); setRendering(true); setError('');
     try {
+      // Always the full canvas through the shot camera, whatever the viewport showed (the split view uses two).
+      ctx.renderer.setScissorTest(false); ctx.renderer.setViewport(0, 0, WIDTH, HEIGHT);
       ctx.stage.roof(true); if (ctx.guides) ctx.guides.group.visible = false;
       // WebCodecs + a WebM writer: exact timestamps, so the clip is 97 frames at 24 fps; the plan rides in the file.
       // A slate with an Actor Matte column also gets the same plan with the actor white on black (Layout Render mask),
@@ -177,7 +197,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     setRendering(false); setView('lens');
   };
 
-  const t = key => uiText('previs.' + key);
+  const t = (key, params) => uiText('previs.' + key, params);
   if (!shot) return <div className="sheet-empty"><p>{t('empty')}</p></div>;
   const layoutable = shot.matteCol >= 0 && shot.skeletonCol >= 0;  // the Layout Render binds both
   return <div className="previs-stage" tabIndex={-1} onKeyDown={onKey}>
@@ -213,7 +233,10 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     <aside className="previs-controls" aria-label={t('inspector')}>
       <details className="previs-howto" open><summary>{t('howto')}</summary><ol>{[1, 2, 3, 4, 5].map(n => <li key={n}>{t('step' + n)}</li>)}</ol></details>
       <fieldset className="previs-fields" disabled={!writable || rendering}>
-        {pick(t('set'), plan.set, ['observatory', 'empty'], v => edit({ set: v }), v => t('set_' + v))}
+        {/* Switching to the parallax set hangs the shot's @SET image as its far card. */}
+        {pick(t('set'), plan.set, SETS, v => edit({ set: v, ...(v === 'parallax' && shot.setAsset && !plan.layers ? { layers: [{ id: 'far', src: shot.setAsset.url }] } : {}) }), v => t('set_' + v))}
+        {plan.set === 'observatory' && pick(t('beacon'), plan.beacon !== false, [true, false], v => edit({ beacon: v }), v => t(v ? 'beacon_on' : 'beacon_off'))}
+        {plan.set === 'parallax' && <p className="previs-note">{plan.layers?.some(l => l.src) ? t('layersFromSet', { id: shot.setAsset?.id || 'SET' }) : t('layersPlaceholder')}</p>}
         {pick(t('action'), plan.action, ACTIONS, v => edit({ action: v }), v => t('action_' + v))}
         {pick(t('facing'), plan.facing, FACINGS, v => edit({ facing: v }), v => t('facing_' + v))}
         {pick(t('move'), plan.keys ? 'custom' : plan.move, MOVES, v => edit({ move: v, keys: null }), v => t('move_' + v))}

@@ -56,6 +56,12 @@
 .workbench-app .story-workbench .story-nav button { height: 32px; padding: 0 12px; border-color: transparent; color: #bbbbbb; }
 .workbench-app .story-workbench .story-nav button:hover:not(:disabled) { background: var(--hover-bg); border-color: transparent; color: var(--text); }
 .workbench-app .story-workbench .story-nav button[aria-current] { background: var(--surface); color: var(--text); border-color: transparent; }
+.story-engine-menu { position: relative; z-index: 20; }
+.story-engine-menu > summary { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--radius-control); color: #bbbbbb; cursor: pointer; list-style: none; }
+.story-engine-menu > summary::-webkit-details-marker { display: none; }
+.story-engine-menu > summary:hover, .story-engine-menu[open] > summary { background: var(--hover-bg); color: var(--text); }
+.story-engine-dropdown { position: absolute; left: 0; top: calc(100% + 4px); display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-float); }
+.workbench-app .story-workbench .story-engine-dropdown button { justify-content: flex-start; width: 100%; }
 .story-nav label { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 12px; }
 .story-nav select { max-width: 200px; }
 .story-macro { display: flex; flex: 1 1 100%; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; background: var(--surface); border-radius: var(--radius-panel); }
@@ -247,6 +253,9 @@
 .story-batch-hint { color: var(--faint); font-size: 13px; }
 .story-batch { padding: 10px 20px; }
 .story-batch > .story-settings[open] { flex-basis: 100%; }
+/* Nothing selected: one quiet line; the full batch actions arrive with the first checked shot. */
+.story-batch.is-idle { padding: 4px 20px; border-bottom-color: transparent; background: none; }
+.workbench-app .sheet-workspace .sheet-view-switch button.quiet-view { padding: 0 8px; color: var(--faint); font-size: 12px; }
 .sheet-review .review-presets > small { color: var(--text); font-size: 13px; line-height: 1.5; }
 .story-macro:not(.is-dirty) { flex: 0 0 auto; padding: 0; background: none; }
 .story-macro:not(.is-dirty) > span { display: none; }
@@ -466,8 +475,7 @@
 .previs-canvas { background: #000; border-radius: var(--radius-panel); overflow: hidden; aspect-ratio: 1280 / 704; }
 .previs-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .previs-canvas.view-overhead { cursor: grab; }
-.previs-canvas.view-overhead:active { cursor: grabbing; }
-.previs-hud { position: absolute; left: 12px; top: 10px; color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); pointer-events: none; }
+.previs-canvas.view-overhead:active { cursor: grabbing; }.previs-hud { position: absolute; left: 12px; top: 10px; color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); pointer-events: none; }
 .previs-views { position: absolute; right: 10px; top: 8px; display: flex; gap: 4px; }
 .previs-hint { position: absolute; left: 12px; bottom: 10px; margin: 0; color: #e5e5e5; font-size: 11px; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); pointer-events: none; }
 .previs-timeline { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; color: var(--faint); font-size: 12px; }

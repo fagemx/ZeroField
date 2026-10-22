@@ -5,6 +5,7 @@
     "myProjects": "My Projects",
     "assetVault": "Asset Vault",
     "toolbox": "Toolbox",
+    "studioEngine": "Studio Engine",
     "openApi": "Open API",
     "episode": "Episode",
     "working": "Working — keep this view open for progress",
@@ -2407,7 +2408,15 @@
     "step5": "Or run layout render: FLUX 3 Klein paints frame 0 for your review, then the Layout-To-Render IC-LoRA shoots the shot on this set and camera.",
     "layout": "Run layout render",
     "layoutHint": "Layout Key (FLUX 3 Klein on previs frame 0, reviewed) then Layout Render (LTX-2.5 Layout-To-Render IC-LoRA keeps the set and camera; the actor matte frees the actor and LTX-2.3 Union-Control takes the acting from the pose skeleton). About 3 minutes on an RTX 4090.",
-    "renderMatte": "Render the previs again to save the actor matte and pose skeleton; the layout render needs both."
+    "renderMatte": "Render the previs again to save the actor matte and pose skeleton; the layout render needs both.",
+    "view_split": "Split",
+    "hint_split": "Left: overhead plan (drag to pan, scroll to zoom). Right: the shot's lens.",
+    "set_parallax": "2.5D parallax",
+    "beacon": "Sun beacon",
+    "beacon_on": "On",
+    "beacon_off": "Off",
+    "layersFromSet": "Far card: @{{id}} from this shot. Camera moves slide the cards for parallax.",
+    "layersPlaceholder": "Grey depth cards (far, mid, near). Tag the shot with an @SET that has an image to use it as the far card."
   },
   "grade": {
     "title": "Continuity grades",
