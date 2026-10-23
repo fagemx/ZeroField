@@ -6,37 +6,47 @@ export function hasSceneHeadings(content) {
   return /^\s*(?:#{1,6}\s*)?(?:Scene\s*\d+\b|(?:場景|场景)\s*[一二三四五六七八九十\d]+|(?:INT|EXT|INT\.?\s*\/\s*EXT)\.)/im.test(content || '');
 }
 
-const adaptationKey = (sourceMode, draft, targetScenes) => JSON.stringify([sourceMode, draft.sourceText, targetScenes]);
+// A composition (SPEC_14 lenses and choice trace) is part of what was adapted; without one the key is SPEC_13's.
+const adaptationKey = (sourceMode, draft, targetScenes, composition) => JSON.stringify([sourceMode, draft.sourceText, targetScenes, ...(composition ? [composition] : [])]);
 
-export function editStoryScreenplay(sourceMode, draft, script, targetScenes = 3) {
-  return {...draft, script, adaptationKey:sourceMode === 'script' ? draft.adaptationKey : adaptationKey(sourceMode, draft, targetScenes)};
+// The request fields of the Start Creating composition, or null when no lens is chosen (classic adaptation).
+export function storyComposition({medium, genre, collisions, unchecked = [], focus = 'overall', extra = ''}) {
+  if (!medium) return null;
+  return {mediumLens:medium, genreLens:genre, ...(collisions && {choiceTrace:{focus,
+    keptLabels:collisions.candidates.map(card => card.label).filter(label => !unchecked.includes(label)),
+    uncheckedLabels:unchecked, extraCondition:extra.trim()}})};
 }
 
-export function needsStoryAdaptation(sourceMode, draft, targetScenes = 3) {
+export function editStoryScreenplay(sourceMode, draft, script, targetScenes = 3, composition = null) {
+  return {...draft, script, adaptationKey:sourceMode === 'script' ? draft.adaptationKey : adaptationKey(sourceMode, draft, targetScenes, composition)};
+}
+
+export function needsStoryAdaptation(sourceMode, draft, targetScenes = 3, composition = null) {
   if (sourceMode === 'script') return false;
-  if (draft.sourceText.trim()) return draft.adaptationKey !== adaptationKey(sourceMode, draft, targetScenes) || !hasSceneHeadings(draft.script);
+  if (draft.sourceText.trim()) return draft.adaptationKey !== adaptationKey(sourceMode, draft, targetScenes, composition) || !hasSceneHeadings(draft.script);
   return !!draft.script.trim() && !hasSceneHeadings(draft.script);
 }
 
-export async function adaptStoryDraft({epId, sourceMode, draft, targetScenes = 3, breakdownMode = 'auto', request}) {
+export async function adaptStoryDraft({epId, sourceMode, draft, targetScenes = 3, breakdownMode = 'auto', composition = null, request}) {
   const sourceText = draft.sourceText.trim() ? draft.sourceText : draft.script;
   if (!sourceText.trim()) throw new Error(t('story.sourceRequired'));
-  const result = await request(`/episodes/${epId}/script-adaptations`, 'POST', {sourceText, sourceMode, targetScenes, breakdownMode});
+  const result = await request(`/episodes/${epId}/script-adaptations`, 'POST', {sourceText, sourceMode, targetScenes, breakdownMode, ...composition});
   const script = result?.script?.content;
   if (typeof script !== 'string' || !script.trim()) throw new Error(t('story.adaptationEmpty'));
-  return {...draft, script, adaptationKey:adaptationKey(sourceMode, draft, targetScenes)};
+  return {...draft, script, adaptationKey:adaptationKey(sourceMode, draft, targetScenes, composition),
+    report:composition ? {voiceAudit:result.voiceAudit, choiceTrace:result.choiceTrace} : null};
 }
 
 // Save the prepared draft before downstream requests so a retry keeps screenplay edits
 // and does not adapt the original source a second time.
-export async function buildStoryFromDraft({epId, sourceMode, draft, targetScenes = 3, breakdownMode = 'auto', settings, request, wait, onPrepared, onDone}) {
+export async function buildStoryFromDraft({epId, sourceMode, draft, targetScenes = 3, breakdownMode = 'auto', composition = null, settings, request, wait, onPrepared, onDone}) {
   await request(`/episodes/${epId}/settings`, 'PUT', {...settings, breakdownMode});
   let prepared = draft;
-  if (needsStoryAdaptation(sourceMode, draft, targetScenes)) {
+  if (needsStoryAdaptation(sourceMode, draft, targetScenes, composition)) {
     const source = draft.sourceText.trim() ? draft.sourceText : draft.script;
     prepared = hasSceneHeadings(source)
-      ? {...draft, script:source, adaptationKey:adaptationKey(sourceMode, draft, targetScenes)}
-      : await adaptStoryDraft({epId, sourceMode, draft, targetScenes, breakdownMode, request});
+      ? {...draft, script:source, adaptationKey:adaptationKey(sourceMode, draft, targetScenes, composition)}
+      : await adaptStoryDraft({epId, sourceMode, draft, targetScenes, breakdownMode, composition, request});
     onPrepared?.(prepared);
   }
   if (!prepared.script.trim()) throw new Error(t('story.sourceRequired'));

@@ -88,6 +88,110 @@ class StoryPureTests(unittest.TestCase):
         from project_docs.story_adaptation import character_details
         self.assertEqual(character_details('MARA: We should leave.\nEnvironment: Station\nProp: Key'), [('MARA', '', None)])
 
+    COURIER = 'A delivery courier is secretly an immortal sage.'
+
+    def test_condition_collisions_differ_by_genre_and_carry_prop_slices(self):
+        from project_docs.story_adaptation import propose_story_collisions
+        seen = set()
+        for genre in ('melodrama', 'xianxia', 'comedy', 'suspense', 'general'):
+            proposal = propose_story_collisions(self.COURIER, 'manju', genre)
+            cards = proposal['candidates']
+            self.assertEqual([c['id'] for c in cards], ['col_1', 'col_2', 'col_3', 'col_4'])
+            self.assertEqual({c['focus'] for c in cards}, {'collision', 'restraint', 'reversal', 'negative_space'})
+            for card in cards:
+                self.assertTrue(card['conditionA'] and card['conditionB'] and card['conditionA'] != card['conditionB'])
+                self.assertEqual(len(set(card['propSlice'])), 3)
+                self.assertNotIn(card['conditionA'], seen)
+                seen.add(card['conditionA'])
+            self.assertEqual((proposal['genreLens'], proposal['mediumLens']), (genre, 'manju'))
+            self.assertEqual(set(proposal['forms']), {'actors', 'prop', 'setting'})
+        self.assertIn('incense', propose_story_collisions(self.COURIER, 'cinema', 'xianxia')['candidates'][0]['conditionA'])
+        for lenses in (('film', 'general'), ('manju', 'horror'), ([], 'general')):
+            with self.assertRaises(ValueError):
+                propose_story_collisions(self.COURIER, *lenses)
+
+    def test_choice_trace_strikes_unchecked_and_weaves_kept_and_extra_into_scenes_one_and_two(self):
+        from project_docs.story_adaptation import propose_story_collisions
+        cards = propose_story_collisions(self.COURIER, 'manju', 'comedy')['candidates']
+        trace = {'focus': 'collision', 'keptLabels': [cards[0]['label'], cards[2]['label']],
+                 'uncheckedLabels': [cards[1]['label'], 'amnesia'], 'extraCondition': 'The courier never says their real name.'}
+        script = story.adapt_source_to_script(self.COURIER + ' He has amnesia.', 'idea', medium_lens='manju', genre_lens='comedy', choice_trace=trace)
+        for kept in (cards[0]['label'], cards[2]['label'], 'is mid-duel with @CAST-02', 'steps on @PROP-01'):
+            self.assertIn(kept, script)
+        for struck in (cards[1]['label'], "sign for a stranger's parcel", 'amnesia'):
+            self.assertNotIn(struck.casefold(), script.casefold())
+        scenes = story.scene_sections(script)
+        self.assertTrue(all(trace['extraCondition'] in s['content'] for s in scenes[:2]))
+        self.assertNotIn(trace['extraCondition'], scenes[2]['content'])
+        # P1: the prop's origin → turn → current states run through the scenes in order.
+        slices = [s.replace('the delivery phone', '@PROP-01') for s in cards[0]['propSlice']]
+        self.assertEqual([next(i for i, s in enumerate(slices) if s in scene['content']) for scene in scenes], [0, 1, 2])
+        self.assertIn('Lens: manju × comedy', script)
+        self.assertEqual(story.scene_shot_beats(scenes[0]['content'])[0][:11], '[Cold open]')  # Lens/Constraint lines are never shots
+        with self.assertRaises(ValueError):
+            story.adapt_source_to_script(self.COURIER, 'idea', choice_trace={'focus': 'anger'})
+        with self.assertRaises(ValueError):
+            story.adapt_source_to_script(self.COURIER, 'idea', choice_trace={'keptLabels': 'all'})
+
+    def test_choice_contrast_detects_a_switch_and_injects_an_action_beat(self):
+        from project_docs.story_adaptation import compute_choice_contrast
+        traces = lambda *focuses: [{'focus': f} for f in focuses]
+        contrast = compute_choice_contrast(traces('restraint', 'restraint'), 'reversal')
+        self.assertEqual((contrast['contrastDetected'], contrast['dominantFocus']), (True, 'restraint'))
+        self.assertIn('without explanation', contrast['contrastCue'])
+        self.assertTrue(compute_choice_contrast(traces('collision', 'reversal', 'collision'), 'negative_space')['contrastDetected'])
+        for history, focus in ((traces('restraint'), 'reversal'), (traces('restraint', 'restraint'), 'collision'),
+                               (traces('restraint', 'restraint', *['overall'] * 4), 'reversal'), ([], 'reversal')):
+            self.assertFalse(compute_choice_contrast(history, focus)['contrastDetected'])
+        trace = {'focus': 'reversal'}
+        with_contrast = story.adapt_source_to_script(self.COURIER, 'idea', medium_lens='cinema', choice_trace=trace, contrast=contrast)
+        beat = next(line for line in with_contrast.splitlines() if '[Contrast]' in line)
+        self.assertIn('Twice before, @CAST-01 lowers the hand', beat)
+        self.assertIn('This time @CAST-01 sweeps', beat)
+        self.assertNotIn('[Contrast]', story.adapt_source_to_script(self.COURIER, 'idea', medium_lens='cinema', choice_trace=trace))
+
+    def test_medium_lens_cuts_the_same_skeleton_into_different_structures_and_camera_grammar(self):
+        from project_docs.story_adaptation import script_medium_lens
+        trace = {'focus': 'overall', 'keptLabels': [], 'uncheckedLabels': [], 'extraCondition': ''}
+        scripts = {m: story.adapt_source_to_script(self.COURIER, 'idea', medium_lens=m, genre_lens='melodrama', choice_trace=trace) for m in ('manju', 'cinema', 'storybook')}
+        self.assertEqual(len(set(scripts.values())), 3)
+        manju, cinema, storybook = scripts['manju'], scripts['cinema'], scripts['storybook']
+        self.assertTrue(manju.startswith('Lens: manju') and '[Cold open]' in manju and '[Cliffhanger]' in manju)
+        self.assertEqual(manju.count(': "'), 6)  # two dialogue turns in every scene
+        self.assertTrue('[Omission]' in cinema and 'foreground doorway' in cinema and '[Cliffhanger]' not in cinema)
+        self.assertEqual(cinema.count(': "'), 0)
+        for line in ('The first time', 'The second time', 'The third time', '[Page turn]', 'Narration:'):
+            self.assertIn(line, storybook)
+        self.assertIn('@CAST-01:revealed', manju)  # melodrama casts the reversal variant
+        grammar = {}
+        for medium, script in scripts.items():
+            self.assertEqual(script_medium_lens(script), medium)
+            beats = [b for scene in story.scene_sections(script) for b in story.scene_shot_beats(scene['content'])]
+            grammar[medium] = [story.infer_shot_grammar(b, i, len(beats), medium) for i, b in enumerate(beats)]
+        self.assertTrue({g['previsPlan']['lens'] for g in grammar['manju']} <= {50, 85})
+        self.assertTrue({g['cameraMotion'] for g in grammar['manju']} <= {'Slow Dolly In', 'Handheld Tracking'})
+        self.assertTrue({'Slow Dolly In', 'Orbit 45°'} <= {g['cameraMotion'] for g in grammar['cinema']})
+        self.assertEqual([g['cameraMotion'] for g in grammar['storybook']][-2:], ['Static Tripod', 'Crane Up'])
+        self.assertIsNone(script_medium_lens(story.adapt_source_to_script(self.COURIER, 'idea')))
+        for beat, index, total in (('@CAST-01 enters.', 0, 3), ('Close-up of tearful eyes.', 2, 3), ('MARA: "Stay."', 1, 2)):
+            self.assertEqual(story.infer_shot_grammar(beat, index, total), story.infer_shot_grammar(beat, index, total, None))
+
+    def test_no_label_rule_flags_and_sanitizes_and_engine_output_is_always_clean(self):
+        from project_docs.story_adaptation import audit_narrative_voice, sanitize_narrative_voice
+        labelled = '她心裡壓著這件事。他霸氣外露地看著眾人。Mira feels deep inside that time is running out.'
+        audit = audit_narrative_voice(labelled)
+        self.assertFalse(audit['ok'])
+        self.assertEqual(audit['violations'], ['心裡壓著', '霸氣外露', 'feels deep inside'])
+        clean = sanitize_narrative_voice(labelled)
+        self.assertTrue(audit_narrative_voice(clean)['ok'])
+        self.assertIn('Mira checks the @PROP-01 indicator as the mark advances.', clean)
+        self.assertIn('他將 @PROP-01 重重按在檯面上，全場停下動作。', clean)
+        self.assertGreater(audit_narrative_voice(clean)['concreteScore'], audit['concreteScore'])
+        novel = 'Mira entered the station. The atmosphere is very tense.\n\nEvan secretly thinks to himself that she lied.'
+        for medium in ('manju', 'cinema', 'storybook'):
+            self.assertTrue(audit_narrative_voice(story.adapt_source_to_script(novel, 'novel', medium_lens=medium,
+                choice_trace={'extraCondition': '氣氛十分緊張，沒有人說話。'}))['ok'])
+
     def test_pagination_and_scene_parser(self):
         result = story.page(list(range(6)), {"limit": "2"})
         self.assertEqual(result["items"], [0, 1])
@@ -213,6 +317,43 @@ class StoryHTTPTests(unittest.TestCase):
         repo.upsert_member(self.conn, self.actor, 'Viewer', 'viewer'); self.conn.commit()
         self.assertEqual(self.call(path, 'POST', body)[0], 409)
         self.assertEqual(self.call(f'/episodes/{self.ep}/asset-image-generations', 'POST', {})[0], 409)
+
+    def test_story_collisions_choice_traces_and_composed_adaptation(self):
+        idea = 'A delivery courier is secretly an immortal sage.'
+        proposal = self.ok(f'/episodes/{self.ep}/story-collisions', 'POST', {'sourceText': idea, 'mediumLens': 'manju', 'genreLens': 'comedy'})
+        self.assertEqual((len(proposal['candidates']), proposal['recentTraces']), (4, []))
+        for change in ({'mediumLens': 'film'}, {'genreLens': 'horror'}, {'sourceText': ''}):
+            self.assertEqual(self.call(f'/episodes/{self.ep}/story-collisions', 'POST', {'sourceText': idea} | change)[0], 422)
+        cards, path = proposal['candidates'], f'/episodes/{self.ep}/script-adaptations'
+        body = {'sourceText': idea, 'sourceMode': 'idea', 'targetScenes': 3, 'breakdownMode': 'auto', 'mediumLens': 'manju', 'genreLens': 'comedy'}
+        results = []
+        for focus in ('restraint', 'restraint', 'reversal'):
+            results.append(self.ok(path, 'POST', body | {'choiceTrace': {'focus': focus, 'keptLabels': [cards[0]['label']],
+                'uncheckedLabels': [cards[1]['label']], 'extraCondition': 'The courier never says their real name.'}}))
+        last = results[-1]
+        self.assertEqual([r['choiceTrace']['contrastDetected'] for r in results], [False, False, True])
+        self.assertTrue(last['choiceTrace']['traceId'].startswith('ctr_'))
+        self.assertEqual((last['mediumLens'], last['genreLens'], last['engine']), ('manju', 'comedy', 'deterministic'))
+        self.assertTrue(last['voiceAudit']['ok'])
+        script = last['script']['content']
+        self.assertIn('[Contrast]', script)
+        self.assertIn(cards[0]['label'], script)
+        self.assertNotIn(cards[1]['label'], script)
+        self.assertIn('The courier never says their real name.', script)
+        traces = self.ok(f'/episodes/{self.ep}/choice-traces')['items']
+        self.assertEqual([t['focus'] for t in traces], ['restraint', 'restraint', 'reversal'])
+        self.assertEqual(traces[-1]['uncheckedLabels'], [cards[1]['label']])
+        self.assertEqual(len(self.ok(f'/episodes/{self.ep}/story-collisions', 'POST', {'sourceText': idea})['recentTraces']), 3)
+        for change in ({'choiceTrace': {'focus': 'anger'}}, {'choiceTrace': {'keptLabels': 'all'}}, {'choiceTrace': []}, {'mediumLens': 'film'}):
+            self.assertEqual(self.call(path, 'POST', body | change)[0], 422)
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.ok(f'/episodes/{self.ep}/storyboards', 'POST', {})
+        plans = [s['previsPlan'] for s in self.ok(f'/episodes/{self.ep}/shots?limit=100')['items'] if s.get('sceneId')]
+        self.assertTrue(plans and {p['lens'] for p in plans} <= {50, 85})  # the script's Lens line reaches the storyboard
+        plain = self.ok(path, 'POST', {key: body[key] for key in ('sourceText', 'sourceMode', 'targetScenes', 'breakdownMode')})
+        self.assertEqual(set(plain), {'episodeId', 'script', 'sourceMode', 'breakdownMode', 'engine'})
+        self.assertEqual(plain['script']['content'], story.adapt_source_to_script(idea, 'idea', 3, story.STYLES[0]['name']))
+        self.assertEqual(len(self.ok(f'/episodes/{self.ep}/choice-traces')['items']), 3)
 
     def test_multibeat_readiness_variants_and_rebuild_preserves_media(self):
         content = 'Character: Mara @CAST-88 (silver hair, red coat)\nProp: Brass dial @PROP-88\n\nScene 01: Rooftop Rain\nEnvironment: @SET-88, moonlight through rain.\n\n@CAST-88:night enters.'

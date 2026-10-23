@@ -31,7 +31,9 @@ from project_docs.doc_schema import column_ids, doc_text, new_id, node_text, val
 from project_assistant import limb_worker as worker
 from project_assistant.table_edits import _cell, cell_value, validate_value
 from project_docs.story_adaptation import (adapt_source_to_script, source_mode, scene_shot_beats,
-    infer_shot_grammar, extract_asset_details, BREAKDOWN_MODES, asset_code, screenplay_markdown)
+    infer_shot_grammar, extract_asset_details, BREAKDOWN_MODES, asset_code, screenplay_markdown,
+    composition_lenses, choice_trace_input, compute_choice_contrast, propose_story_collisions,
+    audit_narrative_voice, script_medium_lens)
 
 BASE = "/aivideo/open/v1"
 STAGES = ["PROJECT", "EPISODE", "SCRIPT", "ASSETS", "SCENES", "STORYBOARD", "SHOTS", "FILM_EXPORT"]
@@ -192,6 +194,11 @@ def scenes(conn, ep):
     content = "\n\n".join(doc_text({"content": [node]}) for node in tab["doc"].get("content", []))
     return [{**item, "sceneId": f"sc_{ep['slug']}_{ep['episodeIndex']:02d}_S{i:02d}",
              "episodeId": ep["episodeId"], "sceneIndex": i} for i, item in enumerate(scene_sections(content), 1)]
+
+
+def choice_traces(conn, ep):
+    """P3 decision traces of one episode, oldest first."""
+    return sorted((t for t in records(conn, "choice_trace", ep["slug"]) if t["episodeId"] == ep["episodeId"]), key=lambda t: t["createdAt"])
 
 
 def episode_view(conn, ep):
@@ -475,6 +482,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     if ep.get("confirmedHash") != digest(script(conn, ep)) or not scenes(conn, ep):
         raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before building storyboards.")
     previous = shots(conn, ep)
+    medium = script_medium_lens(script(conn, ep))  # a composed script carries its Lens line
     plans = [(scene, scene_shot_beats(scene["content"], mode) or [scene["title"]]) for scene in scenes(conn, ep)
              if not only_scene or scene["sceneId"] == only_scene]
     if sum(len(beats) for _, beats in plans) > 200:
@@ -489,7 +497,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
             if index < len(matches) and not only_scene:
                 created.append(matches[index])
                 continue  # A normal build fills missing beats; existing director edits stay authoritative.
-            grammar = infer_shot_grammar(beat, index, len(beats))
+            grammar = infer_shot_grammar(beat, index, len(beats), medium)
             refs = scene_refs + [code for name, code in cast.items() if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", beat, re.I)]
             prompt = beat + " " + " ".join("@" + c for c in dict.fromkeys(refs) if c not in {asset_code(m[1]) for m in ASSET_RE.finditer(beat)})
             cells = {0: f"SC{scene['sceneIndex']:02d}-S{index + 1:02d}", 1: grammar["opticalRig"], 2: grammar["cameraMotion"], 3: prompt[:10000]}
@@ -1204,15 +1212,41 @@ def dispatch(conn, me, method, path, body, query, actions):
             if breakdown not in BREAKDOWN_MODES:
                 invalid("Unknown breakdownMode.")
             style = next((s["name"] for s in STYLES if s["stylePresetId"] == str(ep.get("settings", {}).get("stylePresetId", "88123"))), STYLES[0]["name"])
+            # Without a lens or choice trace the request is the SPEC_13 adaptation and its response is unchanged.
+            composed = any(body.get(key) is not None for key in ("mediumLens", "genreLens", "choiceTrace"))
+            trace = contrast = None
             try:
-                content = adapt_source_to_script(raw, mode, body.get("targetScenes", 3), style)
+                if composed:
+                    medium, genre = composition_lenses(body.get("mediumLens"), body.get("genreLens"))
+                    if body.get("choiceTrace") is not None:
+                        trace = choice_trace_input(body["choiceTrace"])
+                        contrast = compute_choice_contrast(choice_traces(conn, ep), trace["focus"])
+                    content = adapt_source_to_script(raw, mode, body.get("targetScenes", 3), style, medium, genre, trace, contrast)
+                else:
+                    content = adapt_source_to_script(raw, mode, body.get("targetScenes", 3), style)
             except ValueError as exc:
                 invalid(str(exc))
             ep["breakdownMode"] = breakdown
             ep.pop("extractedAssetCodes", None)
             set_script(conn, me, ep, content)
-            return {"episodeId": ep["episodeId"], "script": {"content": content}, "sourceMode": source_mode(raw, mode),
-                    "breakdownMode": breakdown, "engine": "deterministic"}
+            result = {"episodeId": ep["episodeId"], "script": {"content": content}, "sourceMode": source_mode(raw, mode),
+                      "breakdownMode": breakdown, "engine": "deterministic"}
+            if composed:
+                result |= {"mediumLens": medium, "genreLens": genre, "voiceAudit": audit_narrative_voice(content)}
+            if trace:
+                trace_id = "ctr_" + uuid.uuid4().hex
+                result["choiceTrace"] = store(conn, trace_id, "choice_trace", {
+                    "traceId": trace_id, "episodeId": ep["episodeId"], "mediumLens": medium, "genreLens": genre, **trace,
+                    "contrastDetected": contrast["contrastDetected"], "contrastCue": contrast["contrastCue"], "createdAt": now()}, slug, me.actor_id)
+            return result
+        if tail == "story-collisions" and method == "POST":
+            try:
+                proposal = propose_story_collisions(text(body, "sourceText", maximum=500000), body.get("mediumLens", "manju"), body.get("genreLens", "general"))
+            except ValueError as exc:
+                invalid(str(exc))
+            return {**proposal, "recentTraces": choice_traces(conn, ep)[-5:]}
+        if tail == "choice-traces" and method == "GET":
+            return page(choice_traces(conn, ep), query)
         if tail == "script/versions" and method == "GET":
             return page([{"versionId": str(r["revision"]), "scriptContent": doc_text(r["doc"])} for r in repo.revision_rows(conn, slug, tab_key=ep["tabKey"])], query)
         if tail == "script-refinements" and method == "POST":

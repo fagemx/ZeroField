@@ -8,7 +8,7 @@ import { episodeId, shotId, selectedTake, storyList, storyRequest, waitStoryTask
 import { normalizeStatus, statusLabel } from './format.js';
 import { ProposalRaceView } from './assistant/ProposalRaceView.jsx';
 import { allocationPath, escalationPath, allocationDispatchBody, approvedCompositionSource, allocationBlockerLabel, GRADE_ACTIVE, gradesActive, takeGrade } from './storyModel.js';
-import { sourceDraft, editStoryScreenplay, needsStoryAdaptation, adaptStoryDraft, buildStoryFromDraft, missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
+import { sourceDraft, editStoryScreenplay, needsStoryAdaptation, adaptStoryDraft, buildStoryFromDraft, storyComposition, missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
 import './story-workbench.css';
 import { Icon } from './Icon.jsx';
 
@@ -98,12 +98,22 @@ export function StoryImportModal({epId, writable, onClose, onDone}) {
   const [sourceMode, setSourceMode] = useState('script'), [targetScenes, setTargetScenes] = useState(3), [breakdownMode, setBreakdownMode] = useState('auto');
   const [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123');
   const [styles, setStyles] = useState([]), [error, setError] = useState(''), [loading, setLoading] = useState(true), [reading, setReading] = useState(false);
+  const [comp, setComp] = useState({medium:'', genre:'general', collisions:null, unchecked:[], focus:'overall', extra:''});
   const fileRead = useRef(false), mounted = useRef(true);
   const action = useStoryAction();
   const draft = drafts[sourceMode], isSource = sourceMode !== 'script';
   const disabled = action.busy || loading || reading || !writable;
+  const composition = isSource ? storyComposition(comp) : null;
   const updateDraft = update => setDrafts(current => ({...current, [sourceMode]:{...current[sourceMode], ...update}}));
-  const needsAdaptation = needsStoryAdaptation(sourceMode, draft, targetScenes);
+  const needsAdaptation = needsStoryAdaptation(sourceMode, draft, targetScenes, composition);
+  const changeComposition = patch => {
+    if (patch.medium === 'manju') setRatio('9:16');  // micro-drama is vertical by convention
+    setComp(current => ({...current, ...patch}));
+  };
+  const collide = () => action.run(async () => {
+    const result = await storyRequest(`/episodes/${epId}/story-collisions`, 'POST', {sourceText:draft.sourceText, mediumLens:comp.medium, genreLens:comp.genre});
+    setComp(current => ({...current, collisions:result, unchecked:[]}));
+  });
   useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
   useEffect(() => {
     let alive = true; setLoading(true); setError('');
@@ -123,8 +133,9 @@ export function StoryImportModal({epId, writable, onClose, onDone}) {
       <label className="modal-field">{t('story.sourceText')}<textarea rows={6} value={draft.sourceText} maxLength={500000} disabled={disabled} onChange={e => updateDraft({sourceText:e.target.value})}/></label>
       <p>{t('story.sourceDraftHelp')}</p>
       <label className="modal-field">{t('story.targetScenes')}<input type="number" min={1} max={12} step={1} value={targetScenes} disabled={disabled} onChange={e => setTargetScenes(Math.max(1, Math.min(12, Math.trunc(Number(e.target.value)) || 1)))}/></label>
+      <CompositionPanel value={comp} disabled={disabled} onChange={changeComposition} onCollide={draft.sourceText.trim() ? collide : null}/>
     </>}
-    <label className="modal-field">{t('story.script')}<textarea rows={13} value={draft.script} maxLength={500000} disabled={disabled} onChange={e => updateDraft(editStoryScreenplay(sourceMode, draft, e.target.value, targetScenes))}/></label>
+    <label className="modal-field">{t('story.script')}<textarea rows={13} value={draft.script} maxLength={500000} disabled={disabled} onChange={e => updateDraft(editStoryScreenplay(sourceMode, draft, e.target.value, targetScenes, composition))}/></label>
     {isSource && <p>{t(needsAdaptation && draft.adaptationKey ? 'story.sourceChangedHelp' : 'story.screenplayEditHelp')}</p>}
     <label className="modal-field">{t('story.uploadScript')}<input type="file" accept=".txt,.md,text/plain,text/markdown" disabled={disabled} onChange={async e => {
       const file = e.target.files?.[0]; e.target.value = ''; if (!file || fileRead.current || disabled) return;
@@ -142,8 +153,9 @@ export function StoryImportModal({epId, writable, onClose, onDone}) {
       if (fileRead.current) return;
       setError('');
       await storyRequest(`/episodes/${epId}/settings`, 'PUT', {aspectRatio:ratio, stylePresetId:style, breakdownMode});
-      updateDraft(await adaptStoryDraft({epId, sourceMode, draft, targetScenes, breakdownMode, request:storyRequest}));
+      updateDraft(await adaptStoryDraft({epId, sourceMode, draft, targetScenes, breakdownMode, composition, request:storyRequest}));
     })}>{t('story.adaptScript')}</button>}
+    {isSource && <CompositionReport report={draft.report}/>}
     <label className="modal-field">{t('story.breakdownMode')}<select value={breakdownMode} disabled={disabled} onChange={e => setBreakdownMode(e.target.value)}>{['auto','scene','cinematic'].map(mode => <option key={mode} value={mode}>{t('story.breakdownMode_'+mode)}</option>)}</select></label>
     <p>{t('story.breakdownHelp')}</p>
     <label className="modal-field">{t('story.aspectRatio')}<select value={ratio} disabled={disabled} onChange={e => setRatio(e.target.value)}>{['16:9','9:16','1:1','21:9'].map(r => <option key={r}>{r}</option>)}</select></label>
@@ -154,10 +166,50 @@ export function StoryImportModal({epId, writable, onClose, onDone}) {
     <button className="primary" disabled={disabled || !(draft.script.trim() || (isSource && draft.sourceText.trim()))} onClick={() => action.run(async wait => {
       if (fileRead.current) return;
       setError('');
-      await buildStoryFromDraft({epId, sourceMode, draft, targetScenes, breakdownMode,
+      await buildStoryFromDraft({epId, sourceMode, draft, targetScenes, breakdownMode, composition,
         settings:{aspectRatio:ratio, stylePresetId:style}, request:storyRequest, wait, onPrepared:updateDraft, onDone});
     })}>{t('story.confirmAndBuild')}</button>
   </SheetDialog>;
+}
+
+// SPEC_14 P5 lenses and the P3 choice trace: keep or strike collision cards, pick a focus, add one condition.
+// Off (no medium lens) keeps the classic adaptation and its request unchanged.
+export function CompositionPanel({value, disabled, onChange, onCollide}) {
+  useLocale();
+  const {medium, genre, collisions, unchecked, focus, extra} = value;
+  const reset = {collisions:null, unchecked:[]};
+  return <fieldset className="story-composition"><legend>{t('story.composition')}</legend>
+    <label className="modal-field">{t('story.mediumLens')}<select value={medium} disabled={disabled} onChange={e => onChange({medium:e.target.value, ...reset})}>
+      {['', 'manju', 'cinema', 'storybook'].map(m => <option key={m} value={m}>{t('story.mediumLens_' + (m || 'off'))}</option>)}</select></label>
+    {medium && <>
+      <label className="modal-field">{t('story.genreLens')}<select value={genre} disabled={disabled} onChange={e => onChange({genre:e.target.value, ...reset})}>
+        {['general', 'melodrama', 'xianxia', 'comedy', 'suspense'].map(g => <option key={g} value={g}>{t('story.genreLens_' + g)}</option>)}</select></label>
+      <button type="button" disabled={disabled || !onCollide} onClick={onCollide}>{t('story.collideConditions')}</button>
+      {collisions && <>
+        <p>{t('story.collisionHelp')}</p>
+        <ul className="story-collisions">{collisions.candidates.map(card => {
+          const struck = unchecked.includes(card.label);
+          return <li key={card.id} className={struck ? 'is-struck' : undefined}><label>
+            <input type="checkbox" checked={!struck} disabled={disabled} onChange={() => onChange({unchecked:struck ? unchecked.filter(label => label !== card.label) : [...unchecked, card.label]})}/>
+            <span><strong>{card.label}</strong> · {t('story.focus_' + card.focus)}<br/>{card.conditionA} × {card.conditionB}</span>
+          </label></li>;
+        })}</ul>
+        <label className="modal-field">{t('story.choiceFocus')}<select value={focus} disabled={disabled} onChange={e => onChange({focus:e.target.value})}>
+          {['overall', 'collision', 'restraint', 'reversal', 'negative_space'].map(f => <option key={f} value={f}>{t('story.focus_' + f)}</option>)}</select></label>
+        <label className="modal-field">{t('story.extraCondition')}<input value={extra} maxLength={500} disabled={disabled} placeholder={t('story.extraConditionHint')} onChange={e => onChange({extra:e.target.value})}/></label>
+      </>}
+    </>}
+  </fieldset>;
+}
+
+export function CompositionReport({report}) {
+  useLocale();
+  if (!report?.voiceAudit) return null;
+  const {voiceAudit, choiceTrace} = report;
+  return <p role="status" className="story-voice">
+    {voiceAudit.ok ? t('story.voiceClean', {score:voiceAudit.concreteScore}) : t('story.voiceFlagged', {labels:voiceAudit.violations.join(', ')})}
+    {choiceTrace?.contrastDetected && <><br/>{t('story.contrastDetected', {cue:choiceTrace.contrastCue})}</>}
+  </p>;
 }
 
 export function AssetGenerationState({group, error, onRefresh}) {

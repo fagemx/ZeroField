@@ -23,4 +23,10 @@ API additions under `/aivideo/open/v1`:
 - Episode details expose `missingAssetCodes`; shot details expose `readiness`, `dialogue` and `previsPlan`.
 - `POST /episodes/{episodeId}/asset-image-generations` returns `taskGroupId`, `taskIds` and `assetCodes`. Progress uses the existing `GET /task-groups/{taskGroupId}` route.
 
+SPEC_14 composition (all offline and deterministic; without these fields the adaptation and its response are unchanged):
+
+- `POST /episodes/{episodeId}/story-collisions` takes `sourceText`, `mediumLens` (`manju`, `cinema`, `storybook`) and `genreLens` (`general`, `melodrama`, `xianxia`, `comedy`, `suspense`). It returns `forms`, four `candidates` (`conditionA` × `conditionB`, `focus`, three-state `propSlice`) and the last five `recentTraces`.
+- `script-adaptations` also accepts `mediumLens`, `genreLens` and `choiceTrace` (`focus`, `keptLabels`, `uncheckedLabels`, `extraCondition`). Struck labels never reach the script; kept collisions and the extra condition are written into scenes 1–2. A choice trace is stored and returned as `choiceTrace` with `contrastDetected`/`contrastCue`, and every composed response carries `voiceAudit` (the no-label check). The script's first line, `Lens: <medium> × <genre>`, sets the storyboard's camera grammar.
+- `GET /episodes/{episodeId}/choice-traces` lists the episode's traces, oldest first.
+
 The backend must be restarted to load the new Python code. Frontend assets are served from `static/projects/` after `npm run build --prefix ui`.
