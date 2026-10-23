@@ -265,9 +265,14 @@ def apply(conn, me, slug, target):
                 "before": cell_value(op["base"]["content"][index], values),
                 "after": cell_value(op["node"]["content"][index], after_values)}
                for op in ops if op.get("base") for index in op.get("edited_cols", [])]
+    from project_docs.story_openapi import StoryError
     try:
         result, doc, revision, saved_at = service._run_ops(conn, me, slug, key, tab, ops, "table-" + new_id("s"), atomic=True,
                                                          delivery_mode=target.get("delivery_mode"))
+    except StoryError as exc:
+        # StoryError is a ValueError: preserve 409 before the legacy 400 handler.
+        if exc.code not in ('DRAMA_WRITING_LOCKED','DRAMA_WRITING_CONFLICT'): raise
+        return exc.status, {"error": str(exc), "code": exc.code}
     except ValueError as exc:
         return 400, {"error": str(exc), "dependencies": getattr(exc, "dependencies", [])}
     if result.conflicts:

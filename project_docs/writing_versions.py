@@ -263,6 +263,11 @@ def build_preview(conn, scope, body):
 
 
 def apply_preview(conn, scope, preview, selection):
+    with structure.deferred_reconciliation(conn,scope.slug,scope.episode['tabKey']):
+        return _apply_preview(conn,scope,preview,selection)
+
+
+def _apply_preview(conn, scope, preview, selection):
     from project_docs import writing_service as service
     before=store.resolve_ref(conn,scope,{'kind':'working'})
     proposed=preview['proposedChanges'];doc=copy.deepcopy(proposed['doc'])
@@ -301,7 +306,7 @@ def apply_preview(conn, scope, preview, selection):
         previous['scenes'].extend(copy.deepcopy(s) for s in proposed['sourceStructure'].get('scenes',[])
             if s['sceneKey'] in selected and s['sceneKey'] not in known)
     reconciled=structure.reconcile_structure(actual,previous)
-    structure.persist(conn,scope,reconciled)
+    structure.finalize_structure_change(conn,scope,before['structure'],reconciled)
     return {'docHash':store.doc_hash(actual),'beforeVersionId':version_id,'candidateBranchId':preview.get('candidateBranchId'),'savedAt':story.now()}
 
 
