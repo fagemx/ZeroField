@@ -106,6 +106,10 @@ class StoryPureTests(unittest.TestCase):
             self.assertEqual((proposal['genreLens'], proposal['mediumLens']), (genre, 'manju'))
             self.assertEqual(set(proposal['forms']), {'actors', 'prop', 'setting'})
         self.assertIn('incense', propose_story_collisions(self.COURIER, 'cinema', 'xianxia')['candidates'][0]['conditionA'])
+        for idea, place in (('Kael learns the beacon at the lighthouse is a countdown.', 'the lighthouse'),
+                            ('A lone astronomer discovers a brass dial in the old observatory.', 'the old observatory')):
+            self.assertEqual(propose_story_collisions(idea, 'manju', 'suspense')['forms']['setting'], place)
+        self.assertNotIn("'s own old the", str(propose_story_collisions(self.COURIER, 'manju', 'suspense')['candidates']))
         for lenses in (('film', 'general'), ('manju', 'horror'), ([], 'general')):
             with self.assertRaises(ValueError):
                 propose_story_collisions(self.COURIER, *lenses)

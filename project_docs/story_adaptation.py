@@ -14,7 +14,8 @@ HEADING = re.compile(r"^\s*(?:#{1,6}\s*)?(?:Scene\s*\d+|場景\s*[一二三四�
 DECLARATION = re.compile(r"^\s*(?:Character|角色|Prop|道具|Environment|Style|Lens|Premise|Constraint)\s*[:：]", re.I)
 LENS_LINE = re.compile(r"^\s*Lens\s*[:：]\s*(manju|cinema|storybook)\b", re.I | re.M)
 PROP = re.compile(r"\b(?:the|a|an)\s+((?:brass |analog |broken |old )?(?:dial|key|recorder|letter|book|phone|beacon|timer|map))\b", re.I)
-SETTING = re.compile(r"\b(?:in|at|inside)\s+(the\s+(?:[a-z]+\s+)?[a-z]+)\b", re.I)
+# One known adjective at most: a free second word swallows verbs ("at the lighthouse is a countdown").
+SETTING = re.compile(r"\b(?:in|at|inside)\s+(the\s+(?:old |new |abandoned |empty |dark |quiet |small |great )?[a-z]+)\b", re.I)
 IDEA_STAGES = [("The discovery", "establishes the space and discovers the conflict", "We need to understand what is happening."),
                ("The pressure", "approaches the obstacle as the stakes become clear", "There is still a choice."),
                ("The decision", "reaches for @PROP-01 and makes the decisive choice", "Then we act now.")]
@@ -249,7 +250,7 @@ GENRES = {
         "cards": [("collision", "Three steps left × dead end", "{p} in {a}'s hand shows three steps to the target", "{s} ends in a wall one step in front of {a}"),
                   ("restraint", "No looking back × matching footsteps", "{a} must not look back until the count ends", "{b}'s footsteps stop exactly where {a} stopped"),
                   ("reversal", "Same reading × an hour earlier", "{a} has checked {p} at every door and the reading never changed", "at this door {p} shows a time one hour earlier"),
-                  ("negative_space", "Empty corridor × old belonging", "{s} is empty", "{a}'s own old {p} lies open on the floor")]},
+                  ("negative_space", "Empty corridor × old belonging", "{s} is empty", "{p} from {a}'s past lies open on the floor")]},
 }
 OPPOSITE_FOCUS = {"restraint": "reversal", "reversal": "restraint", "collision": "negative_space", "negative_space": "collision"}
 # P4 contrasts film behaviour, never a motive.
@@ -511,7 +512,7 @@ def infer_shot_grammar(beat_text, beat_index, total_beats, medium_lens=None):
         lens, move = (85 if close else 35), ("crane" if beat_index == total_beats - 1 else "static")
     if medium_lens in MEDIUM_LENSES:
         rig = f"ARRI Alexa 65 / {lens}mm Prime" if beat_index == 0 else {35: "RED V-Raptor XL / 35mm T1.5", 50: "Panavision Millennium DXL2 / 50mm Prime", 85: "Sony Venice 2 / 85mm Macro"}[lens]
-    motion ={"track": "Handheld Tracking", "orbit": "Orbit 45°", "pushin": "Slow Dolly In", "crane": "Crane Up", "static": "Static Tripod"}[move]
+    motion = {"track": "Handheld Tracking", "orbit": "Orbit 45°", "pushin": "Slow Dolly In", "crane": "Crane Up", "static": "Static Tripod"}[move]
     return {"opticalRig": rig, "cameraMotion": motion, "dialogue": dialogue,
             "previsPlan": {"set": "parallax", "lens": lens, "move": move, "action": "walkin" if moving else "turnreach" if reaching else "stand",
                            "facing": "console" if reaching else "room", "seconds": 4}}
