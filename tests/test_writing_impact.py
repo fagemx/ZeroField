@@ -137,6 +137,11 @@ class ImpactHTTPTests(unittest.TestCase):
         _, row = story.find_row(self.conn, b['shotId'], 'shot')
         story.mutate_row(self.conn, self.me, self.slug, row['tabKey'], row['rid'], {3: 'Concurrent edit'})
         self.conn.commit()
+        readonly = impact.validate_preview(self.conn, self.scope(), p)
+        self.assertTrue(readonly['stale'])
+        self.assertIn('update:' + b['shotId'], readonly['staleActionIds'])
+        self.assertNotIn('update:' + a['shotId'], readonly['staleActionIds'])
+        self.conn.rollback()
         body = {'expectedPreviewVersion': 1, 'selection': {'actions': [{'actionId': 'update:' + s['shotId']} for s in selected]}}
         self.error('previews/' + p['previewId'] + '/apply', 'POST', body, 409)
         self.assertEqual(next(s for s in self.shots() if s['shotId'] == a['shotId']), original)
@@ -148,6 +153,8 @@ class ImpactHTTPTests(unittest.TestCase):
         repo.take_lock(self.conn, self.slug, b['tabKey'], b['rowId'], other)
         self.conn.commit()
         before = story.shot_meta(self.conn, b['shotId'])
+        self.assertEqual(impact.validate_preview(self.conn, self.scope(), p), {'stale': False, 'staleActionIds': []})
+        self.conn.rollback()
         error = self.error('previews/' + p['previewId'] + '/apply', 'POST', {'expectedPreviewVersion': 1, 'selection': {'actions': [{'actionId': 'keep:' + b['shotId']}]}}, 409)
         self.assertEqual(error['code'], 'DRAMA_WRITING_LOCKED')
         self.assertEqual(story.shot_meta(self.conn, b['shotId']), before)
@@ -199,6 +206,36 @@ class ImpactHTTPTests(unittest.TestCase):
         moved = self.writing('workspace')['structure']['scenes']
         self.assertEqual([s['sceneKey'] for s in moved], list(reversed(keys)))
         self.assertEqual(next(s for s in self.shots() if s['shotId'] == first[1]['shotId'])['storyOrigin']['beatKeys'], first[1]['storyOrigin']['beatKeys'])
+
+    def test_readonly_domain_hint_concurrent_add_and_current_authority(self):
+        self.prepare()
+        doc = copy.deepcopy(self.writing('workspace')['doc'])
+        doc['content'].extend(core.document('Scene 03: Fresh', 'A new beat.')['content'])
+        self.save_doc(doc)
+        self.ok('/episodes/' + self.ep + '/asset-extractions', 'POST', {})
+        one = self.preview(confirmBaseline=False)
+        two = self.preview(confirmBaseline=False)
+        action = next(a for a in one['allowedActions'] if a['kind'] == 'add_shot' and a['suggested']['description'] == 'A new beat.')
+        with self.conn.cursor() as cur:
+            cur.execute('SELECT count(*) FROM projectops.story_record WHERE project_slug=%s', (self.slug,)); count = cur.fetchone()[0]
+        self.assertEqual(impact.validate_preview(self.conn, self.scope(), one), {'stale': False, 'staleActionIds': []})
+        with self.conn.cursor() as cur:
+            cur.execute('SELECT count(*) FROM projectops.story_record WHERE project_slug=%s', (self.slug,)); self.assertEqual(cur.fetchone()[0], count)
+        self.conn.rollback()
+        self.apply(one, [{'actionId': action['actionId']}])
+        stale = impact.validate_preview(self.conn, self.scope(), two)
+        self.assertIn(action['actionId'], stale['staleActionIds'])
+        self.conn.rollback()
+        self.error('previews/' + two['previewId'] + '/apply', 'POST', {'expectedPreviewVersion': 1, 'selection': {'actions': [{'actionId': action['actionId']}]}}, 409)
+        # Display aggregate staleness does not expand apply's selected row scope.
+        fresh = next(a for a in two['allowedActions'] if a['kind'] == 'keep_shot')
+        self.apply(two, [{'actionId': fresh['actionId']}])
+        from project_assistant import store as assistant_store
+        assistant_store.set_member_enabled(self.conn, self.slug, self.actor, False, self.actor); self.conn.commit()
+        with self.assertRaises(story.StoryError) as err:
+            impact.validate_preview(self.conn, store.WritingScope(self.me, self.slug, story.episode(self.conn, self.ep), self.ep, self.actor, ''), one)
+        self.assertEqual(err.exception.status, 403)
+        self.conn.rollback()
 
     def test_scene_many_to_one_and_explicit_scene_only_split_stays_ambiguous(self):
         shots = self.prepare('scene', ('Scene 01: Arrival', '@CAST-01 walks.', '@CAST-01 stops.', 'Scene 02: Signal', '@CAST-01 waits.'))

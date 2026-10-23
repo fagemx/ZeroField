@@ -304,6 +304,26 @@ def _new_origin(target, version_id, old, units, fields, values):
     return origin
 
 
+def validate_preview(conn, scope, preview):
+    """Readonly domain freshness hint; never a whole-preview apply gate.
+
+    Core supplies shared-source/config staleness separately. A changed unselected
+    shot must not prevent still-fresh selected actions, and temporary locks are
+    checked only at apply time, not mislabeled as permanent source staleness.
+    """
+    store.reauthorize(conn, scope)
+    frozen = store.get_preview(conn, scope, preview['previewId'])
+    if frozen['kind'] != 'impact':
+        story.invalid('Impact freshness requires an impact preview.')
+    items = {s['shotId']: s for s in story.shots(conn, story.episode(conn, scope.episode_id))}
+    guards = {g['shotId']: g['rowHash'] for g in frozen['targetFingerprints'] if 'shotId' in g}
+    changed = {sid for sid, expected in guards.items() if sid not in items or _shot_guard(conn, items[sid]) != expected}
+    mapped = {key for shot in items.values() for key in shot.get('storyOrigin', {}).get('beatKeys', [])}
+    stale = [a['actionId'] for a in frozen['allowedActions'] if a.get('shotId') in changed
+             or (a['kind'] == 'add_shot' and bool(set(a['beatKeys']) & mapped))]
+    return {'stale': bool(stale), 'staleActionIds': stale}
+
+
 def apply_preview(conn, scope, preview, selection):
     store.reauthorize(conn, scope, write=True)
     store.lock_project(conn, scope)
@@ -334,6 +354,8 @@ def apply_preview(conn, scope, preview, selection):
         fields = choice.get('fields', action.get('fields', []))
         if action['kind'] == 'update_text' and (not fields or len(set(fields)) != len(fields)):
             story.invalid('Select unique nonempty derived fields.')
+        if action['kind'] == 'add_shot' and any(set(action['beatKeys']) & set(s.get('storyOrigin', {}).get('beatKeys', [])) for s in items.values()):
+            store.fail('PREVIEW_STALE', 'A selected new source beat was already bound to a shot.')
         selected.append((action, fields))
     if len(items) + sum(a['kind'] == 'add_shot' for a, _ in selected) > 200:
         store.fail('LIMIT_EXCEEDED', 'A storyboard supports at most 200 shots.', 413)
