@@ -1,0 +1,461 @@
+{
+  "schemaVersion": 1,
+  "spec": "SPEC_16",
+  "status": "ready_for_independent_readonly_review",
+  "overallUserAcceptance": "not claimed",
+  "recordedAtUtc": "2026-10-23T19:35:51.516317+00:00",
+  "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+  "baseCommit": "591c3e602f5f35aabd681dbdfedda93dedd0e2f9",
+  "documentationCloseout": "Later commit is documentation-only; its SHA is in the commit history and integration artifact, not a fabricated self-reference.",
+  "frozenInputs": {
+    "seed": "591c3e602f5f35aabd681dbdfedda93dedd0e2f9",
+    "core": "648fdd8adb72ff28520c9fd2ed3429af45868ae2",
+    "impact": "1daf103635faf14255f752a6628d21dc36fc16c1",
+    "tools": "61977a588da8c1ca5b28a520a274b0353b4cead8",
+    "authoring": "c07111bec9bd0b7b3a02264321ef076464b2d785",
+    "toolsUI": "16f926e2ba4bdac9e2c8cff7c21cc87da894fbd0"
+  },
+  "integrationAttribution": [
+    "Fast-forwarded final corrected core; merged impact helper/native hooks without replacing corrected core.",
+    "Proved tools inherited core files equal a0eaf20009b54fb6a92da7e374e2293ff7139d14. Imported only its two tools modules and four owned test files in611a89c; no duplicate core cherry-picks replayed.",
+    "Merged latest toolsUI16f926e, which already contains authoringc07111b; authoring not applied twice.",
+    "Integrator owns root composition/transport/locales/live alignment/identity/logout, narrow SheetSurface/IdentityBadge wiring, compiled static, real product harness and current docs. Component-owned writing modules/UI remain exact handoff contents."
+  ],
+  "commands": [
+    {
+      "command": "C:/Python313/python.exe -u -X utf8 ../integration-validation/run-backend.py",
+      "result": "passed",
+      "tests": 658,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "ranAtBackendTree": "8caecf6c7ec03ecfe890747606b60828380bbb89",
+      "seconds": 863.322,
+      "rerunAtFinalCandidate": false,
+      "attribution": "RAN against unchanged backend/test/config tree; READ/reused at final candidate under explicit parent approval. Included browser/resource cases were not kept on one static build throughout this long command; do not use them as frozen old-candidate browser evidence. Separate final-build browser/resource gates below supersede those cases."
+    },
+    {
+      "command": "npm test --prefix ui",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "tests": 243,
+      "failures": 0,
+      "skips": 0
+    },
+    {
+      "command": "npm run build --prefix ui",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "notes": "Production Vite build; generated index line endings normalized only. Main JS1828kB inherited large-chunk warning remains; no warning threshold increased."
+    },
+    {
+      "command": "C:/Python313/python.exe -u -X utf8 ../integration-validation/run-browser.py",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "tests": 6,
+      "failures": 0,
+      "skips": 0,
+      "seconds": 60.59,
+      "notes": "Actual root app, production assets, cookie authentication and isolated PostgreSQL. No injected component transport or fake backend results. Deliberately injected IDB put failure permits only its exact expected window error; all ordinary page errors fail."
+    },
+    {
+      "command": "C:/Python313/python.exe -u -X utf8 ../integration-validation/run-narrow-logout.py",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "tests": 1,
+      "failures": 0,
+      "skips": 0,
+      "notes": "Same real root logout preservation journey at768x720; Sign out remains visible, keyboard-addressable and uses the same guarded callback."
+    },
+    {
+      "command": "C:/Python313/python.exe -u -X utf8 ../integration-validation/extra-browser.py",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "notes": "Real canonical-heading/quoted-source promotion; original source retained. Bilingual private novel adaptation/adoption/text-only build/reload. Actual50k/500k search/compare timings."
+    },
+    {
+      "command": "C:/Python313/python.exe -u -X utf8 ../integration-validation/navigation-browser.py",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "notes": "Real episode-switch private note recovery and live-alignment reverse source navigation."
+    },
+    {
+      "command": "isolated build-env python -m build --wheel --no-isolation --outdir dist-4eed7ef wheel-source-4eed7ef",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "notes": "Built from exact git archive, excluding dirty docs; build frontend/wheel installed only in authorized isolated sibling venv after cache inspection."
+    },
+    {
+      "command": "installed-env python ../integration-validation/installed-check.py (SPEC16_WHEEL_SOURCE=exact final archive)",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "tests": 91,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "notes": "Actual installed modules outside checkout, real PG/auth HTTP/store/Office/print tests; interface-only unit substitutions remain identified by their original tests."
+    },
+    {
+      "command": "installed-env python ../integration-validation/wheel-identity.py and installed-static-smoke.py",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "pythonModuleByteIdentities": 96,
+      "declaredDataResourceByteIdentities": 67,
+      "packagePromptByteIdentities": 7,
+      "notes": "170 exact declared installed-file identities against frozen archive;12 migrations,17 cards,7 native schemas. Actual installed root HTML/compiled JS HTTP and writing workspace endpoint succeed."
+    },
+    {
+      "command": "C:/Python313/python.exe ../integration-validation/preservation-check.py",
+      "result": "passed",
+      "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+      "sourceFilesByteIdentical": 810,
+      "notes": "Original source HEAD/index/status unchanged; inherited protected files and handoff-owned component files exact."
+    },
+    {
+      "command": "C:/Python313/python.exe ../integration-validation/pg-lifecycle.py stop",
+      "result": "passed",
+      "notes": "Exact data directory/PID/start/SQL identity and zero other clients verified first; owned stop0/status3/PID absent/port refuses connection."
+    }
+  ],
+  "backendEquivalence": {
+    "sourceGate": "8caecf6c7ec03ecfe890747606b60828380bbb89",
+    "finalCandidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+    "paths": [
+      "project_docs",
+      "project_assistant",
+      "tests",
+      "server.py",
+      "run_studio.py",
+      "pyproject.toml",
+      "setup.py",
+      "db",
+      "workflows",
+      "samples"
+    ],
+    "trackedPathCount": 236,
+    "pathAndBlobManifestSha256": "e730a1702f69550b62ed54422bc157b252126fca644e49a2ccf4e5cc3d26cfac",
+    "identical": true,
+    "finalFullBackendCommand": "NOT RERUN; explicitly approved unchanged-tree reuse, not prose claiming a new execution"
+  },
+  "coverage": {
+    "W1": "Real mainline save→space switch→reload, private novel preservation, two-context offline/remote block conflict, scoped retry/CAS, tool note recovery, episode switch, identity/logout preservation and next-actor privacy. Faulted browser storage and failed server ACK block logout.",
+    "W2": "Stable structure/lineage/reorder/split/merge/remove/Undo and legacy reconciliation in real core tests; root plot-summary edit leaves docHash unchanged and reorder retains sceneKey; corrected imported boundaries persist.",
+    "W3": "Immutable named snapshots/coalesced revisions/locks/private branches, safe whole/selected adoption and baseline/extraction tested in real HTTP; root compare/adopt and corrected conversion disclosure exercised.",
+    "W4": "Actual per-shot origins, partial field updates, selected-only stale atomicity, old media/manual settings preservation, explicit bindings/keep/unresolved and native/M8 frozen provenance. Root applies fresh selected row despite changed unselected row, retains valid original video and reads live film/source projections. Media inference fixtures are synthetic, not model quality evidence.",
+    "W5": "Real asset-linked narrative bible/events/reference matrices with CAS/reorder/orphan checks; root private note form checkpoint/recovery and explicit shared save. Asset identity remains original authority; no Console memory bypass.",
+    "W6": "Bounded literal Unicode/code-point scoped search and frozen atomic replacement/protected tags/immutable refs in real backend tests; actual root selected replacement preserves @CAST reference.",
+    "W7": "Real safe raw imports and TXT/MD/DOCX bytes, Office reopen/round-trip, private reauthorization, corrected boundaries; root DOCX download/reimport and sandboxed clean print HTML. Browser Print/Save as PDF is honest; OS file saving not certified.",
+    "W8": "Recursive bilingual leaf/key/placeholder coverage with old assertions retained, focus/IME/persistence component tests, actual Ctrl+S root journeys,768/1280/1920 browser layouts, visible compact logout and real50k/500k timings. No full accessibility certification claimed."
+  },
+  "browserEvidenceBoundary": {
+    "rootActualBackend": true,
+    "productionBuild": true,
+    "actualPostgreSQL": true,
+    "externalBrowserNetwork": "blocked; loopback product requests only",
+    "viewports": [
+      "768x720",
+      "1280x720",
+      "1920x1080"
+    ],
+    "syntheticComponentEvidence": "npm tests also include existing injected loopback component fixtures; they are not substituted for the real root journeys above."
+  },
+  "performance": {
+    "inputAndSwitch": [
+      {
+        "codePoints": 50000,
+        "scenes": 100,
+        "inputToAnimationFrameP95ms": 15.5,
+        "switchMs": 70.40330000745598,
+        "samplesMs": [
+          15.5,
+          8.599999994039536,
+          7.9000000059604645,
+          7.200000002980232,
+          8,
+          14.200000002980232,
+          8.300000011920929,
+          8.099999994039536,
+          14.299999997019768,
+          6.899999991059303,
+          6.5,
+          7,
+          6.5999999940395355,
+          6.200000002980232,
+          12.699999988079071,
+          14,
+          6.299999997019768,
+          6.200000002980232,
+          8.5,
+          16.200000002980232
+        ]
+      },
+      {
+        "codePoints": 500000,
+        "scenes": 100,
+        "inputToAnimationFrameP95ms": 33,
+        "switchMs": 158.09950001130346,
+        "samplesMs": [
+          23.299999997019768,
+          30.200000002980232,
+          27.700000002980232,
+          33,
+          14.799999997019768,
+          36.79999999701977,
+          13.600000008940697,
+          30.100000008940697,
+          14.900000005960464,
+          25.69999998807907,
+          25.099999994039536,
+          13.400000005960464,
+          14.299999997019768,
+          30.100000008940697,
+          13.700000002980232,
+          13.799999997019768,
+          29.899999991059303,
+          13.700000002980232,
+          13.400000005960464,
+          13.400000005960464
+        ]
+      }
+    ],
+    "searchAndCompare": [
+      {
+        "journey": "actual root long script search and compare",
+        "codePoints": 50000,
+        "scenes": 100,
+        "searchClickToResponseMs": 537.4268000014126,
+        "compareClickToResponseMs": 929.6881999907782
+      },
+      {
+        "journey": "actual root long script search and compare",
+        "codePoints": 500000,
+        "scenes": 100,
+        "searchClickToResponseMs": 1095.2019000105793,
+        "compareClickToResponseMs": 1641.7828000121517
+      }
+    ],
+    "method": "Twenty real editor insertText→requestAnimationFrame samples per fixture; p95 is19th sorted sample. Search/compare click→actual HTTP response include preflight/network/server time.100 scenes;500k uses scene-loaded editor. Local engineering measurements, not a universal guarantee."
+  },
+  "wheel": {
+    "sha256": "6145d3c3d68ec20dfc4738164837bc59889bd299126580b235aa3267d125f649",
+    "builtFromCandidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9",
+    "installedOutsideCheckout": true,
+    "allDeclaredFilesByteIdentical": true,
+    "files": 170,
+    "limits": "Historical workflows/interim is not declared in inherited wheel packaging; no claim that every repository file is installed. No package rules were weakened or changed."
+  },
+  "ownedServices": {
+    "state": "STOPPED",
+    "verifiedAtUtc": "2026-10-23T19:31:54.533241+00:00",
+    "dataDirectory": "C:\\ai_project\\ZeroField-spec16-20261023-b1\\impact-test-pg",
+    "pid": 8044,
+    "postmasterStartEpoch": 1792779844,
+    "host": "127.0.0.1",
+    "port": 50367,
+    "database": "spec16_integration",
+    "otherClientBackends": 0,
+    "sqlIdentityVerified": true,
+    "stopReturnCode": 0,
+    "statusReturnCode": 3,
+    "pidfileAbsent": true,
+    "portRefusesConnection": true
+  },
+  "sourcePreservation": {
+    "verifiedAtUtc": "2026-10-23T19:31:57.587680+00:00",
+    "sourcePathsByteIdentical": 810,
+    "sourceHead": "e7b2ce734494b58915a711f99a78980989439e3b",
+    "sourceIndexSha256": "f7dea951f24d2d5d84509e7250b973989f68b6fec03b97a629ddae25ea8f5fb6",
+    "sourceStatusUnchanged": true,
+    "toolsOwnedFilesMatch61977a5": true,
+    "toolsInheritedCoreEqualsA0eaf20": true,
+    "correctedCoreFilesMatch648fdd8": true,
+    "protectedInheritedFilesMatchSeed": true,
+    "componentUiMatches16f926e": true,
+    "impactOwnedFilesMatch1daf103": true,
+    "authoringIncludedOnceViaToolsUiAncestry": true,
+    "candidate": "4eed7ef756d7f5de9d4cf6eed886718863c827c9"
+  },
+  "historicalEvidence": [
+    "Initial localized pg_ctl pipe capture hit UTF-8 decoding error and timeout; a fragile inline quoting attempt failed before execution. Observed owned PID39176 healthy on unintended default5432, then actual log recorded0xC0000142 shutdown; status3/PID absent/free ports positively reconciled. Correct explicit50367 detached/file-output startup returned0 asPID8044. No foreign PostgreSQL stopped.",
+    "Initial root browser attempts had exact-label/toggle/action-selection fixture errors. First integrated browser batch also overlapped full-suite DDL in one DB, causing a fixture deadlock; subsequent browser/installed tests used a second dedicated DB. No product assertion was converted into a skip.",
+    "Long-script setup initially exceeded200 block ops in a fixture; loaded bounded fixture through preserved legacy script API instead. Broad word search correctly hit1000-match safety bound; final timings use100 distinct heading matches, not a relaxed limit.",
+    "Initial installed inventory incorrectly required undeclared historical interim graphs, then copied fixture files under the wrong tests namespace. Corrected harness verifies all declared170 files and runs91 tests outside checkout; product packaging was not relaxed.",
+    "Frozen66a9817 browser run had four passing cases and one first-build fixture timeout because inherited showcase shots existed. Real API deletion in the test fixture corrected it; no product feature bypass.",
+    "f3abfbc completed preliminary backend657/frontend243/browser5/build/installed91; not relabeled as final evidence. Parent then approved real guarded logout;8caecf6 added6th browser case.",
+    "Quota injection initially returned its throwing function to Playwright, causing a harness evaluation error. Fixed the fault injector IIFE. The actual intentional native-IDB exception is explicitly allowed only in that fault test; safety checks remain asserted.",
+    "Manual768px screenshot review found inherited .me hiding the new logout. Final4eed7ef moves only the optional guarded button outside that hidden span. Backend/test/input tree unchanged; full backend reuse is explicitly attributed, while final frontend/browser/wheel gates were RAN again.",
+    "Existing HTTP response senders can log WinError10053 when browsers abandon in-flight responses during navigation. Logs are retained; unittest errors/failures remain zero. No claim of clean runtime stderr or production logging cleanup."
+  ],
+  "notRun": [
+    "Independent readonly security/product reviews and final user acceptance: pending parent/user.",
+    "Real paid/credentialed product-provider inference, GPU/model quality, real billing/remote cancellation or model downloads: not authorized or run.",
+    "Interactive OS print/Save-as-PDF completion and cross-device/offline-site guarantees: not run/not claimed. Clean browser print view was actually rendered.",
+    "Comprehensive assistive-technology/WCAG certification or all-hardware latency benchmark: not run.",
+    "Full Python command at final4eed7ef: not rerun; unchanged backend/test/config tree proof and parent-approved reuse above. Final browser and resource checks were independently rerun."
+  ],
+  "residualRisks": [
+    "Independent reviewers may identify issues; engineering readiness is not user acceptance.",
+    "Recovery is bounded on-device storage; abrupt termination before a successful checkpoint can lose the latest keystrokes. Lost auth/conflicts are fail-closed, not forced rebase.",
+    "DOCX is text conversion; browser print is not a generated PDF. Semantic adaptation/mapping/model quality are not guaranteed; ambiguous legacy origins remain unknown.",
+    "Main UI bundle remains large (~1.83MB minified); no chunk warning was suppressed. Long-script results are local fixture timings.",
+    "Intentional browser storage fault emits its expected injected window error; navigation/logout remain blocked until the current sequence is durably handled. Existing aborted-request server tracebacks remain a logging limitation."
+  ],
+  "artifacts": [
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/backend-8caecf6.log",
+      "sha256": "9f1653053768a31ce6117c4a3759b87686807e4c93d1166e240d266ce98c6d94",
+      "bytes": 138439
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/frontend-4eed7ef.log",
+      "sha256": "82835f0894b7d3e22402b9756e6439e91a3c40e997a3200705f0648f07b21a0f",
+      "bytes": 24268
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/responsive-build.log",
+      "sha256": "4fa3c2bb70a8811ee3a4604263f5e91fa5f159fe33766ddb96c51a8332dac2fe",
+      "bytes": 1103
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser-4eed7ef.log",
+      "sha256": "46b8c4e5dfeeb34a61c64e318d6c00abb0bd0aa65ca16f79b3e0c36a0e052ba4",
+      "bytes": 29161
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/narrow-logout-4eed7ef.log",
+      "sha256": "1d59e535a412091a7d48f6b5803ed2826203e163016d4963adcdd7351c0baba5",
+      "bytes": 288
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/extra-browser-4eed7ef.log",
+      "sha256": "3da4c4f7fc45fda6449167b263b5074000343ab4aed089aa1970bae38c9fa169",
+      "bytes": 9850
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/extra-browser-result.json",
+      "sha256": "4406f6502f481bd12fcd43638c869411ea7542e4111d025a3d47000ec6a135e4",
+      "bytes": 830
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/navigation-browser-4eed7ef.log",
+      "sha256": "614e6d290dc5b1a9cdce188a0ee9e1e63a58d38befe5b828d0034399b7d96118",
+      "bytes": 79
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/navigation-browser-result.json",
+      "sha256": "df5cd850a60dc101deb9132a0a6116f2627c9788ad81b6d3324f40815d931272",
+      "bytes": 174
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/wheel-build-4eed7ef.log",
+      "sha256": "da5f5f0abbcf72e06d0ca85659a33fdf4f0df4d94cc4196278cb22864b205fde",
+      "bytes": 38643
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/wheel-install-4eed7ef.log",
+      "sha256": "57b333a7402b184f72e8f9563246c3e74052d2b1b8d84c13ef42f32aba6bddd1",
+      "bytes": 592
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/installed-wheel-4eed7ef.log",
+      "sha256": "939b0718d29afaa03ba5176b10780ceacb3435000942afacdb56b47b740973e7",
+      "bytes": 15874
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/installed-static-4eed7ef.log",
+      "sha256": "5e59e140e66fa0d3a9f28a2850267c37fb43907021ab9b5935f843922c5a6664",
+      "bytes": 343
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/installed-static-result.json",
+      "sha256": "67391348d9ce792b9faff765f3a9aa1490b337dc5f3b86caa5ba5ab183d68ef2",
+      "bytes": 341
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/wheel-4eed7ef-identities.json",
+      "sha256": "f5e935cbd7013ceeb16f3eb8e6835f83b403b23a46050e1b2f23e173007db8f4",
+      "bytes": 20322
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/pg-final-lifecycle.json",
+      "sha256": "3d12bd5566fd255ffb4e439ecc1b14f4f616ae93a8246c3f6b0880dc032e3e22",
+      "bytes": 471
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/pg-stop.log",
+      "sha256": "1cf9ecb6d8b156f9df475bd9a7ad7c0f7bc1e12816bc0364aab88967d3191eed",
+      "bytes": 41
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/preservation-4eed7ef.log",
+      "sha256": "248f1c875217ccd3518e0e89f73ce65348f5f5240fbebb6adf5b8d0db914c84a",
+      "bytes": 647
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/preservation-result.json",
+      "sha256": "cd2786d5152549ec89d36b419cf4e953854d358c0efdc46d026956f2498a8567",
+      "bytes": 645
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/long-script-timings.json",
+      "sha256": "b665761c57ebff19218a812688f6982f05ca83dacf1b0fe32065f3e1ed19b0d1",
+      "bytes": 1283
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/timings-4eed7ef.json",
+      "sha256": "b665761c57ebff19218a812688f6982f05ca83dacf1b0fe32065f3e1ed19b0d1",
+      "bytes": 1283
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/materialization-real.png",
+      "sha256": "71260a36e74f6a83c609ed6b07d9db9af7fcd8ee2dec9252844088bf1bbcb1da",
+      "bytes": 182258
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/novel-zh-real.png",
+      "sha256": "72bb2a366f3c3acc74e5153a0bd1864c7db165029a78ec57631cb12879632312",
+      "bytes": 77160
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/source-reverse-and-episode.png",
+      "sha256": "b5a4866c845e6eaf63473d4cac23c66efe058817f7cab3f52faee1a26b7adc80",
+      "bytes": 83343
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/test_outline_notes_replace_office_and_print.png",
+      "sha256": "2a126cdf8179f6c47ef4b51e6a92fc4709a25c2cea16d07f5e57778f3d45f298",
+      "bytes": 123187
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/test_real_long_script_timings_and_text_only_build.png",
+      "sha256": "fb5c7094577b39a0dc4ef91c51bd9b3a15724336d7d4dfa6b56132924b8e47cb",
+      "bytes": 208982
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/test_root_logout_requires_exact_private_preservation_and_isolates_next_actor.png",
+      "sha256": "cb8823f4d0f5a1440ea34620902e4318965f5e1c933aa4d914d1f38f2eedb594",
+      "bytes": 128922
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/test_root_save_private_novel_compare_and_adopt.png",
+      "sha256": "425b9b17efa7217cfecff7970c26468ad98397882e900b5d58c58d57b71c48b0",
+      "bytes": 78934
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/test_scoped_impact_live_alignment_and_text_only_build.png",
+      "sha256": "9338acd4d09e92b80d8b2d4864f48b419ba6176c3cb502b7bfac342b8eda7a76",
+      "bytes": 339308
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/test_two_context_conflict_offline_and_actor_privacy.png",
+      "sha256": "1fc5419b7f75c17dd5c26c4064a38eade5e89e037e698e333af2c834f6e2556c",
+      "bytes": 68456
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/browser/narrow-logout/test_root_logout_requires_exact_private_preservation_and_isolates_next_actor.png",
+      "sha256": "cbee43be9ace11bd4364628e04a50cd2bca038ac8fad0acd445951b32b97101b",
+      "bytes": 81742
+    }
+  ],
+  "manualNotes": "Reviewed actual root wiring/transport/identity/locale/live-alignment seams and desktop/1280/768 screenshots. Final compact logout is visibly reachable. No pushes, deployment, model downloads, nested agents, external coding CLI, foreign process stops, original checkout/index writes, global defaults or promotion. Scratch services, credentials, build environments and raw logs stay outside product commits; only this evidence index/usage docs are committed."
+}
