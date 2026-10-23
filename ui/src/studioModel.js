@@ -23,9 +23,9 @@ export function benchGroup(label) {
 }
 // Shots for the 3D stage: every row of a slate that has a Previs column, with the slate text the stage starts from.
 // assetLookup (buildAssetLookup): the row's first @SET with an image becomes setAsset, the parallax set's far card.
-export function stageShots(parsed, rows = parsed.rows, assetLookup = null) {
+export function stageShots(parsed, rows = parsed.rows, assetLookup = null, shotInfo = {}) {
   const setAsset = row => {
-    for (const id of assetReferences(row).filter(ref => ref.startsWith('SET-'))) {
+    for (const id of assetReferences(row).filter(ref => /^(?:SET|LOC)-/.test(ref))) {
       const media = assetLookup && resolveAssetReference(id, assetLookup).media;
       if (media?.kind === 'image') return { id, url: media.url };
     }
@@ -45,6 +45,7 @@ export function stageShots(parsed, rows = parsed.rows, assetLookup = null) {
     keyframe: keyCol < 0 ? null : mediaOf(text(row, keyCol), 'image')?.url || null,
     slate: { motion: text(row, motion), rig: text(row, rig), action: text(row, action) },
     setAsset: setAsset(row),
+    previsPlan: shotInfo[row.rid]?.previsPlan || null,
   }));
 }
 // A shot's stages as bench columns and the links between them: one source fans out to every control pass,

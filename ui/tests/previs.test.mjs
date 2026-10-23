@@ -161,12 +161,20 @@ test('performance keys in a plan replace its canned action; each channel eases b
 
 test('the mannequin stands in the first mannequin\'s envelope (1.93 m, ±0.34 m) and bends into its poses', () => {
   const stage = buildStage(defaultPlan()), plan = {...defaultPlan(), action: 'stand'};
-  const actor = () => { stage.scene.updateMatrixWorld(true); const box = new THREE.Box3(); stage.scene.traverse(o => { if (o.isMesh && o.userData.actor) box.union(new THREE.Box3().setFromObject(o)); }); return box; };
+  const actor = () => { stage.scene.updateMatrixWorld(true); const box = new THREE.Box3(); stage.scene.traverse(o => { if (o.isMesh && o.userData.actor) { if (o.isSkinnedMesh) o.computeBoundingBox(); box.union(new THREE.Box3().setFromObject(o)); } }); return box; };
   stage.pose(0, plan);
   const rest = actor();
   assert.ok(Math.abs(rest.max.y - 1.93) < 0.01 && Math.abs(rest.min.y) < 0.005 && Math.abs(rest.min.x + 0.34) < 0.01, 'an adult standing on the floor');
-  let fingers = 0; stage.scene.traverse(o => { if (o.isMesh && o.userData.actor && o.geometry.type === 'LatheGeometry') fingers++; });
-  assert.ok(fingers > 30, 'hands with fingers, not balls (a 60% layout follow renders a ball as a fist)');
+  const fingerSegments = new Map();
+  stage.scene.traverse(o => { if (/^f[0-4]_[0-2][LR]$/.test(o.userData.kp || '')) fingerSegments.set(o.userData.kp, o); });
+  assert.equal(fingerSegments.size, 30, 'both hands retain five articulated three-segment fingers');
+  for (const [name, joint] of fingerSegments) {
+    const mesh = joint.children.find(o => o.isMesh && o.userData.actor && !o.userData.outline);
+    assert.ok(mesh, `${name} has visible finger geometry`);
+    mesh.geometry.computeBoundingBox();
+    const size = mesh.geometry.boundingBox.getSize(new THREE.Vector3());
+    assert.ok(size.y > Math.max(size.x, size.z) * 1.1, `${name} is an elongated finger segment, not a ball`);
+  }
   stage.pose(0, {...plan, acts: [{at: 0, body: 'kneel'}]});
   assert.ok(actor().max.y < rest.max.y - 0.3 && actor().min.y > -0.08, 'kneeling lowers him, no deeper than a shin into the floor');
   stage.pose(0, {...plan, acts: [{at: 0, body: 'lean'}]});
@@ -304,4 +312,127 @@ test('from behind the skeleton keeps a crown point, so looking up and slumping r
     return person.body[1][1] - person.crown[1];  // pixels the crown sits above the neck
   };
   assert.ok(crownAbove('lookup') > crownAbove('slump') + 30, 'a head thrown back puts the crown higher over the neck than a slump');
+});
+
+// SPEC_12: physical fixes and motion QA on the stage's own frames (an adult standing at the mark, clean to start with).
+const standing = () => buildStage(defaultPlan()).motion({...defaultPlan(), action: 'stand'}).base;
+const copy = frames => frames.map(fr => Object.fromEntries(Object.entries(fr).map(([j, v]) => [j, [...v]])));
+const group = (qa, kind, subject) => qa.groups.find(g => g.kind === kind && (!subject || g.subject === subject));
+
+test('fix.ground lifts an ankle in the floor back onto its sole; the QA names the frame, the cause and the fix', async () => {
+  const {applyMotionFixes, auditMotion, ANKLE_FLOOR_Y} = await import('../src/previs/plan.js');
+  const base = standing(), shin = dist(base[0].kneeL, base[0].ankleL);
+  assert.equal(auditMotion(base, {action: 'stand'}).ok, true, 'the standing mannequin is clean');
+  const sunk = copy(base);
+  for (let f = 40; f <= 50; f++) { const dy = sunk[f].ankleL[1] + 0.05; sunk[f].ankleL[1] -= dy; sunk[f].footL[1] -= dy; }  // ankle at y = -0.05
+  const qa = auditMotion(sunk, {action: 'stand'}), ground = group(qa, 'GROUND', 'ankleL');
+  assert.equal(qa.ok, false); assert.ok(qa.cost > 0);
+  assert.deepEqual([ground.count, ground.first, ground.last, ground.limit], [11, 40, 50, 0.005]);
+  assert.ok(ground.worst > 0.12 && ground.worstFrame >= 40 && ground.worstFrame <= 50);
+  assert.match(ground.cause, /action stand at f\d+/); assert.match(ground.hint, /^Enable fix\.ground or lift pelvis \+0\.12\dm at f\d+$/);
+  const {frames, fixed} = applyMotionFixes(sunk, {ground: true}, {action: 'stand'});
+  assert.equal(fixed.ground, 11);
+  assert.ok(frames.every(fr => fr.ankleL[1] >= ANKLE_FLOOR_Y - 1e-9), 'every ankle back on its sole');
+  assert.ok(frames.every(fr => Math.abs(dist(fr.kneeL, fr.ankleL) - shin) < 1e-6), 'the knee follows by IK: the shin keeps its length');
+  assert.equal(group(auditMotion(frames, {action: 'stand'}), 'GROUND'), undefined);
+  assert.equal(sunk[45].ankleL[1].toFixed(2), '-0.05', 'the input is not changed');
+  assert.deepEqual(applyMotionFixes(sunk, false).fixed, {ground: 0, slide: 0, penetration: 0, retime: 0});
+});
+
+test('fix.slide locks a planted foot that drifts, and Auto-Fix cleans the canned turn-and-reach pivoting feet', async () => {
+  const {applyMotionFixes, auditMotion} = await import('../src/previs/plan.js');
+  const drifting = copy(standing()), start = drifting[0].ankleR;
+  for (let f = 30; f < drifting.length; f++) {  // 4 cm out to the side over 30 frames while standing on it
+    const dx = 0.04 * Math.min(1, (f - 30) / 30);
+    drifting[f].ankleR[0] += dx; drifting[f].footR[0] += dx;
+  }
+  const slide = group(auditMotion(drifting, {action: 'stand'}), 'SLIDE', 'footR');
+  assert.ok(slide && Math.abs(slide.worst - 0.04) < 1e-3 && slide.limit === 0.015 && slide.worstFrame >= 60, JSON.stringify(slide));
+  assert.match(slide.hint, /^Enable fix\.slide to lock planted foot at f\d+$/);
+  const {frames, fixed} = applyMotionFixes(drifting, {slide: true}, {action: 'stand'});
+  assert.ok(fixed.slide >= 60);
+  assert.ok(frames.every(fr => Math.hypot(fr.ankleR[0] - start[0], fr.ankleR[2] - start[2]) < 1e-4), 'the ankle stays on its first spot');
+  assert.equal(auditMotion(frames, {action: 'stand'}).ok, true);
+  // The default shot turns him on the spot: both feet orbit the pelvis. Auto-Fix plants them and steps when it must.
+  const stage = buildStage(defaultPlan()), raw = stage.motion(defaultPlan()).qa;
+  assert.deepEqual(raw.groups.map(g => g.kind + ':' + g.subject).sort(), ['SLIDE:footL', 'SLIDE:footR']);
+  assert.match(group(raw, 'SLIDE').cause, /^action turnreach at f\d+$/);
+  const fixedShot = stage.motion({...defaultPlan(), fix: {ground: true, slide: true, penetration: true}});
+  assert.equal(fixedShot.qa.ok, true, JSON.stringify(fixedShot.qa.groups)); assert.ok(fixedShot.fixed.slide > 0);
+});
+
+test('fix.penetration pushes a hand pinned into the console back out over its top; the arm keeps its length', async () => {
+  const {applyMotionFixes, auditMotion, SCENE_BOXES} = await import('../src/previs/plan.js');
+  const plan = {...defaultPlan(), action: 'stand', pins: [{at: 0.5, joint: 'wristL', pos: [-0.25, 0.9, 0.66], radius: 0.08}]};
+  const {solved, base} = buildStage(plan).motion(plan), box = SCENE_BOXES.console;
+  const inBox = p => p.every((v, i) => v > box.min[i] + 0.01 && v < box.max[i] - 0.01);
+  assert.ok(inBox(solved[48].wristL), 'the pin puts the hand inside the console');
+  const qa = auditMotion(solved, plan), hit = group(qa, 'PENETRATION', 'wristL');
+  assert.ok(hit && hit.worstFrame >= 44 && hit.worstFrame <= 52 && hit.limit === 0.01, JSON.stringify(qa.groups));
+  assert.match(hit.cause, /pin wristL at f48 into console/); assert.match(hit.hint, /^Enable fix\.penetration or move hand \[0, \+0\.\d+, -0\.\d+\] m out of console at f\d+$/);
+  assert.equal(group(auditMotion(solved, {...plan, set: 'empty'}), 'PENETRATION'), undefined, 'no console on the empty stage');
+  const {frames, fixed} = applyMotionFixes(solved, {penetration: true}, plan);
+  assert.ok(fixed.penetration > 0);
+  for (const fr of frames) for (const j of ['wristL', 'elbowL']) assert.ok(!fr[j].every((v, i) => v > box.min[i] + 0.005 && v < box.max[i] - 0.005), `${j} out of the console`);
+  assert.ok(frames[48].wristL[1] >= box.max[1], 'out over the top, the nearest way out');
+  const upper = dist(base[0].shoulderL, base[0].elbowL), fore = dist(base[0].elbowL, base[0].wristL);
+  assert.ok(Math.abs(dist(frames[48].shoulderL, frames[48].elbowL) - upper) < 1e-6 && Math.abs(dist(frames[48].elbowL, frames[48].wristL) - fore) < 1e-6);
+  assert.equal(group(auditMotion(frames, plan), 'PENETRATION'), undefined);
+});
+
+test('motion QA without fixes reports ground, slide, penetration and reach with the worst frame, cause and hint', async () => {
+  const {auditMotion} = await import('../src/previs/plan.js');
+  // A kneel keyed in at 0.75: the right foot ends in the floor and both feet are dragged into the pose.
+  const kneel = {...defaultPlan(), acts: [{at: 0, body: 'stand'}, {at: 0.75, body: 'kneel'}]}, stage = buildStage(kneel);
+  const qa = stage.motion(kneel).qa, ground = group(qa, 'GROUND', 'ankleR');
+  assert.ok(ground && ground.worst > 0.03 && ground.last === 96); assert.equal(ground.cause, 'pose kneel at f72');
+  assert.ok(group(qa, 'SLIDE', 'footR'));
+  assert.equal(stage.motion({...kneel, fix: {}}).qa.ok, true, 'Auto-Fix clears both');
+  // The pelvis pinned on its mark, the right hand pinned far past the console: the lean cannot reach it.
+  const far = {...defaultPlan(), action: 'stand', pins: [{at: 0, joint: 'pelvis', pos: [0, 0.9927, 0], radius: 2}, {at: 0.5, joint: 'wristR', pos: [0.3, 1.2, 1.6]}]};
+  const reach = group(auditMotion(stage.motion(far).solved, far), 'REACH', 'wristR');
+  assert.ok(reach && reach.worstFrame === 48 && reach.worst > 0.2 && reach.limit === 0.015, JSON.stringify(reach));
+  assert.equal(reach.cause, 'pin wristR at f48');
+  assert.match(reach.hint, /^Move actor mark \[0\.\d+, 0\.\d+\] m toward target or add spine lean at f48$/);
+  assert.ok(qa.cost > 0 && qa.groups.length === new Set(qa.groups.map(g => g.kind + g.subject)).size, 'one group per kind and joint');
+});
+
+test('skills compile to keys, pins and checks; the search resolves an open walk length to a clean reach for the dial', async () => {
+  const {compileMotionSkills, searchMotionPlan, auditMotion, SCENE_ANCHORS} = await import('../src/previs/plan.js');
+  const plan = {...defaultPlan(), action: 'stand', use: [
+    {skill: 'walkTo', args: {from: [0, -1.6], to: [0, {range: [-1.4, 0.2]}]}},
+    {skill: 'reachGrip', args: {anchor: 'dial'}}]};
+  const {acts, pins, checks} = compileMotionSkills(plan);
+  assert.deepEqual([...new Set(acts.filter(a => a.body).map(a => a.body))], ['stand', 'walk']);
+  assert.deepEqual([...new Set(pins.map(p => p.joint))].sort(), ['ankleL', 'ankleR', 'wristL']);
+  assert.ok(checks.planted.length >= 4 && checks.planted.every(c => c.to >= c.from));
+  const [contact] = checks.contacts;
+  assert.deepEqual([contact.joint, contact.anchor, contact.pos, contact.to - contact.from], ['wristL', 'dial', SCENE_ANCHORS.dial.pos, 24]);
+  assert.ok(acts.every(a => a.at >= 0 && a.at <= 1) && pins.every(p => p.at >= 0 && p.at <= 1));
+  const stage = buildStage(plan), evaluate = p => stage.motion(p).qa;
+  assert.ok(evaluate(plan).cost > 0, 'the midpoint stops too far back: the body is dragged to the dial');
+  const found = searchMotionPlan(plan, evaluate);
+  assert.equal(found.cost, 0); assert.equal(found.qa.ok, true); assert.ok(found.evals >= 2 && found.evals <= 24);
+  const z = found.plan.use[0].args.to[1];
+  assert.ok(Number.isFinite(z) && z >= -1.4 && z <= 0.2, String(z));
+  assert.doesNotMatch(JSON.stringify(found.plan), /range/);
+  const {solved} = stage.motion(found.plan), F = solved.length, [grip] = compileMotionSkills(found.plan).checks.contacts;
+  for (let f = grip.from; f <= grip.to; f++) assert.ok(dist(solved[f].wristL, SCENE_ANCHORS.dial.pos) < 1e-6, `hand on the dial at f${f}`);
+  assert.ok(Math.abs(solved[F - 1].pelvis[2] - z) < 0.05 && Math.abs(solved[F - 1].pelvis[0]) < 0.05, 'the walk ends on the found spot');
+  const strides = checks.planted.filter(c => c.joint === 'ankleL').map(c => c.pos[2]);
+  assert.ok(strides.every((v, i) => i === 0 || v > strides[i - 1]), 'the left foot lands further on each step');
+  assert.equal(auditMotion(solved, found.plan).ok, true);
+  assert.equal(searchMotionPlan({...defaultPlan(), action: 'stand'}, () => 0).evals, 1, 'no open values: one evaluation');
+});
+
+test('fix.retime smooths a one-frame jump that the QA flags as a pop', async () => {
+  const {applyMotionFixes, auditMotion} = await import('../src/previs/plan.js');
+  const jump = copy(standing());
+  for (let f = 50; f < jump.length; f++) for (const j in jump[f]) jump[f][j][0] += 0.5;  // the whole body teleports 0.5 m
+  const pop = group(auditMotion(jump, {action: 'stand'}), 'POP');
+  assert.ok(pop && pop.worstFrame === 50 && Math.abs(pop.worst - 0.5) < 1e-3);
+  const {frames, fixed} = applyMotionFixes(jump, {ground: false, slide: false, penetration: false, retime: true});
+  assert.equal(fixed.retime, 4);
+  assert.equal(group(auditMotion(frames, {action: 'stand'}), 'POP'), undefined);
+  assert.deepEqual([frames[47].pelvis, frames[52].pelvis], [jump[47].pelvis, jump[52].pelvis], 'the window\'s ends are kept');
 });

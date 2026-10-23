@@ -1,0 +1,131 @@
+{
+  "spec": "SPEC_13_UPSTREAM_NOVEL_TO_STORYBOARD_AND_PREVIS_PIPELINE",
+  "verified_at": "2026-10-23T01:00:58.046319+08:00",
+  "workspace": "C:\\ai_project\\ZeroField",
+  "head": "c4a7e8ea1bf349f661f1ef8f9a0945af5ae149f2",
+  "status": "implemented_and_verified",
+  "working_tree": "Uncommitted changes; existing SPEC12 and concurrently developed 3D demo changes preserved. Full frontend count includes those sibling tests. No commits, pushes or deployment.",
+  "checks": [
+    {
+      "name": "story",
+      "command": "python -X utf8 -m pytest tests/test_story_openapi.py -q",
+      "exit_code": 0,
+      "stdout_stderr_log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\backend-story.log",
+      "log_sha256": "fb7cb85c7e2069f32ac547d3c78e645b88079c3831f5109251584e68b8fb863d",
+      "passed": 30,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 43.07
+    },
+    {
+      "name": "governance",
+      "command": "python -X utf8 -m pytest tests/test_agent_console_governance.py -q",
+      "exit_code": 0,
+      "stdout_stderr_log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\backend-governance.log",
+      "log_sha256": "b4af9c63757a6adaea13afe597fae12f8bab2e60367269a544f6d79a8c43fca2",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 8.91
+    },
+    {
+      "name": "frontend_required",
+      "command": "node --test ui/tests/story-ui.test.mjs ui/tests/studio-ui.test.mjs ui/tests/i18n.test.mjs",
+      "exit_code": 0,
+      "stdout_stderr_log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\frontend-required.log",
+      "log_sha256": "8084e52c8b6b29489ef59fe96fd468f094c5f9f8c8e188ae7ec098b4f1a34160",
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "frontend_all",
+      "command": "npm test --prefix ui",
+      "exit_code": 0,
+      "stdout_stderr_log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\frontend-all.log",
+      "log_sha256": "70a1b20dfc14a86bebdd8b5dff2a5d26b93b660afeff25e1119ce94c7fb238d6",
+      "passed": 191,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "build",
+      "command": "npm run build --prefix ui",
+      "exit_code": 0,
+      "stdout_stderr_log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\build.log",
+      "log_sha256": "c46d74d6ade33c78c777f06e6e4912911f0576a5909cf5b78bce57f1df5d7b57"
+    },
+    {
+      "name": "browser",
+      "command": "python -X utf8 ui/tests/storyImport.browser.py",
+      "exit_code": 0,
+      "stdout_stderr_log": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\browser.log",
+      "log_sha256": "8dad5ed317ca1ba3c54f01179ffc47225485852d5ca34051f6200220ab95406d",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 6.651
+    }
+  ],
+  "source_sha256": {
+    "project_docs/story_adaptation.py": "62c8645f742f4855955d6952c672441ea35c3c9e616435c7ade015725aa6fc9a",
+    "project_docs/story_openapi.py": "10d78bd841a48ebaf9fcf66de63ff9ca262011b1cac0a2df3d385daeea4bdc89",
+    "project_assistant/execution_governance.py": "0ac6af47c454ed1159c384e273e5908f5e8536974474af627c194e11015de603",
+    "tests/test_story_openapi.py": "0f6ac7d77231c73516619e48d594f8c3437fb8395e534dc39f00b040c6ec6b66",
+    "ui/src/StoryWorkbenchModals.jsx": "cc6eb0ca5d912262d576f74b74bb876216baf478c58f8942bfdd74fb17be8365",
+    "ui/src/storyImport.js": "7710739d36cafbea4126ced7179421812c09f00c3be51f9806ab7510efb9b707",
+    "ui/src/studioModel.js": "abc179664c0396fe4794cfb2ce2bbcce37494e079cf1b317209602470661f76d",
+    "ui/src/SheetWorkspace.jsx": "5771c24247c91b4fb5b8177032b79c22b4ffa5b62786ccc6dadc0a2badf7dcd8",
+    "ui/src/previs/storyPlan.js": "83e9b6cb3800a2cbcebdd92448cfcd977e8c60a61e86eed0b5a994a1ef2cee74",
+    "ui/src/previs/PrevisStage.jsx": "d5d2a8b285495209c888dfe09b205d656f89fdf05ab79be5edd2e116666bd774",
+    "ui/src/i18n/locales/en.json": "8eb5a82cef437787e931dc7db459a4d556b8b74a5a53d06efbb322be709440a7",
+    "ui/src/i18n/locales/zh-TW.json": "607847763af94bf09746b4bab605aff0e13858c72cfb3fdb629ab9233c3a1b01",
+    "ui/tests/story-ui.test.mjs": "907663c8e464b12bc85c5b1fc62975ed0a779484adabd19dce5c0d5f85953ed3",
+    "ui/tests/storyPrevis.test.mjs": "da7fa7b290dd50f4011e8c25d00c471d5c467b4364e6bb2dc0c5037e60875913",
+    "ui/tests/storyImport.browser.py": "6d90e5d3a8cdff7e9b7675fa6bcc930707fa9543e137a353d2287295ea67b1cb",
+    "ui/tests/previs.test.mjs": "ab9f7c1a376c7b90fd68635c265cbcc71caf027ceb07322b2571c72466642023",
+    "docs/SPEC13_UPSTREAM_PIPELINE.md": "90b9c109e62f4ac721ef5451b0265f1e674d018d1cd86b0847f646ecdf477c65",
+    "docs/STORY_WORKBENCH.md": "24b4b0c9fd9df69d672d940953e080bad9090b079304044d1efa4042f0ba1c2b",
+    "static/projects/index.html": "cd486b8364a7160c1ab04d0c99c58ea4d9c8ea86b208f29652151dc336f00d44"
+  },
+  "browser_evidence": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\browser\\idea-to-assets.png",
+  "database": {
+    "uri": "postgresql://postgres@127.0.0.1:65001/postgres",
+    "data": "C:\\Users\\fagem\\AppData\\Local\\Temp\\zerofield-spec13-6e9widj0\\data",
+    "ownership": "New dedicated temporary PG16 cluster for this work; no user production DB used.",
+    "stopped": true,
+    "stop_exit": 0,
+    "status_exit": 3,
+    "postmaster_pid_present": false
+  },
+  "review_fixes": [
+    "Preserve manually edited asset names/prompts/status and shot labels/rigs/motions/prompts on normal rebuild. Explicit scene rebuild refreshes narrative without discarding media.",
+    "Reserve explicit character codes before allocating implicit names; normalize Chinese speech suffixes and bind CJK action mentions.",
+    "Consume generated previsPlan in the actual Stage; preserve director drafts/rendered plans and support SET/LOC images.",
+    "Direct asset image tasks wait only before provider action for transient capacity, within deadlines/current authority; no provider action retries.",
+    "Preserve screenplay edits and adaptation results on extraction retry; restore pending asset task group on dialog reopen.",
+    "Update legacy mannequin assertions to inspect 30 articulated finger segments and refreshed SkinnedMesh bounds; no sibling product geometry/motion edits."
+  ],
+  "initial_failures_resolved": [
+    "A real five-asset browser batch exposed Agent concurrency limit reached; fixed bounded pre-dispatch capacity waiting and covered completion/cancel/deadline/no-retry.",
+    "Parallel database fixtures ran ensure_schema while other fixture teardown held locks; final PostgreSQL suites and browser were rerun strictly sequentially without code changes for the fixture scheduling issue.",
+    "Concurrent sibling 3D implementation invalidated legacy geometry-count/cached-bounds test assumptions; semantic equivalent assertions now pass."
+  ],
+  "limits": [
+    "Adaptation is deterministic and heuristic; no live LLM or GPU/provider model quality was exercised.",
+    "Browser image inference is a synthetic PNG upload; HTTP/DB tasks, admission, writeback and polling are real.",
+    "Existing referenced assets with manual descriptions or selected media are preserved; adaptation does not replace production identities.",
+    "Build succeeds with the existing large-chunk warning.",
+    "Backend restart is needed to load Python changes; compiled frontend assets were rebuilt."
+  ],
+  "edda": "Read and note commands attempted; workspace has no .edda, so no ledger initialized or written.",
+  "frontend_source_snapshot": {
+    "file_count": 93,
+    "tree_sha256": "144cf172702389c35f311656e76478a0535df35b1910da778ad01b629e00b265"
+  },
+  "compiled_asset_sha256": {
+    "static/projects/assets/index-Cs6U5DXC.css": "c324ebaef53e765bb6b7b0b48b54d4fe8d2c20abf372b97042920f2c371eb7b4",
+    "static/projects/assets/index-DUF5tF72.js": "9e9abf52abfda69c282c759642e16fe8a3baca639148bda21bd7b377fafd4824",
+    "static/projects/assets/PrevisStage-BNGJZ-PF.js": "ad512e8e8ff5231058e9efe0420b9f7b985a8fb35cd64053bae2a985197abd53"
+  }
+}

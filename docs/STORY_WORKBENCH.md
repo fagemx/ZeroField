@@ -1,5 +1,7 @@
 # Story Workbench (SPEC_06)
 
+> SPEC_13 extends Start Creating with offline idea/novel adaptation, multi-beat storyboard coverage, generated 3D Stage plans and episode-scoped missing asset generation. See [current upstream workflow and API additions](SPEC13_UPSTREAM_PIPELINE.md). The one-initial-shot description below records the original SPEC_06 baseline.
+
 > SPEC_07 extends this baseline with explicit production policy, graphless routing, allocation preflight and M8-reviewed media chains. Use the [current routing/allocation guide](SPEC07_STUDIO_ROUTING.md) and [separate verification receipt](spec07-verification.json); the historical SPEC_06 receipt is unchanged.
 
 The production header now exposes **Start Creating**, **My Projects**, **Asset Vault**, **Toolbox**, and **Open API**. English is the default; Traditional Chinese is selectable without changing saved IDs, prompts or card inputs.

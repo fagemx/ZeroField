@@ -11,6 +11,7 @@ import datetime as dt
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from types import SimpleNamespace
 from decimal import Decimal, ROUND_CEILING
@@ -21,6 +22,11 @@ from project_assistant import orchestrator as cp, privacy, store
 
 
 class AdmissionError(ValueError):
+    pass
+
+
+class CapacityUnavailable(AdmissionError):
+    """A queued media reservation is valid but cannot begin execution yet."""
     pass
 
 
@@ -505,12 +511,12 @@ def begin_operation(conn, ctx, request_key, *, card=None):
     active = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category=%s AND state IN ('dispatched','uncertain')", (ctx.slug,row['category']))
     per_agent = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('dispatched','uncertain')", (ctx.slug,row['agent_key']))
     if per_agent >= live(conn,ctx)['profile']['max_concurrency']:
-        raise AdmissionError('Agent concurrency limit reached.')
+        raise CapacityUnavailable('Agent concurrency limit reached.')
     if active >= settings['rate_limits']['max_concurrent_renders' if row['category']=='render' else 'max_concurrent_llm']:
-        raise AdmissionError('Execution concurrency limit reached.')
+        raise CapacityUnavailable('Execution concurrency limit reached.')
     recent = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state<>'queued' AND started_at>NOW()-INTERVAL '1 minute'", (ctx.slug,row['agent_key']))
     if recent >= settings['rate_limits']['rpm_per_agent']:
-        raise AdmissionError('Agent rate limit reached.')
+        raise CapacityUnavailable('Agent rate limit reached.')
     db.execute(conn, "UPDATE projectops.agent_usage_reservation SET state='dispatched',started_at=NOW(),lease_until=%s WHERE project_slug=%s AND request_key=%s", (cp.now()+dt.timedelta(minutes=30),ctx.slug,request_key))
 
 
@@ -559,7 +565,8 @@ def media_context(me, slug, *, agent_key='coordinator', **fields):
     return SimpleNamespace(connection_factory=http.open_connection, me=me, slug=slug, agent_key=agent_key, **fields)
 
 
-def run_operation(ctx, request_key, action, *, card=None, model_name='ffmpeg', fingerprint=None):
+def run_operation(ctx, request_key, action, *, card=None, model_name='ffmpeg', fingerprint=None,
+                  wait_for_capacity=False, capacity_timeout=300):
     """Actual media/prep boundary; caller's M8/Story authority_check stays live."""
     def begin(conn):
         if card is None:
@@ -573,7 +580,25 @@ def run_operation(ctx, request_key, action, *, card=None, model_name='ffmpeg', f
         else:
             begin_operation(conn, ctx, request_key, card=card)
     try:
-        transaction(ctx, begin)
+        wait_until = None
+        while True:
+            if wait_until is not None and time.monotonic() >= wait_until:
+                raise AdmissionError('Timed out waiting for execution capacity; no provider request was submitted.')
+            try:
+                transaction(ctx, begin)
+                break
+            except CapacityUnavailable:
+                if not wait_for_capacity:
+                    raise
+                # Only pre-dispatch admission is retried. The reservation remains queued;
+                # each attempt checks current authority, cancellation, quotes and budgets.
+                current_deadline = time.monotonic() + min(capacity_timeout, remaining(ctx, capacity_timeout))
+                wait_until = current_deadline if wait_until is None else min(wait_until, current_deadline)
+                left = wait_until - time.monotonic()
+                if left <= 0:
+                    raise AdmissionError('Timed out waiting for execution capacity; no provider request was submitted.') from None
+                ctx.operation_deadline_at = None
+                time.sleep(min(.25, left))
     except Exception:
         transaction(ctx, lambda conn: release_unstarted(conn, ctx.slug, [request_key]))
         ctx.operation_deadline_at = None

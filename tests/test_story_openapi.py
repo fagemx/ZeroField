@@ -15,6 +15,76 @@ import test_product_http as product_fixture
 
 
 class StoryPureTests(unittest.TestCase):
+    def test_offline_adaptation_modes_and_preserved_source(self):
+        idea = story.adapt_source_to_script('A lone astronomer discovers a brass dial counting down.', mode='idea')
+        self.assertEqual(idea, story.adapt_source_to_script('A lone astronomer discovers a brass dial counting down.', mode='idea'))
+        self.assertEqual(len(story.scene_sections(idea)), 3)
+        for tag in ('@CAST-01', '@CAST-02', '@SET-03', '@PROP-01'):
+            self.assertIn(tag, idea)
+        novel = 'Mira entered the station. "The signal is back."\n\nEvan replied, "Then we must leave."\n\nLater, Mira turned toward the brass dial.'
+        adapted = story.adapt_source_to_script(novel, mode='novel')
+        self.assertEqual(len(story.scene_sections(adapted)), 3)
+        self.assertIn('Character: Mira', adapted)
+        self.assertIn('Character: Evan', adapted)
+        self.assertIn('@CAST-01: "The signal is back."', adapted)
+        self.assertIn('@CAST-02: "Then we must leave."', adapted)
+        self.assertIn('## Scene 01: INT. STATION - NIGHT', story.adapt_source_to_script('INT. STATION - NIGHT\nMIRA: "Stay."', 'script'))
+        chinese = story.adapt_source_to_script('小明說：「快走！」\n\n小美回答：「等等！」\n\n小明走進房間。小美轉身關門。', 'novel')
+        self.assertEqual(chinese.count('Character:'), 2)
+        self.assertIn('Character: 小明 @CAST-01', chinese)
+        self.assertIn('Character: 小美 @CAST-02', chinese)
+        self.assertIn('@CAST-01 走進房間', chinese)
+        self.assertIn('@CAST-02 轉身關門', chinese)
+        for kwargs in ({'mode': 'unknown'}, {'mode': []}, {'target_scenes': 0}, {'target_scenes': 13}, {'target_scenes': True}, {'target_scenes': '3'}):
+            with self.assertRaises(ValueError):
+                story.adapt_source_to_script('A story.', **kwargs)
+        for source in ('', ' ', None, 'x' * 500001):
+            with self.assertRaises(ValueError):
+                story.adapt_source_to_script(source)
+
+    def test_character_code_allocation_and_rich_asset_descriptions(self):
+        from project_docs.story_adaptation import extract_asset_details, allocated_characters
+        source = 'Character: Mara @CAST-02 (silver hair)\nCharacter: Evan (green coat)\nMARA: "Wait."\nProp: Brass dial @PROP-07\n\nScene 01: Rooftop Rain\nEnvironment: @SET-07, moonlight through rain.\n@CAST-02:night approaches. @CAST-02#injured (torn sleeve) turns.'
+        people = allocated_characters(source)
+        self.assertEqual([(name, code) for name, _, code in people], [('Mara', 'CAST-02'), ('Evan', 'CAST-01')])
+        details = extract_asset_details(source, story.scene_sections(source))
+        self.assertEqual(details['CAST-02']['name'], 'Mara')
+        self.assertIn('silver hair', details['CAST-02']['prompt'])
+        self.assertEqual(details['CAST-02:NIGHT']['kind'], 'OUTFIT')
+        self.assertIn('torn sleeve', details['CAST-02:INJURED']['prompt'])
+        self.assertIn('foreground/midground/background', details['SET-07']['prompt'])
+        self.assertIn('moonlight', details['SET-07']['prompt'])
+        self.assertEqual(details['PROP-07']['name'], 'Brass dial')
+        adapted = story.adapt_source_to_script('Character: Mara @CAST-07 (silver hair)\nA secret is discovered.', 'idea')
+        self.assertIn('Shot 1: @CAST-07', adapted)
+        self.assertIn('Shot 2: @CAST-01:', adapted)
+        appearance = story.adapt_source_to_script('Mara (silver hair, dark coat) entered the room. "Wait."\n\nEvan replied, "Stay."', 'novel')
+        self.assertIn('Character: Mara @CAST-01 (silver hair, dark coat)', appearance)
+
+    def test_shot_beats_compatibility_dialogue_and_grammar(self):
+        for mode in ('auto', 'scene', 'cinematic'):
+            self.assertEqual(story.scene_shot_beats('@CAST-01 walks past @PROP-01.', mode), ['@CAST-01 walks past @PROP-01.'])
+        self.assertEqual(len(story.scene_shot_beats('@CAST-01 walks across\nthe room.', 'auto')), 1)
+        self.assertEqual(len(story.scene_shot_beats('@CAST-01 walks.', 'cinematic_multi')), 2)
+        raw = '@CAST-01 enters.\n\n@CAST-02: "We are out of time."\n\nClose-up of tearful eyes.'
+        beats = story.scene_shot_beats(raw)
+        self.assertEqual(len(beats), 3)
+        self.assertEqual(len(story.scene_shot_beats(raw, 'scene')), 1)
+        self.assertEqual(len(story.scene_shot_beats('@CAST-01 enters. @CAST-01 stops. @CAST-01 turns.', 'cinematic')), 3)
+        self.assertEqual(story.scene_shot_beats('@CAST-01 enters. @CAST-01: "Wait. Stay here." @CAST-01 turns.', 'cinematic'),
+                         ['@CAST-01 enters.', '@CAST-01: "Wait. Stay here."', '@CAST-01 turns.'])
+        grammar = [story.infer_shot_grammar(b, i, len(beats)) for i, b in enumerate(beats)]
+        self.assertIn('ARRI Alexa', grammar[0]['opticalRig'])
+        self.assertEqual([g['previsPlan']['lens'] for g in grammar], [35, 50, 85])
+        self.assertEqual(grammar[0]['previsPlan']['action'], 'walkin')
+        self.assertEqual(grammar[1]['dialogue'][0]['speaker'], 'CAST-02')
+        self.assertEqual(grammar[1]['dialogue'][0]['line'], 'We are out of time.')
+        self.assertGreater(grammar[1]['dialogue'][0]['estimatedSeconds'], 0)
+        self.assertEqual(grammar[2]['cameraMotion'], 'Crane Up')
+        self.assertEqual(story.infer_shot_grammar('MARA: We should leave.', 1, 2)['dialogue'][0]['line'], 'We should leave.')
+        from project_docs.story_adaptation import character_details
+        self.assertEqual(character_details('MARA: We should leave.\nEnvironment: Station\nProp: Key'), [('MARA', '', None)])
+
     def test_pagination_and_scene_parser(self):
         result = story.page(list(range(6)), {"limit": "2"})
         self.assertEqual(result["items"], [0, 1])
@@ -117,6 +187,233 @@ class StoryHTTPTests(unittest.TestCase):
         self.ok(f"/episodes/{self.ep}/asset-extractions", "POST", {})
         self.ok(f"/episodes/{self.ep}/storyboards", "POST", {})
         return [s for s in self.ok(f"/episodes/{self.ep}/shots")["items"] if s['tabKey'] == 'cinema-studio' and s.get('sceneId')]
+
+    def test_adaptation_endpoint_is_offline_idempotent_and_validated(self):
+        from project_assistant import providers
+        path = f'/episodes/{self.ep}/script-adaptations'
+        body = {'sourceText': 'A lone astronomer discovers a brass dial.', 'sourceMode': 'idea', 'targetScenes': 3, 'breakdownMode': 'cinematic'}
+        with patch.dict(os.environ, {'OPENBENCH_MODEL': 'must-not-call', 'OPENBENCH_API_BASE': 'https://example.invalid'}), patch.object(providers, 'run_openai_compat_turn', side_effect=AssertionError('Offline adaptation must not call a provider')):
+            result = self.ok(path, 'POST', body, {'Idempotency-Key': 'adapt-once'})
+            self.assertEqual(result, self.ok(path, 'POST', body, {'Idempotency-Key': 'adapt-once'}))
+        self.assertEqual(result['engine'], 'deterministic')
+        self.assertIn('## Scene 03', result['script']['content'])
+        self.assertEqual(self.ok('/episodes/' + self.ep)['breakdownMode'], 'cinematic')
+        self.assertEqual(self.call(path, 'POST', {**body, 'targetScenes': 2}, {'Idempotency-Key': 'adapt-once'})[0], 409)
+        for change in ({'sourceText': ''}, {'sourceText': []}, {'sourceMode': 'remote'}, {'targetScenes': True}, {'targetScenes': 13}, {'breakdownMode': 'bad'}):
+            self.assertEqual(self.call(path, 'POST', body | change)[0], 422)
+        self.assertEqual(self.request(story.BASE + path, method='POST', data=body, authenticated=False)[0], 401)
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.ok(f'/episodes/{self.ep}/storyboards', 'POST', {})
+        generated = [s for s in self.ok(f'/episodes/{self.ep}/shots?limit=100')['items'] if s.get('sceneId')]
+        self.assertGreaterEqual(len(generated), 9)
+        self.assertTrue(all(s.get('previsPlan') for s in generated))
+        repo.upsert_member(self.conn, self.actor, 'Viewer', 'viewer'); self.conn.commit()
+        self.assertEqual(self.call(path, 'POST', body)[0], 409)
+        self.assertEqual(self.call(f'/episodes/{self.ep}/asset-image-generations', 'POST', {})[0], 409)
+
+    def test_multibeat_readiness_variants_and_rebuild_preserves_media(self):
+        content = 'Character: Mara @CAST-88 (silver hair, red coat)\nProp: Brass dial @PROP-88\n\nScene 01: Rooftop Rain\nEnvironment: @SET-88, moonlight through rain.\n\n@CAST-88:night enters.'
+        self.ok(f'/episodes/{self.ep}/script', 'PUT', {'scriptContent': content})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.assertIn('CAST-88:NIGHT', self.ok('/episodes/' + self.ep)['missingAssetCodes'])
+        self.ok(f'/episodes/{self.ep}/storyboards', 'POST', {})
+        original = next(s for s in self.ok(f'/episodes/{self.ep}/shots')['items'] if s.get('sceneId'))
+        self.assertEqual(original['readiness']['missingAssets'], ['CAST-88:NIGHT', 'SET-88'])
+        self.assertFalse(original['readiness']['ready'])
+        self.assertFalse(original['readiness']['hasPrevis'])
+        base = next(a for a in story.assets(self.conn, story.episode(self.conn, self.ep)) if a['assetCode'] == 'CAST-88')
+        url = f'/projects/api/{self.slug}/assets/pa_' + 'a' * 32
+        story.mutate_row(self.conn, self.me, self.slug, 'soul-cast', base['rowId'], {3: f'![Image]({url})'})
+        story.mutate_row(self.conn, self.me, self.slug, 'cinema-studio', original['rowId'], {8: f'[Previs]({url})'})
+        self.conn.commit()
+        ready = self.ok('/shots/' + original['shotId'])
+        self.assertIn('CAST-88:NIGHT', ready['readiness']['missingAssets'])
+        self.assertTrue(ready['readiness']['ready'])
+        self.assertTrue(ready['readiness']['hasPrevis'])
+        story.mutate_row(self.conn, self.me, self.slug, 'cinema-studio', original['rowId'], {4: f'![Image]({url})', 8: ''})
+        self.conn.commit()
+        keyframe_ready = self.ok('/shots/' + original['shotId'])
+        self.assertTrue(keyframe_ready['readiness']['ready'])
+        self.assertFalse(keyframe_ready['readiness']['hasPrevis'])
+        story.mutate_row(self.conn, self.me, self.slug, 'cinema-studio', original['rowId'], {8: f'[Previs]({url})'})
+        self.conn.commit()
+        scene_id = original['sceneId']
+        beats = '@CAST-88:night enters.\n\n@CAST-88:night: "Stay here."\n\nClose-up of @CAST-88:night eyes.'
+        self.ok('/scenes/' + scene_id, 'PATCH', {'content': beats})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.ok('/scenes/' + scene_id + '/shot-rebuilds', 'POST', {})
+        rebuilt = [s for s in self.ok(f'/episodes/{self.ep}/shots')['items'] if s.get('sceneId') == scene_id]
+        self.assertEqual([s['shotIndex'] for s in rebuilt], ['SC01-S01', 'SC01-S02', 'SC01-S03'])
+        self.assertEqual(rebuilt[0]['shotId'], original['shotId'])
+        self.assertTrue(rebuilt[0]['readiness']['hasPrevis'])
+        self.assertTrue(rebuilt[1]['readiness']['hasDialogue'])
+        self.assertEqual([s['previsPlan']['lens'] for s in rebuilt], [35, 50, 85])
+        self.assertEqual(self.call(f'/episodes/{self.ep}/storyboards', 'POST', {'breakdownMode': 'invalid'})[0], 422)
+        self.ok('/scenes/' + scene_id, 'PATCH', {'content': '\n\n'.join('A new action.' for _ in range(201))})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.assertEqual(self.call(f'/episodes/{self.ep}/storyboards', 'POST', {})[0], 422)
+        self.assertEqual(len([s for s in self.ok(f'/episodes/{self.ep}/shots')['items'] if s.get('sceneId') == scene_id]), 3)
+
+    def test_missing_asset_batch_defaults_scope_accounting_and_atomic_failure(self):
+        from project_assistant import execution_governance as governance
+        self.prepare()
+        ep = story.episode(self.conn, self.ep)
+        missing, known = story.missing_episode_assets(self.conn, ep)
+        self.assertEqual(set(missing), {'CAST-01', 'SET-01', 'SET-02'})
+        path = f'/episodes/{self.ep}/asset-image-generations'
+        before = len(story.records(self.conn, 'task', owner=self.actor))
+        original_prepare = governance.prepare_operation
+        calls = []
+        def reject_second(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 2:
+                raise governance.AdmissionError('Test budget exhausted')
+            return original_prepare(*args, **kwargs)
+        with patch.object(story._POOL, 'submit') as submit, patch.object(governance, 'prepare_operation', side_effect=reject_second):
+            self.assertEqual(self.call(path, 'POST', {})[0], 409)
+            submit.assert_not_called()
+        self.assertEqual(len(story.records(self.conn, 'task', owner=self.actor)), before)
+        with patch.object(story._POOL, 'submit') as submit:
+            group = self.ok(path, 'POST', {}, {'Idempotency-Key': 'assets-once'})
+            self.assertEqual(group, self.ok(path, 'POST', {}, {'Idempotency-Key': 'assets-once'}))
+            self.assertEqual(set(group['assetCodes']), set(missing))
+            self.assertEqual(submit.call_count, 3)
+        for task_id in group['taskIds']:
+            task = story.record(self.conn, task_id)
+            self.assertEqual(task['_job']['card']['card_id'], 'flux-soul-cast')
+            self.assertEqual(task['_job']['episodeId'], self.ep)
+            self.assertTrue(task['_job']['_accounting_keys'])
+            self.ok('/tasks/' + task_id + '/cancellations', 'POST', {})
+        for code in missing:
+            url = f'/projects/api/{self.slug}/assets/pa_' + 'a' * 32
+            story.mutate_row(self.conn, self.me, self.slug, 'soul-cast', known[code]['rowId'], {3: f'![Image]({url})'})
+        self.conn.commit()
+        self.assertEqual(self.ok(path, 'POST', {})['taskIds'], [])
+        self.assertEqual(self.ok('/episodes/' + self.ep)['missingAssetCodes'], [])
+
+    def test_extraction_preserves_manual_drafts_and_settings_select_density(self):
+        source = 'Character: Mara @CAST-88 (silver hair)\n\nScene 01: Station\n@CAST-88 enters. @CAST-88 turns.'
+        self.ok(f'/episodes/{self.ep}/script', 'PUT', {'scriptContent': source})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        asset = next(a for a in self.ok(f'/episodes/{self.ep}/assets')['items'] if a['assetCode'] == 'CAST-88')
+        self.ok('/assets/' + asset['assetId'], 'PATCH', {'name': 'Director Mara', 'prompt': 'Custom blue coat and cropped hair'})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.assertEqual(self.ok('/assets/' + asset['assetId'])['prompt'], 'Custom blue coat and cropped hair')
+        self.assertEqual(self.ok('/assets/' + asset['assetId'])['name'], 'Director Mara')
+        self.ok('/assets/' + asset['assetId'], 'PATCH', {'name': 'Director Mara', 'prompt': 'Director Mara'})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.assertEqual(self.ok('/assets/' + asset['assetId'])['prompt'], 'Director Mara')
+        self.assertEqual(self.ok('/assets/' + asset['assetId'])['name'], 'Director Mara')
+        self.ok(f'/episodes/{self.ep}/settings', 'PUT', {'breakdownMode': 'cinematic'})
+        self.ok(f'/episodes/{self.ep}/storyboards', 'POST', {})
+        generated = [s for s in self.ok(f'/episodes/{self.ep}/shots')['items'] if s.get('sceneId')]
+        self.assertEqual(len(generated), 2)
+        self.assertEqual(self.call(f'/episodes/{self.ep}/settings', 'PUT', {'breakdownMode': 'unknown'})[0], 422)
+
+    def test_storyboard_build_preserves_director_edits_and_only_appends_missing_beats(self):
+        original = self.prepare()[0]
+        edits = {'shotIndex': 'DIRECTOR-42', 'opticalRig': 'Director 50mm lens', 'cameraMotion': 'Director locked camera', 'description': 'A hand-edited prompt @CAST-01'}
+        self.ok('/shots/' + original['shotId'], 'PATCH', edits)
+        before_meta = story.shot_meta(self.conn, original['shotId'])
+        self.ok(f'/episodes/{self.ep}/storyboards', 'POST', {})
+        preserved = self.ok('/shots/' + original['shotId'])
+        self.assertEqual({key: preserved[key] for key in edits}, edits)
+        self.assertEqual(story.shot_meta(self.conn, original['shotId']), before_meta)
+        self.ok('/scenes/' + original['sceneId'], 'PATCH', {'content': '@CAST-01 enters.\n\n@CAST-01: "Wait."\n\nClose-up of @CAST-01 eyes.'})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        self.ok(f'/episodes/{self.ep}/storyboards', 'POST', {})
+        preserved = self.ok('/shots/' + original['shotId'])
+        self.assertEqual({key: preserved[key] for key in edits}, edits)
+        related = [s for s in self.ok(f'/episodes/{self.ep}/shots')['items'] if s.get('sceneId') == original['sceneId']]
+        self.assertEqual(len(related), 3)
+        self.ok('/scenes/' + original['sceneId'] + '/shot-rebuilds', 'POST', {})
+        rebuilt = self.ok('/shots/' + original['shotId'])
+        self.assertEqual({key: rebuilt[key] for key in ('shotIndex', 'opticalRig', 'cameraMotion')}, {key: edits[key] for key in ('shotIndex', 'opticalRig', 'cameraMotion')})
+        self.assertIn('@CAST-01 enters.', rebuilt['description'])
+
+    def test_missing_asset_batch_completes_more_than_render_concurrency_limit(self):
+        from PIL import Image
+        source = self.ok(f'/episodes/{self.ep}/script-adaptations', 'POST', {'sourceText': 'A lone astronomer discovers a brass dial.', 'sourceMode': 'idea'})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        data = io.BytesIO(); Image.new('RGB', (8, 8), 'green').save(data, format='PNG')
+        active = maximum = 0
+        lock = threading.Lock()
+        def render(task, card, values, head):
+            nonlocal active, maximum
+            with lock:
+                active += 1
+                maximum = max(maximum, active)
+            try:
+                time.sleep(.4)
+                return head.upload(task, data.getvalue(), 'image/png')
+            finally:
+                with lock:
+                    active -= 1
+        with patch.object(worker, 'execute_story_card', side_effect=render):
+            group = self.ok(f'/episodes/{self.ep}/asset-image-generations', 'POST', {})
+            self.assertEqual(len(group['taskIds']), 5)
+            tasks = [self.await_task({'taskId': identifier}) for identifier in group['taskIds']]
+        self.assertEqual([task['status'] for task in tasks], ['SUCCEEDED'] * 5, tasks)
+        self.assertLessEqual(maximum, 2)
+        self.assertEqual(self.ok('/episodes/' + self.ep)['missingAssetCodes'], [])
+
+    def capacity_wait_case(self, cancel):
+        from PIL import Image
+        from project_assistant import execution_governance as governance
+        self.ok(f'/episodes/{self.ep}/script-adaptations', 'POST', {'sourceText': 'A lone astronomer discovers a brass dial.', 'sourceMode': 'idea', 'targetScenes': 1})
+        self.ok(f'/episodes/{self.ep}/asset-extractions', 'POST', {})
+        data = io.BytesIO(); Image.new('RGB', (8, 8), 'green').save(data, format='PNG')
+        release, waiting = threading.Event(), threading.Event()
+        blocked, submitted = [], []
+        original_begin, original_run = governance.begin_operation, governance.run_operation
+        def begin(conn, ctx, request_key, **kwargs):
+            try:
+                return original_begin(conn, ctx, request_key, **kwargs)
+            except governance.CapacityUnavailable:
+                blocked.append(request_key.rsplit(':', 1)[0]); waiting.set()
+                raise
+        def run(*args, **kwargs):
+            return original_run(*args, **kwargs, capacity_timeout=5 if cancel else .15)
+        def render(task, card, values, head):
+            submitted.append(task['id'])
+            release.wait(10)
+            return head.upload(task, data.getvalue(), 'image/png')
+        with patch.object(governance, 'begin_operation', side_effect=begin), patch.object(governance, 'run_operation', side_effect=run), patch.object(worker, 'execute_story_card', side_effect=render):
+            group = self.ok(f'/episodes/{self.ep}/asset-image-generations', 'POST', {})
+            try:
+                self.assertTrue(waiting.wait(5), 'Third asset did not reach the capacity wait')
+                identifier = blocked[0]
+                if cancel:
+                    self.ok('/tasks/' + identifier + '/cancellations', 'POST', {})
+                result = self.await_task({'taskId': identifier})
+                self.assertEqual(result['status'], 'CANCELED' if cancel else 'FAILED', result)
+                if not cancel:
+                    self.assertIn('Timed out waiting for execution capacity', result['error']['message'])
+                self.assertNotIn(identifier, submitted)
+                with self.conn.cursor() as cur:
+                    cur.execute('SELECT state FROM projectops.agent_usage_reservation WHERE project_slug=%s AND request_key=%s', (self.slug, identifier + ':generate'))
+                    self.assertEqual(cur.fetchone()[0], 'released')
+            finally:
+                release.set()
+                outcomes = [self.await_task({'taskId': task_id}) for task_id in group['taskIds']]
+        self.assertEqual(sum(task['status'] == 'SUCCEEDED' for task in outcomes), 2, outcomes)
+        self.assertEqual(len(submitted), 2)
+
+    def test_waiting_asset_cancel_never_submits_and_releases_reservation(self):
+        self.capacity_wait_case(cancel=True)
+
+    def test_waiting_asset_deadline_never_submits_and_releases_reservation(self):
+        self.capacity_wait_case(cancel=False)
+
+    def test_asset_action_failure_is_not_retried(self):
+        from project_assistant import execution_governance as governance
+        self.prepare()
+        asset = self.ok(f'/episodes/{self.ep}/assets')['items'][0]
+        with patch.object(worker, 'execute_story_card', side_effect=governance.CapacityUnavailable('Provider action already started')) as render:
+            task = self.ok('/assets/' + asset['assetId'] + '/image-generations', 'POST', {'appCode': 'flux-soul-cast'})
+            result = self.await_task(task)
+        self.assertEqual(result['status'], 'FAILED')
+        render.assert_called_once()
 
     def await_task(self, task):
         end = time.monotonic() + 30

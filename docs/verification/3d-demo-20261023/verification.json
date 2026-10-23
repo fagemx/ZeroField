@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-23",
+  "scope": "continuous-character-and-walking-demo",
+  "frontend_tests": {
+    "passed": 192,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": "passed",
+  "video": {
+    "frames": 241,
+    "codec": "h264",
+    "height": 704,
+    "fps": 24,
+    "duration": 10.041667,
+    "faststart": true,
+    "file": "movement-demo.mp4",
+    "width": 1280
+  },
+  "browser_playback": {
+    "ended": true,
+    "readyState": 4,
+    "duration": 10.041667,
+    "error": null
+  },
+  "independent_review": "no blocking issue",
+  "paid_calls": 0,
+  "gpu_inference": false
+}

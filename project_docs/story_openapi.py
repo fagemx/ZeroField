@@ -30,6 +30,8 @@ from project_docs import blocks, markdown_import, media, repository as repo, ser
 from project_docs.doc_schema import column_ids, doc_text, new_id, node_text, validate_doc
 from project_assistant import limb_worker as worker
 from project_assistant.table_edits import _cell, cell_value, validate_value
+from project_docs.story_adaptation import (adapt_source_to_script, source_mode, scene_shot_beats,
+    infer_shot_grammar, extract_asset_details, BREAKDOWN_MODES, asset_code, screenplay_markdown)
 
 BASE = "/aivideo/open/v1"
 STAGES = ["PROJECT", "EPISODE", "SCRIPT", "ASSETS", "SCENES", "STORYBOARD", "SHOTS", "FILM_EXPORT"]
@@ -185,14 +187,18 @@ def scene_sections(content):
 
 
 def scenes(conn, ep):
+    # Preserve paragraph boundaries for shot beats without changing script hashes or API text.
+    tab = repo.get_tab(conn, ep["slug"], ep["tabKey"])
+    content = "\n\n".join(doc_text({"content": [node]}) for node in tab["doc"].get("content", []))
     return [{**item, "sceneId": f"sc_{ep['slug']}_{ep['episodeIndex']:02d}_S{i:02d}",
-             "episodeId": ep["episodeId"], "sceneIndex": i} for i, item in enumerate(scene_sections(script(conn, ep)), 1)]
+             "episodeId": ep["episodeId"], "sceneIndex": i} for i, item in enumerate(scene_sections(content), 1)]
 
 
 def episode_view(conn, ep):
     content = script(conn, ep)
     return {**{k: v for k, v in ep.items() if k not in ("confirmedHash",)}, "scriptContent": content,
-            "scriptDirty": ep.get("confirmedHash") != digest(content), "scenes": scenes(conn, ep)}
+            "scriptDirty": ep.get("confirmedHash") != digest(content), "scenes": scenes(conn, ep),
+            "missingAssetCodes": missing_episode_assets(conn, ep)[0]}
 
 
 def save_doc(conn, me, slug, key, doc):
@@ -230,7 +236,7 @@ def save_doc(conn, me, slug, key, doc):
 def set_script(conn, me, ep, content):
     if not content.strip():
         raise StoryError(422, "DRAMA_SCRIPT_INVALID", "The script cannot be empty.")
-    doc, _ = markdown_import.markdown_to_doc(content, tab_keys=set(), image_src=lambda _: None)
+    doc, _ = markdown_import.markdown_to_doc(screenplay_markdown(content), tab_keys=set(), image_src=lambda _: None)
     doc, _ = validate_doc(doc, slug=ep["slug"])
     save_doc(conn, me, ep["slug"], ep["tabKey"], doc)
     store(conn, ep["episodeId"], "episode", ep, ep["slug"])
@@ -315,6 +321,21 @@ def assets(conn, ep):
     return [asset_view(ep["slug"], r) for r in table_rows(conn, ep["slug"], "soul-cast")]
 
 
+def missing_episode_assets(conn, ep):
+    """One exact-reference scope for pre-storyboard readiness and batch generation."""
+    refs = [asset_code(m[1]) for m in ASSET_RE.finditer(script(conn, ep))]
+    refs.extend(ep.get("extractedAssetCodes", []))
+    for key in ("cinema-studio", "openjutsu-lab"):
+        for row in table_rows(conn, ep["slug"], key):
+            meta = shot_meta(conn, shot_id(ep["slug"], row))
+            # Seed/template shots have no episode metadata and are not this script's extraction.
+            if meta.get("episodeId") == ep["episodeId"]:
+                refs.extend(asset_code(m[1]) for m in ASSET_RE.finditer(" ".join(row["cells"])))
+    known = {a["assetCode"]: a for a in assets(conn, ep)}
+    missing = [c for c in dict.fromkeys(refs) if c.startswith(("CAST-", "SET-", "LOC-")) and not known.get(c, {}).get("selectedImageUrl")]
+    return missing, known
+
+
 def find_row(conn, identifier, kind):
     prefix = "sh_" if kind == "shot" else "as_"
     match = re.fullmatch(prefix + r"([a-z0-9-]{1,41})_(b[A-Za-z0-9_-]+)", identifier)
@@ -345,12 +366,17 @@ def shot_view(conn, slug, row):
     mapped = {"Approved": "READY", "Pending Review": "READY", "已完成": "READY", "等待審核": "READY",
               "Rendering Video": "RUNNING", "Rendering Image": "RUNNING", "In Progress": "RUNNING", "進行中": "RUNNING"}
     refs = list(dict.fromkeys(m[1].upper().replace("#", ":") for m in ASSET_RE.finditer(" ".join(row["cells"]))))
+    known = {a["assetCode"]: a for a in (asset_view(slug, r) for r in table_rows(conn, slug, "soul-cast"))}
+    missing = [c for c in refs if c.startswith(("CAST-", "SET-", "LOC-")) and not known.get(c, {}).get("selectedImageUrl")]
+    has_previs = any(media_url(v) for k, v in fields.items() if re.search(r"previs|pose.*skeleton", k, re.I))
     return {**meta, "shotId": identifier, "rowId": row["rid"], "tabKey": row["tabKey"], "shotIndex": row["cells"][0],
             "description": next((v for k, v in fields.items() if re.search("prompt", k, re.I)), ""),
             "opticalRig": next((v for k, v in fields.items() if re.search(r"optical|rig", k, re.I)), ""),
             "cameraMotion": next((v for k, v in fields.items() if re.search(r"camera.*motion", k, re.I)), ""),
             "assets": refs, "status": mapped.get(status, "PENDING"), "reviewStatus": status,
             "complexity": worker.evaluate_shot_complexity({**fields, "reviewStatus": status}),
+            "readiness": {"ready": bool(output("image") or has_previs or not missing), "missingAssets": missing,
+                          "hasPrevis": has_previs, "hasDialogue": bool(meta.get("dialogue"))},
             "selectedImageUrl": output("image"), "selectedVideoUrl": output("video")}
 
 
@@ -414,52 +440,73 @@ def extract(conn, me, ep):
     content = script(conn, ep)
     if not content.strip():
         raise StoryError(422, "DRAMA_STAGE_INPUT_EMPTY", "Write a script before extracting assets.")
-    existing = {a["assetCode"] for a in assets(conn, ep)}
-    refs = list(dict.fromkeys(m[1].upper().replace("#", ":") for m in ASSET_RE.finditer(content)))
-    # Offline fallback recognizes explicit asset tags and screenplay speaker cues.
-    names = re.findall(r"(?m)^\s*(?:Character|角色)\s*:\s*([^\n]+)|^\s*([A-Z][A-Z ]{1,35})\s*:", content)
-    for i, name in enumerate(dict.fromkeys(a or b for a, b in names), 1):
-        code = f"CAST-{i:02d}"
-        if code not in existing and code not in refs:
-            refs.append(code)
+    existing = {a["assetCode"]: a for a in assets(conn, ep)}
+    current_rows = {asset_code(r["cells"][0]): r for r in table_rows(conn, ep["slug"], "soul-cast")}
+    details = extract_asset_details(content, scenes(conn, ep))
+    if len(details) > 200:
+        invalid("An extraction supports at most 200 assets; split the script into episodes.")
+    for code, item in details.items():
+        cells = {0: code, 1: item["name"], 2: item["prompt"][:10000], 5: "Queued"}
+        if item.get("kind"):
+            cells[6] = item["kind"]
         if code not in existing:
-            mutate_row(conn, me, ep["slug"], "soul-cast", cells={0: code, 1: name.strip(), 2: name.strip(), 5: "Queued"})
-            existing.add(code)
-    refs += [f"SET-{i:02d}" for i, _ in enumerate(scenes(conn, ep), 1)]
-    for code in dict.fromkeys(refs):
-        if code not in existing:
-            mutate_row(conn, me, ep["slug"], "soul-cast", cells={0: code, 1: code, 2: f"Reference for @{code}", 5: "Queued"})
-            existing.add(code)
+            rid = mutate_row(conn, me, ep["slug"], "soul-cast", cells=cells)
+            store(conn, f"extracted_as_{ep['slug']}_{rid}", "asset_extraction", {"name": cells[1], "prompt": cells[2]}, ep["slug"])
+        elif not existing[code]["selectedImageUrl"] and current_rows[code]["cells"][5] in ("Queued", "待處理"):
+            previous = record(conn, "extracted_" + existing[code]["assetId"], required=False)
+            draft = {"name": existing[code]["name"], "prompt": existing[code]["prompt"]}
+            placeholder = draft["name"] in ("", code) and draft["prompt"] in ("", code, f"Reference for @{code}")
+            untouched = previous == draft if previous is not None else placeholder
+            if untouched:
+                # Only drafts we generated (still untouched), or placeholders, may be enriched.
+                mutate_row(conn, me, ep["slug"], "soul-cast", existing[code]["rowId"], {1: cells[1], 2: cells[2], **({6: item["kind"]} if item.get("kind") else {})})
+                store(conn, "extracted_" + existing[code]["assetId"], "asset_extraction", {"name": cells[1], "prompt": cells[2]}, ep["slug"])
+    ep["extractedAssetCodes"] = list(details)
     ep["confirmedHash"] = digest(content)
     store(conn, ep["episodeId"], "episode", ep, ep["slug"])
-    return completed_task(conn, me, ep["slug"], "ASSET_EXTRACT", {"assetsCount": len(existing), "scenesCount": len(scenes(conn, ep))})
+    return completed_task(conn, me, ep["slug"], "ASSET_EXTRACT", {"assetsCount": len(existing.keys() | details.keys()), "scenesCount": len(scenes(conn, ep))})
 
 
-def build_shots(conn, me, ep, only_scene=None):
+def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
+    mode = ep.get("breakdownMode", ep.get("settings", {}).get("breakdownMode", "auto")) if breakdown_mode is None else breakdown_mode
+    if not isinstance(mode, str) or mode not in BREAKDOWN_MODES:
+        invalid("Unknown breakdownMode.")
     repo.get_tab_for_update(conn, ep["slug"], ep["tabKey"])
     if ep.get("confirmedHash") != digest(script(conn, ep)) or not scenes(conn, ep):
         raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before building storyboards.")
     previous = shots(conn, ep)
+    plans = [(scene, scene_shot_beats(scene["content"], mode) or [scene["title"]]) for scene in scenes(conn, ep)
+             if not only_scene or scene["sceneId"] == only_scene]
+    if sum(len(beats) for _, beats in plans) > 200:
+        invalid("A storyboard build supports at most 200 shots; split the script into episodes.")
     created = []
-    for scene in scenes(conn, ep):
-        if only_scene and scene["sceneId"] != only_scene:
-            continue
-        matches = [s for s in previous if s.get("sceneId") == scene["sceneId"]]
-        prompt = scene["content"].strip() or scene["title"]
-        prompt += f" @SET-{scene['sceneIndex']:02d}"
-        if matches:
-            if only_scene:
-                for shot in matches:
-                    _, row = find_row(conn, shot["shotId"], "shot")
-                    column = next((i for i, h in enumerate(row["headers"]) if re.search("prompt", h, re.I)), 3)
-                    mutate_row(conn, me, ep["slug"], row["tabKey"], row["rid"], {column: prompt[:10000]})
-            created.extend(matches)  # Rebuilding narrative never deletes candidate media.
-            continue
-        rid = mutate_row(conn, me, ep["slug"], "cinema-studio", cells={0: f"SC{scene['sceneIndex']:02d}-S01",
-            1: "ARRI Alexa 65 / 35mm Anamorphic f/1.4", 2: "Static Tripod", 3: prompt[:10000], 6: "Queued"})
-        identifier = f"sh_{ep['slug']}_{rid}"
-        store(conn, "meta_" + identifier, "shot_meta", {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"]}, ep["slug"])
-        created.append({"shotId": identifier})
+    for scene, beats in plans:
+        matches = [s for s in previous if s.get("sceneId") == scene["sceneId"] and s["tabKey"] == "cinema-studio"]
+        scene_refs = [asset_code(m[1]) for m in ASSET_RE.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-"))]
+        scene_refs = list(dict.fromkeys(scene_refs)) or [f"SET-{scene['sceneIndex']:02d}"]
+        cast = {a["name"].casefold(): a["assetCode"] for a in assets(conn, ep) if a["type"] == "CHARACTER" and a["isDefault"]}
+        for index, beat in enumerate(beats):
+            if index < len(matches) and not only_scene:
+                created.append(matches[index])
+                continue  # A normal build fills missing beats; existing director edits stay authoritative.
+            grammar = infer_shot_grammar(beat, index, len(beats))
+            refs = scene_refs + [code for name, code in cast.items() if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", beat, re.I)]
+            prompt = beat + " " + " ".join("@" + c for c in dict.fromkeys(refs) if c not in {asset_code(m[1]) for m in ASSET_RE.finditer(beat)})
+            cells = {0: f"SC{scene['sceneIndex']:02d}-S{index + 1:02d}", 1: grammar["opticalRig"], 2: grammar["cameraMotion"], 3: prompt[:10000]}
+            if index < len(matches):
+                previous_shot = matches[index]
+                # Explicit narrative rebuilds retain the established label, optics and media.
+                rid = mutate_row(conn, me, ep["slug"], previous_shot["tabKey"], previous_shot["rowId"], {3: prompt[:10000]})
+                if previous_shot.get("previsPlan"):
+                    grammar["previsPlan"] = {**grammar["previsPlan"], **{key: previous_shot["previsPlan"][key]
+                        for key in ("lens", "move") if key in previous_shot["previsPlan"]}}
+            else:
+                rid = mutate_row(conn, me, ep["slug"], "cinema-studio", cells=cells | {6: "Queued"})
+            identifier = f"sh_{ep['slug']}_{rid}"
+            meta = shot_meta(conn, identifier) | {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"], "dialogue": grammar["dialogue"], "previsPlan": grammar["previsPlan"]}
+            store(conn, "meta_" + identifier, "shot_meta", meta, ep["slug"])
+            created.append({"shotId": identifier})
+        created.extend(matches[len(beats):])  # Never delete existing takes when a scene becomes shorter.
     return completed_task(conn, me, ep["slug"], "STORYBOARD_GENERATE", {"shotsCount": len(created)})
 
 
@@ -836,7 +883,8 @@ def execute_task(identifier):
                 head.accounting_card = job['card']
                 head.accounting_destination = governance.media_destination(job['card'])
                 output = governance.run_operation(head.accounting_context, job['_accounting_keys']['generate'],
-                    lambda: worker.execute_story_card(execution, job['card'], job['values'], head), card=job['card'])
+                    lambda: worker.execute_story_card(execution, job['card'], job['values'], head), card=job['card'],
+                    wait_for_capacity=task['type'] == 'ASSET_IMAGE_GENERATE')
         with http.open_connection() as conn:
             current = record(conn, identifier, lock=True)
             if current["status"] != "RUNNING":
@@ -1144,7 +1192,27 @@ def dispatch(conn, me, method, path, body, query, actions):
                 store(conn, ep["episodeId"], "episode", ep, slug)
                 return episode_view(conn, ep)
         if tail == "script" and method == "PUT":
+            if "breakdownMode" in body:
+                ep["breakdownMode"] = text(body, "breakdownMode")
+                if ep["breakdownMode"] not in BREAKDOWN_MODES:
+                    invalid("Unknown breakdownMode.")
             return set_script(conn, me, ep, text(body, "scriptContent", maximum=500000))
+        if tail == "script-adaptations" and method == "POST":
+            raw = text(body, "sourceText", maximum=500000)
+            mode = text(body, "sourceMode", "auto")
+            breakdown = text(body, "breakdownMode", "auto")
+            if breakdown not in BREAKDOWN_MODES:
+                invalid("Unknown breakdownMode.")
+            style = next((s["name"] for s in STYLES if s["stylePresetId"] == str(ep.get("settings", {}).get("stylePresetId", "88123"))), STYLES[0]["name"])
+            try:
+                content = adapt_source_to_script(raw, mode, body.get("targetScenes", 3), style)
+            except ValueError as exc:
+                invalid(str(exc))
+            ep["breakdownMode"] = breakdown
+            ep.pop("extractedAssetCodes", None)
+            set_script(conn, me, ep, content)
+            return {"episodeId": ep["episodeId"], "script": {"content": content}, "sourceMode": source_mode(raw, mode),
+                    "breakdownMode": breakdown, "engine": "deterministic"}
         if tail == "script/versions" and method == "GET":
             return page([{"versionId": str(r["revision"]), "scriptContent": doc_text(r["doc"])} for r in repo.revision_rows(conn, slug, tab_key=ep["tabKey"])], query)
         if tail == "script-refinements" and method == "POST":
@@ -1156,6 +1224,11 @@ def dispatch(conn, me, method, path, body, query, actions):
             return queue_task(conn, me, slug, "SCRIPT_REFINE", {"episodeId": ep["episodeId"], "instruction": instruction, "script": script(conn, ep)}, actions)
         if tail == "settings":
             if method == "PUT":
+                if "breakdownMode" in body:
+                    value = text(body, "breakdownMode")
+                    if value not in BREAKDOWN_MODES:
+                        invalid("Unknown breakdownMode.")
+                    ep["breakdownMode"] = value
                 if body.get("aspectRatio", "16:9") not in RATIOS:
                     invalid("Unsupported aspectRatio.")
                 if str(body.get("stylePresetId", "88123")) not in {s["stylePresetId"] for s in STYLES}:
@@ -1167,7 +1240,25 @@ def dispatch(conn, me, method, path, body, query, actions):
         if tail == "asset-extractions" and method == "POST":
             return extract(conn, me, ep)
         if tail == "storyboards" and method == "POST":
-            return build_shots(conn, me, ep)
+            return build_shots(conn, me, ep, breakdown_mode=text(body, "breakdownMode") if "breakdownMode" in body else None)
+        if tail == "asset-image-generations" and method == "POST":
+            repo.get_tab_for_update(conn, slug, ep["tabKey"])
+            if ep.get("confirmedHash") != digest(script(conn, ep)):
+                raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before generating reference sheets.")
+            missing, known = missing_episode_assets(conn, ep)
+            if any(code not in known for code in missing):
+                raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Extract script assets before generating missing reference sheets.")
+            if len(missing) > 200:
+                invalid("Generate at most 200 missing assets in one batch.")
+            request = {"appCode": "flux-soul-cast", **body}
+            # Validate every source before admission; queue_task retains budget and authority checks.
+            jobs = [generation_job(conn, me, known[code]["assetId"], "image", request) for code in missing]
+            for _, job in jobs:
+                job["episodeId"] = ep["episodeId"]
+            tasks = [queue_task(conn, me, job_slug, "ASSET_IMAGE_GENERATE", job, actions) for job_slug, job in jobs]
+            identifier = "tg_" + uuid.uuid4().hex
+            return store(conn, identifier, "taskGroup", {"taskGroupId": identifier, "taskIds": [t["taskId"] for t in tasks],
+                         "assetCodes": missing}, slug, me.actor_id)
         if tail == "assets":
             if method == "GET":
                 return page([a for a in assets(conn, ep) if a["isDefault"]], query)
@@ -1350,7 +1441,7 @@ def dispatch(conn, me, method, path, body, query, actions):
             write_scenes(conn, me, ep, items)
             return scenes(conn, ep)[scene["sceneIndex"] - 1]
         if tail == "shot-rebuilds" and method == "POST":
-            return build_shots(conn, me, ep, scene["sceneId"])
+            return build_shots(conn, me, ep, scene["sceneId"], breakdown_mode=text(body, "breakdownMode") if "breakdownMode" in body else None)
         if tail == "shots" and method == "POST":
             rid = mutate_row(conn, me, ep["slug"], "cinema-studio", cells={0: text(body, "shotIndex", f"SC{scene['sceneIndex']:02d}-S{len(shots(conn, ep)) + 1:02d}"), 3: text(body, "description"), 6: "Queued"})
             identifier = f"sh_{ep['slug']}_{rid}"

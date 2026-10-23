@@ -498,6 +498,19 @@
 .previs-stage .previs-field button[aria-pressed=true] { border-color: var(--text); background: var(--text); color: var(--ground); }
 .previs-stage .previs-views button { height: 26px; border-color: rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .55); color: #fff; }
 .previs-stage .previs-views button[aria-pressed=true] { border-color: var(--accent); background: var(--accent); color: #000; }
+/* The PiP lens window: the renderer draws it at 320×176 with a 16 px margin on the 1280×704 canvas; this frames it. */
+.previs-pip { position: absolute; right: calc(16 / 1280 * 100%); bottom: calc(16 / 704 * 100%); width: 25%; height: 25%; border: 1px solid var(--accent); border-radius: var(--radius-chip); pointer-events: none; }
+.previs-pip span { position: absolute; left: 6px; top: 4px; color: var(--accent); font-size: 11px; font-weight: 600; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+.previs-hint.beside-pip { max-width: calc(75% - 40px); }
+.previs-qa { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--warning-line); border-radius: var(--radius-field); font-size: 12px; }
+.previs-qa.clean { border-color: var(--line); }
+.previs-qa-pill { justify-self: start; margin: 0; padding: 3px 10px; border-radius: var(--radius-control); background: var(--pill-warning-bg); color: var(--pill-warning-ink); font-weight: 600; }
+.previs-qa.clean .previs-qa-pill { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
+.previs-qa ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.previs-qa li { display: grid; gap: 2px; }
+.previs-qa li b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.previs-qa li small { color: var(--faint); line-height: 1.4; }
+.previs-stage .previs-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
 @media (max-width: 1180px) {
   .previs-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; overflow: auto; }
   .previs-stage > * { overflow: visible; }

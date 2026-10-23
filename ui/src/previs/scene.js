@@ -1,8 +1,8 @@
 // three.js previs stage: a grey blockout the motion pass can follow. Built from primitives only (no assets),
 // so what LTX-2.5 reads is structure, camera and light, never a look.
 import * as THREE from 'three';
-import { DOME, MSFLOW_JOINTS, WIDTH, HEIGHT, billboardYaw, cameraKeys, framesOf, parallaxLayers, sampleActor, sampleActs, sampleCamera,
-  solveLimbIK, solvePinnedXYZ, verticalFov } from './plan.js';
+import { DOME, MSFLOW_JOINTS, WIDTH, HEIGHT, applyMotionFixes, auditMotion, billboardYaw, cameraKeys, framesOf, motionPlan, parallaxLayers,
+  sampleActor, sampleActs, sampleCamera, solveLimbIK, solvePinnedXYZ, verticalFov } from './plan.js';
 import { SET, buildFigure } from './figure.js';
 
 const ROOM = new THREE.Vector3(DOME.x, 0, DOME.z);  // dome centre; the station (actor's mark) is the origin, the console is at +z
@@ -41,6 +41,24 @@ function emptyStage(group, mats) {
   const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 0.2), mats.glass); wall.position.set(0, 2, 1.2); group.add(wall);
 }
 
+// A simple rehearsal floor and tangible contact props use the same stage/rig/export path as any shot. The plan
+// carries their dimensions and positions, so the saved previs can be replayed without a second demo renderer.
+function rehearsalStage(group, mats) {
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), mats.floor);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = -0.003; group.add(floor);
+}
+function stageProps(group, props, mats) {
+  for (const p of props || []) {
+    const material = new THREE.MeshLambertMaterial({ color: p.color ?? 0xc2a680 });
+    mats['prop:' + p.id] = material;
+    const geo = p.shape === 'cylinder'
+      ? new THREE.CylinderGeometry(p.radius ?? 0.15, p.radius ?? 0.15, p.height ?? 1, 40)
+      : new THREE.BoxGeometry(...(p.size || [0.3, 0.3, 0.3]));
+    const mesh = new THREE.Mesh(geo, material); mesh.name = p.id || 'prop'; mesh.position.set(...(p.position || [0, 0, 0]));
+    mesh.userData.contactObject = !!p.contact; group.add(mesh);
+  }
+}
+
 // The 2.5D parallax set: a dark floor for the actor's shadow and the plan's cards (plan.js parallaxLayers). Each card is
 // sized to the 35 mm frustum at its distance from the wide push-in key, so the far card fills that frame and any camera
 // move slides the cards against each other. A card with src shows that image (the shot's @SET); without one a grey
@@ -73,6 +91,7 @@ const RIG = { pelvis: ['pelvis'], hipL: ['hipL'], hipR: ['hipR'], spine1: ['spin
   neck: ['neck'], collarL: ['chest', [-0.09, 0.26, 0]], collarR: ['chest', [0.09, 0.26, 0]], head: ['head'], shoulderL: ['shoulderL'], shoulderR: ['shoulderR'],
   elbowL: ['elbowL'], elbowR: ['elbowR'], wristL: ['wristL'], wristR: ['wristR'] };
 const keypoints = fig => fig.kp ??= (() => { const m = {}; fig.root.traverse(o => { if (o.userData.kp && !(o.userData.kp in m)) m[o.userData.kp] = o; }); return m; })();
+const disposeSkeletons = root => { const skeletons = new Set(); root.traverse(o => { if (o.skeleton) skeletons.add(o.skeleton); }); skeletons.forEach(s => s.dispose()); };
 function rigXYZ(fig) {
   fig.root.updateMatrixWorld(true);
   const kp = keypoints(fig);
@@ -103,6 +122,13 @@ export function retargetXYZToRig(fig, base, solved) {
     turn(kp[root], at(mid).sub(S), V(ik.mid).sub(S));
     turn(kp[mid], at(end).sub(at(mid)), V(ik.end).sub(at(mid)));
   }
+  // An ankle position alone leaves the sole following the shin. Carry the solved toe direction as well, so a
+  // planted foot stays level after leg IK (and the final mesh agrees with the motion-space contact).
+  for (const s of ['L', 'R']) {
+    const ankle = kp['ankle' + s], origin = at('ankle' + s);
+    const toe = ankle.localToWorld(new THREE.Vector3(0, -0.06, 0.12));
+    turn(ankle, toe.sub(origin), V(solved['foot' + s]).sub(V(solved['ankle' + s])));
+  }
 }
 
 // Pose the jointed mannequin: the body pose on top of its rest, then the reach channel takes the left arm toward the console.
@@ -110,6 +136,9 @@ function applyPose(figure, a) {
   const p = a.pose || {};
   for (const [name, g] of Object.entries(figure.joints)) { const r = p[name] || [0, 0, 0], rest = figure.rest[name] || [0, 0, 0]; g.rotation.set(r[0] + rest[0], r[1] + rest[1], r[2] + rest[2]); }
   figure.joints.pelvis.position.y = (figure.pelvisY ?? 0.98) - (p.drop || 0);
+  const headYaw = a.headYaw || 0;
+  figure.joints.neck.rotation.y += headYaw * 0.35;
+  figure.joints.head.rotation.y += headYaw * 0.65;
   const w = Math.min(1, a.reach / 0.6);  // a reach blends the left arm from its pose to straight out at the dial
   if (w > 0) {
     const s = figure.joints.shoulderL.rotation, e = figure.joints.elbowL.rotation;
@@ -129,12 +158,19 @@ export function prepareRenderer(renderer) {
 }
 
 export function buildStage(plan, opts = {}) {
-  const night = plan.mood === 'night', board = !!opts.board;
+  const night = plan.mood === 'night', board = !!opts.board, rehearsal = plan.presentation === 'rehearsal';
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(board ? (night ? SET.night : SET.background) : night ? 0x0d1219 : 0xaab4c4);  // grey mood matches the Blender blockout LTX was tested on
   const mats = { glass: lambert(board ? SET.glass : 0x8c949e), floor: lambert(board ? SET.floor : night ? 0x24262b : 0x4d4f54), brass: lambert(board ? SET.brass : 0x9e8550),
                  skin: lambert(0xccad94), hair: lambert(0x3a322c), coat: lambert(night ? 0x383a40 : 0x55585f), beam: new THREE.MeshBasicMaterial({ color: 0xfff2cc }) };
-  if (board) {  // high-key and even, like the shot-idiom generator's stage: every shape reads
+  if (rehearsal) {
+    scene.background.set(0xd5dcd8); mats.floor.color.set(0xc7cfca); mats.skin.color.set(0xd6b391);
+    scene.add(new THREE.HemisphereLight(0xfff6e8, 0x879491, 1.65));
+    const key = new THREE.DirectionalLight(0xfff2df, 1.8); key.position.set(-3, 9, 3); key.target.position.set(0, 1, -1);
+    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0002; key.shadow.normalBias = 0.012;
+    Object.assign(key.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 0.5, far: 30 }); scene.add(key, key.target);
+    const fill = new THREE.DirectionalLight(0xd8eaff, 1.1); fill.position.set(4, 4, -3); scene.add(fill);
+  } else if (board) {  // high-key and even, like the shot-idiom generator's stage: every shape reads
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8a918d, 0.95));
     const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(-2, 4, 3); scene.add(sun);
   } else if (night) {
@@ -149,8 +185,10 @@ export function buildStage(plan, opts = {}) {
     Object.assign(key.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 0.5, far: 40 });
   }
   const set = new THREE.Group(); scene.add(set);
-  if (plan.set === 'parallax') parallaxStage(set, mats, plan, opts.onLoad);
+  if (rehearsal) rehearsalStage(set, mats);
+  else if (plan.set === 'parallax') parallaxStage(set, mats, plan, opts.onLoad);
   else (plan.set === 'empty' ? emptyStage : observatory)(set, mats);
+  stageProps(set, plan.props, mats);
   // The observatory's sun, unless the plan switches it off (it sat in every close-up of the dome, SPEC_10 §7.9).
   const lit = p => (p.set || 'observatory') === 'observatory' && p.beacon !== false;
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.8, 24, 16), mats.beam); beacon.position.set(-2, 3, 28); beacon.userData.beacon = true; beacon.visible = lit(plan); scene.add(beacon);
@@ -158,15 +196,16 @@ export function buildStage(plan, opts = {}) {
   scene.traverse(o => { if (o.isMesh && o.material !== mats.beam && !o.userData.parallaxLayer) o.castShadow = o.receiveShadow = true; });
   // The cast: the shot's subject (the plan's own actor) plus anyone in plan.cast, rebuilt only when who is in it changes.
   let figures = [], castKey = null, matteOn = false;
-  const coats = COATS[night ? 'night' : 'grey'].map(lambert);
+  const coats = (rehearsal ? [0x477a7d, 0xad725c, 0x62788c, 0x867193] : COATS[night ? 'night' : 'grey']).map(lambert);
+  const pants = (rehearsal ? [0x46535e, 0x5b5a61, 0x465259, 0x4e515a] : COATS[night ? 'night' : 'grey'].map(c => new THREE.Color(c).multiplyScalar(0.8))).map(lambert);
   function cast(p) {
     const looks = [p.figure || {}, ...(p.cast || []).map(c => c.figure || {})], key = JSON.stringify(looks);
     if (key === castKey) return figures;
-    for (const f of figures) { scene.remove(f.root); f.root.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); }
+    for (const f of figures) { scene.remove(f.root); disposeSkeletons(f.root); f.root.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); }
     for (const f of figures) Object.values(f.mats || {}).forEach(x => x.dispose());
     figures = looks.map((look, i) => {
       const tone = look.tone ?? i;  // a person keeps their colour in every shot, whoever is the subject
-      return buildFigure(look, tone, board ? null : { coat: coats[tone % coats.length], skin: mats.skin, hair: mats.hair });
+      return buildFigure(look, tone, board ? null : { coat: coats[tone % coats.length], pants: pants[tone % pants.length], skin: mats.skin, hair: mats.hair });
     });
     castKey = key;
     for (const f of figures) { scene.add(f.root); f.root.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = !o.userData.outline; }); }
@@ -174,28 +213,29 @@ export function buildStage(plan, opts = {}) {
     return figures;
   }
   const place = (fig, a, mark = [0, 0], turn = 0) => {
-    fig.root.position.set(mark[0], 0, mark[1] - a.back); fig.root.rotation.y = a.yaw + turn * Math.PI / 180; applyPose(fig, a);
+    fig.root.position.set(mark[0] + (a.side || 0), 0, mark[1] - a.back); fig.root.rotation.y = a.yaw + turn * Math.PI / 180; applyPose(fig, a);
     fig.root.userData.face = a.face || {};  // the expression the skeleton's face points draw (skeleton.js)
   };
   const camera = new THREE.PerspectiveCamera(verticalFov(plan.lens), WIDTH / HEIGHT, 0.05, 200);
   const aim = new THREE.Vector3(), eye = new THREE.Vector3();
-  // The subject's motion in direct motion space: the mannequin's FK per frame and the plan's pins solved on it, kept
-  // until the acting or the pins change.
+  // The subject's motion in direct motion space: the mannequin's FK per frame (plan.use compiled into acts and pins),
+  // the pins solved on it, the plan's fixes (plan.fix) and its motion QA, kept until any of them change.
   let motionKey = null, solvedMotion = null;
-  function motion(p = plan) {
-    const main = cast(p)[0], key = JSON.stringify([p.pins, p.acts, p.action, p.facing, p.seconds, p.mark, p.turn, p.figure]);
+  function motion(plan0 = plan) {
+    const p = motionPlan(plan0), main = cast(p)[0], key = JSON.stringify([p.pins, p.acts, p.action, p.facing, p.seconds, p.mark, p.turn, p.figure, p.fix, p.set]);
     if (key !== motionKey) {
       const base = [];
       for (let f = 0; f < framesOf(p); f++) { place(main, sampleActor(p, f), p.mark, p.turn); base.push(rigXYZ(main)); }
-      solvedMotion = { base, solved: solvePinnedXYZ(base, p.pins) }; motionKey = key;
+      const pinned = solvePinnedXYZ(base, p.pins), { frames: solved, fixed } = p.fix ? applyMotionFixes(pinned, p.fix, p) : { frames: pinned, fixed: null };
+      solvedMotion = { base, solved, fixed, qa: auditMotion(solved, p) }; motionKey = key;
     }
     return solvedMotion;
   }
-  function pose(f, p = plan) {  // the cast, the beacon and the cards at frame f; mark [x, z] and turn (degrees) place each actor
-    const pinned = p.pins?.length ? motion(p) : null;
+  function pose(f, plan0 = plan) {  // the cast, the beacon and the cards at frame f; mark [x, z] and turn (degrees) place each actor
+    const p = motionPlan(plan0), moved = p.pins?.length || p.fix ? motion(p) : null;
     const [main, ...others] = cast(p), u = f / (framesOf(p) - 1);
     place(main, sampleActor(p, f), p.mark, p.turn);
-    if (pinned) retargetXYZToRig(main, pinned.base[f], pinned.solved[f]);
+    if (moved) retargetXYZToRig(main, moved.base[f], moved.solved[f]);
     (p.cast || []).forEach((c, i) => place(others[i], sampleActs(c.acts || [], u), c.mark, c.turn));
     const b = f * 96 / (framesOf(p) - 1);  // the beacon lights on the beat clock, so a 6 or 8 s shot keeps it after the dial turn
     beacon.scale.setScalar(b < 67 ? 0.001 : b < 71 ? (b - 67) / 4 : 1); beacon.visible = lit(p);
@@ -228,8 +268,9 @@ export function buildStage(plan, opts = {}) {
     });
   }
   function dispose() {
+    disposeSkeletons(scene);
     scene.traverse(o => { o.geometry?.dispose(); });
-    Object.values(mats).concat(Object.values(flat), coats, ...figures.map(f => Object.values(f.mats || {}))).forEach(m => { m.map?.dispose(); m.dispose(); });
+    Object.values(mats).concat(Object.values(flat), coats, pants, ...figures.map(f => Object.values(f.mats || {}))).forEach(m => { m.map?.dispose(); m.dispose(); });
   }
   return { scene, camera, frame, pose, shoot, roof, matte, motion, dispose };
 }

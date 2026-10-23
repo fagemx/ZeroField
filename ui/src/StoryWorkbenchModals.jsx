@@ -8,6 +8,7 @@ import { episodeId, shotId, selectedTake, storyList, storyRequest, waitStoryTask
 import { normalizeStatus, statusLabel } from './format.js';
 import { ProposalRaceView } from './assistant/ProposalRaceView.jsx';
 import { allocationPath, escalationPath, allocationDispatchBody, approvedCompositionSource, allocationBlockerLabel, GRADE_ACTIVE, gradesActive, takeGrade } from './storyModel.js';
+import { sourceDraft, editStoryScreenplay, needsStoryAdaptation, adaptStoryDraft, buildStoryFromDraft, missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
 import './story-workbench.css';
 import { Icon } from './Icon.jsx';
 
@@ -85,61 +86,145 @@ export function StoryWorkbench({slug, tab, me, version, onReload, onNavigate, fl
     </div>}
     <ActionState action={action}/>
     {film && <video className="story-film" src={film} controls playsInline preload="metadata" aria-label={t('story.episodeFilm')}/>}
-    {modal === 'import' && <StoryImportModal epId={epId} writable={writable} onClose={() => setModal(null)} onChanged={async () => {await onReload?.(); setModal(null); onNavigate?.('cinema-studio');}}/>}
+    {modal === 'import' && <StoryImportModal epId={epId} writable={writable} onClose={() => setModal(null)} onDone={async () => {await onReload?.(); setModal(null); onNavigate?.('cinema-studio');}}/>}
     {modal === 'assets' && <AssetVaultModal epId={epId} writable={writable} onClose={() => setModal(null)} onChanged={onReload} onNavigate={() => {setModal(null); onNavigate?.('soul-cast');}}/>}
     {modal === 'toolbox' && <ToolboxModal writable={writable} onClose={() => setModal(null)}/>}
     {modal === 'api' && <OpenApiModal slug={slug} epId={epId} onClose={() => setModal(null)}/>}
   </div>;
 }
 
-function StoryImportModal({epId, writable, onClose, onChanged}) {
-  const [script, setScript] = useState(''), [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123');
-  const [styles, setStyles] = useState([]), [error, setError] = useState('');
-  const action = useStoryAction(onChanged);
+export function StoryImportModal({epId, writable, onClose, onDone}) {
+  const [drafts, setDrafts] = useState(() => ({script:sourceDraft(), idea:sourceDraft(), novel:sourceDraft()}));
+  const [sourceMode, setSourceMode] = useState('script'), [targetScenes, setTargetScenes] = useState(3), [breakdownMode, setBreakdownMode] = useState('auto');
+  const [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123');
+  const [styles, setStyles] = useState([]), [error, setError] = useState(''), [loading, setLoading] = useState(true), [reading, setReading] = useState(false);
+  const fileRead = useRef(false), mounted = useRef(true);
+  const action = useStoryAction();
+  const draft = drafts[sourceMode], isSource = sourceMode !== 'script';
+  const disabled = action.busy || loading || reading || !writable;
+  const updateDraft = update => setDrafts(current => ({...current, [sourceMode]:{...current[sourceMode], ...update}}));
+  const needsAdaptation = needsStoryAdaptation(sourceMode, draft, targetScenes);
+  useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
   useEffect(() => {
-    let alive = true;
+    let alive = true; setLoading(true); setError('');
     Promise.all([storyRequest('/episodes/' + epId), storyList('/catalog/styles')]).then(([ep, presets]) => {
-      if (alive) {setScript(ep.scriptContent); setStyles(presets); setRatio(ep.settings?.aspectRatio || '16:9'); setStyle(ep.settings?.stylePresetId || '88123');}
-    }).catch(e => {if (alive) setError(e.message);});
+      if (alive) {
+        setDrafts({script:sourceDraft(ep.scriptContent || ''), idea:sourceDraft(), novel:sourceDraft()});
+        setStyles(presets); setRatio(ep.settings?.aspectRatio || '16:9'); setStyle(ep.settings?.stylePresetId || '88123');
+        setBreakdownMode(['auto','scene','cinematic'].includes(ep.settings?.breakdownMode) ? ep.settings.breakdownMode : 'auto');
+      }
+    }).catch(e => {if (alive) setError(t('story.importLoadFailed',{message:e.message}));}).finally(() => {if (alive) setLoading(false);});
     return () => {alive = false;};
   }, [epId]);
-  return <SheetDialog title={t('story.startCreating')} wide onClose={action.busy ? () => {} : onClose}>
+  return <SheetDialog title={t('story.startCreating')} wide onClose={action.busy || reading ? () => {} : onClose}>
     <p>{t('story.importHelp')}</p>
-    <label className="modal-field">{t('story.script')}<textarea rows={13} value={script} maxLength={500000} disabled={action.busy || !writable} onChange={e => setScript(e.target.value)}/></label>
-    <label className="modal-field">{t('story.uploadScript')}<input type="file" accept=".txt,.md,text/plain,text/markdown" disabled={action.busy} onChange={async e => {
-      const file = e.target.files?.[0]; if (!file) return;
+    <label className="modal-field">{t('story.sourceMode')}<select value={sourceMode} disabled={disabled} onChange={e => {setSourceMode(e.target.value); setError('');}}>{['idea','novel','script'].map(mode => <option key={mode} value={mode}>{t('story.sourceMode_'+mode)}</option>)}</select></label>
+    {isSource && <>
+      <label className="modal-field">{t('story.sourceText')}<textarea rows={6} value={draft.sourceText} maxLength={500000} disabled={disabled} onChange={e => updateDraft({sourceText:e.target.value})}/></label>
+      <p>{t('story.sourceDraftHelp')}</p>
+      <label className="modal-field">{t('story.targetScenes')}<input type="number" min={1} max={12} step={1} value={targetScenes} disabled={disabled} onChange={e => setTargetScenes(Math.max(1, Math.min(12, Math.trunc(Number(e.target.value)) || 1)))}/></label>
+    </>}
+    <label className="modal-field">{t('story.script')}<textarea rows={13} value={draft.script} maxLength={500000} disabled={disabled} onChange={e => updateDraft(editStoryScreenplay(sourceMode, draft, e.target.value, targetScenes))}/></label>
+    {isSource && <p>{t(needsAdaptation && draft.adaptationKey ? 'story.sourceChangedHelp' : 'story.screenplayEditHelp')}</p>}
+    <label className="modal-field">{t('story.uploadScript')}<input type="file" accept=".txt,.md,text/plain,text/markdown" disabled={disabled} onChange={async e => {
+      const file = e.target.files?.[0]; e.target.value = ''; if (!file || fileRead.current || disabled) return;
+      if (!/\.(txt|md)$/i.test(file.name)) {setError(t('story.scriptFileType')); return;}
       if (file.size > 2000000) {setError(t('story.scriptTooLarge')); return;}
-      try {setScript(await file.text()); setError('');} catch (err) {setError(err.message);}
+      fileRead.current = true; setReading(true);
+      try {
+        const text = await file.text();
+        if (text.length > 500000) throw new Error(t('story.scriptTextTooLong'));
+        if (mounted.current) {updateDraft(isSource ? {sourceText:text} : {script:text}); setError('');}
+      } catch (err) {if (mounted.current) setError(err.message);}
+      finally {fileRead.current = false; if (mounted.current) setReading(false);}
     }}/></label>
-    <label className="modal-field">{t('story.aspectRatio')}<select value={ratio} disabled={action.busy} onChange={e => setRatio(e.target.value)}>{['16:9','9:16','1:1','21:9'].map(r => <option key={r}>{r}</option>)}</select></label>
-    <label className="modal-field">{t('story.style')}<select value={style} disabled={action.busy} onChange={e => setStyle(e.target.value)}>{styles.map(s => <option key={s.stylePresetId} value={s.stylePresetId}>{s.name}</option>)}</select></label>
+    {isSource && <button disabled={disabled || !draft.sourceText.trim() || !needsAdaptation} onClick={() => action.run(async () => {
+      if (fileRead.current) return;
+      setError('');
+      await storyRequest(`/episodes/${epId}/settings`, 'PUT', {aspectRatio:ratio, stylePresetId:style, breakdownMode});
+      updateDraft(await adaptStoryDraft({epId, sourceMode, draft, targetScenes, breakdownMode, request:storyRequest}));
+    })}>{t('story.adaptScript')}</button>}
+    <label className="modal-field">{t('story.breakdownMode')}<select value={breakdownMode} disabled={disabled} onChange={e => setBreakdownMode(e.target.value)}>{['auto','scene','cinematic'].map(mode => <option key={mode} value={mode}>{t('story.breakdownMode_'+mode)}</option>)}</select></label>
+    <p>{t('story.breakdownHelp')}</p>
+    <label className="modal-field">{t('story.aspectRatio')}<select value={ratio} disabled={disabled} onChange={e => setRatio(e.target.value)}>{['16:9','9:16','1:1','21:9'].map(r => <option key={r}>{r}</option>)}</select></label>
+    <label className="modal-field">{t('story.style')}<select value={style} disabled={disabled} onChange={e => setStyle(e.target.value)}>{styles.map(s => <option key={s.stylePresetId} value={s.stylePresetId}>{s.name}</option>)}</select></label>
+    {(loading || reading) && <p role="status">{t(loading ? 'story.importLoading' : 'story.importReading')}</p>}
     {error && <p role="alert">{error}</p>}<ActionState action={action}/>
-    <button className="primary" disabled={!writable || action.busy || !script.trim()} onClick={() => action.run(async wait => {
-      await storyRequest(`/episodes/${epId}/settings`, 'PUT', {aspectRatio:ratio, stylePresetId:style});
-      await storyRequest(`/episodes/${epId}/script`, 'PUT', {scriptContent:script});
-      await wait(await storyRequest(`/episodes/${epId}/asset-extractions`, 'POST'));
-      await wait(await storyRequest(`/episodes/${epId}/storyboards`, 'POST'));
+    {action.error && <p>{t('story.importRetryHelp')}</p>}
+    <button className="primary" disabled={disabled || !(draft.script.trim() || (isSource && draft.sourceText.trim()))} onClick={() => action.run(async wait => {
+      if (fileRead.current) return;
+      setError('');
+      await buildStoryFromDraft({epId, sourceMode, draft, targetScenes, breakdownMode,
+        settings:{aspectRatio:ratio, stylePresetId:style}, request:storyRequest, wait, onPrepared:updateDraft, onDone});
     })}>{t('story.confirmAndBuild')}</button>
   </SheetDialog>;
 }
 
-function AssetVaultModal({epId, writable, onClose, onChanged, onNavigate}) {
+export function AssetGenerationState({group, error, onRefresh}) {
+  if (!group) return null;
+  const counts = group.counts || {total:group.taskIds.length, queued:group.taskIds.length};
+  const taskLabels = {QUEUED:'queued', RUNNING:'running', SUCCEEDED:'succeeded', FAILED:'failed', CANCELED:'canceled'};
+  return <section aria-label={t('story.assetGenerationProgress')}>
+    <p role="status">{t('story.assetGenerationCounts',{total:counts.total || 0, queued:counts.queued || 0, running:counts.running || 0, succeeded:counts.succeeded || 0, failed:Number(counts.failed || 0) + Number(counts.canceled || 0)})}</p>
+    {!!group.assetCodes?.length && <p>{group.assetCodes.map(code => '@' + code).join(', ')}</p>}
+    {!!group.tasks?.length && <details><summary>{t('story.assetGenerationTasks')}</summary><ul>{group.tasks.map(task => <li key={task.taskId}>{task.taskId} · {t('story.assetTask_' + (taskLabels[task.status] || 'unknown'))}{task.error?.message && <> · {task.error.message}</>}</li>)}</ul></details>}
+    {Number(counts.failed || 0) + Number(counts.canceled || 0) > 0 && <p>{t('story.assetGenerationRetryHelp')}</p>}
+    {error && <p role="alert">{t('story.assetGenerationRefreshFailed',{message:error})}</p>}
+    {error && <button onClick={onRefresh}>{t('story.refreshAssetTasks')}</button>}
+  </section>;
+}
+
+export function AssetVaultModal({epId, writable, onClose, onChanged, onNavigate}) {
   const [assets, setAssets] = useState([]), [selected, setSelected] = useState(''), [detail, setDetail] = useState(null);
   const [name, setName] = useState(''), [key, setKey] = useState(''), [prompt, setPrompt] = useState(''), [error, setError] = useState(''), [editing, setEditing] = useState(null);
-  const action = useStoryAction(async () => {await loadDetail(selected); await onChanged?.();});
+  const [episode, setEpisode] = useState(null), [loading, setLoading] = useState(true), [group, setGroup] = useState(null), [groupError, setGroupError] = useState(''), [pollVersion, setPollVersion] = useState(0);
+  const selectedRef = useRef(selected); selectedRef.current = selected;
+  const action = useStoryAction(async () => {await loadVault(); await loadDetail(selected); await onChanged?.();});
+  const loadVault = async () => {
+    const [items, ep] = await Promise.all([storyList(`/episodes/${epId}/assets`), storyRequest('/episodes/' + epId)]);
+    setAssets(items); setEpisode(ep);
+    setSelected(current => items.some(item => item.assetId === current) ? current : items[0]?.assetId || '');
+  };
   const loadDetail = async id => {if (id) setDetail(await storyRequest('/assets/' + id));};
+  const missing = missingAssetSheets(episode), generating = assetGroupActive(group);
   useEffect(() => {
-    let alive = true;
-    storyList(`/episodes/${epId}/assets`).then(items => {if (alive) {setAssets(items); setSelected(items[0]?.assetId || '');}}).catch(e => {if (alive) setError(e.message);});
+    let alive = true; setLoading(true); setEpisode(null); setGroup(restoredAssetGroup(epId)); setGroupError(''); setError('');
+    Promise.all([storyList(`/episodes/${epId}/assets`), storyRequest('/episodes/' + epId)]).then(([items, ep]) => {
+      if (alive) {setAssets(items); setEpisode(ep); setSelected(items[0]?.assetId || '');}
+    }).catch(e => {if (alive) setError(e.message);}).finally(() => {if (alive) setLoading(false);});
     return () => {alive = false;};
   }, [epId]);
+  useEffect(() => {
+    if (!group?.taskGroupId) return;
+    let alive = true, timer;
+    setGroupError('');
+    const poll = async () => {
+      try {
+        const next = await storyRequest('/task-groups/' + group.taskGroupId);
+        if (!alive) return;
+        rememberAssetGroup(epId, next);
+        setGroup(current => ({...current, ...next}));
+        if (assetGroupActive(next)) timer = setTimeout(poll, 1500);
+        else {await loadVault(); if (alive) {await loadDetail(selectedRef.current); await onChanged?.();}}
+      } catch (err) {if (alive) setGroupError(err.message);}
+    };
+    poll();
+    return () => {alive = false; clearTimeout(timer);};
+  }, [group?.taskGroupId, pollVersion]);
   useEffect(() => {
     let alive = true; setDetail(null); setEditing(null); setName(''); setKey(''); setPrompt('');
     if (selected) storyRequest('/assets/' + selected).then(item => {if (alive) setDetail(item);}).catch(e => {if (alive) setError(e.message);});
     return () => {alive = false;};
   }, [selected]);
   return <SheetDialog title={t('story.assetVault')} wide onClose={action.busy ? () => {} : onClose}>
-    <button onClick={onNavigate}>{t('story.openAssetSheet')}</button>
+    <button disabled={action.busy} onClick={onNavigate}>{t('story.openAssetSheet')}</button>
+    <button disabled={!writable || action.busy || loading || generating || !missing.length} onClick={() => action.run(async () => {
+      setError(''); setGroupError('');
+      const pending = await storyRequest(`/episodes/${epId}/asset-image-generations`, 'POST', {appCode:'flux-soul-cast'});
+      rememberAssetGroup(epId, pending); setGroup(pending);
+    })}>{t('story.generateMissingAssets')}</button>
+    <p>{t(loading ? 'story.assetReadinessLoading' : !episode ? 'story.assetReadinessUnavailable' : missing.length ? 'story.missingAssetCount' : 'story.noMissingAssets',{count:missing.length})}</p>
+    <AssetGenerationState group={group} error={groupError} onRefresh={() => setPollVersion(value => value + 1)}/>
     <label className="modal-field">{t('story.asset')}<select value={selected} disabled={action.busy} onChange={e => setSelected(e.target.value)}>{assets.map(a => <option key={a.assetId} value={a.assetId}>@{a.assetCode} · {a.name}</option>)}</select></label>
     {detail && <><p>{detail.prompt}</p><div className="story-variants">{[detail, ...detail.variants].map(a => <figure key={a.assetId}>{a.selectedImageUrl && <MediaCell compact type="image" value={a.selectedImageUrl} label={a.name}/>}<figcaption>@{a.assetCode} · {a.name}</figcaption>{a.variantId && writable && <div><button disabled={action.busy} onClick={() => {setEditing(a.variantId); setName(a.name); setKey(a.assetCode.split(':')[1].toLowerCase()); setPrompt(a.prompt);}}>{t('story.editVariant')}</button><button disabled={action.busy} onClick={() => action.run(() => storyRequest(`/assets/${selected}/variants/${a.variantId}`, 'DELETE'))}>{t('story.deleteVariant')}</button></div>}</figure>)}</div>
       <p>{t('story.assetUses',{shots:detail.shotIds?.length || 0,scenes:detail.sceneIds?.length || 0})}</p>

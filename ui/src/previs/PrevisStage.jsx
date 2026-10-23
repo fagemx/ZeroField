@@ -3,14 +3,22 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useLocale } from '../i18n/react.jsx';
 import { t as uiText } from '../i18n/index.js';
-import { ACTIONS, DURATIONS, FACINGS, FPS, HEIGHT, LENSES, MOODS, MOVES, SETS, WIDTH, cameraKeys, defaultPlan, describePlan, framesOf, planFromSlate, sampleCamera, verticalFov } from './plan.js';
+import { ACTIONS, DURATIONS, FACINGS, FPS, HEIGHT, LENSES, MOODS, MOVES, SETS, WIDTH, cameraKeys, defaultPlan, describePlan, framesOf, sampleCamera, verticalFov } from './plan.js';
+import { resolveShotPlan } from './storyPlan.js';
 import { buildStage, prepareRenderer, shotGuides } from './scene.js';
 import { encodeCanvas, fetchPlan } from './webm.js';
 import { drawSkeleton, poseKeypoints } from './skeleton.js';
+import { createMotionDemoPlan } from './demoPlan.js';
 
 // split: the overhead plan and the shot lens side by side on one renderer (80.lv's layout view over the camera view).
 export const VIEWS = ['split', 'lens', 'overhead', 'free'];
 const SPLIT = WIDTH / 2 - 1;  // each half of the split view, with a 2 px seam
+const PIP = { w: 320, h: 176, margin: 16 };  // the shot lens in the free and overhead views' lower right corner (canvas px)
+const AUTO_FIX = { ground: true, slide: true, penetration: true };
+const save = (blob, name) => {  // a local file to the browser's downloads
+  const url = URL.createObjectURL(blob), link = Object.assign(document.createElement('a'), { href: url, download: name });
+  link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 const draftKey = (slug, rid) => `zf.previs:${slug}:${rid}`;
 function loadDraft(slug, rid) { try { return JSON.parse(localStorage.getItem(draftKey(slug, rid)) || 'null'); } catch { return null; } }
 function saveDraft(slug, rid, plan) {  // unrendered edits stay in this browser; a render stores its plan in the project
@@ -31,11 +39,14 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   const [stored, setStored] = useState({}), [rendered, setRendered] = useState({});  // url -> plan in that file; rid -> plan rendered here
   const [view, setView] = useState('lens'), [frame, setFrame] = useState(0), [playing, setPlaying] = useState(false);
   const [rendering, setRendering] = useState(false), [error, setError] = useState('');
-  const host = useRef(null), live = useRef(null), progress = useRef(null), now = useRef({});
+  const [showDemo, setShowDemo] = useState(false), [demoPlan] = useState(createMotionDemoPlan);
+  // pip: the lens corner window in the free and overhead views; returnView: the view Look through came from (Esc goes back).
+  const [pip, setPip] = useState(true), [returnView, setReturnView] = useState(null), [qa, setQa] = useState(null);
+  const host = useRef(null), live = useRef(null), progress = useRef(null), now = useRef({}), framed = useRef(null);
 
-  const planOf = s => ({ ...defaultPlan(), ...(drafts[s.rid] || stored[s.previs] || rendered[s.rid] || planFromSlate(s.slate)) });
+  const planOf = s => resolveShotPlan(s, { draft: drafts[s.rid], stored: stored[s.previs], rendered: rendered[s.rid] });
   const shot = shots.find(s => s.rid === rid) || shots[0];
-  const plan = shot ? planOf(shot) : defaultPlan(), frames = framesOf(plan);
+  const plan = showDemo ? demoPlan : shot ? planOf(shot) : defaultPlan(), frames = framesOf(plan);
   const statusOf = s => (drafts[s.rid] ? 'edited' : s.previs ? 'rendered' : 'none');
   const edit = patch => { const next = { ...plan, ...patch }; saveDraft(slug, shot.rid, next); setDrafts(d => ({ ...d, [shot.rid]: next })); };
   const discard = () => { saveDraft(slug, shot.rid, null); setDrafts(({ [shot.rid]: _, ...rest }) => rest); };
@@ -73,7 +84,8 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       e.preventDefault(); top.zoom = Math.min(6, Math.max(0.4, top.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); top.updateProjectionMatrix(); now.current.draw();
     };
     canvas.addEventListener('pointermove', pan); canvas.addEventListener('wheel', zoom, { passive: false });
-    live.current = { renderer, controls, top, aspect, stage: null, guides: null };
+    const lens = new THREE.PerspectiveCamera(verticalFov(35), WIDTH / HEIGHT, 0.05, 200);  // the PiP's shot camera; the free camera stays the user's
+    live.current = { renderer, controls, top, aspect, lens, stage: null, guides: null };
     return () => {
       canvas.removeEventListener('pointermove', pan); canvas.removeEventListener('wheel', zoom);
       controls.dispose(); live.current.guides?.dispose(); live.current.stage?.dispose(); renderer.dispose(); canvas.remove(); live.current = null;
@@ -85,12 +97,16 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     ctx.stage = buildStage(plan, { onLoad: () => { if (!now.current.rendering) now.current.draw(); } });
     ctx.controls.object = ctx.stage.camera;
     if (ctx.guides) ctx.stage.scene.add(ctx.guides.group);
-  }, [plan.set, plan.mood, plan.set === 'parallax' ? JSON.stringify(plan.layers || null) : '']);
-  const guideKey = JSON.stringify(shots.map(s => [s.shot, planOf(s), s.rid === shot?.rid]));
+  }, [plan.set, plan.mood, plan.presentation, JSON.stringify(plan.props || null), plan.set === 'parallax' ? JSON.stringify(plan.layers || null) : '']);
+  // Motion QA of this shot's acting (scene.js motion: skills, pins, fixes), redone only when the motion changes.
+  const motionKey = JSON.stringify([shot?.rid, plan.set, plan.mood, plan.use, plan.pins, plan.acts, plan.action, plan.facing, plan.seconds, plan.mark, plan.turn, plan.figure, plan.fix]);
+  useEffect(() => { const ctx = live.current; if (ctx?.stage) setQa(ctx.stage.motion(plan).qa); }, [motionKey]);
+  const guideKey = JSON.stringify(showDemo ? [['Motion demo', plan, true]] : shots.map(s => [s.shot, planOf(s), s.rid === shot?.rid]));
   useEffect(() => {  // every shot camera that shares this set
     const ctx = live.current; if (!ctx?.stage) return;
     if (ctx.guides) { ctx.guides.group.removeFromParent(); ctx.guides.dispose(); }
-    ctx.guides = shotGuides(shots.filter(s => planOf(s).set === plan.set).map(s => ({ id: s.shot, plan: planOf(s), selected: s.rid === shot.rid })));
+    ctx.guides = shotGuides(showDemo ? [{ id: uiText('previs.demoTitle'), plan, selected: true }]
+      : shots.filter(s => planOf(s).set === plan.set).map(s => ({ id: s.shot, plan: planOf(s), selected: s.rid === shot.rid })));
     ctx.stage.scene.add(ctx.guides.group);
   }, [guideKey]);
 
@@ -113,6 +129,12 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       renderer.setScissorTest(false); renderer.setViewport(0, 0, WIDTH, HEIGHT);
     } else {
       ctx.aspect(WIDTH / HEIGHT); paint(top ? ctx.top : stage.camera, top, view !== 'lens');
+      if (pip && view !== 'lens') {  // the shot lens over the corner, clean like the render: roof on, no guides
+        const c = sampleCamera(plan, frame);
+        ctx.lens.fov = verticalFov(plan.lens); ctx.lens.updateProjectionMatrix(); ctx.lens.position.set(...c.position); ctx.lens.lookAt(...c.aim);
+        renderer.setScissorTest(true); paint(ctx.lens, false, false, WIDTH - PIP.w - PIP.margin, PIP.margin, PIP.w, PIP.h);
+        renderer.setScissorTest(false); renderer.setViewport(0, 0, WIDTH, HEIGHT);
+      }
     }
   };
   now.current = { frame, frames, rid: shot?.rid, shots, view, draw, rendering };
@@ -122,8 +144,9 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     const ctx = live.current; if (!ctx?.stage) return;
     ctx.controls.enabled = view === 'free';
     if (view !== 'free') return;
-    const keys = cameraKeys(plan), key = frame >= frames / 2 ? keys[keys.length - 1] : keys[0];
-    ctx.stage.camera.position.set(...key[1]); ctx.controls.target.set(...key[2]); ctx.controls.update();
+    const keys = cameraKeys(plan), key = frame >= frames / 2 ? keys[keys.length - 1] : keys[0], back = framed.current;
+    framed.current = null;  // back from Look through: the framing it left
+    ctx.stage.camera.position.set(...(back?.position || key[1])); ctx.controls.target.set(...(back?.target || key[2])); ctx.controls.update();
     const redraw = () => now.current.draw();
     ctx.controls.addEventListener('change', redraw); redraw();
     return () => ctx.controls.removeEventListener('change', redraw);
@@ -141,11 +164,13 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     return () => clearInterval(id);
   }, [playing]);
 
-  const step = d => { const i = shots.findIndex(s => s.rid === shot.rid), next = shots[i + d]; if (next) setRid(next.rid); };
+  const step = d => { if (rendering || showDemo) return; const i = shots.findIndex(s => s.rid === shot.rid), next = shots[i + d]; if (next) setRid(next.rid); };
   const onKey = e => {
+    if (rendering) return;
     if (e.target.closest('input, select, textarea')) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1); }
     else if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); setPlaying(p => (p ? false : 'shot')); }
+    else if (e.key === 'Escape' && view === 'lens' && returnView) { e.preventDefault(); exitLook(); }
   };
   const fitOverhead = v => {  // frame every camera of this set and the actor's mark on the plan
     const top = live.current?.top; if (!top) return;
@@ -156,7 +181,13 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     top.zoom = Math.min(top.right / ((x1 - x0) / 2 + 1.5), top.top / ((z1 - z0) / 2 + 1.5));
     top.updateProjectionMatrix(); top.updateMatrixWorld();
   };
-  const pickView = v => { if (v === 'overhead' || v === 'split') fitOverhead(v); setView(v); if (v !== 'lens' && playing === 'scene') setPlaying(false); };
+  const pickView = v => { if (v === 'overhead' || v === 'split') fitOverhead(v); setView(v); setReturnView(null); if (v !== 'lens' && playing === 'scene') setPlaying(false); };
+  const lookThrough = () => {  // full-frame lens; Esc (or Exit) returns to this view as it was framed
+    const ctx = live.current;
+    if (view === 'free' && ctx?.stage) framed.current = { position: ctx.stage.camera.position.toArray(), target: ctx.controls.target.toArray() };
+    setReturnView(view); setView('lens');
+  };
+  const exitLook = () => { setView(returnView); setReturnView(null); };
   const playScene = () => { setView('lens'); if (playing !== 'scene') setFrame(0); setPlaying(p => (p === 'scene' ? false : 'scene')); };
   const capture = which => {  // the framed free camera becomes this shot's start or end key
     const ctx = live.current;
@@ -175,7 +206,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       // WebCodecs + a WebM writer: exact timestamps, so the clip is 97 frames at 24 fps; the plan rides in the file.
       // A slate with an Actor Matte column also gets the same plan with the actor white on black (Layout Render mask),
       // one with a Pose Skeleton column the cast's joints as an OpenPose drawing (the acting, without the mannequin).
-      const n = framesOf(p), passes = 1 + (target.matteCol >= 0) + (target.skeletonCol >= 0);
+      const n = framesOf(p), passes = showDemo ? 1 : 1 + (target.matteCol >= 0) + (target.skeletonCol >= 0);
       let pass = 0;
       const encode = (canvas, draw, plan = null) => {
         const at = pass++ * n;
@@ -183,6 +214,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       };
       const shoot = f => { ctx.stage.frame(f, p); ctx.renderer.render(ctx.stage.scene, ctx.stage.camera); };
       const blob = await encode(ctx.renderer.domElement, shoot, p);
+      if (showDemo) { save(blob, 'zerofield-motion-demo.webm'); return; }
       let matte = null, skeleton = null;
       if (target.matteCol >= 0) { ctx.stage.matte(true); try { matte = await encode(ctx.renderer.domElement, shoot); } finally { ctx.stage.matte(false); } }
       if (target.skeletonCol >= 0) {
@@ -194,7 +226,24 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
         setDrafts(({ [target.rid]: _, ...rest }) => rest); setRendered(r => ({ ...r, [target.rid]: p }));
       }
     } catch (e) { setError(e.message || String(e)); }
-    setRendering(false); setView('lens');
+    finally { setRendering(false); setView('lens'); }
+  };
+  // Keyframe Pack for first/last-frame workflows: the shot's frame 0 and last frame as clean 1280×704 PNGs (full canvas,
+  // roof on, no guides or PiP, like the render) and a JSON with the camera at both ends and the plan.
+  const exportPack = async () => {
+    const ctx = live.current, p = plan, n = framesOf(p), cam = ctx.stage.camera, kept = [cam.position.clone(), cam.quaternion.clone(), cam.fov];
+    setPlaying(false); setRendering(true); setError('');
+    try {
+      ctx.renderer.setScissorTest(false); ctx.renderer.setViewport(0, 0, WIDTH, HEIGHT);
+      ctx.stage.roof(true); if (ctx.guides) ctx.guides.group.visible = false;
+      const still = f => { ctx.stage.frame(f, p); ctx.renderer.render(ctx.stage.scene, cam); return new Promise(done => ctx.renderer.domElement.toBlob(done, 'image/png')); };
+      const first = await still(0), last = await still(n - 1), end = f => ({ frame: f, ...sampleCamera(p, f) });
+      const name = showDemo ? 'motion-demo' : shot.shot;
+      const about = { shot: name, width: WIDTH, height: HEIGHT, fps: FPS, frames: n, lens: p.lens, camera: describePlan(p), first: end(0), last: end(n - 1), plan: p };
+        save(first, `${showDemo ? 'motion-demo' : shot.shot}_first.png`); save(last, `${showDemo ? 'motion-demo' : shot.shot}_last.png`);
+      save(new Blob([JSON.stringify(about, null, 2)], { type: 'application/json' }), `${name}_keyframes.json`);
+    } catch (e) { setError(e.message || String(e)); }
+    finally { cam.position.copy(kept[0]); cam.quaternion.copy(kept[1]); cam.fov = kept[2]; cam.updateProjectionMatrix(); setRendering(false); }
   };
 
   const t = (key, params) => uiText('previs.' + key, params);
@@ -205,34 +254,45 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
       <h2>{t('shots')}</h2>
       {shots.map(s => {
         const p = planOf(s), state = statusOf(s);
-        return <button type="button" key={s.rid} aria-current={s.rid === shot.rid} onClick={() => setRid(s.rid)}>
+        return <button type="button" key={s.rid} disabled={rendering} aria-current={!showDemo && s.rid === shot.rid} onClick={() => { setShowDemo(false); setPlaying(false); setFrame(0); setRid(s.rid); }}>
           {s.keyframe ? <img src={s.keyframe} alt="" loading="lazy" /> : <span className="previs-thumb" />}
           <span><b>{s.shot}</b><small>{t('move_' + (p.keys ? 'custom' : p.move))} · {p.lens}mm</small>
             <small className={'previs-state ' + state}>{t('state_' + state)}</small></span>
         </button>;
       })}
       <p className="previs-note">{t('keys')}</p>
+      <button type="button" aria-pressed={showDemo} disabled={rendering} onClick={() => { setShowDemo(!showDemo); setPlaying(false); setFrame(0); setView('lens'); }}>
+        <span><b>{showDemo ? t('demoBack') : t('demoTitle')}</b><small>{t('demoBeats')}</small></span>
+      </button>
     </nav>
     <section className="previs-view">
       <div className="previs-viewport">
         <div ref={host} className={'previs-canvas view-' + view} aria-label={t('viewport')} />
-        <div className="previs-hud"><b>{shot.shot}</b> · {plan.lens}mm · {(frame / FPS).toFixed(2)}s</div>
+        <div className="previs-hud"><b>{showDemo ? t('demoTitle') : shot.shot}</b> · {plan.lens}mm · {(frame / FPS).toFixed(2)}s</div>
         <div className="previs-views" role="group" aria-label={t('viewMode')}>{VIEWS.map(v =>
           <button type="button" key={v} aria-pressed={view === v} disabled={rendering}
-            onClick={() => pickView(v)}>{t('view_' + v)}</button>)}</div>
-        {view !== 'lens' && <p className="previs-hint">{t('hint_' + view)}</p>}
+            onClick={() => pickView(v)}>{t('view_' + v)}</button>)}
+          {(view === 'free' || view === 'overhead') && <>
+            <button type="button" aria-pressed={pip} title={t('pipHint')} onClick={() => setPip(on => !on)}>{t('pip')}</button>
+            <button type="button" onClick={lookThrough} disabled={rendering}>{t('lookThrough')}</button></>}
+          {view === 'lens' && returnView && <button type="button" onClick={exitLook}>{t('exitLookThrough')}</button>}
+        </div>
+        {pip && (view === 'free' || view === 'overhead') && <div className="previs-pip" aria-hidden="true"><span>{t('view_lens')}</span></div>}
+        {view === 'lens' && returnView ? <p className="previs-hint">{t('hint_return', { view: t('view_' + returnView) })}</p>
+          : view !== 'lens' && <p className={'previs-hint' + (pip && view !== 'split' ? ' beside-pip' : '')}>{t('hint_' + view)}</p>}
       </div>
       <div className="previs-timeline">
         <button type="button" onClick={() => setPlaying(p => (p === 'shot' ? false : 'shot'))} disabled={rendering}>{playing === 'shot' ? t('pause') : t('playShot')}</button>
-        <button type="button" onClick={playScene} disabled={rendering}>{playing === 'scene' ? t('pause') : t('playScene')}</button>
+        {!showDemo && <button type="button" onClick={playScene} disabled={rendering}>{playing === 'scene' ? t('pause') : t('playScene')}</button>}
         <input type="range" min="0" max={frames - 1} value={Math.min(frame, frames - 1)} aria-label={t('frame')} onChange={e => { setPlaying(false); setFrame(+e.target.value); }} />
         <span>{Math.min(frame, frames - 1)}/{frames - 1}</span>
       </div>
-      <p className="previs-summary">{describePlan(plan)}</p>
+      <p className="previs-summary">{showDemo ? t('demoBeats') : describePlan(plan)}</p>
     </section>
     <aside className="previs-controls" aria-label={t('inspector')}>
-      <details className="previs-howto" open><summary>{t('howto')}</summary><ol>{[1, 2, 3, 4, 5].map(n => <li key={n}>{t('step' + n)}</li>)}</ol></details>
-      <fieldset className="previs-fields" disabled={!writable || rendering}>
+      {showDemo ? <section className="previs-howto"><h3>{t('demoTitle')}</h3><p>{t('demoDescription')}</p><ol>{[1, 2, 3, 4].map(n => <li key={n}>{t('demoStep' + n)}</li>)}</ol></section>
+        : <details className="previs-howto"><summary>{t('howto')}</summary><ol>{[1, 2, 3, 4, 5].map(n => <li key={n}>{t('step' + n)}</li>)}</ol></details>}
+      {!showDemo && <fieldset className="previs-fields" disabled={!writable || rendering}>
         {/* Switching to the parallax set hangs the shot's @SET image as its far card. */}
         {pick(t('set'), plan.set, SETS, v => edit({ set: v, ...(v === 'parallax' && shot.setAsset && !plan.layers ? { layers: [{ id: 'far', src: shot.setAsset.url }] } : {}) }), v => t('set_' + v))}
         {plan.set === 'observatory' && pick(t('beacon'), plan.beacon !== false, [true, false], v => edit({ beacon: v }), v => t(v ? 'beacon_on' : 'beacon_off'))}
@@ -243,22 +303,36 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
         {pick(t('lens'), plan.lens, LENSES, v => edit({ lens: v }), v => `${v}mm`)}
         {pick(t('duration'), plan.seconds, DURATIONS, v => edit({ seconds: v }), v => `${v} s`)}
         {pick(t('light'), plan.mood, MOODS, v => edit({ mood: v }), v => t('mood_' + v))}
+        {/* Only the framing actions that can act now (CozyClay R2/R3): set start/end in the free view, otherwise one
+            button that opens it; the preset and discard only once there is a path or an edit to undo. */}
         <fieldset className="previs-field"><legend>{t('framing')}</legend>
-          <button type="button" disabled={view !== 'free'} onClick={() => capture('start')}>{t('setStart')}</button>
-          <button type="button" disabled={view !== 'free'} onClick={() => capture('end')}>{t('setEnd')}</button>
-          <button type="button" disabled={!plan.keys} onClick={() => edit({ keys: null })}>{t('resetPath')}</button>
-          <button type="button" disabled={!drafts[shot.rid]} onClick={discard}>{t('discard')}</button>
+          {view === 'free' ? <>
+            <button type="button" onClick={() => capture('start')}>{t('setStart')}</button>
+            <button type="button" onClick={() => capture('end')}>{t('setEnd')}</button>
+          </> : <button type="button" onClick={() => pickView('free')}>{t('frameCustom')}</button>}
+          {plan.keys && <button type="button" onClick={() => edit({ keys: null })}>{t('resetPath')}</button>}
+          {drafts[shot.rid] && <button type="button" onClick={discard}>{t('discard')}</button>}
         </fieldset>
-      </fieldset>
+      </fieldset>}
+      {qa && <section className={'previs-qa' + (qa.ok ? ' clean' : '')} aria-label={t('qaTitle')} aria-live="polite">
+        {qa.ok ? <p className="previs-qa-pill">{t('qaClean')}</p> : <>
+          <p className="previs-qa-pill">{t('qaIssues', { count: qa.groups.length })}</p>
+          <ul>{qa.groups.map(g => <li key={g.kind + g.subject}>
+            <b>{t('qaIssue', { kind: g.kind, subject: g.subject, worst: g.worst, frame: g.worstFrame })}</b><small>{g.hint}</small></li>)}</ul>
+        </>}
+        {plan.fix ? <p className="previs-note">{t('autoFixOn')}{writable && !showDemo && <> <button type="button" className="previs-link" disabled={rendering} onClick={() => edit({ fix: undefined })}>{t('autoFixOff')}</button></>}</p>
+          : !qa.ok && writable && !showDemo && <button type="button" className="previs-motion" disabled={rendering} onClick={() => edit({ fix: AUTO_FIX })}>{t('autoFix')}</button>}
+      </section>}
       {error && <p className="sheet-save-error" role="alert">{error}</p>}
-      {writable && <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>
-        {rendering ? <>{t('rendering')} <span ref={progress} /></> : t('render')}</button>}
-      {writable && onMotion && <button type="button" className="previs-motion" disabled={busy || rendering || !shot.previs || !!drafts[shot.rid]} onClick={() => onMotion(shot)}>{t('motion')}</button>}
-      {writable && onLayout && layoutable && <button type="button" className="previs-motion" title={t('layoutHint')}
+      {(writable || showDemo) && <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>
+        {rendering ? <>{t('rendering')} <span ref={progress} /></> : showDemo ? t('demoDownload') : t('render')}</button>}
+      {!showDemo && writable && onMotion && <button type="button" className="previs-motion" disabled={busy || rendering || !shot.previs || !!drafts[shot.rid]} onClick={() => onMotion(shot)}>{t('motion')}</button>}
+      {!showDemo && writable && onLayout && layoutable && <button type="button" className="previs-motion" title={t('layoutHint')}
         disabled={busy || rendering || !shot.matte || !shot.skeleton || !!drafts[shot.rid]} onClick={() => onLayout(shot)}>{t('layout')}</button>}
-      {writable && onMotion && (!shot.previs || drafts[shot.rid]) && <p className="previs-note">{t('renderFirst')}</p>}
-      {writable && onLayout && layoutable && shot.previs && (!shot.matte || !shot.skeleton) && !drafts[shot.rid] && <p className="previs-note">{t('renderMatte')}</p>}
-      <p className="previs-note">{t('note')}</p>
+      <button type="button" className="previs-motion" title={t('keyframePackHint')} disabled={rendering} onClick={exportPack}>{t('keyframePack')}</button>
+      {!showDemo && writable && onMotion && (!shot.previs || drafts[shot.rid]) && <p className="previs-note">{t('renderFirst')}</p>}
+      {!showDemo && writable && onLayout && layoutable && shot.previs && (!shot.matte || !shot.skeleton) && !drafts[shot.rid] && <p className="previs-note">{t('renderMatte')}</p>}
+      <p className="previs-note">{showDemo ? t('demoLocal') : t('note')}</p>
     </aside>
   </div>;
 }
