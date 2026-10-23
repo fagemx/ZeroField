@@ -51,9 +51,9 @@ _PROCESS = uuid.uuid4().hex
 
 
 class StoryError(ValueError):
-    def __init__(self, status, code, message):
+    def __init__(self, status, code, message, details=None):
         super().__init__(message)
-        self.status, self.code = status, code
+        self.status, self.code, self.details = status, code, details
 
 
 def invalid(message):
@@ -446,7 +446,10 @@ def completed_task(conn, me, slug, kind, result):
 
 
 def extract(conn, me, ep):
-    repo.get_tab_for_update(conn, ep["slug"], ep["tabKey"])
+    from project_assistant.orchestrator import lock_project
+    lock_project(conn, ep['slug'])
+    for key in sorted({ep['tabKey'], 'soul-cast'}):
+        repo.get_tab_for_update(conn, ep['slug'], key)
     content = script(conn, ep)
     if not content.strip():
         raise StoryError(422, "DRAMA_STAGE_INPUT_EMPTY", "Write a script before extracting assets.")
@@ -474,6 +477,10 @@ def extract(conn, me, ep):
     ep["extractedAssetCodes"] = list(details)
     ep["confirmedHash"] = digest(content)
     store(conn, ep["episodeId"], "episode", ep, ep["slug"])
+    from project_docs import writing_store, writing_versions
+    writing_scope = writing_store.scope_for(conn, me, ep['episodeId'], write=True)
+    writing_versions.confirm_baseline(conn, writing_scope, expected_doc_hash=writing_store.doc_hash(repo.get_tab(conn, ep['slug'], ep['tabKey'])['doc']), extracted=True)
+    ep.update(writing_scope.episode)
     return completed_task(conn, me, ep["slug"], "ASSET_EXTRACT", {"assetsCount": len(existing.keys() | details.keys()), "scenesCount": len(scenes(conn, ep))})
 
 
@@ -481,7 +488,10 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     mode = ep.get("breakdownMode", ep.get("settings", {}).get("breakdownMode", "auto")) if breakdown_mode is None else breakdown_mode
     if not isinstance(mode, str) or mode not in BREAKDOWN_MODES:
         invalid("Unknown breakdownMode.")
-    repo.get_tab_for_update(conn, ep["slug"], ep["tabKey"])
+    from project_assistant.orchestrator import lock_project
+    lock_project(conn, ep['slug'])
+    for key in sorted({ep['tabKey'], 'cinema-studio'}):
+        repo.get_tab_for_update(conn, ep['slug'], key)
     if ep.get("confirmedHash") != digest(script(conn, ep)) or not scenes(conn, ep):
         raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before building storyboards.")
     previous = shots(conn, ep)
@@ -491,6 +501,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     if sum(len(beats) for _, beats in plans) > 200:
         invalid("A storyboard build supports at most 200 shots; split the script into episodes.")
     created = []
+    origin_updated = []
     for scene, beats in plans:
         matches = [s for s in previous if s.get("sceneId") == scene["sceneId"] and s["tabKey"] == "cinema-studio"]
         scene_refs = [asset_code(m[1]) for m in ASSET_RE.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-"))]
@@ -517,7 +528,14 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
             meta = shot_meta(conn, identifier) | {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"], "dialogue": grammar["dialogue"], "previsPlan": grammar["previsPlan"]}
             store(conn, "meta_" + identifier, "shot_meta", meta, ep["slug"])
             created.append({"shotId": identifier})
+            origin_updated.append(identifier)
         created.extend(matches[len(beats):])  # Never delete existing takes when a scene becomes shorter.
+    if origin_updated and ep.get('productionScriptVersionId'):
+        from project_docs import writing_store
+        from importlib.util import find_spec
+        if find_spec('project_docs.writing_impact') is not None:
+            from project_docs import writing_impact
+            writing_impact.bind_generated_shots(conn, writing_store.scope_for(conn, me, ep['episodeId'], write=True), origin_updated, version_id=ep['productionScriptVersionId'])
     return completed_task(conn, me, ep["slug"], "STORYBOARD_GENERATE", {"shotsCount": len(created)})
 
 
@@ -1074,6 +1092,12 @@ def notify(owner, task):
 
 def dispatch(conn, me, method, path, body, query, actions):
     """Return unwrapped data; callers own commit, rollback and post-commit launches."""
+    from project_docs import writing_http, writing_store
+    writing_match = writing_http.ROUTE.fullmatch(path)
+    if writing_match:
+        tail = writing_match[2] or 'workspace'
+        scope = writing_store.scope_for(conn, me, writing_match[1], write=not (method == 'GET' or (method == 'POST' and tail in ('search','compare','exports'))))
+        return writing_http.dispatch(conn, scope, method, tail, body, query)
     if method != "GET" and not me.can_write:
         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
     parts = path.strip("/").split("/")
@@ -1634,6 +1658,9 @@ def handle(handler, parsed, method):
             raise StoryError(401, "DRAMA_AUTH_MISSING" if not auth else "DRAMA_AUTH_INVALID", "Sign in or supply a valid Bearer token.")
         if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
             raise StoryError(400, "DRAMA_REQUEST_FAILED", "Unsupported method.")
+        from project_docs import writing_http
+        if writing_http.handle(handler, parsed, method, me):
+            return True
         if method != "GET":
             if not me.can_write:
                 raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
@@ -1709,7 +1736,10 @@ def handle(handler, parsed, method):
             status, code, message = 422, "DRAMA_VALIDATION_FAILED", "Invalid request or incompatible production sheet."
         else:
             status, code, message = 500, "DRAMA_REQUEST_FAILED", "Story service unavailable; check server deployment."
-        handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+        payload = {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]}
+        if isinstance(exc, StoryError) and exc.details is not None:
+            payload['details'] = exc.details
+        handler.send_json(status, payload)
     finally:
         if conn:
             conn.close()
