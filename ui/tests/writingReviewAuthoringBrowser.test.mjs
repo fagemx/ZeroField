@@ -1,0 +1,166 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {createServer} from 'node:http';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const uiRoot=fileURLToPath(new URL('..',import.meta.url));
+const fixture=String.raw`
+import React from 'react';import{createRoot}from'react-dom/client';
+import{AuthoringWorkspace}from'./src/writing/AuthoringWorkspace.jsx';import{i18n}from'./src/i18n/index.js';
+import authoring from './src/writing/locales/authoring.en.json';import reviewAuthoring from './src/writing/locales/review1-authoring.en.json';
+i18n.addResourceBundle('en','translation',{writing:{authoring:{...authoring,...reviewAuthoring}}},true,true);
+window.calls=[];window.control={};window.statuses=[];window.failMetadata=false;window.delaySave=false;window.failLocal=false;
+const original=IDBDatabase.prototype.transaction;IDBDatabase.prototype.transaction=function(stores,mode,...rest){if(window.failLocal&&mode==='readwrite')throw new Error('Synthetic quota failure');return original.call(this,stores,mode,...rest);};
+const block=(bid,text,type='paragraph')=>({type,attrs:{bid,owner:null,created:null,...(type==='heading'?{level:2}:{})},content:[{type:'text',text,...(bid==='bodyB'?{marks:[{type:'bold'}]}:{})}]});
+window.serverDoc={type:'doc',content:[block('headA','Scene 01: Before','heading'),block('bodyA','Surrounding before.'),block('headB','Scene 02: Selected','heading'),block('bodyB','Selected action.'),block('headC','Scene 03: After','heading'),block('bodyC','Surrounding after.')]};
+window.version=Number(sessionStorage.getItem('fixtureVersion'))||1;window.sceneMetadata={};window.lanes=[{laneId:'lane1',name:'Signal',order:1}];window.actor='actor-a';window.episode='ep1';
+window.structure=()=>({initialized:true,version:window.version,docHash:'hash'+window.version,scenes:['A','B','C'].map((key,i)=>({sceneKey:'scene'+key,headingBid:'head'+key,title:'Scene 0'+(i+1)+': '+({A:'Before',B:'Selected',C:'After'})[key],blockBids:['body'+key],beats:[{beatKey:'beat'+key,blockBids:['body'+key]}],assetCodes:['@CAST-01'],shotIds:['shot'+key],...(window.sceneMetadata[key]||{})})),lanes:window.lanes});
+const request=async(path,method='GET',body)=>{
+ window.calls.push({path,method,body:structuredClone(body)});const tail=path.split('/writing/')[1];
+ if(tail==='workspace')return {doc:structuredClone(serverDoc),docHash:'hash'+window.version,revision:window.version,structure:window.structure(),versions:{items:[]},branches:{items:[]},locks:[],baseline:{}};
+ if(tail==='structure/metadata'){
+  if(window.delayMetadata)await new Promise(resolve=>window.releaseMetadata=resolve);
+  if(window.failMetadata)throw Object.assign(new Error('Synthetic metadata offline'),{status:500});
+  if(body.baseVersion!==window.version)throw Object.assign(new Error('Structure changed'),{status:409});
+  for(const patch of body.scenePatches){const key=patch.sceneKey.slice(-1);window.sceneMetadata[key]={...(window.sceneMetadata[key]||{}),...patch};}
+  for(const patch of body.lanePatches){const lane=window.lanes.find(l=>l.laneId===patch.laneId);if(lane)Object.assign(lane,patch);else window.lanes.push(patch);}
+  window.version++;return {...window.structure(),clientMutationId:body.clientMutationId,savedAt:new Date().toISOString()};
+ }
+ if(tail==='script/ops'){
+  if(window.delaySave)await new Promise(resolve=>window.releaseSave=resolve);
+  for(const op of body.ops){const at=serverDoc.content.findIndex(n=>n.attrs.bid===op.bid);if(op.op==='put'){if(at>=0)serverDoc.content[at]=op.node;else serverDoc.content.splice(op.after?serverDoc.content.findIndex(n=>n.attrs.bid===op.after)+1:0,0,op.node);}else if(op.op==='del'){if(at>=0)serverDoc.content.splice(at,1);}else if(op.op==='order'){const byId=new Map(serverDoc.content.map(n=>[n.attrs.bid,n]));serverDoc.content=op.bids.map(id=>byId.get(id)).filter(Boolean);}}
+  window.version++;return {clientMutationId:body.clientMutationId,doc:structuredClone(serverDoc),docHash:'hash'+window.version,revision:window.version,version:window.version,conflicts:[]};
+ }
+ if(tail?.startsWith('sources/'))return null;
+ throw new Error('Unexpected route '+tail);
+};
+const root=createRoot(document.getElementById('root'));window.mount=()=>root.render(<AuthoringWorkspace slug="fixture" epId={window.episode} me={{actor_id:window.actor,role:'admin'}} writable request={request} controlRef={window.control} onStatus={s=>window.statuses.push(s)} onStage={s=>window.stage=s}/>);
+window.tryEpisode=async ep=>{if(!await control.current.flush())return false;window.episode=ep;window.mount();return true;};window.mount();
+`;
+async function browser(driver){
+ const bundle=await build({stdin:{contents:fixture,resolveDir:uiRoot,loader:'jsx'},bundle:true,write:false,format:'iife',jsx:'automatic',loader:{'.css':'empty'},define:{'process.env.NODE_ENV':'"production"'}});
+ const server=createServer((req,res)=>{if(req.url==='/app.js'){res.setHeader('Content-Type','text/javascript');res.end(bundle.outputFiles[0].text);}else{res.setHeader('Content-Type','text/html');res.end('<!doctype html><div id="root"></div><script src="/app.js"></script>');}});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const python=`from playwright.sync_api import sync_playwright,expect\nwith sync_playwright() as p:\n browser=p.chromium.launch(headless=True)\n context=browser.new_context(accept_downloads=True)\n page=context.new_page()\n errors=[]\n page.on('pageerror',lambda error:errors.append(str(error)))\n page.goto('http://127.0.0.1:${server.address().port}')\n expect(page.get_by_role('textbox',name='Manuscript editor')).to_contain_text('Selected action.')\n${driver}\n assert errors==[],errors\n context.close()\n browser.close()\nprint('PASS: mounted authoring regression')`;
+ try{const output=await new Promise((resolve,reject)=>{const child=spawn('python',['-X','utf8','-c',python]);let stdout='',stderr='';child.stdout.on('data',c=>stdout+=c);child.stderr.on('data',c=>stderr+=c);child.on('error',reject);child.on('close',code=>resolve({code,stdout,stderr}));});assert.equal(output.code,0,output.stdout+'\n'+output.stderr);console.log(output.stdout.trim());}
+ finally{await new Promise(resolve=>server.close(resolve));}
+}
+test('J1 mounted scene Enter, paste, delete, heading split and delayed ACK preserve local blocks and identities',{timeout:90000},()=>browser(String.raw`
+ page.get_by_role('button',name='Scene 02: Selected',exact=True).click()
+ editor=page.get_by_role('textbox',name='Manuscript editor')
+ expect(editor).not_to_contain_text('Surrounding before.')
+ page.wait_for_timeout(100)
+ editor.evaluate("el=>{const e=el.editor;let at;e.state.doc.forEach((n,p)=>{if(n.type.name==='paragraph')at=p+n.nodeSize-1});e.commands.setTextSelection(at);e.view.focus();}")
+ page.keyboard.press('Enter')
+ expect(editor.locator('p')).to_have_count(2)
+ page.keyboard.type('New paragraph.');page.keyboard.type(' Again.')
+ expect(editor.locator('p').last).to_have_text('New paragraph. Again.')
+ expect(editor.locator('h2')).to_have_text('Scene 02: Selected')
+ assert page.evaluate("calls.filter(c=>c.path.endsWith('script/ops')).length")==0
+ editor.evaluate(r"el=>{const data=new DataTransfer();data.setData('text/plain','Pasted one.\n\nPasted two.');el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));}")
+ expect(editor).to_contain_text('Pasted two.')
+ editor.evaluate("el=>{el.editor.commands.setTextSelection(3);el.editor.view.focus();}");page.keyboard.press('Enter')
+ expect(editor.locator('h2')).to_have_count(2)
+ page.keyboard.type('Split heading.')
+ editor.evaluate("el=>{const e=el.editor;let range;e.state.doc.forEach((n,p)=>{if(n.type.name==='paragraph')range={from:p+1,to:p+n.nodeSize-1}});e.commands.setTextSelection(range);e.view.focus();}");page.keyboard.press('Backspace');page.keyboard.press('Backspace')
+ expect(editor).not_to_contain_text('Pasted two.')
+ ids=editor.evaluate("el=>[...el.children].map(n=>n.getAttribute('data-bid'))")
+ assert len(ids)==len(set(ids)),ids
+ page.evaluate('delaySave=true')
+ page.keyboard.press('Control+s');page.wait_for_function('!!window.releaseSave')
+ editor.evaluate("el=>{const e=el.editor;let at;e.state.doc.forEach((n,p)=>{if(at===undefined&&n.type.name==='paragraph')at=p+n.nodeSize-1});e.commands.setTextSelection(at);e.view.focus();}");page.keyboard.press('Enter');page.keyboard.type('Typed during ACK.')
+ editor.dispatch_event('compositionstart');page.keyboard.insert_text('中文');page.wait_for_timeout(850)
+ expect(editor).to_contain_text('Typed during ACK.中文')
+ page.evaluate('delaySave=false;releaseSave()');page.wait_for_timeout(100)
+ expect(editor).to_contain_text('Typed during ACK.中文')
+ editor.dispatch_event('compositionend');page.wait_for_timeout(50)
+ # Multiple transactions in one JS turn must use the latest draft membership, not a render closure.
+ editor.evaluate("el=>{const e=el.editor;e.commands.splitBlock();e.commands.insertContent('Synchronous first');e.commands.splitBlock();e.commands.insertContent('Synchronous second');}")
+ expect(editor).to_contain_text('Synchronous second')
+ assert page.evaluate('control.current.flush({requireServer:true})') is True
+ expect(editor).to_contain_text('Typed during ACK.中文')
+ full=page.evaluate('serverDoc.content');bids=[n['attrs']['bid'] for n in full]
+ assert len(bids)==len(set(bids)),bids
+ assert bids[:2]==['headA','bodyA'] and bids[-2:]==['headC','bodyC'],bids
+ assert next(n for n in full if n['attrs']['bid']=='bodyB')['content'][0]['marks']==[{'type':'bold'}]
+ page.get_by_role('button',name='Full manuscript',exact=True).click()
+ expect(editor).to_contain_text('Surrounding before.')
+ expect(editor).to_contain_text('Typed during ACK.中文')
+`));
+test('J3 mounted outline Ctrl+S failure is dirty/recoverable and restores after navigation',{timeout:90000},()=>browser(String.raw`
+ page.get_by_role('button',name='Plot overview',exact=True).click()
+ page.locator('.writing-scene-metadata textarea').nth(1).fill('Author summary before blur')
+ assert page.evaluate('control.current.isDirty()') is True
+ page.evaluate('failMetadata=true');page.keyboard.press('Control+s')
+ page.wait_for_function("calls.some(c=>c.path.endsWith('structure/metadata'))")
+ assert page.evaluate('control.current.isDirty()') is True
+ assert page.evaluate('control.current.flush()') is True
+ assert page.evaluate('control.current.recoveryState().state')=='local_only'
+ assert page.evaluate("tryEpisode('ep2')") is True
+ page.wait_for_function("statuses.at(-1)?.tools?.some(t=>t.key==='outline:metadata'&&t.state!=='recovery')")
+ assert page.evaluate("tryEpisode('ep1')") is True
+ page.get_by_role('button',name='Restore outline draft for review',exact=True).click()
+ page.get_by_role('button',name='Plot overview',exact=True).click()
+ expect(page.locator('.writing-scene-metadata textarea').nth(1)).to_have_value('Author summary before blur')
+ assert page.evaluate("calls.filter(c=>c.path.endsWith('structure/metadata')).every(c=>c.body.baseVersion===1)") is True
+ page.evaluate('failMetadata=false');page.keyboard.press('Control+s')
+ page.wait_for_function('control.current.isDirty()===false')
+ assert page.evaluate('sceneMetadata.B.summary')=='Author summary before blur'
+`));
+test('J3 controlled summary/time/plot/lane edits survive delayed ACK and use successive current CAS',{timeout:90000},()=>browser(String.raw`
+ page.get_by_role('button',name='Plot overview',exact=True).click()
+ row=page.locator('.writing-scene-metadata').nth(1)
+ page.evaluate('delayMetadata=true')
+ row.locator('textarea').fill('First summary')
+ row.get_by_label('Story time',exact=True).fill('Three years earlier')
+ row.get_by_label('Signal',exact=True).fill('Signal plot cell')
+ page.keyboard.press('Control+s');page.wait_for_function('!!window.releaseMetadata')
+ row.locator('textarea').fill('Newest summary during ACK')
+ row.get_by_label('Story time',exact=True).fill('The following night')
+ page.evaluate('delayMetadata=false;releaseMetadata()')
+ page.wait_for_function('control.current.isDirty()===false')
+ expect(row.locator('textarea')).to_have_value('Newest summary during ACK')
+ expect(row.get_by_label('Story time',exact=True)).to_have_value('The following night')
+ expect(row.get_by_label('Signal',exact=True)).to_have_value('Signal plot cell')
+ assert page.evaluate("calls.filter(c=>c.path.endsWith('structure/metadata')).map(c=>c.body.baseVersion)")==[1,2]
+ assert page.evaluate('sceneMetadata.B.plot.lane1')=='Signal plot cell'
+ expect(row.get_by_role('button',name='1 linked shots',exact=True)).to_be_visible()
+ # Projection remains consumable after the metadata ACK/reload.
+ expect(row).to_contain_text('@CAST-01')
+ page.locator('.writing-outline form').get_by_role('textbox').last.fill('Renamed thread')
+ page.keyboard.press('Control+s');page.wait_for_function('control.current.isDirty()===false')
+ assert page.evaluate('lanes[0].name')=='Renamed thread'
+ expect(page.get_by_role('textbox',name='Manuscript editor')).to_contain_text('Selected action.')
+ assert page.evaluate("calls.some(c=>/generations|allocations|script\/ops/.test(c.path))") is False
+`));
+test('J3 quota + network failure blocks leaving; metadata-only divergent recovery is never rebased/published',{timeout:90000},()=>browser(String.raw`
+ page.get_by_role('button',name='Plot overview',exact=True).click()
+ page.evaluate('failLocal=true;failMetadata=true')
+ page.locator('.writing-scene-metadata textarea').nth(1).fill('Do not lose this metadata')
+ page.keyboard.press('Control+s')
+ page.wait_for_function("control.current.recoveryState().state==='save_failed'")
+ assert page.evaluate('control.current.recoveryState().recoverable') is False
+ assert page.evaluate("tryEpisode('ep2')") is False
+ assert page.evaluate('control.current.flush({reason:"identity"})') is False
+ assert page.evaluate("window.dispatchEvent(new Event('beforeunload',{cancelable:true}))") is False
+ with page.expect_download() as info:page.get_by_role('button',name='Download outline draft',exact=True).click()
+ assert 'Do not lose this metadata' in open(info.value.path(),encoding='utf-8').read()
+ page.evaluate('failLocal=false')
+ assert page.evaluate('control.current.flush()') is True
+ assert page.evaluate('control.current.recoveryState().state')=='local_only'
+ # A different browser tab changed structure metadata, not manuscript text.
+ page.evaluate("sessionStorage.setItem('fixtureVersion',String(++version))")
+ page.reload()
+ page.get_by_role('button',name='Restore outline draft for review',exact=True).click()
+ page.wait_for_function("control.current.recoveryState().state==='conflict'")
+ expect(page.get_by_text('This draft keeps base version 1',exact=False)).to_be_visible()
+ assert page.evaluate('control.current.flush({reason:"save"})') is False
+ assert page.evaluate("calls.filter(c=>c.path.endsWith('structure/metadata')).length")==0
+ page.get_by_role('button',name='Plot overview',exact=True).click()
+ expect(page.locator('.writing-scene-metadata textarea').nth(1)).to_have_value('Do not lose this metadata')
+ assert page.evaluate("tryEpisode('ep2')") is False
+ page.get_by_role('button',name='Discard outline draft and read current structure',exact=True).click()
+ page.wait_for_function('control.current.isDirty()===false')
+ assert page.evaluate("calls.filter(c=>c.path.endsWith('structure/metadata')).length")==0
+`));
