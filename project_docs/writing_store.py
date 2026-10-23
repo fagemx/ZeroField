@@ -301,7 +301,7 @@ def resolve_ref(conn, scope, source_ref, *, write=False):
         result={'doc':doc,'docHash':doc_hash(doc),'version':tab['revision'],'structure':current_structure}
         result['structureHash']=result['structure']['structureHash']
         result['composition']=composition(doc)
-        result['productionInputs']=production_inputs(replace(scope,episode=story.episode(conn,scope.episode_id)))
+        result['productionInputs']=production_inputs(replace(scope,episode=story.episode(conn,scope.episode_id)),conn=conn,doc=doc)
         result['resourceId']=scope.episode_id
         result['locked']=False
     elif kind in ('source','branch','version'):
@@ -315,6 +315,8 @@ def resolve_ref(conn, scope, source_ref, *, write=False):
         result['locked']=True if kind=='version' else bool(data.get('locked',False))
         result['docHash']=doc_hash(result['doc'])
         result.setdefault('structure',{})
+        if kind=='branch':
+            result['productionInputs']=production_inputs(replace(scope,episode=story.episode(conn,scope.episode_id)),conn=conn,doc=result['doc'])
         result['structureHash']=hash_value(result['structure']) if 'structureHash' not in result else result['structureHash']
     else:
         story.invalid('Unknown sourceRef kind.')
@@ -329,8 +331,26 @@ def composition(doc):
     return {'mediumLens':match[1],'genreLens':match[2]} if match else {}
 
 
-def production_inputs(scope):
-    return {'settings':copy.deepcopy(scope.episode.get('settings',{})), 'breakdownMode':scope.episode.get('breakdownMode',scope.episode.get('settings',{}).get('breakdownMode','auto'))}
+def production_inputs(scope, *, conn=None, doc=None):
+    result={'settings':copy.deepcopy(scope.episode.get('settings',{})),
+        'breakdownMode':scope.episode.get('breakdownMode',scope.episode.get('settings',{}).get('breakdownMode','auto'))}
+    if doc is not None:
+        result['composition']=composition(doc)
+    if conn is not None and doc is not None:
+        # Freeze only actually referenced visual settings, never notes or media bytea.
+        codes={m[1].upper().replace('#',':') for m in story.ASSET_RE.finditer(doc_text(doc))}
+        codes|={code.split(':')[0] for code in codes if ':' in code}  # variant image fallback
+        known={a['assetCode']:a for a in story.assets(conn,scope.episode)} if codes else {}
+        bindings=[]
+        for code in sorted(codes):
+            asset=known.get(code)
+            if asset:
+                visual={k:asset.get(k) for k in ('assetId','assetCode','name','prompt','type','kind','selectedImageUrl')}
+                bindings.append({'assetId':asset['assetId'],'assetCode':code,'visualSettings':visual,'visualSettingsHash':hash_value(visual)})
+            else:
+                bindings.append({'assetCode':code,'missing':True})
+        result['assetBindings']=bindings
+    return result
 
 
 def create_preview(conn, scope, kind, proposal):
@@ -375,7 +395,7 @@ def replay_receipt(conn, scope, resource_key, mutation_id, body_hash):
 def save_receipt(conn, scope, resource_key, mutation_id, body_hash, ack):
     identifier=_receipt_id(scope,resource_key,mutation_id)
     # Bound ACKs, retaining script conflicts/doc for reliable block acknowledgements.
-    if len(canonical(ack).encode('utf8'))>2500000:
+    if len(canonical(ack).encode('utf8'))>16000000:
         fail('LIMIT_EXCEEDED','Writing acknowledgement exceeds the response limit.',413)
     existing=get_record(conn,scope,'writing_receipt',identifier,required=False,lock=True)
     if existing:

@@ -162,6 +162,24 @@ class WritingHTTPTests(unittest.TestCase):
         text=story.doc_text(self.writing('workspace')['doc']);self.assertIn('New Alpha',text);self.assertNotIn('New Beta',text)
         self.assertTrue(applied['beforeVersionId'])
 
+    def test_snapshots_pin_only_referenced_visual_settings_and_detect_changes(self):
+        self.init();self.save_doc(document('Scene 01: Arrival','@CAST-01 enters.'))
+        self.ok(f'/episodes/{self.ep}/asset-extractions','POST',{})
+        ws=self.writing('workspace');baseline=self.writing('versions/'+ws['baseline']['versionId'])
+        self.assertTrue(ws['productionInputs']['assetBindings'])
+        branch=self.writing('branches','POST',{'sourceRef':{'kind':'working'},'name':'Alternate','expectedSourceHash':ws['docHash']})
+        preview=self.writing('previews','POST',{'kind':'promotion','sourceRef':{'kind':'branch','id':branch['branchId']},'expectedSourceHash':branch['docHash'],'targetDocHash':ws['docHash'],'whole':True})
+        asset=next(a for a in story.assets(self.conn,story.episode(self.conn,self.ep)) if a['assetCode']=='CAST-01')
+        story.mutate_row(self.conn,service.Identity(self.actor,'Test','admin'),self.slug,'soul-cast',asset['rowId'],{2:'A deliberately changed visual appearance.'})
+        self.conn.commit()
+        current=self.writing('workspace')
+        self.assertEqual(current['docHash'],ws['docHash'])
+        self.assertNotEqual(current['productionInputsHash'],ws['productionInputsHash'])
+        self.assertTrue(self.writing('previews/'+preview['previewId'])['stale'])
+        self.assertEqual(self.writing('versions/'+baseline['versionId'])['snapshot'],baseline['snapshot'])
+        self.ok(f'/episodes/{self.ep}/asset-extractions','POST',{})
+        self.assertNotEqual(self.writing('workspace')['baseline']['versionId'],baseline['versionId'])
+
     def test_typed_private_checkpoint_cannot_be_forged_or_client_written(self):
         self.init()
         saved=self.writing('sources/idea','PUT',{'baseVersion':0,'clientMutationId':'source','doc':document('Before'),'structure':{},'composition':{}})

@@ -73,7 +73,8 @@ def workspace(conn, scope):
         'revision':current['version'],'structure':current['structure'],'structureHash':current['structureHash'],
         'versions':store.list_records(conn,scope,'writing_version'),'sources':store.list_records(conn,scope,'writing_source'),
         'branches':store.list_records(conn,scope,'writing_branch'),'baseline':baseline,'composition':current['composition'],
-        'productionInputs':current['productionInputs'],'capabilities':{'writable':bool(scope.me.can_write)}}
+        'productionInputs':current['productionInputs'],'productionInputsHash':current['productionInputsHash'],
+        'capabilities':{'writable':bool(scope.me.can_write)}}
 
 
 def _source_structure(value):
@@ -173,10 +174,8 @@ def replace_working(conn, scope, doc, *, expected_hash):
 
 
 def validate_fingerprints(conn, scope, preview):
-    from dataclasses import replace
-    live_scope=replace(scope,episode=story.episode(conn,scope.episode_id))
-    if 'productionInputsHash' in preview and store.hash_value(store.production_inputs(live_scope))!=preview['productionInputsHash']:
-        store.fail('PREVIEW_STALE','Production settings changed.')
+    if 'productionInputsHash' in preview and store.resolve_ref(conn,scope,{'kind':'working'})['productionInputsHash']!=preview['productionInputsHash']:
+        store.fail('PREVIEW_STALE','Production settings or referenced visual settings changed.')
     for frozen in preview.get('sourceFingerprints',[])+preview.get('targetFingerprints',[]):
         if 'sourceRef' not in frozen: continue  # feature owners validate shot/domain fingerprints
         current=store.resolve_ref(conn,scope,frozen['sourceRef'])
