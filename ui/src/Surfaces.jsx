@@ -24,14 +24,14 @@ export function IdentityBadge({ me, members, beforeIdentity, onSignOut }) {
   const locale = useLocale();
   const list = members || [];
   if (list.length <= 1 || me.auth_mode !== "dev") {
-    return (
+    return <>
       <span className="me" title={uiText("surfaces.asSignedIn", {v0: (me.name), v1: (roleLabel(me.role, me.role_label))})}>
         <Avatar id={me.actor_id} name={me.name} size={26} />
         <span className="name">{me.name}</span>
         <small>{roleLabel(me.role, me.role_label)}</small>
-        {me.auth_mode === 'token' && onSignOut && <button type="button" onClick={onSignOut}>{uiText('writing.integration.signOut')}</button>}
       </span>
-    );
+      {me.auth_mode === 'token' && onSignOut && <button type="button" onClick={onSignOut}>{uiText('writing.integration.signOut')}</button>}
+    </>;
   }
   return (
     <span className="me" title={uiText("surfaces.switchCrewIdentityDevelopmentDemoMode")}>
