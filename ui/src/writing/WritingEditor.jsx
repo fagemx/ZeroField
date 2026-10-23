@@ -44,31 +44,38 @@ export function patchWritingEditor(editor,json) {
 }
 export function WritingEditor({doc,writable,me,onChange,onComposition,onReady,label,focusBid,locks=[],privateResource=false}) {
   const latest=useRef({});latest.current={onChange,onComposition,onReady};
-  const composing=useRef(false),compositionBase=useRef(null),deferred=useRef(null),editorRef=useRef(null);
+  const composing=useRef(false),compositionBase=useRef(null),deferred=useRef(null),editorRef=useRef(null),localEchoes=useRef([]);
+  const changed=next=>{localEchoes.current.push(stable(next));if(localEchoes.current.length>200)localEchoes.current.shift();latest.current.onChange?.(next);};
   const ctx=useRef({});ctx.current={me:me?.actor_id,admin:privateResource || me?.role==='admin',locks:new Map(locks.map(lock=>[lock.bid,lock.name || lock.actor_id])),names:new Map(),adminIds:new Set(),onBlocked:()=>{}};
   const editor=useEditor({
     extensions:writingExtensions({getOwner:()=>me?.role==='admin'?null:me?.actor_id,getCtx:()=>ctx.current}),
-    content:doc,editable:writable,immediatelyRender:false,
+    content:doc,editable:writable,immediatelyRender:false,shouldRerenderOnTransaction:false,
     editorProps:{attributes:{'aria-label':label,role:'textbox','aria-multiline':'true'},handleDOMEvents:{
       compositionstart:()=>{composing.current=true;compositionBase.current=canonicalEditorDoc(editorRef.current.getJSON());latest.current.onComposition?.(true);return false;},
       compositionend:()=>{
         // Let ProseMirror finish its composition transaction before scheduling a save/remote patch.
-        setTimeout(()=>{if(!editorRef.current || editorRef.current.isDestroyed)return;composing.current=false;const live=canonicalEditorDoc(editorRef.current.getJSON());const merged=deferred.current?mergeAcknowledged(deferred.current,compositionBase.current,live):live;deferred.current=null;if(stable(merged)!==stable(live))patchWritingEditor(editorRef.current,merged);latest.current.onChange?.(merged);latest.current.onComposition?.(false);},0);return false;
+        setTimeout(()=>{if(!editorRef.current || editorRef.current.isDestroyed)return;composing.current=false;const live=canonicalEditorDoc(editorRef.current.getJSON());const merged=deferred.current?mergeAcknowledged(deferred.current,compositionBase.current,live):live;deferred.current=null;if(stable(merged)!==stable(live))patchWritingEditor(editorRef.current,merged);changed(merged);latest.current.onComposition?.(false);},0);return false;
       },
     }},
     onCreate:({editor})=>{const tr=ensureIds(editor.state);if(tr)editor.view.dispatch(tr);latest.current.onReady?.(editor);},
-    onUpdate:({editor,transaction})=>{if(!transaction.getMeta(REMOTE))latest.current.onChange?.(canonicalEditorDoc(editor.getJSON()));},
+    onUpdate:({editor,transaction})=>{if(!transaction.getMeta(REMOTE))changed(canonicalEditorDoc(editor.getJSON()));},
   },[]);
   editorRef.current=editor;
   useEffect(()=>{if(editor)editor.setEditable(writable,false);},[editor,writable]);
+  // A local transaction can rerender EditorContent before React receives its parent echo.
+  // Only a genuinely different prop document is a remote/projection update.
+  const docVersion=stable(doc);
   useEffect(()=>{
-    if(!editor || stable(canonicalEditorDoc(editor.getJSON()))===stable(doc))return;
+    if(!editor)return;
+    const echo=localEchoes.current.lastIndexOf(docVersion);
+    if(echo>=0){localEchoes.current.splice(0,echo+1);return;}
+    if(stable(canonicalEditorDoc(editor.getJSON()))===docVersion)return;
     if(composing.current){deferred.current=doc;return;}patchWritingEditor(editor,doc);
-  },[editor,doc]);
+  },[editor,docVersion]);
   useEffect(()=>{
     if(!editor || !focusBid || composing.current)return;
     let at=null;editor.state.doc.descendants((node,pos)=>{if(node.attrs.bid===focusBid){at=pos+1;return false;}});
-    if(at!==null){editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve(at))).scrollIntoView());editor.commands.focus();}
+    if(at!==null){editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve(at))).scrollIntoView());editor.view.focus();}
   },[editor,focusBid]);
   return <EditorContent editor={editor} className="writing-editor" />;
 }

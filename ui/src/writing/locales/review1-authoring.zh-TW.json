@@ -1,0 +1,11 @@
+{
+  "outlineDraft": "情節總覽中繼資料草稿",
+  "restoreOutline": "還原情節總覽草稿以供檢視",
+  "discardOutlineRecovery": "捨棄此情節總覽復原稿",
+  "keepOutlineRecovery": "為我的帳戶私下保留此確切的情節總覽復原稿",
+  "saveOutline": "儲存情節總覽中繼資料",
+  "discardOutline": "捨棄情節總覽草稿並讀取目前結構",
+  "keepOutline": "為我的帳戶私下保留此確切的情節總覽草稿",
+  "downloadOutline": "下載情節總覽草稿",
+  "outlineNoRebase": "共享結構已變更。此草稿保留基底版本 {{version}}，不會覆寫目前的中繼資料。請先下載再捨棄，然後檢視目前結構並重新輸入您的變更。"
+}

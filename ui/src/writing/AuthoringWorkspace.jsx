@@ -4,7 +4,8 @@ import { storyRequest } from '../storyModel.js';
 import { createWritingTransport, writingAction, mutationId } from './writingTransport.js';
 import { createWritingJournal, journalScope } from './writingJournal.js';
 import { WritingPersistence } from './writingPersistence.js';
-import { baselineState, documentText, emptyDoc, refKey, replaceSceneBlocks, sceneBlocks, textCounts, stable, sourceStructureForDoc, semanticEnumKey } from './writingModel.js';
+import { WritingOutlineRecovery } from './writingOutlineRecovery.js';
+import { baselineState, documentText, emptyDoc, refKey, replaceSceneBlocks, sceneBlocks, draftSceneMembership, textCounts, stable, sourceStructureForDoc, semanticEnumKey } from './writingModel.js';
 import { WritingEditor } from './WritingEditor.jsx';
 import { WritingOutline } from './WritingOutline.jsx';
 import { WritingVersions } from './WritingVersions.jsx';
@@ -32,7 +33,12 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   const [workspace,setWorkspace]=useState(null),[resourceRef,setResourceRef]=useState({kind:'working'}),[resource,setResource]=useState(null),[snapshot,setSnapshot]=useState(null),[error,setError]=useState(null),[panel,setPanel]=useState(null),[preview,setPreview]=useState(null),[selectedScene,setSelectedScene]=useState(null),[focusBid,setFocusBid]=useState(null),[focus,setFocus]=useState(false),[outlineOpen,setOutlineOpen]=useState(true),[fontSize,setFontSize]=useState(18),[lineHeight,setLineHeight]=useState(1.8),[pageWidth,setPageWidth]=useState(720),[duplicate,setDuplicate]=useState(false),[busy,setBusy]=useState(false),[switching,setSwitching]=useState(false);
   const taskAbort=useRef(new AbortController());
   const persistence=useRef(null),latest=useRef({}),mounted=useRef(true),loadSequence=useRef(0),editor=useRef(null),actionRetry=useRef(null),structureUndo=useRef(null);
-  const [toolRevision,setToolRevision]=useState(0);
+  const draftScenes=useRef(new Map());
+  const [toolRevision,setToolRevision]=useState(0),[outlineSnapshot,setOutlineSnapshot]=useState(null);
+  const outlineRecovery=useMemo(()=>new WritingOutlineRecovery({slug,actorId:me.actor_id,epId,transport,journal,tabId:tabId.current,
+    flushDocument:options=>persistence.current?.flush(options) ?? true,
+    notify:state=>{if(mounted.current){setOutlineSnapshot(state);setToolRevision(value=>value+1);}},
+  }),[slug,me.actor_id,epId,transport,journal]);
   const toolControls=useMemo(()=>new WritingToolControls(()=>{if(mounted.current)setToolRevision(value=>value+1);}),[]);
   const registerToolControl=useCallback((key,control)=>toolControls.register(key,control),[toolControls]);
   latest.current={workspace,resourceRef,resource,snapshot,writable,onChanged,onStatus,selectedScene,panel,translate:t};
@@ -45,13 +51,16 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   },[transport]);
   const reload=useCallback(async()=>{
     const data=await transport('workspace');if(!mounted.current)return;
-    setWorkspace(data);
+    setWorkspace(data);outlineRecovery.refresh(data.structure);
     const current=latest.current.resourceRef;
     const next=await fetchResource(current,data);if(!mounted.current)return;
-    if(persistence.current?.refresh(next)){setResource(next);setSnapshot(persistence.current.snapshot());}
+    if(persistence.current?.refresh(next)){draftScenes.current.clear();setResource(next);setSnapshot(persistence.current.snapshot());}
     else if(!persistence.current){setResource(next);}
     return data;
-  },[transport,fetchResource]);
+  },[transport,fetchResource,outlineRecovery]);
+  useEffect(()=>{
+    if(outlineSnapshot?.state==='saved'&&workspace&&outlineSnapshot.base?.version>workspace.structure.version)reload().then(()=>latest.current.onChanged?.()).catch(report);
+  },[outlineSnapshot,workspace,reload,report]);
   const load=useCallback(async(ref)=>{
     const sequence=++loadSequence.current;
     let data=await transport('workspace');
@@ -59,15 +68,18 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     const next=await fetchResource(ref,data);
     if(!mounted.current || sequence!==loadSequence.current)return;
     if(!next?.doc)throw new Error(latest.current.translate(p+'invalidWorkspace'));
-    persistence.current?.dispose();
+    persistence.current?.dispose();draftScenes.current.clear();outlineRecovery.refresh(data.structure);if(!outlineRecovery.discovered)await outlineRecovery.discover();
+    if(!mounted.current || sequence!==loadSequence.current)return;
     setWorkspace(data);setResourceRef(ref);setResource(next);setSelectedScene(ref.kind==='working'&&documentText(next.doc).length>100000?data.structure.scenes?.[0]?.sceneKey || null:null);setPreview(null);structureUndo.current=null;
     if(ref.kind==='version'){persistence.current=null;setSnapshot({state:'readonly',dirty:false,recoverable:false,doc:next.doc,docHash:next.docHash});return data;}
     const instance=new WritingPersistence({resourceRef:ref,initial:next,transport,journal,
       scope:journalScope({slug,actorId:me.actor_id,epId,resourceKind:ref.kind,resourceId:ref.id || ref.mode || 'main'}),tabId:tabId.current,
-      notify:state=>{if(mounted.current&&persistence.current===instance){setSnapshot(state);if(ref.kind==='working'&&state.state==='saved'&&state.docHash!==latest.current.workspace?.docHash){transport('workspace').then(data=>{if(mounted.current&&persistence.current===instance&&data.docHash===instance.base.docHash)setWorkspace(data);}).catch(report);}}}});
+      notify:state=>{if(mounted.current&&persistence.current===instance){setSnapshot(state);if(ref.kind==='working'&&state.state==='saved'&&state.docHash!==latest.current.workspace?.docHash){transport('workspace').then(data=>{if(mounted.current&&persistence.current===instance&&data.docHash===instance.base.docHash){setWorkspace(data);outlineRecovery.refresh(data.structure);}}).catch(report);}}}});
     persistence.current=instance;setSnapshot(instance.snapshot());await instance.discover();return data;
-  },[transport,fetchResource,journal,slug,me.actor_id,epId,writable,report]);
+  },[transport,fetchResource,journal,slug,me.actor_id,epId,writable,report,outlineRecovery]);
   useEffect(()=>{mounted.current=true;taskAbort.current=new AbortController();load({kind:'working'}).catch(report);return()=>{mounted.current=false;loadSequence.current++;persistence.current?.dispose();taskAbort.current.abort();};},[load,report]);
+  useEffect(()=>()=>outlineRecovery.dispose(),[outlineRecovery]);
+  useEffect(()=>registerToolControl('outline:metadata',outlineRecovery),[registerToolControl,outlineRecovery]);
   // Tool callers get this manuscript-only boundary: previews must not submit unrelated forms.
   const flushDocument=useCallback(async(options={})=>persistence.current?await persistence.current.flush(options.reason==='identity'?{...options,requireServer:true}:options):!!latest.current.resource,[]);
   const flush=useCallback(async(options={})=>{
@@ -94,10 +106,10 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   useEffect(()=>{if(snapshot)onStatus?.({...toolControls.summary(snapshot),docHash:snapshot.docHash});},[snapshot,onStatus,toolControls,toolRevision]);
   useEffect(()=>{
     const unload=event=>{const state=toolControls.summary(persistence.current?.snapshot());if(state.dirty&&!state.recoverable){event.preventDefault();event.returnValue='';}};
-    const reconnect=()=>{if(persistence.current?.state==='local_only')persistence.current.save();};
+    const reconnect=()=>{if(persistence.current?.state==='local_only')persistence.current.save();if(outlineRecovery.state==='local_only')outlineRecovery.save();};
     window.addEventListener('beforeunload',unload);window.addEventListener('online',reconnect);
     return()=>{window.removeEventListener('beforeunload',unload);window.removeEventListener('online',reconnect);};
-  },[toolControls]);
+  },[toolControls,outlineRecovery]);
   useEffect(()=>{
     if(!globalThis.BroadcastChannel)return;
     const channel=new BroadcastChannel('zerofield-writing-'+JSON.stringify([slug,me.actor_id,epId,refKey(resourceRef)]));
@@ -111,8 +123,9 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     const result=await retry();actionRetry.current=null;return result;
   };
   const structure=workspace?.structure || resource?.structure || {scenes:[],lanes:[]};
-  const previewStructure=operation=>run(async()=>{await requireServer();const current=await transport('workspace');const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation});setPreview(result);setPanel('preview');});
-  const metadata=(scenePatch,lanePatch)=>run(async()=>{await requireServer();const result=await transport('structure/metadata','PATCH',{baseVersion:structure.version,clientMutationId:mutationId(),scenePatches:scenePatch?[scenePatch]:[],lanePatches:lanePatch?[lanePatch]:[]});await reload();if(mounted.current)onChanged?.(result);});
+  const previewStructure=operation=>run(async()=>{await requireServer();await requireOutline();const current=await transport('workspace');const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation});setPreview(result);setPanel('preview');});
+  const metadata=(scenePatch,lanePatch)=>outlineRecovery.change(scenePatch,lanePatch);
+  const requireOutline=async()=>{if(!await outlineRecovery.flush({requireServer:true}))throw new Error(t(p+'serverSaveRequired'));};
   const apply=async selection=>{
     await requireServer();
     let active=preview;
@@ -140,13 +153,14 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     const searchShortcut=(event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key.toLowerCase()==='f';
     // The injected tools panel owns search mode and listens at window; let that one shortcut through.
     if(!searchShortcut)event.stopPropagation();
-    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();flush();}
+    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();flush({reason:'save'});}
     if(searchShortcut){event.preventDefault();setFocus(false);setPanel('tools');}
     if(event.key==='Escape'&&focus){event.preventDefault();setFocus(false);editor.current?.commands.focus();}
   };
   const counts=useMemo(()=>snapshot?.doc?textCounts(snapshot.doc):{words:0,characters:0},[snapshot?.doc]);
   if(!workspace||!resource||!snapshot)return <section className="authoring-workspace" aria-busy="true"><p role={error?'alert':'status'}>{error?.message || t(p+'loading')}</p></section>;
-  const doc=snapshot.doc,scene=selectedScene?structure.scenes?.find(scene=>scene.sceneKey===selectedScene):null;
+  const doc=snapshot.doc,serverScene=selectedScene?structure.scenes?.find(scene=>scene.sceneKey===selectedScene):null;
+  const scene=selectedScene?(draftScenes.current.get(selectedScene) || serverScene):null;
   const shown=scene?sceneBlocks(doc,scene):doc,baseline=baselineState(workspace);
   const editable=!!writable&&!switching&&resourceRef.kind!=='version'&&!resource.locked&&!snapshot.recoveries?.length&&!['conflict','auth_lost'].includes(snapshot.state);
   const aggregate=toolControls.summary(snapshot),toolSummary=toolControls.summary();
@@ -168,8 +182,23 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     {error&&<div role="alert">{error.message}{actionRetry.current&&![401,403,409].includes(error.status)&&<button type="button" onClick={()=>run(async()=>{await actionRetry.current();actionRetry.current=null;await reload();})}>{t(p+'retryAction')}</button>}</div>}
     {duplicate&&<p role="status">{t(p+'duplicateTab')}</p>}
     <div className="writing-layout">
-      {outlineOpen&&resourceRef.kind==='working'&&<aside className="writing-left"><WritingOutline structure={structure} doc={doc} writable={editable&&!busy} selected={selectedScene} onSelect={async key=>{if(await flush()){setSelectedScene(key);setFocusBid(structure.scenes.find(scene=>scene.sceneKey===key)?.headingBid);}}} onMetadata={metadata} onStructure={previewStructure} onShots={navigateShots} onUndo={structureUndo.current?()=>run(async()=>{await requireServer();const current=await transport('workspace'),undo=structureUndo.current;if(current.docHash!==undo.docHash || undo.structureHash&&current.structure.structureHash!==undo.structureHash)throw new Error(t(p+'undoStale'));const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation:{type:'restore',snapshotId:undo.snapshotId}});setPreview(result);setPanel('preview');}):null}/></aside>}
+      {outlineOpen&&resourceRef.kind==='working'&&<aside className="writing-left"><WritingOutline structure={structure} metadataDraft={outlineSnapshot?.draft} onComposition={value=>outlineRecovery.setComposing(value)} doc={doc} writable={editable&&!busy&&!outlineSnapshot?.recoveries?.length&&outlineSnapshot?.state!=='auth_lost'} selected={selectedScene} onSelect={async key=>{if(await flush()){setSelectedScene(key);setFocusBid(structure.scenes.find(scene=>scene.sceneKey===key)?.headingBid);}}} onMetadata={metadata} onStructure={previewStructure} onShots={navigateShots} onUndo={structureUndo.current?()=>run(async()=>{await requireServer();const current=await transport('workspace'),undo=structureUndo.current;if(current.docHash!==undo.docHash || undo.structureHash&&current.structure.structureHash!==undo.structureHash)throw new Error(t(p+'undoStale'));const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation:{type:'restore',snapshotId:undo.snapshotId}});setPreview(result);setPanel('preview');}):null}/></aside>}
       <main className="writing-manuscript">
+        {(outlineSnapshot?.dirty||outlineSnapshot?.localError)&&<section className="writing-outline-recovery" aria-label={t(p+'outlineDraft')}>
+          <h3>{t(p+'outlineDraft')}</h3><p role="status">{t(p+semanticEnumKey('state',outlineSnapshot.state))}</p>
+          {outlineSnapshot.localError&&<p role="alert">{t(p+'localRecoveryFailed')}<button type="button" onClick={()=>run(()=>outlineRecovery.dirty()?outlineRecovery.checkpoint():outlineRecovery.discover())}>{t(p+'retryAction')}</button></p>}
+          {outlineSnapshot.error&&<p role="alert">{outlineSnapshot.error.message}</p>}
+          {outlineSnapshot.conflict&&<p role="alert">{t(p+'outlineNoRebase',{version:outlineSnapshot.baseVersion})}</p>}
+          {outlineSnapshot.recoveries.map(row=><div key={row.key}><pre>{JSON.stringify(row.draft,null,2)}</pre>
+            <button type="button" onClick={()=>run(async()=>{const current=await transport('workspace');await outlineRecovery.restore(row,current.structure);})}>{t(p+'restoreOutline')}</button>
+            <button type="button" onClick={()=>run(()=>outlineRecovery.discardRecovery(row))}>{t(p+'discardOutlineRecovery')}</button>
+            <button type="button" onClick={()=>run(()=>outlineRecovery.preserveRecovery(row))}>{t(p+'keepOutlineRecovery')}</button>
+          </div>)}
+          {outlineRecovery.dirty()&&<><button type="button" disabled={!!outlineSnapshot.conflict||outlineSnapshot.state==='auth_lost'||outlineSnapshot.state==='saving'} onClick={()=>run(()=>outlineRecovery.save({explicit:true}))}>{t(p+'saveOutline')}</button>
+            <button type="button" onClick={()=>run(async()=>{const current=await transport('workspace');await outlineRecovery.discard(current.structure);await reload();})}>{t(p+'discardOutline')}</button>
+            <button type="button" onClick={()=>run(()=>outlineRecovery.preserveIdentity())}>{t(p+'keepOutline')}</button>
+            <button type="button" onClick={()=>{const url=URL.createObjectURL(new Blob([JSON.stringify({baseVersion:outlineSnapshot.baseVersion,...outlineSnapshot.draft},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='outline-recovery.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);}}>{t(p+'downloadOutline')}</button></>}
+        </section>}
         <p className="writing-scope">{t(p+(resourceRef.kind==='working'?'sharedWorking':resourceRef.kind==='version'?'sharedSnapshot':'privateScope'))}</p>
         {snapshot.recoveries?.length>0&&<WritingRecovery snapshot={snapshot} persistence={persistence.current} onError={report}/>}
         {snapshot.state==='conflict'&&<WritingConflict persistence={persistence.current} fetchServer={async()=>fetchResource(resourceRef,await transport('workspace'))} onError={report} onDownload={download}/>}
@@ -177,7 +206,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
         {snapshot.error&&snapshot.state!=='auth_lost'&&<p role="alert">{snapshot.error.message}</p>}
         {snapshot.localError&&<p role="alert">{t(p+'localRecoveryFailed')}</p>}
         {resourceRef.kind==='source'&&<WritingSourceTools key={resourceRef.mode} doc={doc} structure={snapshot.structure} composition={snapshot.composition} writable={editable} onDocument={next=>persistence.current.change(next)} onMetadata={patch=>persistence.current.changeMetadata(patch)} request={request} epId={epId} onError={report}/>}
-        <WritingEditor key={refKey(resourceRef)} doc={shown} writable={editable} me={me} privateResource={['source','branch'].includes(resourceRef.kind)} locks={resourceRef.kind==='working'?(workspace.locks || []):[]} label={t(p+'editorLabel')} focusBid={focusBid} onReady={value=>{editor.current=value;}} onComposition={value=>persistence.current?.setComposing(value)} onChange={next=>{if(editable){persistence.current?.change(scene?replaceSceneBlocks(persistence.current.doc,scene,next):next);if(resourceRef.kind==='source')persistence.current?.changeMetadata({structure:sourceStructureForDoc(persistence.current.draftStructure,next)});}}}/>
+        <WritingEditor key={refKey(resourceRef)} doc={shown} writable={editable} me={me} privateResource={['source','branch'].includes(resourceRef.kind)} locks={resourceRef.kind==='working'?(workspace.locks || []):[]} label={t(p+'editorLabel')} focusBid={focusBid} onReady={value=>{editor.current=value;}} onComposition={value=>persistence.current?.setComposing(value)} onChange={next=>{if(editable){if(scene){const localScene=draftScenes.current.get(selectedScene) || scene;const full=replaceSceneBlocks(persistence.current.doc,localScene,next);draftScenes.current.set(selectedScene,draftSceneMembership(localScene,next));persistence.current?.change(full);}else persistence.current?.change(next);if(resourceRef.kind==='source')persistence.current?.changeMetadata({structure:sourceStructureForDoc(persistence.current.draftStructure,next)});}}}/>
         {['local_only','save_failed','auth_lost'].includes(snapshot.state)&&<div><button type="button" onClick={download}>{t(p+'downloadDraft')}</button>{snapshot.state!=='auth_lost'&&<button type="button" onClick={()=>persistence.current.save()}>{t(p+'retrySave')}</button>}</div>}
       </main>
       <aside className="writing-right" hidden={!panel}>

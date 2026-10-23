@@ -47,6 +47,11 @@ export function sceneBlocks(doc, scene) {
   const bids = new Set([scene.headingBid,...(scene.blockBids || []),...(scene.beats || []).flatMap(beat=>beat.blockBids || [])]);
   return {...doc,content:(doc.content || []).filter(node=>bids.has(bidOf(node)))};
 }
+// A selected scene is an editing slice, not a fresh projection through server blockBids.
+// Keep every local block (including empty inserts and split headings) until a fresh load.
+export function draftSceneMembership(scene,partial) {
+  return {...scene,headingBid:null,blockBids:(partial.content || []).map(bidOf),beats:[]};
+}
 export function replaceSceneBlocks(doc, scene, partial) {
   const selected = sceneBlocks(doc,scene).content;
   const bids = new Set(selected.map(bidOf));

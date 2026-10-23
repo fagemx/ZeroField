@@ -2,20 +2,23 @@ import { useState } from 'react';
 import { useTranslation } from '../i18n/react.jsx';
 import { documentText, sceneBlocks } from './writingModel.js';
 const key='writing.authoring.';
-export function WritingOutline({structure,doc,writable,selected,onSelect,onMetadata,onStructure,onShots,onUndo}) {
+export function WritingOutline({structure,metadataDraft,doc,writable,selected,onSelect,onMetadata,onStructure,onShots,onUndo,onComposition}) {
   const {t}=useTranslation();const [outline,setOutline]=useState(false),[laneName,setLaneName]=useState(''),[splitPoints,setSplitPoints]=useState({});
-  const scenes=structure?.scenes || [],lanes=structure?.lanes || [];
-  return <section className="writing-outline" aria-label={t(key+'outline')}>
+  const scenes=(structure?.scenes || []).map(scene=>({...scene,...metadataDraft?.scenePatches?.find(patch=>patch.sceneKey===scene.sceneKey)}));
+  const laneMap=new Map((structure?.lanes || []).map(lane=>[lane.laneId,lane]));
+  for(const patch of metadataDraft?.lanePatches || [])laneMap.set(patch.laneId,{...laneMap.get(patch.laneId),...patch});
+  const lanes=[...laneMap.values()];
+  return <section className="writing-outline" aria-label={t(key+'outline')} onCompositionStart={()=>onComposition?.(true)} onCompositionEnd={()=>onComposition?.(false)}>
     <header><h2>{t(key+'outline')}</h2><button type="button" aria-pressed={outline} onClick={()=>setOutline(!outline)}>{t(key+'plotView')}</button></header>
     {onUndo&&<button type="button" disabled={!writable} onClick={onUndo}>{t(key+'undoStructure')}</button>}
     <button type="button" aria-pressed={!selected} onClick={()=>onSelect(null)}>{t(key+'fullDocument')}</button>
     <ol>{scenes.map((scene,index)=><li key={scene.sceneKey}>
       <button type="button" aria-pressed={selected===scene.sceneKey} onClick={()=>onSelect(scene.sceneKey)}>{scene.title || scene.heading || t(key+'sceneNumber',{number:index+1})}</button>
       {outline&&<div className="writing-scene-metadata">
-        <label>{t(key+'summary')}<textarea defaultValue={scene.summary || ''} key={`${scene.sceneKey}:summary:${structure.version}`} disabled={!writable} onBlur={e=>{if(e.target.value!==(scene.summary || ''))onMetadata({sceneKey:scene.sceneKey,summary:e.target.value});}}/></label>
+        <label>{t(key+'summary')}<textarea value={scene.summary || ''} disabled={!writable} onChange={e=>onMetadata({sceneKey:scene.sceneKey,summary:e.target.value})}/></label>
         {!scene.summary&&<p><small>{t(key+'excerpt')}</small> {documentText(sceneBlocks(doc,scene)).slice(0,200)}</p>}
-        {['storyTime','act','foreshadowing','payoff'].map(field=><label key={field}>{t(key+field)}<input defaultValue={scene[field] || ''} disabled={!writable} key={`${scene.sceneKey}:${field}:${structure.version}`} onBlur={e=>{if(e.target.value!==(scene[field] || ''))onMetadata({sceneKey:scene.sceneKey,[field]:e.target.value});}}/></label>)}
-        {lanes.map(lane=><label key={lane.laneId}>{lane.name}<input defaultValue={scene.plot?.[lane.laneId] || ''} disabled={!writable} onBlur={e=>onMetadata({sceneKey:scene.sceneKey,plot:{...(scene.plot || {}),[lane.laneId]:e.target.value}})}/></label>)}
+        {['storyTime','act','foreshadowing','payoff'].map(field=><label key={field}>{t(key+field)}<input value={scene[field] || ''} disabled={!writable} onChange={e=>onMetadata({sceneKey:scene.sceneKey,[field]:e.target.value})}/></label>)}
+        {lanes.map(lane=><label key={lane.laneId}>{lane.name}<input value={scene.plot?.[lane.laneId] || ''} disabled={!writable} onChange={e=>onMetadata({sceneKey:scene.sceneKey,plot:{...(scene.plot || {}),[lane.laneId]:e.target.value}})}/></label>)}
         <p>{(scene.assetCodes || []).join(' · ')}</p>
         {(scene.shotIds || []).length>0&&<button type="button" onClick={()=>onShots?.({shotIds:scene.shotIds})}>{t(key+'linkedShots',{count:scene.shotIds.length})}</button>}
       </div>}
@@ -31,7 +34,7 @@ export function WritingOutline({structure,doc,writable,selected,onSelect,onMetad
     {writable&&<button type="button" onClick={()=>onStructure({type:'add',afterSceneKey:scenes.at(-1)?.sceneKey || null,title:'Scene '+String(scenes.length+1).padStart(2,'0')+': '+t(key+'newScene')})}>{t(key+'addScene')}</button>}
     {outline&&writable&&<form onSubmit={event=>{event.preventDefault();if(laneName.trim()){onMetadata(null,{laneId:'lane_'+crypto.randomUUID().replaceAll('-',''),name:laneName.trim(),order:lanes.length+1});setLaneName('');}}}>
       <label>{t(key+'plotLane')}<input value={laneName} onChange={event=>setLaneName(event.target.value)} maxLength={100}/></label><button disabled={!laneName.trim() || lanes.length>=8}>{t(key+'addLane')}</button>
-      {lanes.map(lane=><div key={lane.laneId}><label>{t(key+'plotLane')}<input key={structure.version} defaultValue={lane.name} maxLength={200} onBlur={event=>{if(event.target.value!==lane.name)onMetadata(null,{laneId:lane.laneId,name:event.target.value});}}/></label><button type="button" onClick={()=>onStructure({type:'remove_lane',laneId:lane.laneId})}>{t(key+'removeLane',{name:lane.name})}</button></div>)}
+      {lanes.map(lane=><div key={lane.laneId}><label>{t(key+'plotLane')}<input value={lane.name} maxLength={200} onChange={event=>onMetadata(null,{laneId:lane.laneId,name:event.target.value})}/></label><button type="button" onClick={()=>onStructure({type:'remove_lane',laneId:lane.laneId})}>{t(key+'removeLane',{name:lane.name})}</button></div>)}
     </form>}
   </section>;
 }
