@@ -81,6 +81,9 @@ class StoryPureTests(unittest.TestCase):
         self.assertEqual(grammar[1]['dialogue'][0]['line'], 'We are out of time.')
         self.assertGreater(grammar[1]['dialogue'][0]['estimatedSeconds'], 0)
         self.assertEqual(grammar[2]['cameraMotion'], 'Crane Up')
+        self.assertEqual(story.infer_shot_grammar('Close-up of a trembling hand.', 1, 3)['cameraMotion'], 'Slow Dolly In')
+        self.assertEqual(story.infer_shot_grammar('MARA: "Stay."', 0, 2)['cameraMotion'], 'Static Tripod')
+        self.assertEqual(story.infer_shot_grammar('@CAST-01 chases the drone.', 0, 2)['cameraMotion'], 'Handheld Tracking')
         self.assertEqual(story.infer_shot_grammar('MARA: We should leave.', 1, 2)['dialogue'][0]['line'], 'We should leave.')
         from project_docs.story_adaptation import character_details
         self.assertEqual(character_details('MARA: We should leave.\nEnvironment: Station\nProp: Key'), [('MARA', '', None)])

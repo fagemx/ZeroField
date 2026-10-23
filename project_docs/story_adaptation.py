@@ -253,7 +253,10 @@ def infer_shot_grammar(beat_text, beat_index, total_beats):
         lens, rig = 50, "Panavision Millennium DXL2 / 50mm Prime"
     else:
         lens, rig = 35, "RED V-Raptor XL / 35mm T1.5"
-    move = "track" if running else "orbit" if orbit else "pushin" if moving or dialogue else "crane" if close and beat_index == total_beats - 1 and beat_index else "static"
+    if beat_index == 0:  # establishing shot: movement cues only
+        move = "track" if running else "pushin" if moving else "static"
+    else:
+        move = "track" if running else "orbit" if orbit else ("crane" if beat_index == total_beats - 1 else "pushin") if close else "pushin" if moving or dialogue else "static"
     motion = {"track": "Handheld Tracking", "orbit": "Orbit 45°", "pushin": "Slow Dolly In", "crane": "Crane Up", "static": "Static Tripod"}[move]
     return {"opticalRig": rig, "cameraMotion": motion, "dialogue": dialogue,
             "previsPlan": {"set": "parallax", "lens": lens, "move": move, "action": "walkin" if moving else "turnreach" if reaching else "stand",
