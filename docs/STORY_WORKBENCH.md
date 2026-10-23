@@ -1,5 +1,7 @@
 # Story Workbench (SPEC_06)
 
+> **Current SPEC16 workspace:** The studio now has **Story & World / Shot Stage**, Ctrl K, the crew dock and one Film overlay. [Writing workspace usage](WRITING_WORKSPACE.md) covers persistent private sources/drafts, plot structure, immutable creative versions, selected-shot impact, narrative notes, literal search/replace and private Office/print handoff. [SPEC16 verification](spec16-verification.json) records current integration evidence. The SPEC06 five-entry workflow and receipts below are preserved historical contracts, not the current top-level navigation.
+
 > SPEC_13 extends Start Creating with offline idea/novel adaptation, multi-beat storyboard coverage, generated 3D Stage plans and episode-scoped missing asset generation. See [current upstream workflow and API additions](SPEC13_UPSTREAM_PIPELINE.md). The one-initial-shot description below records the original SPEC_06 baseline.
 
 > SPEC_07 extends this baseline with explicit production policy, graphless routing, allocation preflight and M8-reviewed media chains. Use the [current routing/allocation guide](SPEC07_STUDIO_ROUTING.md) and [separate verification receipt](spec07-verification.json); the historical SPEC_06 receipt is unchanged.
