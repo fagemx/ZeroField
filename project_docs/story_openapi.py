@@ -236,7 +236,7 @@ def save_doc(conn, me, slug, key, doc):
             raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "This content belongs to another crew member.")
     doc, _ = validate_doc(doc, slug=slug)
     repo.save_tab_doc(conn, slug, key, doc=doc, title=tab["title"], actor_id=me.actor_id,
-                      session_id="story-" + uuid.uuid4().hex, base_revision=tab["revision"], force_revision=True)
+                      session_id="story-" + uuid.uuid4().hex, base_revision=tab["revision"], force_revision=True, trusted_writer=me)
     repo.add_audit(conn, slug, action="edit", actor_id=me.actor_id, tab_key=key,
                    detail={"source": "rh_story", "changes": service.doc_changes(tab["doc"], doc)})
     service.reanchor_tab(conn, slug, key, doc, actor_id=me.actor_id)
@@ -420,6 +420,12 @@ def locate_scene(conn, identifier):
 
 
 def write_scenes(conn, me, ep, items, redirects=None):
+    from project_docs import writing_structure
+    with writing_structure.deferred_reconciliation(conn,ep['slug'],ep['tabKey']):
+        return _write_scenes(conn,me,ep,items,redirects)
+
+
+def _write_scenes(conn, me, ep, items, redirects=None):
     from project_docs import writing_store, writing_structure
     writing_scope = writing_store.scope_for(conn, me, ep['episodeId'], write=True)
     writing_store.lock_project(conn, writing_scope)
@@ -442,8 +448,7 @@ def write_scenes(conn, me, ep, items, redirects=None):
         lineage.update({old_stable[old]: old_stable[new] for old, new in (redirects or {}).items()
                         if old in old_stable and new in old_stable})
         reconciled = writing_structure.reconcile_structure(current_doc, before_structure, lineage=lineage)
-        writing_structure.persist(conn, writing_scope, reconciled)
-        writing_structure.remap_shot_associations(conn, writing_scope, before_structure, reconciled)
+        writing_structure.finalize_structure_change(conn, writing_scope, before_structure, reconciled)
         return result
     for shot in shots(conn, ep):
         old = shot.get('sceneId')

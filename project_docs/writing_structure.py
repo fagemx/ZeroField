@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import re
 import uuid
+from contextlib import contextmanager
 from collections import Counter
 from project_docs import writing_store as store, repository as repo, story_openapi as story
 from project_docs.doc_schema import node_text, new_id
@@ -242,13 +243,13 @@ def project_references(conn, scope, value, doc):
     return result
 
 
-def remap_shot_associations(conn, scope, before, after):
+def association_changes(conn, scope, before, after):
     """Detach deleted/uncertain compatibility links in the same structure transaction.
 
     Origins and all takes remain untouched. Explicit merges redirect compatibility
     associations; split scene-only relationships cannot safely choose either half.
     """
-    from project_docs import writing_impact
+    changes=[]
     old_ids={s['legacySceneId']:s['sceneKey'] for s in before['scenes']}
     new_ids={s['sceneKey']:(f"sc_{scope.slug}_{scope.episode['episodeIndex']:02d}_S{i:02d}",i)
         for i,s in enumerate(after['scenes'],1)}
@@ -264,7 +265,27 @@ def remap_shot_associations(conn, scope, before, after):
         if not old_key and not shot.get('sceneId') and not shot.get('detachedScene'): continue
         legacy,index=new_ids[keys[0]] if not missing and len(keys)==1 else (None,None)
         if legacy==shot.get('sceneId'): continue
-        writing_impact._check_row(conn,scope,shot)
+        changes.append((shot,legacy,index,old_key,missing))
+    return sorted(changes,key=lambda change:change[0]['shotId'])
+
+
+def lock_associations(conn, scope, changes):
+    """No reverse project lock: source is already locked; other tabs never wait."""
+    from project_docs import writing_impact
+    store.reauthorize(conn,scope,write=True)
+    for key in sorted({shot['tabKey'] for shot,_,_,_,_ in changes}):
+        with conn.cursor() as cur:
+            cur.execute('SELECT tab_key FROM projectops.tab WHERE project_slug=%s AND tab_key=%s AND deleted_at IS NULL FOR UPDATE NOWAIT',
+                (scope.slug,key))
+            if not cur.fetchone(): store.fail('CONFLICT','An affected production page changed.')
+    for shot,_,_,_,_ in changes: writing_impact._check_row(conn,scope,shot)
+
+
+def remap_shot_associations(conn, scope, before, after, *, changes=None):
+    if changes is None:
+        changes=association_changes(conn,scope,before,after)
+        lock_associations(conn,scope,changes)
+    for shot,legacy,index,old_key,missing in changes:
         meta=story.shot_meta(conn,shot['shotId'])|{'sceneId':legacy}
         if legacy is None:
             meta['detachedScene']={'sceneKeys':copy.deepcopy((shot.get('storyOrigin') or {}).get('sceneKeys') or ([old_key] if old_key else [])),
@@ -276,6 +297,103 @@ def remap_shot_associations(conn, scope, before, after):
             if label!=shot['shotIndex']:
                 story.mutate_row(conn,scope.me,scope.slug,shot['tabKey'],shot['rowId'],{0:label})
         story.store(conn,'meta_'+shot['shotId'],'shot_meta',meta,scope.slug)
+
+
+@contextmanager
+def savepoint(conn):
+    """Rollback boundary without ever committing the caller's outer transaction."""
+    from psycopg.pq import TransactionStatus
+    if conn.info.transaction_status==TransactionStatus.IDLE:
+        conn.execute('SELECT 1')  # Begin the caller's transaction before nesting.
+    with conn.transaction(): yield
+
+
+@contextmanager
+def deferred_reconciliation(conn, slug, key):
+    """Internal connection/transaction-scoped suppression for declared lineage only.
+
+    The enclosing savepoint rolls back source/history AND associations on failure;
+    connection state is unwound on every exit, never set from a request body.
+    """
+    state=getattr(conn,'_writing_structure_deferred',None)
+    if state is None:
+        state={};conn._writing_structure_deferred=state
+    token=(slug,key);previous=state.get(token,0)
+    from psycopg.errors import LockNotAvailable
+    try:
+        with savepoint(conn):
+            state[token]=previous+1
+            try: yield
+            finally:
+                if previous: state[token]=previous
+                else: state.pop(token,None)
+    except LockNotAvailable:
+        store.fail('LOCKED','An affected production page is busy; nothing was saved.')
+    finally:
+        if not state: del conn._writing_structure_deferred
+
+
+def _layout(value):
+    return ([s['sceneKey'] for s in value['scenes']],
+        {b['beatKey']:s['sceneKey'] for s in value['scenes'] for b in s.get('beats',[])})
+
+
+def prepare_tab_save(conn, slug, key, old_doc, doc, trusted_writer):
+    """Repository seam for enrolled screenplay writes; no authority from actor_id.
+
+    Unrelated tabs/keystrokes do not acquire production locks or persist sidecars.
+    No project advisory lock is ever requested from this already-tab-locked seam.
+    """
+    if getattr(conn,'_writing_structure_deferred',{}).get((slug,key)): return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT data->>'episodeId',data FROM projectops.story_record WHERE project_slug=%s AND kind='writing_structure' ORDER BY id",(slug,))
+        enrolled=cur.fetchall()
+    if not enrolled: return None
+    episode_tabs={ep['episodeId']:ep for ep in story.episodes(conn,slug) if ep['tabKey']==key}
+    for episode_id,saved in enrolled:
+        ep=episode_tabs.get(episode_id)
+        if ep is None: continue
+        # Read/reconcile against the still-locked OLD document, never a new ordinal snapshot.
+        before=reconcile_structure(old_doc,repo._loads(saved))
+        for scene in before['scenes']:
+            scene['legacySceneId']=f"sc_{slug}_{ep['episodeIndex']:02d}_S{scene['order']:02d}"
+        after=reconcile_structure(doc,before)
+        if _layout(before)==_layout(after): return None
+        if trusted_writer is None:
+            store.fail('CONFLICT','A structural screenplay save requires a current trusted writer.')
+        scope=store.scope_for(conn,trusted_writer,episode_id,write=True)
+        # Validate the enrolled record's scope/kind before any derived write.
+        store.get_record(conn,scope,'writing_structure',identifier(scope))
+        changes=association_changes(conn,scope,before,after)
+        if changes:
+            lock_associations(conn,scope,changes)
+        return scope,before,after,changes
+    return None
+
+
+def finish_tab_save(conn, plan):
+    if plan is None: return
+    scope,before,after,changes=plan
+    # Keep the existing lazy stale-sidecar contract when no association changes.
+    if not changes: return
+    result=persist(conn,scope,after)
+    remap_shot_associations(conn,scope,before,result,changes=changes)
+
+
+def finalize_structure_change(conn, scope, before, after):
+    after=copy.deepcopy(after)
+    # Adopting a draft's layout cannot replace the episode's frozen legacy evidence.
+    after['legacyBindings']=copy.deepcopy(before.get('legacyBindings',[]))
+    live={s['sceneKey'] for s in after['scenes']}
+    removed={t['sceneKey'] for t in after.get('tombstones',[]) if 'scene' in t}
+    for scene in before['scenes']:
+        if scene['sceneKey'] not in live and scene['sceneKey'] not in removed:
+            after.setdefault('tombstones',[]).append({'sceneKey':scene['sceneKey'],'reason':'source_removed','scene':copy.deepcopy(scene)})
+    changes=association_changes(conn,scope,before,after)
+    lock_associations(conn,scope,changes)
+    result=persist(conn,scope,after)
+    remap_shot_associations(conn,scope,before,result,changes=changes)
+    return result
 
 
 def persist(conn, scope, value, *, base_version=None):
@@ -417,6 +535,11 @@ def build_preview(conn, scope, body):
 
 
 def apply_preview(conn, scope, preview, selection):
+    with deferred_reconciliation(conn,scope.slug,scope.episode['tabKey']):
+        return _apply_preview(conn,scope,preview,selection)
+
+
+def _apply_preview(conn, scope, preview, selection):
     from project_docs import writing_service as service, writing_versions as versions
     before=store.resolve_ref(conn,scope,{'kind':'working'})
     snapshot=versions.snapshot_of(scope,before)
@@ -426,6 +549,5 @@ def apply_preview(conn, scope, preview, selection):
     service.replace_working(conn,scope,proposed['doc'],expected_hash=before['docHash'])
     actual=repo.get_tab(conn,scope.slug,scope.episode['tabKey'])['doc']
     reconciled=reconcile_structure(actual,proposed['structure'])
-    result=persist(conn,scope,reconciled)
-    remap_shot_associations(conn,scope,before['structure'],result)
+    result=finalize_structure_change(conn,scope,before['structure'],reconciled)
     return {'docHash':store.doc_hash(repo.get_tab(conn,scope.slug,scope.episode['tabKey'])['doc']),'structure':read_structure(conn,scope),'beforeVersionId':version_id}

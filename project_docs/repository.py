@@ -230,6 +230,30 @@ def create_tab(connection, slug: str, *, key: str, title: str, parent_key: str |
 
 
 def save_tab_doc(connection, slug: str, key: str, *, doc: dict, title: str, actor_id: str,
+                 session_id: str, base_revision: int | None, force_revision: bool = False,
+                 trusted_writer=None) -> dict:
+    """Save source/history and any enrolled Story associations in one savepoint.
+
+    trusted_writer is internal caller context, not reconstructed from actor_id.
+    Explicit lineage operations defer this hook only in connection-local state.
+    """
+    from project_docs import writing_structure, writing_store
+    from psycopg.errors import LockNotAvailable
+    try:
+        with writing_structure.savepoint(connection):
+            tab=get_tab_for_update(connection,slug,key)
+            if not tab: raise LookupError('tab not found')
+            plan=(writing_structure.prepare_tab_save(connection,slug,key,tab['doc'],doc,trusted_writer)
+                if tab['doc']!=doc else None)
+            result=_save_tab_doc(connection,slug,key,doc=doc,title=title,actor_id=actor_id,
+                session_id=session_id,base_revision=base_revision,force_revision=force_revision)
+            writing_structure.finish_tab_save(connection,plan)
+            return result
+    except LockNotAvailable:
+        writing_store.fail('LOCKED','An affected production page is busy; nothing was saved.')
+
+
+def _save_tab_doc(connection, slug: str, key: str, *, doc: dict, title: str, actor_id: str,
                  session_id: str, base_revision: int | None, force_revision: bool = False) -> dict:
     """存一次。同一個人、同一個 session 的自動儲存覆寫同一個版本；換 session、或停了 10 分鐘以上就是新版本
     （修改紀錄「停 10 分鐘以上算新的一筆」，改回才能只回到那一次之前）。
