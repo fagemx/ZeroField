@@ -6,6 +6,10 @@ import en from '../src/i18n/locales/en.json' with {type:'json'};
 import zh from '../src/i18n/locales/zh-TW.json' with {type:'json'};
 import authoring from '../src/writing/locales/authoring.en.json' with {type:'json'};
 import authoringZh from '../src/writing/locales/authoring.zh-TW.json' with {type:'json'};
+import reviewAuthoring from '../src/writing/locales/review1-authoring.en.json' with {type:'json'};
+import reviewAuthoringZh from '../src/writing/locales/review1-authoring.zh-TW.json' with {type:'json'};
+import reviewAuth from '../src/writing/locales/review1-auth.en.json' with {type:'json'};
+import reviewAuthZh from '../src/writing/locales/review1-auth.zh-TW.json' with {type:'json'};
 import tools from '../src/writing/locales/tools.en.json' with {type:'json'};
 import toolsZh from '../src/writing/locales/tools.zh-TW.json' with {type:'json'};
 
@@ -29,6 +33,8 @@ test('Story transport preserves replay keys, binary/raw bodies and structured er
   } finally {globalThis.fetch=original;}
 });
 test('both product dictionaries contain the exact component fragments without flattened or overwritten leaves',()=>{
- assert.deepEqual(en.writing.authoring,authoring);assert.deepEqual(zh.writing.authoring,authoringZh);
+ assert.equal(Object.keys(authoring).some(key=>Object.hasOwn(reviewAuthoring,key)),false,'repair fragment must not overwrite original authoring leaves');
+ assert.deepEqual(en.writing.authoring,{...authoring,...reviewAuthoring});assert.deepEqual(zh.writing.authoring,{...authoringZh,...reviewAuthoringZh});
+ assert.deepEqual(en.writing.reviewIdentity,reviewAuth.writing.reviewIdentity);assert.deepEqual(zh.writing.reviewIdentity,reviewAuthZh.writing.reviewIdentity);
  assert.deepEqual(en.writing.tools,tools);assert.deepEqual(zh.writing.tools,toolsZh);
 });

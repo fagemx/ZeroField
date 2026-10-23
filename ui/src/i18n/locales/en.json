@@ -2836,7 +2836,16 @@
       "serverCopy": "Server copy",
       "deviceCopy": "Device copy",
       "restoreDevice": "Restore this device copy",
-      "discardDevice": "Discard this device copy"
+      "discardDevice": "Discard this device copy",
+      "outlineDraft": "Outline metadata draft",
+      "restoreOutline": "Restore outline draft for review",
+      "discardOutlineRecovery": "Discard this outline recovery",
+      "keepOutlineRecovery": "Keep this exact outline recovery privately for my account",
+      "saveOutline": "Save outline metadata",
+      "discardOutline": "Discard outline draft and read current structure",
+      "keepOutline": "Keep this exact outline draft privately for my account",
+      "downloadOutline": "Download outline draft",
+      "outlineNoRebase": "The shared structure changed. This draft keeps base version {{version}} and will not overwrite the current metadata. Download it before discarding, then review and re-enter your changes against the current structure."
     },
     "tools": {
       "title": "Writing tools",
@@ -3011,6 +3020,11 @@
       "filmWarning": "Story source differences or unknown provenance: {{shots}}. Existing takes remain playable.",
       "signIn": "Sign in as the original author",
       "signOut": "Sign out"
+    },
+    "reviewIdentity": {
+      "metadataChanged": "The server's chapter, structure or lens metadata changed after this device checkpoint. Restoring requires an explicit conflict choice; the saved base version will not be updated automatically.",
+      "metadataConflict": "Manuscript text may match, but private metadata or its version has changed. Compare the current server metadata and choose explicitly which metadata to keep.",
+      "metadataCopies": "Chapter, structure and lens metadata (server / device)"
     }
   }
 }

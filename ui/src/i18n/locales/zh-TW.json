@@ -2836,7 +2836,16 @@
       "serverCopy": "伺服器版本",
       "deviceCopy": "裝置版本",
       "restoreDevice": "恢復這份裝置內容",
-      "discardDevice": "捨棄這份裝置內容"
+      "discardDevice": "捨棄這份裝置內容",
+      "outlineDraft": "情節總覽中繼資料草稿",
+      "restoreOutline": "還原情節總覽草稿以供檢視",
+      "discardOutlineRecovery": "捨棄此情節總覽復原稿",
+      "keepOutlineRecovery": "為我的帳戶私下保留此確切的情節總覽復原稿",
+      "saveOutline": "儲存情節總覽中繼資料",
+      "discardOutline": "捨棄情節總覽草稿並讀取目前結構",
+      "keepOutline": "為我的帳戶私下保留此確切的情節總覽草稿",
+      "downloadOutline": "下載情節總覽草稿",
+      "outlineNoRebase": "共享結構已變更。此草稿保留基底版本 {{version}}，不會覆寫目前的中繼資料。請先下載再捨棄，然後檢視目前結構並重新輸入您的變更。"
     },
     "tools": {
       "title": "寫作工具",
@@ -3011,6 +3020,11 @@
       "filmWarning": "故事來源有差異或來源未知：{{shots}}。仍可播放既有選片。",
       "signIn": "以原作者身份登入",
       "signOut": "登出"
+    },
+    "reviewIdentity": {
+      "metadataChanged": "伺服器的章節、結構或透鏡設定已在本機檢查點之後變更。還原必須明確選擇衝突處理方式，不會自動更新已保存的基底版本。",
+      "metadataConflict": "稿件文字可能相同，但私人設定或其版本已變更。請比較目前伺服器設定，並明確選擇要保留的設定。",
+      "metadataCopies": "章節、結構與透鏡設定（伺服器／本機）"
     }
   }
 }
