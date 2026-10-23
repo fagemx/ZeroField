@@ -55,7 +55,8 @@ function ToolsPanelInstance(props) {
     {/* Preserve unsent tool drafts and editor focus context across tool toggles, not identity changes. */}
     <div>
       <section id="writing-tools-bible" hidden={mode !== 'bible'} className="writing-tools-body" aria-label={t('writing.tools.bible')}>
-        {visited.includes('bible') && <WritingBible {...props}/>}
+        {/* Register and discover scoped note recovery even while the panel is collapsed. */}
+        <WritingBible {...props}/>
       </section>
       <section id="writing-tools-search" hidden={mode !== 'search'} className="writing-tools-body" aria-label={t('writing.tools.search')}>
         {visited.includes('search') && <WritingSearch {...props}/>}

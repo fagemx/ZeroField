@@ -69,12 +69,12 @@ with sync_playwright() as p:
  page.goto(os.environ['WRITING_TOOLS_TEST_URL'])
  panel=page.get_by_role('complementary',name='Writing tools')
  expect(panel).to_be_visible()
- assert page.evaluate('calls.length')==0, 'Tools must be lazy; opening workspace does not eagerly read private material'
+ assert not page.evaluate("calls.some(c=>c.method==='POST'||c.method==='PATCH'||c.tail?.startsWith('sources/'))"), 'Recovery registration must not publish drafts or eagerly read private manuscript sources'
  page.get_by_role('button',name='World & notes',exact=True).click()
  bible=page.get_by_role('region',name='World & notes')
  expect(bible.get_by_role('textbox',name='Notes',exact=True)).to_have_value('Original note')
  bible.get_by_role('textbox',name='Notes',exact=True).fill('New author note <script>not HTML</script>')
- expect(bible.get_by_role('status')).to_contain_text('Unsaved tool changes')
+ expect(bible.get_by_role('status')).to_contain_text('Private form changes')
  bible.get_by_role('button',name='Add event',exact=True).click()
  bible.get_by_label('Event kind').fill('knowledge')
  bible.get_by_label('Event note').fill('Learns the signal is wrong')
@@ -82,7 +82,7 @@ with sync_playwright() as p:
  bible.get_by_label('Explicit state dimension').fill('lamp')
  bible.get_by_label('Explicit state value').fill('broken')
  bible.get_by_role('button',name='Save changes',exact=True).click()
- expect(bible.get_by_role('status')).to_contain_text('Saved on the server')
+ expect(bible.get_by_role('status').filter(has_text='Saved on the server')).to_be_visible()
  sent=page.evaluate("calls.find(c=>c.method==='PATCH').body")
  assert sent['baseVersion']==1 and sent['clientMutationId']
  assert 'assetId' not in sent['patch'] and 'title' not in sent['patch'] and 'name' not in sent['patch']
