@@ -39,12 +39,62 @@ def _content_hash(nodes):
     return store.hash_value(clean(nodes))
 
 
+def authored_structure(doc, previous):
+    """Promote trusted imported/authored block boundaries, not heading text, to authority."""
+    result=copy.deepcopy(previous)
+    nodes={bid(n):n for n in doc.get('content',[])}
+    seen=set();document_hash=store.doc_hash(doc)
+    for scene in result.get('scenes',[]):
+        identifiers=([scene.get('headingBid')] if scene.get('headingBid') else [])+scene.get('blockBids',[])
+        if not identifiers or len(identifiers)!=len(set(identifiers)) or seen.intersection(identifiers) or set(identifiers)-set(nodes):
+            store.fail('MAPPING_REQUIRED','Authored scene boundaries must reference disjoint existing blocks.')
+        seen.update(identifiers)
+        if not isinstance(scene.get('title'),str) or not 1<=len(scene['title'])<=200 or any(c in scene['title'] for c in ('\r','\n')):
+            story.invalid('Authored scene titles must be single-line text of 1–200 characters.')
+        scene['authoredBoundary']=True
+        scene.setdefault('authoredOrigin',{'docHash':document_hash,'headingBid':scene.get('headingBid'),
+            'blockBids':copy.deepcopy(scene.get('blockBids',[])),'title':scene['title']})
+    result['structureHash']=fingerprint(result)
+    return result
+
+
+def authored_parts(doc, previous):
+    """Locate explicit partitions only through surviving bids, never title/order guesses."""
+    nodes=doc.get('content',[]);positions={bid(n):i for i,n in enumerate(nodes)}
+    anchored=[]
+    for scene in previous.get('scenes',[]):
+        identifiers=([scene.get('headingBid')] if scene.get('headingBid') else [])+scene.get('blockBids',[])
+        surviving=[positions[b] for b in identifiers if b in positions]
+        if surviving:
+            anchored.append((min(surviving),max(surviving),scene))
+    anchored.sort(key=lambda item:item[0])
+    for left,right in zip(anchored,anchored[1:]):
+        if left[1]>=right[0]:
+            store.fail('MAPPING_REQUIRED','Authored block memberships overlap or interleave; resolve the boundaries explicitly.')
+    explicit={start:scene for start,_,scene in anchored if scene.get('authoredBoundary')}
+    ranges=[(start,anchored[i+1][0] if i+1<len(anchored) else len(nodes))
+        for i,(start,_,scene) in enumerate(anchored) if scene.get('authoredBoundary')]
+    boundaries=set(explicit)
+    for index,node in enumerate(nodes):
+        if HEADING.match(node_text(node)) and not any(start<=index<end for start,end in ranges):
+            boundaries.add(index)
+    if not boundaries: return sections(doc)
+    ordered=sorted(boundaries);result=[]
+    for i,start in enumerate(ordered):
+        end=ordered[i+1] if i+1<len(ordered) else len(nodes)
+        scene=explicit.get(start)
+        heading=nodes[start] if (scene and bid(nodes[start])==scene.get('headingBid')) or (not scene and HEADING.match(node_text(nodes[start]))) else None
+        result.append({'heading':heading,'nodes':nodes[start+(1 if heading else 0):end],
+            '_sceneKey':scene['sceneKey'] if scene else None})
+    return result
+
+
 def reconcile_structure(doc, previous, *, lineage=None):
     doc=store.checked_doc(doc)
     document_hash=store.doc_hash(doc)
     previous=previous or {}
     old=previous.get('scenes',[])
-    parts=sections(doc)
+    parts=authored_parts(doc,previous) if any(s.get('authoredBoundary') for s in old) else sections(doc)
     if len(parts)>1000 or sum(len(p['nodes']) for p in parts)>1000:
         store.fail('LIMIT_EXCEEDED','Split resources above 1,000 structure units.',413)
     old_scene_hash=Counter(s.get('contentHash') for s in old)
@@ -61,15 +111,15 @@ def reconcile_structure(doc, previous, *, lineage=None):
         candidates=[s for s in old if s['sceneKey'] not in used_s and heading_bid and s.get('headingBid')==heading_bid]
         if not candidates and old_scene_hash[content_hash]==new_scene_hash[content_hash]==1:
             candidates=[s for s in old if s['sceneKey'] not in used_s and s.get('contentHash')==content_hash]
-        explicit=lineage.get(heading_bid)
+        explicit=part.get('_sceneKey') or lineage.get(heading_bid)
         if explicit:
             candidates=[s for s in old if s['sceneKey']==explicit and s['sceneKey'] not in used_s]
         matched=candidates[0] if len(candidates)==1 else None
         key=matched['sceneKey'] if matched else 'wsc_'+uuid.uuid5(uuid.NAMESPACE_URL,'writing-scene:'+document_hash+':'+str(heading_bid or [bid(n) for n in part['nodes']])).hex
         used_s.add(key)
-        scene={k:copy.deepcopy(v) for k,v in (matched or {}).items() if k in ('summary','storyTime','act','plot','foreshadowing','payoff')}
+        scene={k:copy.deepcopy(v) for k,v in (matched or {}).items() if k in ('summary','storyTime','act','plot','foreshadowing','payoff','authoredBoundary','authoredOrigin','materialized')}
         scene.update(sceneKey=key,headingBid=heading_bid,blockBids=[bid(n) for n in part['nodes']],
-            title=node_text(heading) if heading else 'Scene 01',order=i,contentHash=content_hash,
+            title=matched['title'] if matched and matched.get('authoredBoundary') else node_text(heading) if heading else 'Scene 01',order=i,contentHash=content_hash,
             mapping='exact' if matched or not old else 'unresolved',beats=[])
         for node in part['nodes']:
             if not node_text(node).strip(): continue
@@ -238,7 +288,18 @@ def build_preview(conn, scope, body):
         preamble=doc['content'][:first] if any(g['heading'] for g in sections(doc)) else []
         doc['content']=preamble+[n for g in groups for n in ([g['heading']] if g['heading'] else [])+g['nodes']]
     doc=store.checked_doc(doc,scope.slug)
-    proposed=reconcile_structure(doc,current,lineage=lineage)
+    # A typed structural operation deliberately changes the partition. Its explicit
+    # group layout may add/split boundaries that a normal authored text save must not infer.
+    prior=copy.deepcopy(current)
+    if typ not in ('remove_lane','restore'):
+        for scene in prior['scenes']: scene.pop('authoredBoundary',None)
+    proposed=reconcile_structure(doc,prior,lineage=lineage)
+    authored={s['sceneKey']:s for s in current['scenes'] if s.get('authoredBoundary')}
+    for scene in proposed['scenes']:
+        if scene['sceneKey'] in authored:
+            source=authored[scene['sceneKey']]
+            scene.update({k:copy.deepcopy(source[k]) for k in ('authoredBoundary','authoredOrigin','materialized','title') if k in source})
+    proposed['structureHash']=fingerprint(proposed)
     return {'sourceFingerprints':[],'targetFingerprints':[{'sourceRef':{'kind':'working'},'docHash':target['docHash'],'structureHash':target['structureHash']}],
         'allowedActions':[{'actionId':'structure','kind':typ}], 'proposedChanges':{'doc':doc,'structure':proposed,'operation':operation},
         'warnings':['Automatic SC-prefixed shot labels follow scene order. Manually named shot labels retain their film order; review shot ordering separately.'] if typ=='move' else []}

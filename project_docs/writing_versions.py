@@ -3,14 +3,104 @@ from __future__ import annotations
 import copy
 import uuid
 from project_docs import writing_store as store, writing_structure as structure, repository as repo, story_openapi as story
-from project_docs.doc_schema import doc_text
+from project_docs.doc_schema import doc_text, new_id, TEXTBLOCKS
+
+
+def reference_structure(source):
+    previous=copy.deepcopy(source.get('structure',{}))
+    if source.get('sourceFile',{}).get('uploadHash'):
+        previous=structure.authored_structure(source['doc'],previous)
+    return previous
+
+
+def branch_structure(doc, previous, supplied):
+    """Allow explicit layout/title corrections, never caller-supplied identity/history."""
+    if supplied is None or supplied==previous: return previous
+    if not isinstance(supplied,dict): story.invalid('Branch structure must be an object.')
+    if set(supplied)-set(previous)-{'docHash','structureHash'}:
+        story.invalid('Unknown branch structure fields.')
+    for key,value in supplied.items():
+        if key not in ('scenes','docHash','structureHash') and value!=previous.get(key):
+            story.invalid('Branch saves cannot replace protected structural metadata.')
+    scenes=supplied.get('scenes',previous.get('scenes',[]))
+    if not isinstance(scenes,list): story.invalid('Invalid branch scenes.')
+    old={s['sceneKey']:s for s in previous.get('scenes',[])}
+    if len(scenes)!=len(old) or {s.get('sceneKey') for s in scenes if isinstance(s,dict)}!=set(old):
+        store.fail('MAPPING_REQUIRED','Explicit corrections must preserve existing scene identity; add/remove scenes through document edits.')
+    corrected=[]
+    for scene in scenes:
+        current=old[scene['sceneKey']]
+        if set(scene)-set(current): story.invalid('Unknown scene correction fields.')
+        for key,value in scene.items():
+            if key not in ('title','headingBid','blockBids','order') and value!=current.get(key):
+                story.invalid('Branch saves cannot replace stable keys or lineage.')
+        corrected.append(copy.deepcopy(current)|{k:copy.deepcopy(scene[k]) for k in ('title','headingBid','blockBids','order') if k in scene})
+    result=copy.deepcopy(previous);result['scenes']=corrected
+    return structure.authored_structure(doc,result)
+
+
+def quote_scene_lines(node):
+    """Quote legacy heading lines without dropping original text, marks or hard breaks."""
+    if node.get('type') not in TEXTBLOCKS:
+        return any([quote_scene_lines(child) for child in node.get('content',[])])
+    value=doc_text({'type':'doc','content':[node]});offset=0;starts=set()
+    for line in value.splitlines(keepends=True):
+        if structure.HEADING.match(line): starts.add(offset)
+        offset+=len(line)
+    if not starts: return False
+    content=[];offset=0
+    for child in node.get('content',[]):
+        text=child.get('text','') if child.get('type')=='text' else ''
+        begin=0
+        for position in sorted(start-offset for start in starts if offset<=start<offset+len(text)):
+            if position>begin: content.append(copy.deepcopy(child)|{'text':text[begin:position]})
+            content.append({'type':'text','text':'> '});begin=position
+        if text: content.append(copy.deepcopy(child)|{'text':text[begin:]})
+        else: content.append(child)
+        offset+=len(text) if child.get('type')=='text' else 1 if child.get('type')=='hardBreak' else 0
+    node['content']=content
+    return True
+
+
+def materialize_authored(doc, previous):
+    """Freeze explicit legacy-compatible conversion in the preview, retaining source lineage."""
+    if not any(s.get('authoredBoundary') for s in previous.get('scenes',[])):
+        return copy.deepcopy(doc),copy.deepcopy(previous),[]
+    doc=copy.deepcopy(doc);previous=copy.deepcopy(previous)
+    nodes={structure.bid(n):n for n in doc['content']};insertions={};omitted=set();changes=[]
+    for index,scene in enumerate(previous['scenes'],1):
+        if not scene.get('authoredBoundary'): continue
+        members=([scene.get('headingBid')] if scene.get('headingBid') else [])+scene['blockBids']
+        if not members or set(members)-set(nodes): store.fail('MAPPING_REQUIRED','Authored scene blocks changed.')
+        header_text=scene['title'] if structure.HEADING.match(scene['title']) else f"Scene {index:02d}: {scene['title']}"
+        old_header=scene.get('headingBid') if scene.get('materialized') else None
+        header=copy.deepcopy(nodes[old_header]) if old_header else {'type':'heading','attrs':{'bid':new_id('b'),'level':2}}
+        header.update(type='heading',content=[{'type':'text','text':header_text}]);header.setdefault('attrs',{})['level']=2
+        if old_header: omitted.add(old_header)
+        quoted=[]
+        body=[b for b in members if b!=old_header]
+        for identifier in body:
+            node=nodes[identifier]
+            if quote_scene_lines(node): quoted.append(identifier)
+        insertions[members[0]]=header
+        scene.update(headingBid=structure.bid(header),blockBids=body,materialized=True)
+        changes.append({'sceneKey':scene['sceneKey'],'kind':'materialize_authored_scene','headingBid':scene['headingBid'],
+            'headingText':header_text,'quotedBlockBids':quoted,'source':copy.deepcopy(scene.get('authoredOrigin',{}))})
+    content=[]
+    for node in doc['content']:
+        identifier=structure.bid(node)
+        if identifier in insertions: content.append(insertions[identifier])
+        if identifier not in omitted: content.append(node)
+    doc=store.checked_doc({'type':'doc','content':content})
+    return doc,structure.reconcile_structure(doc,previous),changes
 
 
 def snapshot_of(scope, source):
     doc=store.checked_doc(source['doc'],scope.slug)
     inputs=copy.deepcopy(source.get('productionInputs',store.production_inputs(scope)))
+    snapshot_structure=reference_structure(source)
     return {'doc':doc,'docHash':store.doc_hash(doc),'scriptHash':story.digest(doc_text(doc)),
-        'structure':copy.deepcopy(source.get('structure',{})),'structureHash':source.get('structureHash',store.hash_value(source.get('structure',{}))),
+        'structure':snapshot_structure,'structureHash':structure.fingerprint(snapshot_structure),
         'composition':store.composition(doc),'productionInputs':inputs,'productionInputsHash':store.hash_value(inputs)}
 
 
@@ -57,21 +147,29 @@ def create_branch(conn, scope, body):
     name=body['name']
     if not isinstance(name,str) or not 1<=len(name.strip())<=200: story.invalid('A branch name is required.')
     identifier='wbr_'+uuid.uuid4().hex
+    branch_layout=reference_structure(source)
     return store.insert_record(conn,scope,'writing_branch',identifier,{'branchId':identifier,'name':name,'locked':False,'archived':False,
-        'doc':source['doc'],'docHash':source['docHash'],'structure':source['structure'],'structureHash':source['structureHash'],
+        'doc':source['doc'],'docHash':source['docHash'],'structure':branch_layout,'structureHash':structure.fingerprint(branch_layout),
         'composition':source.get('composition',{}),'baseFingerprint':{'sourceRef':body['sourceRef'],'docHash':source['docHash']}})
 
 
 def save_branch(conn, scope, branch_id, body):
     store.fields(body,{'baseVersion','clientMutationId','doc','structure','composition','name','locked','archived'},{'baseVersion','clientMutationId'})
     current=store.get_record(conn,scope,'writing_branch',branch_id)
+    if type(body['baseVersion']) is not int or body['baseVersion']!=current['version']:
+        store.fail(details={'currentVersion':current['version']})
     changes={k:copy.deepcopy(v) for k,v in body.items() if k in ('name','locked','archived')}
     if 'name' in changes and (not isinstance(changes['name'],str) or not 1<=len(changes['name'].strip())<=200): story.invalid('Invalid branch name.')
     if any(type(changes[k]) is not bool for k in ('locked','archived') if k in changes): story.invalid('Branch flags must be boolean.')
     if 'doc' in body:
         doc=store.checked_doc(body['doc'],scope.slug)
-        proposed=structure.reconcile_structure(doc,current.get('structure'))
-        changes|={'doc':doc,'docHash':store.doc_hash(doc),'structure':proposed,'structureHash':proposed['structureHash'],'composition':store.composition(doc)}
+        previous=reference_structure(current)
+        if body.get('structure') is not None and body['structure']!=current.get('structure'):
+            previous=branch_structure(doc,previous,body['structure'])
+        proposed=structure.reconcile_structure(doc,previous)
+        from project_docs.writing_service import _composition
+        composition=_composition(body['composition']) if 'composition' in body else store.composition(doc) if store.composition(doc)!=store.composition(current['doc']) else current.get('composition',{})
+        changes|={'doc':doc,'docHash':store.doc_hash(doc),'structure':proposed,'structureHash':proposed['structureHash'],'composition':composition}
     elif 'structure' in body or 'composition' in body:
         story.invalid('Structure/composition content requires the branch document.')
     data=store.cas_record(conn,scope,'writing_branch',branch_id,base_version=body['baseVersion'],changes=changes)
@@ -88,14 +186,14 @@ def compare(conn, scope, body):
     changes=[]
     for key in list(lm)+[k for k in rm if k not in lm]:
         a,b=lm.get(key),rm.get(key)
-        state='added' if a is None else 'removed' if b is None else 'modified' if a.get('contentHash')!=b.get('contentHash') else 'moved' if a['order']!=b['order'] else 'unchanged'
+        state='added' if a is None else 'removed' if b is None else 'modified' if (a.get('contentHash'),a.get('title'),a.get('headingBid'),a.get('blockBids'))!=(b.get('contentHash'),b.get('title'),b.get('headingBid'),b.get('blockBids')) else 'moved' if a['order']!=b['order'] else 'unchanged'
         changes.append({'sceneKey':key,'state':state,'left':a,'right':b,'mapping':'unresolved' if (a or b).get('mapping')=='unresolved' else 'exact'})
     # Block aligned comparison is linear/bounded even for repetitive half-million-character scripts.
     def nodes(source): return {structure.bid(n):n for n in source['doc'].get('content',[])}
     ln,rn=nodes(left),nodes(right)
     blocks=[{'bid':key,'left':ln.get(key),'right':rn.get(key),'state':'added' if key not in ln else 'removed' if key not in rn else 'modified'}
         for key in list(ln)+[k for k in rn if k not in ln] if ln.get(key)!=rn.get(key)]
-    return {'leftHash':left['docHash'],'rightHash':right['docHash'],'scenes':changes,'blocks':blocks,'equal':left['docHash']==right['docHash']}
+    return {'leftHash':left['docHash'],'rightHash':right['docHash'],'scenes':changes,'blocks':blocks,'equal':left['docHash']==right['docHash'] and left['structureHash']==right['structureHash'] and left['compositionHash']==right['compositionHash']}
 
 
 def build_preview(conn, scope, body):
@@ -136,12 +234,14 @@ def build_preview(conn, scope, body):
         whole=body.get('whole',False)
         if type(whole) is not bool: story.invalid('whole must be boolean.')
     else: story.invalid('Unknown adoption preview kind.')
+    source['structure']=reference_structure(source)
+    adopted_doc,adopted_structure,materialization=materialize_authored(source['doc'],source['structure'])
     keys=body.get('sceneKeys',[])
     if not isinstance(keys,list) or len(set(keys))!=len(keys): story.invalid('sceneKeys must contain unique stable keys.')
     if not whole and not keys: story.invalid('Choose whole:true or at least one scene.')
     if whole and keys: story.invalid('Choose whole or sceneKeys, not both.')
     if whole:
-        doc=copy.deepcopy(source['doc']);proposed_structure=copy.deepcopy(source['structure'])
+        doc=copy.deepcopy(adopted_doc);proposed_structure=copy.deepcopy(adopted_structure)
         actions=[{'actionId':'whole','kind':'adopt_whole'}]
     else:
         sm={s['sceneKey']:s for s in source['structure'].get('scenes',[])}
@@ -149,11 +249,13 @@ def build_preview(conn, scope, body):
         if set(keys)-(set(sm)|set(tm)): store.fail('MAPPING_REQUIRED','Select existing source or target scene keys.')
         doc=copy.deepcopy(target['doc']);proposed_structure=None
         actions=[{'actionId':key,'kind':'adopt_scene' if key in sm and key in tm else 'add_scene' if key in sm else 'remove_scene','sceneKey':key} for key in keys]
+        materialization=[change for change in materialization if change['sceneKey'] in keys]
     result={'sourceFingerprints':fingerprints,'targetFingerprints':[{'sourceRef':{'kind':'working'},'docHash':target['docHash'],'structureHash':target['structureHash']}],
         'productionInputsHash':target['productionInputsHash'],
-        'allowedActions':actions,'proposedChanges':{'doc':doc,'structure':proposed_structure,'sourceDoc':source['doc'],
-            'sourceStructure':source['structure'],'whole':whole},
-        'warnings':['Unaligned selected source scenes are added at the end, never guessed as replacements.'] if any(a['kind']=='add_scene' for a in actions) else []}
+        'allowedActions':actions,'proposedChanges':{'doc':doc,'structure':proposed_structure,'sourceDoc':adopted_doc,
+            'sourceStructure':adopted_structure,'whole':whole,'materializationChanges':materialization},
+        'warnings':(['Unaligned selected source scenes are added at the end, never guessed as replacements.'] if any(a['kind']=='add_scene' for a in actions) else [])+
+            (['Adoption materializes authored scene headings and visibly quotes original Scene lines. Original branch/version prose is retained unchanged; conversion and source lineage are shown in this preview.'] if materialization else [])}
     if candidate:
         result['candidateBranchId']=candidate
         result['_candidateRecord']=candidate_record
@@ -193,6 +295,8 @@ def apply_preview(conn, scope, preview, selection):
     actual=repo.get_tab(conn,scope.slug,scope.episode['tabKey'])['doc']
     previous=copy.deepcopy(proposed['sourceStructure'] if proposed['whole'] else before['structure'])
     if not proposed['whole']:
+        source_by_key={s['sceneKey']:s for s in proposed['sourceStructure'].get('scenes',[])}
+        previous['scenes']=[copy.deepcopy(source_by_key[s['sceneKey']]) if s['sceneKey'] in selected and s['sceneKey'] in source_by_key else s for s in previous['scenes']]
         known={s['sceneKey'] for s in previous['scenes']}
         previous['scenes'].extend(copy.deepcopy(s) for s in proposed['sourceStructure'].get('scenes',[])
             if s['sceneKey'] in selected and s['sceneKey'] not in known)
