@@ -42,7 +42,7 @@ export function patchWritingEditor(editor,json) {
   if(!tr.docChanged)return;
   tr.setMeta(SYSTEM,true).setMeta(REMOTE,true).setMeta('addToHistory',false);editor.view.dispatch(tr);
 }
-export function WritingEditor({doc,writable,me,onChange,onComposition,onReady,label,focusBid,locks=[],privateResource=false}) {
+export function WritingEditor({doc,sliceKey,writable,me,onChange,onComposition,onReady,label,focusBid,locks=[],privateResource=false}) {
   const latest=useRef({});latest.current={onChange,onComposition,onReady};
   const composing=useRef(false),compositionBase=useRef(null),deferred=useRef(null),editorRef=useRef(null),localEchoes=useRef([]);
   const changed=next=>{localEchoes.current.push(stable(next));if(localEchoes.current.length>200)localEchoes.current.shift();latest.current.onChange?.(next);};
@@ -65,13 +65,14 @@ export function WritingEditor({doc,writable,me,onChange,onComposition,onReady,la
   // A local transaction can rerender EditorContent before React receives its parent echo.
   // Only a genuinely different prop document is a remote/projection update.
   const docVersion=stable(doc);
+  useEffect(()=>{localEchoes.current=[];deferred.current=null;},[sliceKey]);
   useEffect(()=>{
     if(!editor)return;
     const echo=localEchoes.current.lastIndexOf(docVersion);
     if(echo>=0){localEchoes.current.splice(0,echo+1);return;}
     if(stable(canonicalEditorDoc(editor.getJSON()))===docVersion)return;
     if(composing.current){deferred.current=doc;return;}patchWritingEditor(editor,doc);
-  },[editor,docVersion]);
+  },[editor,docVersion,sliceKey]);
   useEffect(()=>{
     if(!editor || !focusBid || composing.current)return;
     let at=null;editor.state.doc.descendants((node,pos)=>{if(node.attrs.bid===focusBid){at=pos+1;return false;}});

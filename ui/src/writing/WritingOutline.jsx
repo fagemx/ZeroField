@@ -2,6 +2,24 @@ import { useState } from 'react';
 import { useTranslation } from '../i18n/react.jsx';
 import { documentText, sceneBlocks } from './writingModel.js';
 const key='writing.authoring.';
+export function WritingOutlineMerge({review,onApply}) {
+  const {t}=useTranslation();
+  const [choices,setChoices]=useState(()=>Object.fromEntries(review.fields.map(field=>[field.path,field.unchanged?'local':'server'])));
+  const value=text=>text===undefined?t(key+'outlineUnset'):JSON.stringify(text,null,2);
+  return <form aria-label={t(key+'outlineMerge')} onSubmit={event=>{event.preventDefault();onApply(choices);}}>
+    <p>{t(key+'outlineMergeInstructions',{version:review.structure.version})}</p>
+    {review.fields.map(field=><fieldset key={field.path}><legend><code>{field.path}</code></legend>
+      <label>{t(key+'outlineMergeBase')}<pre>{value(field.base)}</pre></label>
+      <label>{t(key+'outlineMergeServer')}<pre>{value(field.server)}</pre></label>
+      <label>{t(key+'outlineMergeLocal')}<pre>{value(field.local)}</pre></label>
+      {!field.mergeable&&<p role="alert">{t(key+'outlineIdentityChanged')}</p>}
+      <label>{t(key+'outlineMergeChoice')}<select aria-label={t(key+'outlineMergeChoice')+' '+field.path} value={choices[field.path]} onChange={event=>setChoices(current=>({...current,[field.path]:event.target.value}))}>
+        <option value="server">{t(key+'outlineUseServer')}</option><option value="local" disabled={!field.mergeable}>{t(key+'outlineUseLocal')}</option>
+      </select></label>
+    </fieldset>)}
+    <button type="submit">{t(key+'saveReviewedOutline')}</button>
+  </form>;
+}
 export function WritingOutline({structure,metadataDraft,doc,writable,selected,onSelect,onMetadata,onStructure,onShots,onUndo,onComposition}) {
   const {t}=useTranslation();const [outline,setOutline]=useState(false),[laneName,setLaneName]=useState(''),[splitPoints,setSplitPoints]=useState({});
   const scenes=(structure?.scenes || []).map(scene=>({...scene,...metadataDraft?.scenePatches?.find(patch=>patch.sceneKey===scene.sceneKey)}));

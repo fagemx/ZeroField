@@ -52,6 +52,35 @@ export function sceneBlocks(doc, scene) {
 export function draftSceneMembership(scene,partial) {
   return {...scene,headingBid:null,blockBids:(partial.content || []).map(bidOf),beats:[]};
 }
+// Capture *outside* anchors from an authoritative document. Local inserts/deletes inside
+// this interval stay visible even while its server membership is waiting for an ACK.
+export function sceneSliceBoundary(authorityDoc,scene) {
+  const content=authorityDoc.content || [],bids=new Set(sceneBlocks(authorityDoc,scene).content.map(bidOf));
+  const first=content.findIndex(node=>bids.has(bidOf(node)));
+  if(first<0)return null;
+  let end=first;while(end<content.length&&bids.has(bidOf(content[end])))end++;
+  if(content.slice(end).some(node=>bids.has(bidOf(node))))return null;
+  return {before:first?[bidOf(content[first-1])]:[],after:end<content.length?[bidOf(content[end])]:[]};
+}
+export function sceneSliceRange(doc,boundary) {
+  if(!boundary)return null;
+  const content=doc.content || [],positions=new Map(content.map((node,index)=>[bidOf(node),index]));
+  if(positions.size!==content.length)return null;
+  const before=boundary.before[0],after=boundary.after[0];
+  // A lost outside boundary is ambiguous, not permission to absorb another scene.
+  if(before!==undefined&&!positions.has(before)||after!==undefined&&!positions.has(after))return null;
+  const start=before===undefined?0:positions.get(before)+1,end=after===undefined?content.length:positions.get(after);
+  return start<=end?{start,end}:null;
+}
+export function sceneSliceBlocks(doc,boundary) {
+  const range=sceneSliceRange(doc,boundary);
+  return range?{...doc,content:doc.content.slice(range.start,range.end)}:null;
+}
+export function replaceSceneSlice(doc,boundary,partial) {
+  const range=sceneSliceRange(doc,boundary);
+  if(!range)throw new Error('Scene mapping is unresolved');
+  return {...doc,content:[...doc.content.slice(0,range.start),...partial.content,...doc.content.slice(range.end)]};
+}
 export function replaceSceneBlocks(doc, scene, partial) {
   const selected = sceneBlocks(doc,scene).content;
   const bids = new Set(selected.map(bidOf));
