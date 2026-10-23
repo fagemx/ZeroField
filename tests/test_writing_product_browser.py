@@ -153,6 +153,8 @@ class WritingProductBrowserTests(unittest.TestCase):
         from playwright.sync_api import expect
         from project_docs import story_openapi as story
         self.f.init();self.f.save_doc(core.document('Scene 01: Arrival','@CAST-01 opens the door.','Scene 02: Signal','@CAST-01 waits.'))
+        for shot in self.f.ok('/episodes/'+self.f.ep+'/shots')['items']:
+            self.f.ok('/shots/'+shot['shotId'],'DELETE')
         with self.browser() as (page,context,base):
             page.get_by_role('button',name='Confirm screenplay & build text storyboard',exact=True).click()
             expect(page.get_by_role('textbox',name='Manuscript editor')).not_to_be_visible(timeout=20000)
@@ -173,7 +175,7 @@ class WritingProductBrowserTests(unittest.TestCase):
             _,other=story.find_row(self.f.conn,second['shotId'],'shot')
             story.mutate_row(self.f.conn,self.f.me,self.f.slug,other['tabKey'],other['rid'],{3:'Director preserves this unselected row'})
             self.f.conn.commit()
-            page.get_by_role('button',name='Refresh preview status',exact=True).click()
+            page.get_by_role('button',name='Refresh preview freshness',exact=True).click()
             choice=page.locator('.writing-preview-action').filter(has_text='Update text').filter(has_text=first['shotId'])
             choice.locator('input[type=checkbox]').first.check()
             page.get_by_role('button',name='Apply selected content',exact=True).click()
