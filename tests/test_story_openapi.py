@@ -180,6 +180,18 @@ class StoryPureTests(unittest.TestCase):
         for beat, index, total in (('@CAST-01 enters.', 0, 3), ('Close-up of tearful eyes.', 2, 3), ('MARA: "Stay."', 1, 2)):
             self.assertEqual(story.infer_shot_grammar(beat, index, total), story.infer_shot_grammar(beat, index, total, None))
 
+    def test_a_variant_tag_opening_a_beat_is_action_not_a_speaker_cue(self):
+        for beat in ('@CAST-88:night enters.', '@CAST-01:revealed takes off the apron; underneath is a tailored suit.'):
+            self.assertEqual(story.infer_shot_grammar(beat, 1, 3)['dialogue'], [])
+        for beat, speaker in (('@CAST-01:night: "Wait."', 'CAST-01:night'), ('@CAST-02#injured: "Help."', 'CAST-02:injured'),
+                              ('@CAST-02: "Stay."', 'CAST-02'), ('CAST-03: Go.', 'CAST-03'), ('@CAST-02：「十秒。」', 'CAST-02')):
+            self.assertEqual(story.infer_shot_grammar(beat, 1, 3)['dialogue'][0]['speaker'], speaker)
+        for genre, variant in (('melodrama', ':revealed'), ('xianxia', ':awakened')):
+            script = story.adapt_source_to_script(self.COURIER, 'idea', medium_lens='manju', genre_lens=genre)
+            beats = story.scene_shot_beats(story.scene_sections(script)[-1]['content'])
+            reveal = next(i for i, beat in enumerate(beats) if variant in beat)
+            self.assertEqual(story.infer_shot_grammar(beats[reveal], reveal, len(beats), 'manju')['dialogue'], [])
+
     def test_no_label_rule_flags_and_sanitizes_and_engine_output_is_always_clean(self):
         from project_docs.story_adaptation import audit_narrative_voice, sanitize_narrative_voice
         labelled = '她心裡壓著這件事。他霸氣外露地看著眾人。Mira feels deep inside that time is running out.'

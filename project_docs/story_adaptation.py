@@ -20,7 +20,8 @@ IDEA_STAGES = [("The discovery", "establishes the space and discovers the confli
                ("The pressure", "approaches the obstacle as the stakes become clear", "There is still a choice."),
                ("The decision", "reaches for @PROP-01 and makes the decisive choice", "Then we act now.")]
 QUOTED = re.compile(r'["“「]([^"”」\n]+)["”」]')
-SPEAKER = re.compile(r'^\s*(@?CAST-\d+(?:[:#][\w-]+)?|[A-Za-z][A-Za-z\s\'-]{0,35}|[\u3400-\u9fff]{1,12})\s*[:：]\s*(.*)$')
+# A cue tag keeps its variant or has none: "@CAST-01:night enters." must not back off to "@CAST-01" + ": night enters."
+SPEAKER = re.compile(r'^\s*(@?CAST-\d+(?:[:#][\w-]+|(?![:#]\w))|[A-Za-z][A-Za-z\s\'-]{0,35}|[\u3400-\u9fff]{1,12})\s*[:：]\s*(.*)$')
 
 
 def asset_code(value):
