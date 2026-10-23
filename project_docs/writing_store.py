@@ -73,6 +73,11 @@ class WritingScope:
 
 def scope_for(conn, me, episode_id, *, write=False, credential_scope=''):
     ep = story.episode(conn, episode_id)
+    with conn.cursor() as cur:
+        cur.execute('SELECT kind,project_slug FROM projectops.story_record WHERE id=%s',(episode_id,))
+        saved=cur.fetchone()
+    if saved and (saved[0]!='episode' or saved[1]!=ep['slug']):
+        raise story.StoryError(404,'DRAMA_NOT_FOUND','Episode not found.')
     story.authorize(conn, me, ep['slug'], write=write)
     if ep.get('episodeId') != episode_id:
         story.invalid('Invalid episode scope.')

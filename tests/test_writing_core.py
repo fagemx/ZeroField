@@ -162,6 +162,60 @@ class WritingHTTPTests(unittest.TestCase):
         text=story.doc_text(self.writing('workspace')['doc']);self.assertIn('New Alpha',text);self.assertNotIn('New Beta',text)
         self.assertTrue(applied['beforeVersionId'])
 
+    def test_typed_private_checkpoint_cannot_be_forged_or_client_written(self):
+        self.init()
+        saved=self.writing('sources/idea','PUT',{'baseVersion':0,'clientMutationId':'source','doc':document('Before'),'structure':{},'composition':{}})
+        scope=store.scope_for(self.conn,service.Identity(self.actor,'Test','admin'),self.ep,write=True)
+        new_doc=store.checked_doc(document('After'),self.slug)
+        changes={'doc':new_doc,'docHash':store.doc_hash(new_doc),'beforeCheckpoint':{'doc':saved['doc'],'structure':saved['structure']}}
+        result=store.cas_record(self.conn,scope,'writing_source',saved['sourceId'],base_version=1,changes=changes)
+        self.conn.commit()
+        self.assertEqual(result['beforeCheckpoint']['ownerId'],self.actor)
+        self.assertEqual(result['beforeCheckpoint']['episodeId'],self.ep)
+        self.assertEqual(result['beforeCheckpoint']['resourceKind'],'writing_source')
+        self.error('sources/idea','PUT',{'baseVersion':2,'clientMutationId':'forged','doc':new_doc,'structure':{},'composition':{},'beforeCheckpoint':{}},422)
+        forged=copy.deepcopy(changes);forged['beforeCheckpoint']['doc']=document('Unrelated private evidence')
+        with self.assertRaises(story.StoryError): store.cas_record(self.conn,scope,'writing_source',saved['sourceId'],base_version=2,changes=forged)
+        self.conn.rollback()
+        self.assertEqual(self.writing('sources/idea')['version'],2)
+        self.assertNotIn('beforeCheckpoint',self.writing('workspace')['sources']['items'][0])
+
+    def test_expired_receipt_never_silently_rebases(self):
+        self.init()
+        saved=self.writing('sources/idea','PUT',{'baseVersion':0,'clientMutationId':'create','doc':document('Before'),'structure':{},'composition':{}})
+        body={'baseVersion':1,'clientMutationId':'edit','doc':document('After'),'structure':{},'composition':{}}
+        ack=self.writing('sources/idea','PUT',body);self.assertEqual(ack['version'],2)
+        with self.conn.cursor() as cur:
+            cur.execute("UPDATE projectops.story_record SET data=jsonb_set(data,'{expiresAt}','0') WHERE kind='writing_receipt' AND project_slug=%s",(self.slug,))
+        self.conn.commit()
+        self.error('sources/idea','PUT',body,409)
+        self.assertEqual(self.writing('sources/idea')['version'],2)
+        self.writing('sources/idea','PUT',body|{'baseVersion':2,'clientMutationId':'explicit-new-action'})
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM projectops.story_record WHERE kind='writing_receipt' AND project_slug=%s AND (data->>'expiresAt')::double precision<%s",(self.slug,time.time()))
+            self.assertEqual(cur.fetchone()[0],0)
+
+    def test_explicit_other_episode_references_are_scoped_and_computation_is_unlocked(self):
+        from project_docs import writing_service, writing_versions
+        self.init();ws=self.writing('workspace')
+        second=self.ok(f'/projects/pj_{self.slug}/episodes','POST',{'title':'Second'})
+        source={'baseVersion':0,'clientMutationId':'second-source','doc':document('Second private novel'),'structure':{},'composition':{}}
+        self.ok(f'/episodes/{second["episodeId"]}/writing/sources/novel','PUT',source)
+        scope=store.scope_for(self.conn,service.Identity(self.actor,'Test','admin'),self.ep)
+        writing_service.authorize_references(self.conn,scope,{'scope':[{'episodeId':second['episodeId'],'sourceRef':{'kind':'source','mode':'novel'}}]})
+        other=self.ok('/projects','POST',{'title':'Foreign'});self.extra_projects.append(other['slug'])
+        with self.assertRaises(story.StoryError):
+            writing_service.authorize_references(self.conn,scope,{'scope':[{'episodeId':f'ep_{other["slug"]}_01','sourceRef':{'kind':'working'}}]})
+        self.conn.rollback()
+        original=writing_versions.compare
+        def unlocked(conn,scope,body):
+            with conn.cursor() as cur:
+                cur.execute("SELECT count(*) FROM pg_locks WHERE pid=pg_backend_pid() AND locktype='advisory'")
+                self.assertEqual(cur.fetchone()[0],0)
+            return original(conn,scope,body)
+        with patch.object(writing_versions,'compare',unlocked):
+            self.assertTrue(self.writing('compare','POST',{'leftRef':{'kind':'working'},'rightRef':{'kind':'working'},'expectedHashes':{'left':ws['docHash'],'right':ws['docHash']}})['equal'])
+
     def test_limits_settings_and_historical_baseline_are_not_fabricated(self):
         self.init();self.save_doc(document('Scene 01: First','Before'))
         self.ok(f'/episodes/{self.ep}/asset-extractions','POST',{})

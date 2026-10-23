@@ -153,9 +153,11 @@ def project(conn, identifier):
 
 def episodes(conn, slug):
     found = records(conn, "episode", slug)
-    if not found and repo.get_tab(conn, slug, "director-brief"):
+    if not any(e.get('episodeId') == f'ep_{slug}_01' for e in found) and repo.get_tab(conn, slug, "director-brief"):
+        # The legacy first episode is implicit until an old mutation persists it.
+        # Creating episode 2 must not make already-saved episode-1 writing resources unreachable.
         found = [{"episodeId": f"ep_{slug}_01", "projectId": "pj_" + slug, "slug": slug,
-                  "episodeIndex": 1, "title": "Episode 1", "tabKey": "director-brief", "settings": {}}]
+                  "episodeIndex": 1, "title": "Episode 1", "tabKey": "director-brief", "settings": {}}] + found
     return sorted(found, key=lambda e: e["episodeIndex"])
 
 
