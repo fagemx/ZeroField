@@ -17,6 +17,14 @@ export function storyComposition({medium, genre, collisions, unchecked = [], foc
     uncheckedLabels:unchecked, extraCondition:extra.trim()}})};
 }
 
+// P4 preview of the server's compute_choice_contrast: two of the last five choices held one line and this focus is its opposite.
+const OPPOSITE_FOCUS = {restraint:'reversal', reversal:'restraint', collision:'negative_space', negative_space:'collision'};
+export function choiceContrast(traces = [], focus) {
+  const recent = traces.slice(-5).map(trace => trace.focus);
+  const dominant = Object.keys(OPPOSITE_FOCUS).find(key => OPPOSITE_FOCUS[key] === focus && recent.filter(f => f === key).length >= 2) || null;
+  return {contrastDetected:Boolean(dominant), dominantFocus:dominant};
+}
+
 export function editStoryScreenplay(sourceMode, draft, script, targetScenes = 3, composition = null) {
   return {...draft, script, adaptationKey:sourceMode === 'script' ? draft.adaptationKey : adaptationKey(sourceMode, draft, targetScenes, composition)};
 }

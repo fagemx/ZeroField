@@ -73,13 +73,14 @@ class ConsoleInteractions(unittest.TestCase):
     def test_navigation_templates_keyboard_locale_and_production_context(self):
         self.fixture.prepare()
         self.page.goto(self.url+'#cinema-studio')
-        self.page.get_by_role('button',name='Gallery',exact=True).click()
+        self.page.locator('.sheet-view-switch').get_by_role('button',name='Overview',exact=True).click()
         self.page.get_by_role('button',name='SC01-S01',exact=True).click()
+        self.page.locator('.sheet-view-switch').get_by_role('button',name='Review',exact=True).click()
         self.page.locator('.story-shot-tools details summary').click()
         override=self.page.locator('.story-shot-tools details input').first
         override.fill('Preserve unsent shot override')
         self.page.evaluate('window.__productionReview=document.querySelector(".story-shot-tools")')
-        self.page.get_by_role('button',name='Agent Console',exact=True).first.click()
+        self.open_console()
         expect(self.page.locator('.agent-console')).to_be_visible()
         self.assertTrue(self.page.locator('.workbench-app').get_attribute('inert') is not None)
         self.assertEqual(self.page.locator('.ac-nav nav section').count(),4)
@@ -139,7 +140,7 @@ class ConsoleInteractions(unittest.TestCase):
         self.page.get_by_role('button',name='Return to Production',exact=True).click()
         expect(self.page).to_have_url(self.url+'#cinema-studio')
         expect(self.page.locator('.story-shot-tools details input').first).to_have_value('Preserve unsent shot override')
-        self.page.get_by_role('button',name='Agent Console',exact=True).first.click()
+        self.open_console()
         self.nav('Quickstart')
         self.page.locator('.agent-console').get_by_role('button',name='繁體中文',exact=True).click()
         expect(self.page.locator('.agent-console main h1')).to_have_text('快速入門')
@@ -153,9 +154,15 @@ class ConsoleInteractions(unittest.TestCase):
         override=self.page.locator('.story-shot-tools details input').first
         expect(override).to_have_value('Preserve unsent shot override')
         override.fill('Still the same mounted inspector')
-        self.page.get_by_role('button',name='Agent Console',exact=True).first.click()
+        self.open_console()
         self.page.get_by_role('button',name='Return to Production',exact=True).click()
         expect(override).to_have_value('Still the same mounted inspector')
+
+    def open_console(self):
+        # SPEC_15: engineering tools are Ctrl K commands, not standing top-bar buttons.
+        self.page.keyboard.press('Control+K')
+        self.page.get_by_role('combobox',name='Search or run a command').fill('Agent Console')
+        self.page.keyboard.press('Enter')
 
     def test_versioned_skill_memory_provider_environment_and_manual_cron_forms(self):
         self.open('skills','new')

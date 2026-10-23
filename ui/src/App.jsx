@@ -13,7 +13,10 @@ import { HistoryPanel } from "./History.jsx";
 import { parseLocation, tabHash } from "./route.js";
 import { isOpen } from "./rules.js";
 import { TabRail } from "./TabRail.jsx";
-import { IdentityBadge, PROJECT_STATUS, ProjectHub, SurfaceHeader, StudioModeBar } from "./Surfaces.jsx";
+import { IdentityBadge, PROJECT_STATUS, ProjectHub, SurfaceHeader } from "./Surfaces.jsx";
+import { STAGE_TAB, STORY_VIEW, CommandPalette, FilmOverlay, StudioTopBar, episodeCounts, spaceOf, useEpisode } from "./StudioShell.jsx";
+import { StoryWorld } from "./StoryWorld.jsx";
+import { AssetVaultModal, OpenApiModal, ToolboxModal } from "./StoryWorkbenchModals.jsx";
 import { FlowSurface, SheetSurface } from "./CanvasViews.jsx";
 import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { AssistantSide, AssistantWorkspace } from "./assistant/AssistantViews.jsx";
@@ -103,6 +106,7 @@ function ProjectPage({ slug }) {
   const [storyEpisode, setStoryEpisode] = useState(`ep_${slug}_01`);
   const [paMode, setPaMode] = useState('off');
   const [paDraft, setPaDraft] = useState('');
+  const [palette, setPalette] = useState(false), [filmOpen, setFilmOpen] = useState(false), [studioRail, setStudioRail] = useState(false), [studioModal, setStudioModal] = useState(null);
   const versionsShown = useCallback(() => setVersionsFor(null), []);
   const annSeq = useRef(0);
   const pendingFocus = useRef((() => {
@@ -158,8 +162,10 @@ function ProjectPage({ slug }) {
   useEffect(() => {
     if (!data) return;
     const keys = data.tabs.map((t) => t.key);
+    const studio = keys.includes(STAGE_TAB);
+    if (studio && tabKey === STORY_VIEW) return;
     if (!tabKey || !keys.includes(tabKey)) {
-      const first = keys[0];
+      const first = studio ? STAGE_TAB : keys[0];
       if (first) {
         setTabKey(first);
         if (!consoleRoute(window.location.hash)) window.history.replaceState(null, "", tabHash(first));
@@ -168,7 +174,7 @@ function ProjectPage({ slug }) {
   }, [data, tabKey]);
 
   useEffect(() => {
-    if (!tabKey || !data) return;
+    if (!tabKey || !data || tabKey === STORY_VIEW) return;
     const meta = data.tabs.find((t) => t.key === tabKey);
     const cached = docs[tabKey];
     if (!cached) loadTab(tabKey, true);
@@ -512,6 +518,21 @@ function ProjectPage({ slug }) {
     loadProject();
   }, [loadTab, loadProject]);
   const flushSurface = useCallback(async () => (surfaceControl.current ? surfaceControl.current.flush() : true), []);
+  const isStudio = Boolean(data?.tabs.some((t) => t.key === STAGE_TAB));
+  const episode = useEpisode(slug, storyEpisode, (data?.tabs || []).map((t) => t.updated_at).join("|"), isStudio);
+  // Ctrl K opens the command palette; G opens or closes the Assistant when focus is not in a field.
+  useEffect(() => {
+    if (!isStudio || consoleView) return undefined;
+    const keys = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPalette((open) => !open); return; }
+      if (event.key.toLowerCase() !== "g" || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      if (event.target.closest?.("input,textarea,select,[contenteditable=true],.modal-scrim") || !paEnabled) return;
+      event.preventDefault();
+      setPaMode((current) => (current === "off" ? (narrow() ? "full" : "side") : "off"));
+    };
+    window.addEventListener("keydown", keys);
+    return () => window.removeEventListener("keydown", keys);
+  }, [isStudio, consoleView, paEnabled]);
   const openConsole = async () => {
     if (!(await flushSurface())) return;
     productionReturnFocus.current = document.activeElement;
@@ -536,11 +557,51 @@ function ProjectPage({ slug }) {
   const tab = tabKey ? docs[tabKey] : null;
   const todo = todoCount(data.annotations, me);
   const openCount = (key) => data.annotations.filter((a) => a.tab_key === key && isOpen(a) && !a.orphaned_at).length;
+  const storyView = isStudio && tabKey === STORY_VIEW;
+  const space = isStudio ? spaceOf(tabKey) : null;
+  const counts = episodeCounts(episode.ep, episode.shots);
+  const reloadAll = async () => { episode.reload(); await loadProject(); if (tabKey && tabKey !== STORY_VIEW) await loadTab(tabKey, true); };
+  const assistantButton = paEnabled && (
+    <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title={uiText("app.studioAssistant")} aria-keyshortcuts={isStudio ? "G" : undefined}
+      onClick={() => { if (paMode === 'off') { if (assistant.orchestrationCounts?.needs_you || assistant.orchestrationCounts?.working) setPaView('agents'); openAssistant(); } else setPaMode('off'); }}>
+      <Icon name="sparkle" /><span className="label">{uiText("app.studioAssistant")}</span>
+      {paMode === 'off' && assistant.orchestrationCounts?.needs_you > 0 && <span className="count">? {assistant.orchestrationCounts.needs_you}</span>}
+      {paMode === 'off' && assistant.orchestrationCounts?.working > 0 && <span className="count">⟳ {assistant.orchestrationCounts.working}</span>}
+    </button>
+  );
+  // Every page and engineering tool, one Ctrl K away instead of standing in the top bar and page rail.
+  const commands = isStudio ? [
+    { id: "space-story", group: uiText("shell.groupSpaces"), label: uiText("shell.storyWorld"), icon: "doc", run: () => navigate(STORY_VIEW) },
+    { id: "space-stage", group: uiText("shell.groupSpaces"), label: uiText("shell.shotStage"), icon: "clapper", run: () => navigate(STAGE_TAB) },
+    { id: "film", group: uiText("shell.groupSpaces"), label: uiText("shell.filmTitle"), icon: "play", run: () => setFilmOpen(true) },
+    ...tabs.map((item) => ({ id: "page-" + item.key, group: uiText("shell.groupPages"), label: item.title, hint: openCount(item.key) ? uiText("shell.openNotes", { count: openCount(item.key) }) : "",
+      icon: item.surface_type === "sheet" ? "table" : item.surface_type === "flow" ? "flow" : "doc", run: () => navigate(item.key) })),
+    { id: "assets", group: uiText("shell.groupTools"), label: uiText("story.assetVault"), icon: "layers", run: () => setStudioModal("assets") },
+    { id: "annotations", group: uiText("shell.groupTools"), label: uiText("app.annotations"), hint: todo ? String(todo) : "", icon: "comment", run: () => { setPanel(true); setHistoryOpen(false); if (paMode === "side") setPaMode("off"); } },
+    ...(tab && !storyView ? [{ id: "history", group: uiText("shell.groupTools"), label: uiText("shell.pageHistory"), icon: "history", run: () => { setHistoryOpen(true); setPanel(false); if (paMode === "side") setPaMode("off"); } }] : []),
+    { id: "toolbox", group: uiText("shell.groupTools"), label: uiText("story.toolbox"), icon: "toolbox", run: () => setStudioModal("toolbox") },
+    { id: "api", group: uiText("shell.groupTools"), label: uiText("story.openApi"), icon: "code", run: () => setStudioModal("api") },
+    { id: "console", group: uiText("shell.groupTools"), label: uiText("console.entry"), icon: "terminal", run: openConsole },
+    { id: "link", group: uiText("shell.groupTools"), label: uiText("app.copyLink"), icon: "link", run: copyLink },
+    { id: "rail", group: uiText("shell.groupTools"), label: uiText(studioRail ? "shell.hidePages" : "shell.showPages"), icon: "menu", run: () => setStudioRail((open) => !open) },
+  ] : [];
   return (
     <>
     {consoleView && <AgentConsoleApp key={slug+':'+me.actor_id} slug={slug} me={me} project={data.project} route={consoleView} episodeId={storyEpisode} onReturn={returnProduction}/>}
-    <div data-console-hidden={Boolean(consoleView)} inert={consoleView ? true : undefined} aria-hidden={consoleView ? true : undefined} className={"app workbench-app surface-" + (tab?.surface_type || "doc") + (railHidden ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
+    <div data-console-hidden={Boolean(consoleView)} inert={consoleView ? true : undefined} aria-hidden={consoleView ? true : undefined} className={"app workbench-app surface-" + (storyView ? "story" : tab?.surface_type || "doc") + (isStudio ? " studio-shell" : "") + ((isStudio ? !studioRail : railHidden) ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
+      {isStudio ? <StudioTopBar project={data.project} episodes={episode.episodes} epId={storyEpisode}
+        onEpisode={async (next) => { if (await flushSurface()) setStoryEpisode(next); }}
+        space={space} pageTitle={!storyView && tab && tabKey !== STAGE_TAB ? tab.title : ""} counts={counts}
+        onSpace={(next) => navigate(next === "story" ? STORY_VIEW : STAGE_TAB)} onCommand={() => setPalette(true)}
+        assistant={<>{todo > 0 && <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={uiText("app.annotationsNeedsYouAndAll")}
+          onClick={() => { setPanel(!panel); setHistoryOpen(false); if (!panel && paMode === "side") setPaMode("off"); }}><NoteIcon /><span className="count">{todo}</span></button>}
+          {tab?.surface_type === "doc" && !storyView && <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title={uiText("app.chooseWhichHighlightsAndUnderlinesToShow")}
+            onClick={(event) => setViewMenu(viewMenu ? null : event.currentTarget.getBoundingClientRect())}><PenIcon /></button>}
+          {assistantButton}</>}
+        film={{ open: filmOpen, onToggle: () => setFilmOpen((open) => !open) }}
+        settings={<WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />}
+        identity={<IdentityBadge me={me} members={data.members} />} /> :
       <header className="top">
         <button type="button" className="icon-btn" onClick={() => (window.innerWidth <= 860 ? setRailOpen(!railOpen) : setRailHidden(!railHidden))}
           aria-label={uiText("app.togglePages")}><Icon name="menu" /> <span className="label">{uiText("app.pages")}</span></button>
@@ -564,21 +625,14 @@ function ProjectPage({ slug }) {
           onClick={() => { setPanel(!panel); setHistoryOpen(false); if (!panel && paMode === "side") setPaMode("off"); }}>
           <NoteIcon /><span className="label">{uiText("app.annotations")}</span>{todo > 0 && <span className="count">{todo}</span>}
         </button>
-        {paEnabled && (
-          <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title={uiText("app.studioAssistant")}
-            onClick={() => { if (paMode === 'off') { if (assistant.orchestrationCounts?.needs_you || assistant.orchestrationCounts?.working) setPaView('agents'); openAssistant(); } else setPaMode('off'); }}>
-            <Icon name="sparkle" /><span className="label">{uiText("app.studioAssistant")}</span>
-            {paMode === 'off' && assistant.orchestrationCounts?.needs_you > 0 && <span className="count">? {assistant.orchestrationCounts.needs_you}</span>}
-            {paMode === 'off' && assistant.orchestrationCounts?.working > 0 && <span className="count">⟳ {assistant.orchestrationCounts.working}</span>}
-          </button>
-        )}
+        {assistantButton}
         <button type="button" className="icon-btn" onClick={copyLink} title={uiText("app.copyALinkToThisPageOrAnnotation")} aria-label={uiText("app.copyLink")}>
           <LinkIcon /><span className="label">{uiText("app.copyLink")}</span>
         </button>
         <button type="button" className="icon-btn" onClick={openConsole} aria-label={uiText('console.entry')}><Icon name="terminal" /><span className="label">{uiText('console.entry')}</span></button>
         <LanguageSwitch /><WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
         <IdentityBadge me={me} members={data.members} />
-      </header>
+      </header>}
       <ViewMenu open={Boolean(viewMenu)} rect={viewMenu} view={view} showResolved={showResolved}
         onView={setView} onResolved={setShowResolved} onClose={() => setViewMenu(null)} />
       <AnnotationPanel open={panel} annotations={data.annotations} me={me} members={data.members} tabs={tabs}
@@ -595,11 +649,10 @@ function ProjectPage({ slug }) {
           onVersions={async (key) => { if (await flushSurface() && await navigate(key)) setVersionsFor(key); }}
           onError={onError} onToast={showToast} />
         <main className="main">
-          {tabs.some(item => item.key === 'cinema-studio') && <StudioModeBar slug={slug} tab={tab} me={me} activeEpisode={storyEpisode}
-            onEpisode={setStoryEpisode} version={tab?.updated_at} flush={flushSurface} onNavigate={navigate} onConsole={openConsole}
-            onReload={async () => {await loadProject(); if(tabKey)await loadTab(tabKey,true);}}/>}
           <div className="doc-host">
-          {!tab && <div className="center-note">{uiText("app.loading")}</div>}
+          {storyView && <StoryWorld epId={storyEpisode} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
+            onChanged={reloadAll} onStage={() => navigate(STAGE_TAB)} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")} />}
+          {!tab && !storyView && <div className="center-note">{uiText("app.loading")}</div>}
           {tab && tab.surface_type === "sheet" && !versionsFor && !(docModeTabs && docModeTabs[tab.key]) && (
             <SheetSurface
               key={tab.key}
@@ -612,6 +665,8 @@ function ProjectPage({ slug }) {
               annotations={data.annotations} locks={data.locks || []}
               focusRow={sheetFocus}
               storyEpisode={storyEpisode}
+              onOpenWorld={isStudio ? () => navigate(STORY_VIEW) : undefined}
+              onFilm={isStudio ? () => setFilmOpen(true) : undefined}
               onField={setField}
               onReloadTab={async () => { await loadTab(tab.key, true); await loadProject(); }}
               onAskAgent={paEnabled ? assignBackground : null}
@@ -682,6 +737,11 @@ function ProjectPage({ slug }) {
           onClose={() => setPaMode("off")} onConsole={openConsole} onOpenTab={openFromAssistant} onStarter={starter} onError={onError} onToast={showToast} />
       )}
       {railOpen && <div className="rail-scrim" onClick={() => setRailOpen(false)} />}
+      {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}
+      {filmOpen && <FilmOverlay epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} onClose={() => setFilmOpen(false)} />}
+      {studioModal === "assets" && <AssetVaultModal epId={storyEpisode} writable={me.can_write !== false} onClose={() => setStudioModal(null)} onChanged={reloadAll} onNavigate={() => { setStudioModal(null); navigate("soul-cast"); }} />}
+      {studioModal === "toolbox" && <ToolboxModal writable={me.can_write !== false} onClose={() => setStudioModal(null)} />}
+      {studioModal === "api" && <OpenApiModal slug={slug} epId={storyEpisode} onClose={() => setStudioModal(null)} />}
       {toast && <div className={"toast " + toast.kind} role="status">{toast.message}</div>}
     </div>
     </>

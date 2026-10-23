@@ -7,27 +7,32 @@ import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {join,dirname,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {t,setLocale} from '../src/i18n/index.js';
-import {sourceDraft,editStoryScreenplay,hasSceneHeadings,needsStoryAdaptation,adaptStoryDraft,buildStoryFromDraft,storyComposition,missingAssetSheets,assetGroupActive,rememberAssetGroup,restoredAssetGroup} from '../src/storyImport.js';
+import {sourceDraft,editStoryScreenplay,hasSceneHeadings,needsStoryAdaptation,adaptStoryDraft,buildStoryFromDraft,storyComposition,choiceContrast,missingAssetSheets,assetGroupActive,rememberAssetGroup,restoredAssetGroup} from '../src/storyImport.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 let temporary, components;
 before(async()=>{
   temporary=await mkdtemp(join(root,'tests/.story-render-'));
-  const result=await build({stdin:{contents:"export {StoryWorkbench,StoryImportModal,CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
+  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette} from './src/StudioShell.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
   const output=join(temporary,'components.mjs');await writeFile(output,result.outputFiles[0].text);components=await import(pathToFileURL(output));
 });
 after(async()=>{if(temporary)await rm(temporary,{recursive:true,force:true});});
 const render=(name,props)=>renderToStaticMarkup(React.createElement(components[name],props));
 
-test('all five workbench entries render and viewers cannot start creation',()=>{
-  const html=render('StoryWorkbench',{slug:'demo',me:{can_write:false},tab:{key:'cinema-studio'}});
-  for(const name of ['Start Creating','My Projects','Asset Vault','Toolbox','Open API']) assert.ok(html.includes(name));
-  assert.match(html,/<button disabled=""><svg[^>]*class="ico"[\s\S]*?<\/svg>Start Creating/);
+test('the studio top bar holds two unnumbered spaces with their status, Ctrl K and one film entry',()=>{
+  const html=render('StudioTopBar',{project:{title:'The Last Signal'},episodes:[{episodeId:'ep_demo_01',title:'Episode 1'}],epId:'ep_demo_01',space:'stage',counts:{shots:8,review:2,missing:1,filmed:6,scriptDirty:true},onEpisode(){},onSpace(){},onCommand(){},film:{open:false,onToggle(){}}});
+  assert.match(html,/<button type="button">Story &amp; World<span class="studio-note warn">Script changed · 1 missing images<\/span><\/button>/);
+  assert.match(html,/<button type="button" aria-current="page">Shot Stage<span class="studio-note">8 shots · 2 to review<\/span><\/button>/);
+  assert.match(html,/Ctrl K/);assert.match(html,/Film<span class="num">6\/8<\/span>/);
+  assert.doesNotMatch(html,/[①②③④⑤⑥]|Start Creating|My Projects|Studio Engine/,'no numbered stations and no second set of entries');
+  assert.equal((html.match(/>Film</g)||[]).length,1,'one film entry');
 });
 
-test('Toolbox, Open API and Agent Console share one Studio Engine menu that still renders its buttons',()=>{
-  const html=render('StoryWorkbench',{slug:'demo',me:{can_write:true},tab:{key:'cinema-studio'}});
-  assert.match(html,/<details class="story-engine-menu"><summary>[\s\S]*?Studio Engine<\/summary>[\s\S]*?Toolbox[\s\S]*?Open API[\s\S]*?Agent Console[\s\S]*?<\/details>/);
+test('Toolbox, Open API and Agent Console are commands in the Ctrl K palette',()=>{
+  const html=render('CommandPalette',{commands:[['Story & World','Space'],['Soul Cast','Page'],['Toolbox','Tool'],['Open API','Tool'],['Agent Console','Tool']].map(([label,group],i)=>({id:'c'+i,label,group,run(){}})),onClose(){}});
+  assert.match(html,/role="dialog"/);assert.match(html,/role="combobox"/);
+  assert.match(html,/Toolbox[\s\S]*?Open API[\s\S]*?Agent Console/);
+  assert.match(html,/<li id="cmd-c0" role="option" aria-selected="true">/,'the first command is ready for Enter');
 });
 
 test('Micro has real candidate, split, restoration and node-input surfaces',()=>{
@@ -68,12 +73,14 @@ test('new count and usage labels interpolate in both interface languages',async(
   await setLocale('en');
 });
 
-test('Start Creating retains its fields and defaults to Screenplay with three source and density choices',()=>{
-  const html=render('StoryImportModal',{epId:'ep_demo_02',writable:true});
-  for(const name of ['Start Creating','Script','Aspect Ratio','Style Preset','Idea / Logline','Novel / Story Chapter','Screenplay','Storyboard Density','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
-  assert.match(html,/<option value="script" selected="">Screenplay/);
+test('Story & World keeps every Start Creating field on the page, defaults to Screenplay and has one amber action',()=>{
+  const html=render('StoryWorld',{epId:'ep_demo_02',writable:true});
+  for(const name of ['Scenes','Story','Script','Aspect Ratio','Style Preset','Idea / Logline','Novel / Story Chapter','Screenplay','Storyboard Density','World','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
+  assert.match(html,/aria-pressed="true"[^>]*>Screenplay/);
   assert.match(html,/accept="\.txt,\.md,text\/plain,text\/markdown"/);
   for(const mode of ['auto','scene','cinematic']) assert.ok(html.includes(`value="${mode}"`));
+  assert.equal((html.match(/class="primary/g)||[]).length,1,'one primary action');
+  assert.match(render('StoryWorld',{epId:'ep_demo_02',writable:true,shots:[{shotId:'s1',sceneId:'sc1'}]}),/Update Storyboard &amp; Open Shot Stage/);
 });
 
 test('adapting preserves the original source and screenplay edits while a changed source requires a fresh adaptation',async()=>{
@@ -131,7 +138,7 @@ test('a composed adaptation sends lenses and the trace, returns the no-label rep
 test('the composition panel stays folded to one lens choice until a lens is picked, then strikes unchecked cards',async()=>{
   const value={medium:'',genre:'general',collisions:null,unchecked:[],focus:'overall',extra:''};
   let html=render('CompositionPanel',{value,onChange:()=>{}});
-  assert.match(html,/<option value="" selected="">Classic adaptation \(no lens\)/);
+  assert.match(html,/<button type="button" aria-pressed="true">Classic adaptation \(no lens\)<\/button>/);
   assert.doesNotMatch(html,/Collision Genre|Collide Conditions/);
   html=render('CompositionPanel',{value:{...value,medium:'manju',genre:'comedy',collisions:{candidates:cards},unchecked:[cards[1].label]},onChange:()=>{},onCollide:()=>{}});
   for(const text of ['AI Manju / Micro-Drama','Absurd Comedy','Collide Conditions (L1→L2)','Kael is mid-duel × the phone shows 60 seconds','Head-on collision','Extra Condition']) assert.ok(html.includes(text),text);
@@ -142,7 +149,7 @@ test('the composition panel stays folded to one lens choice until a lens is pick
   html=render('CompositionPanel',{value:{...value,medium:'storybook',collisions:{candidates:cards}},onChange:()=>{}});
   for(const text of ['表現形式透鏡','繪本／視覺故事書','條件碰撞類型','補一句限制條件','正面相撞']) assert.ok(html.includes(text),text);
   await components.setLocale('en');
-  assert.doesNotMatch(render('StoryImportModal',{epId:'ep_demo_02',writable:true}),/Medium Lens/,'Screenplay mode shows no composition controls');
+  assert.doesNotMatch(render('StoryWorld',{epId:'ep_demo_02',writable:true}),/Medium Lens/,'Screenplay mode shows no composition controls');
 });
 
 test('one-click novel creation adapts, saves, extracts and builds the selected episode before onDone',async()=>{
@@ -206,4 +213,12 @@ test('asset generation displays queued count, outcomes and actionable failures i
   html=render('AssetGenerationState',{group:finished});assert.ok(html.includes('已完成的圖片會保留'));
   await components.setLocale('en');
   assert.match(render('AssetVaultModal',{epId:'ep_demo_01',writable:false}),/<button disabled="">Generate Missing Asset Sheets/);
+});
+
+test('the P4 contrast preview matches the server rule: two of the last five held one line and this focus opposes it',()=>{
+  const traces=focus=>focus.map(f=>({focus:f}));
+  assert.deepEqual(choiceContrast(traces(['restraint','restraint']),'reversal'),{contrastDetected:true,dominantFocus:'restraint'});
+  assert.equal(choiceContrast(traces(['restraint']),'reversal').contrastDetected,false);
+  assert.equal(choiceContrast(traces(['restraint','restraint']),'collision').contrastDetected,false);
+  assert.equal(choiceContrast(traces(['collision','collision','x','x','x','x']),'negative_space').contrastDetected,false,'only the last five count');
 });

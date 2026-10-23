@@ -73,11 +73,13 @@ class ShotReviewInteractions(unittest.TestCase):
         story.mutate_row(self.fixture.conn,self.fixture.me,self.fixture.slug,'cinema-studio',self.shot['rowId'],edits)
         self.fixture.conn.commit()
         self.page.goto(f'http://127.0.0.1:{self.fixture.server.server_port}/projects/{self.fixture.slug}/#cinema-studio')
-        self.page.get_by_role('button',name='Gallery',exact=True).click()
+        # SPEC_15 Shot Stage: pick the shot in the overview, then open it in Review; its controls stand in the detail column.
+        self.page.locator('.sheet-view-switch').get_by_role('button',name='Overview',exact=True).click()
         self.page.get_by_role('button',name=self.shot['shotIndex'],exact=True).click()
+        self.page.locator('.sheet-view-switch').get_by_role('button',name='Review',exact=True).click()
         self.tools = self.page.locator('.story-shot-tools')
         expect(self.tools.locator('.story-takes figure').first).to_be_visible()
-        self.status = self.page.locator('.sheet-review aside select').first
+        self.status = self.page.locator('.shot-detail select').first
         self.hero = self.tools.get_by_role('button',name='Approved composition → Closed Hero',exact=True)
         self.page.evaluate('window.__sameReview=document.querySelector(".story-shot-tools")')
         self.tools.locator('details summary').click()
@@ -158,7 +160,7 @@ class ShotReviewInteractions(unittest.TestCase):
         replacement = io.BytesIO()
         Image.new('RGB',(32,32),'blue').save(replacement,format='PNG')
         with self.page.expect_file_chooser() as chooser:
-            self.page.locator('.sheet-review aside').get_by_role('button',name='Replace Upload',exact=True).click()
+            self.page.locator('.shot-detail').get_by_role('button',name='Replace Upload',exact=True).click()
         with self.page.expect_response(lambda response: response.url.endswith('/table-edit') and response.request.method=='POST') as saved:
             chooser.value.set_files({'name':'new-keyframe.png','mimeType':'image/png','buffer':replacement.getvalue()})
         self.assertEqual(saved.value.status,200)

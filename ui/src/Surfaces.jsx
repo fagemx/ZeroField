@@ -11,7 +11,6 @@ import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { SheetDialog } from "./SheetDialog.jsx";
 import { Icon } from "./Icon.jsx";
 
-export { StoryWorkbench as StudioModeBar } from './StoryWorkbenchModals.jsx';
 
 export const PROJECT_STATUS = {
   planning: { get label() { return uiText("surfaces.planning"); }, color: "var(--pill-neutral-ink)", bg: "var(--pill-neutral-bg)" },

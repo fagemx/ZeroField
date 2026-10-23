@@ -13,7 +13,7 @@ const uiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 let components, temporary;
 before(async () => {
   temporary = await mkdtemp(join(uiRoot, 'tests/.budget-render-'));
-  const result = await build({ stdin: { contents: "export {StoryWorkbench} from './src/StoryWorkbenchModals.jsx'; export {default as PrevisStage} from './src/previs/PrevisStage.jsx';", resolveDir: uiRoot, sourcefile: 'budget-render.jsx', loader: 'jsx' },
+  const result = await build({ stdin: { contents: "export {StudioTopBar} from './src/StudioShell.jsx'; export {default as PrevisStage} from './src/previs/PrevisStage.jsx';", resolveDir: uiRoot, sourcefile: 'budget-render.jsx', loader: 'jsx' },
     bundle: true, write: false, platform: 'node', format: 'esm', jsx: 'automatic', packages: 'external', loader: { '.css': 'empty' } });
   const output = join(temporary, 'components.mjs'); await writeFile(output, result.outputFiles[0].text); components = await import(pathToFileURL(output));
 });
@@ -27,17 +27,15 @@ const controls = html => [...visible(html).matchAll(/<button\b([^>]*)>([\s\S]*?)
     return { disabled: /\sdisabled=""/.test(attrs), label: (attrs.match(/aria-label="([^"]*)"/)?.[1] || inner.replace(/<[^>]+>/g, '')).trim() };
   });
 
-test('the Story Workbench top bar stands at most 8 controls, none twice; engineering tools stay in the Studio Engine menu', () => {
-  const html = renderToStaticMarkup(React.createElement(components.StoryWorkbench, { slug: 'demo', me: { can_write: true }, tab: { key: 'cinema-studio' } }));
+test('the studio top bar stands at most 9 controls, none twice; engineering tools live in Ctrl K', () => {
+  const props = {project:{title:'The Last Signal'},episodes:[{episodeId:'ep_demo_01',title:'Episode 1'}],epId:'ep_demo_01',space:'stage',counts:{shots:8,review:2,missing:1,filmed:6,scriptDirty:true},onEpisode(){},onSpace(){},onCommand(){},film:{open:false,onToggle(){}}};
+  const html = renderToStaticMarkup(React.createElement(components.StudioTopBar, props));
   const shown = controls(html);
-  assert.ok(shown.length > 0 && shown.length <= 8, `${shown.length} standing controls`);
+  assert.ok(shown.length > 0 && shown.length <= 9, `${shown.length} standing controls: ${shown.map(c => c.label).join(', ')}`);
   const labels = shown.map(c => c.label).filter(Boolean);
   assert.equal(new Set(labels).size, labels.length, `R1: no duplicate control: ${labels.join(', ')}`);
-  for (const folded of ['Toolbox', 'Open API', 'Agent Console']) {
-    assert.ok(html.includes(folded), `${folded} is still in the markup`);
-    assert.ok(!labels.includes(folded), `${folded} is folded into <details class="story-engine-menu">`);
-  }
-  assert.match(html, /<details class="story-engine-menu">/);
+  assert.ok(!shown.some(c => c.disabled), 'R3: no disabled control in the top bar');
+  for (const folded of ['Toolbox', 'Open API', 'Agent Console', 'Asset Vault']) assert.ok(!html.includes(folded), `${folded} is a Ctrl K command`);
 });
 
 test('the 3D stage in the lens view shows no dead framing buttons, one way into the free camera, and stays in budget', () => {

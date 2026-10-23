@@ -32,7 +32,7 @@ const pick = (label, value, options, onChange, text) => <fieldset className="pre
 // (97 frames, 24 fps) into its Previs cell, its actor matte into Actor Matte and its pose skeleton into Pose Skeleton
 // (the Layout Render frees the actor and takes the acting from the skeleton). The render carries its plan, so the
 // project keeps it.
-export default function PrevisStage({ slug, shots, focus, writable, busy, onRender, onMotion, onLayout }) {
+export default function PrevisStage({ slug, shots, focus, writable, busy, onRender, onMotion, onLayout, onShot }) {
   useLocale();
   const [rid, setRid] = useState(() => (shots.some(s => s.rid === focus?.rid) ? focus.rid : shots[0]?.rid));
   const [drafts, setDrafts] = useState(() => Object.fromEntries(shots.map(s => [s.rid, loadDraft(slug, s.rid)]).filter(([, p]) => p)));
@@ -52,6 +52,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   const discard = () => { saveDraft(slug, shot.rid, null); setDrafts(({ [shot.rid]: _, ...rest }) => rest); };
 
   useEffect(() => { if (focus && shots.some(s => s.rid === focus.rid)) setRid(focus.rid); }, [focus]);
+  useEffect(() => { if (shot) onShot?.(shot.rid); }, [shot?.rid]);  // the sheet's current shot follows the stage
   const previsUrls = shots.map(s => s.previs).filter(Boolean).join('|');
   useEffect(() => {  // plans stored in the rendered previs files
     const urls = previsUrls.split('|').filter(u => u && !(u in stored));

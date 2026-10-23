@@ -1,0 +1,226 @@
+/* SPEC_15 studio shell: two creative spaces, a three-column body (list · view · detail), one amber primary per screen.
+   Scoped to .studio-shell so productions without a cinema slate keep the existing shell. studio.css loads after this file,
+   so selectors here carry .studio-shell to win over its equal-specificity rules. */
+.studio-shell {
+  --ground: #0b0c0e; --surface: #111215; --hover-bg: #17191d; --active: #1f2126; --raised: #262930;
+  --line: #23262b; --rule: #1a1c20; --control: #3a3d44;
+  --text: #eceae6; --muted: #a4a7ad; --faint: #8a8e95;
+  --primary: #f2a33a; --primary-ink: #1b1206; --accent: #f2a33a; --accent-bg: rgba(242, 163, 58, .14);
+  --bg: var(--ground); --ink: var(--text); --soft: var(--surface); --hover: var(--hover-bg);
+  background: var(--ground);
+}
+.studio-shell button.primary.primary.primary:hover:not(:disabled) { background: #f5b656; border-color: #f5b656; }
+
+/* ---------- Top bar ---------- */
+.studio-shell .top.studio-top { display: flex; gap: 12px; padding: 0 14px; }
+.studio-crumb, .studio-actions { flex: 1 1 0; }
+.studio-spaces { flex: none; }
+.studio-shell .top .studio-actions { min-width: max-content; }
+.studio-shell .studio-actions .me select { max-width: 120px !important; overflow: hidden; text-overflow: ellipsis; }  /* studio.css's field rule outranks any plain selector */
+.studio-shell .studio-actions .me .name, .studio-shell .studio-actions .me small { display: none; }
+.studio-crumb, .studio-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.studio-actions { justify-content: flex-end; }
+.studio-shell .studio-crumb .brand-mark { flex: none; width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: var(--primary-ink);
+  font: 600 12px/28px ui-monospace, "Cascadia Mono", Consolas, monospace; text-align: center; text-decoration: none; margin: 0; }
+.studio-shell .studio-crumb .studio-title { min-width: 0; max-width: 260px; margin: 0 2px 0 6px; }
+.studio-slash { color: var(--control); }
+.studio-shell .studio-episode { height: 32px; max-width: 180px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0 6px; }
+.studio-spaces { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--ground); }
+.studio-shell .studio-spaces > button { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font-size: 13.5px; white-space: nowrap; cursor: pointer; }
+.studio-shell .studio-spaces > button:hover { color: var(--text); }
+.studio-shell .studio-spaces > button[aria-current] { background: var(--active); color: var(--text); font-weight: 600; }
+.studio-note { font-size: 11.5px; font-weight: 400; color: var(--faint); white-space: nowrap; }
+.studio-note.warn { padding: 1px 7px; border-radius: 999px; background: var(--accent-bg); color: #f5b656; }
+.studio-page { max-width: 180px; padding: 0 10px; border-left: 1px solid var(--line); color: var(--text); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-shell .studio-locale { margin: 0 2px; }
+.studio-shell .studio-locale button { min-width: 30px; }
+.studio-shell .top .studio-command, .studio-shell .top .studio-film { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px 0 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--faint); font-size: 13px; cursor: pointer; white-space: nowrap; }
+.studio-shell .top .studio-command .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.studio-command kbd { font: 500 11px ui-monospace, Consolas, monospace; padding: 1px 6px; border-radius: 5px; background: var(--active); color: var(--muted); }
+.studio-shell .top .studio-film { color: var(--text); }
+.studio-shell .top .studio-film .num { font: 500 12px ui-monospace, Consolas, monospace; color: var(--faint); }
+.studio-shell .top .studio-film.on, .studio-shell .top .studio-command:hover, .studio-shell .top .studio-film:hover { border-color: var(--control); color: var(--text); }
+.studio-shell .top .pa-btn { color: #c9ccff; }
+@media (max-width: 1280px) { .studio-command .label, .studio-command kbd, .studio-note:not(.warn) { display: none; } .studio-shell .studio-crumb .studio-title { max-width: 160px; } }
+@media (max-width: 960px) {
+  .studio-shell .top.studio-top { flex-wrap: wrap; height: auto; min-height: var(--topbar); padding: 8px 10px; row-gap: 8px; }
+  .studio-shell .top .studio-crumb { flex: 1 1 auto; }
+  .studio-shell .top .studio-actions { flex: 0 1 auto; min-width: 0; gap: 4px; }
+  .studio-spaces { order: 3; flex: 1 1 100%; min-width: 0; }
+  .studio-shell .studio-spaces > button { flex: 1 1 0; min-width: 0; justify-content: center; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; }
+  .studio-note, .studio-note.warn, .studio-episode, .studio-slash, .studio-page, .studio-shell .studio-actions .me { display: none; }
+  .studio-shell .top .pa-btn .label { display: none; }
+}
+@media (max-width: 520px) { .studio-shell .studio-crumb .studio-title { display: none; } }
+
+/* ---------- Ctrl K ---------- */
+.studio-palette-scrim { align-items: flex-start; padding-top: 12vh; background: rgba(0, 0, 0, .55); }
+.studio-palette { width: min(560px, 100%); max-height: 70vh; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--control);
+  border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-float); }
+.studio-shell .studio-palette > input { height: 48px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0 16px; background: transparent; color: var(--text); font-size: 15px; }
+.studio-palette ul { list-style: none; margin: 0; padding: 6px; overflow: auto; }
+.studio-palette li { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border-radius: 7px; color: var(--muted); font-size: 13.5px; cursor: pointer; }
+.studio-palette li > span { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-palette li small { color: var(--faint); font-size: 12px; }
+.studio-palette li em { font-style: normal; font-size: 11.5px; color: var(--faint); }
+.studio-palette li[aria-selected="true"] { background: var(--active); }
+.studio-palette .studio-palette-empty { color: var(--faint); cursor: default; }
+
+/* ---------- Film overlay ---------- */
+.studio-film-scrim { background: rgba(0, 0, 0, .78); }
+.studio-film-overlay { width: min(1180px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--ground); box-shadow: var(--shadow-float); outline: 0; }
+.studio-film-overlay > header, .studio-film-overlay > footer { display: flex; align-items: center; gap: 12px; }
+.studio-film-overlay h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.studio-film-screen { position: relative; flex: 1 1 auto; min-height: 0; display: grid; place-items: center; aspect-ratio: 16 / 9; max-height: 62vh; border-radius: 10px; overflow: hidden; background: #000; }
+.studio-film-screen video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.studio-film-slate { display: grid; gap: 6px; place-items: center; color: var(--faint); font-size: 13px; }
+.studio-film-slate b { font: 600 28px ui-monospace, Consolas, monospace; color: var(--text); }
+.studio-film-tag { position: absolute; left: 12px; top: 12px; padding: 3px 9px; border-radius: 999px; background: rgba(11, 12, 14, .82); color: #f5b656; font-size: 12px; }
+.studio-film-strip { display: flex; gap: 8px; margin: 0; padding: 0 0 4px; list-style: none; overflow-x: auto; }
+.studio-shell .studio-film-strip button { display: grid; gap: 4px; width: 112px; padding: 0; border: 0; background: none; color: var(--muted); font: 500 12px ui-monospace, Consolas, monospace; text-align: left; cursor: pointer; }
+.studio-film-strip img, .studio-film-blank { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; background: var(--surface); }
+.studio-film-strip .shot.empty img, .studio-film-strip .shot.empty .studio-film-blank { opacity: .45; outline: 1px dashed #5a3a3e; outline-offset: -1px; }
+.studio-film-strip .shot.fill span:last-child::after { content: " · 3D"; color: #f5b656; }
+.studio-film-strip button[aria-current] img, .studio-film-strip button[aria-current] .studio-film-blank { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Spaces: list · view · detail ---------- */
+/* Each column scrolls on its own; the page itself never scrolls under the top bar. */
+.studio-shell.surface-story .main { padding: 0; height: calc(100dvh - var(--topbar)); overflow: hidden; }
+.studio-space { display: grid; grid-template-columns: 240px minmax(0, 1fr) 320px; height: 100%; min-height: 0; }
+.space-list, .shot-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 10px; background: #0e0f11; border-right: 1px solid var(--line); overflow: auto; }
+.space-list-head { display: flex; align-items: baseline; gap: 8px; padding: 0 6px 6px; font-size: 13px; }
+.space-list-head .num { color: var(--faint); font: 500 12px ui-monospace, Consolas, monospace; }
+.space-items { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.studio-shell .space-items button { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; width: 100%; padding: 7px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; }
+.studio-shell .space-items button:hover { background: var(--hover-bg); }
+.space-items b { color: var(--accent); font: 600 11px/20px ui-monospace, Consolas, monospace; }
+.space-items small { grid-column: 2; color: var(--faint); font-size: 11.5px; }
+.space-foot { margin: auto 6px 0; padding-top: 10px; color: var(--faint); font-size: 11.5px; }
+.space-empty { padding: 8px 6px; color: var(--faint); font-size: 12.5px; list-style: none; }
+.space-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 16px 22px 28px; overflow: auto; }
+.space-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.space-head h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.space-sub { color: var(--faint); font-size: 12.5px; }
+.space-block { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: #121316; }
+.space-block > h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 14px; font-weight: 600; }
+.space-block > h2 > .num { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--active); color: var(--accent); font: 600 11px ui-monospace, Consolas, monospace; }
+.space-block > h2 > .spacer { flex: 1; }
+.studio-shell .space-main .modal-field { margin: 0; }
+.studio-shell .space-main textarea { width: 100%; resize: vertical; }
+.space-inline { flex-direction: row !important; align-items: center; gap: 10px !important; }
+.studio-shell .space-inline input { width: 72px; }
+.space-script { flex: 1 1 auto; }
+.studio-shell .space-script textarea { min-height: calc(100dvh - 300px); font: 14px/1.7 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.space-upload { position: relative; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border: 1px dashed var(--control); border-radius: 8px; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+.space-upload:hover, .space-upload:focus-within { border-color: var(--accent); color: var(--text); }
+.space-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.story-summary { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: #121316; color: var(--muted); font-size: 13px; text-align: left; cursor: pointer; }
+.story-summary span { margin-left: auto; color: var(--accent); }
+.story-dirty, .story-contrast { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--accent-bg); color: #f5b656; font-size: 12.5px; }
+.story-slices { margin: 0; color: var(--faint); font-size: 12.5px; }
+.story-slices span { margin-left: 8px; color: var(--text); }
+.studio-segmented { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: #141519; }
+.studio-shell .studio-segmented > button { height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; }
+.studio-shell .studio-segmented > button[aria-pressed="true"] { background: var(--text); color: #111215; }
+.studio-shell .studio-segmented.small > button { height: 26px; padding: 0 9px; font-size: 12px; }
+.space-detail, .shot-detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 14px 16px 18px; background: var(--surface); border-left: 1px solid var(--line); overflow: auto; }
+.space-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.space-detail > .spacer { flex: 1 1 auto; }
+.studio-shell .studio-primary { width: 100%; min-height: 42px; font-weight: 600; }
+
+/* Story & World: the composition, its collision cards and the world assets */
+.studio-shell .story-composition { border: 0; padding: 0; margin: 0; }
+.studio-shell .story-composition legend { padding: 0 0 6px; color: var(--faint); font-size: 12px; font-weight: 400; }
+.studio-shell .story-collisions { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.studio-shell .story-collisions li label { display: flex; gap: 10px; height: 100%; padding: 10px 12px; border: 1px solid var(--control); border-radius: 10px; background: var(--ground); font-size: 13px; line-height: 1.45; cursor: pointer; }
+.studio-shell .story-collisions li label:has(:checked) { border-color: var(--accent); background: var(--accent-bg); }
+.studio-shell .story-collisions li.is-struck label { opacity: .55; text-decoration: line-through; }
+.world-assets { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.world-assets > li { border: 1px solid var(--line); border-radius: 10px; background: #15171a; overflow: hidden; }
+.world-assets > li.is-missing { border-color: #5a3a3e; }
+.studio-shell .world-asset { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.world-asset img, .world-blank { flex: none; width: 48px; height: 48px; border-radius: 7px; object-fit: cover; background: var(--ground); }
+.world-blank { display: block; border: 1px dashed #5a3a3e; box-sizing: border-box; }
+.world-asset > span { display: grid; min-width: 0; font-size: 13px; }
+.world-asset small { color: var(--faint); font: 500 11.5px ui-monospace, Consolas, monospace; }
+.world-asset em { font-style: normal; color: #ff9b9b; font-size: 11.5px; }
+.world-asset-detail { display: grid; gap: 8px; padding: 0 10px 10px; font-size: 12.5px; color: var(--muted); }
+.world-asset-detail p { margin: 0; }
+.world-variants { display: flex; gap: 6px; flex-wrap: wrap; }
+.world-variants figure { margin: 0; display: grid; gap: 3px; font-size: 11px; color: var(--faint); }
+.world-variants img, .world-variants .world-blank { width: 56px; height: 56px; }
+.world-asset-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.world-breakdown { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; color: var(--muted); }
+.world-breakdown legend { padding: 0 4px; color: var(--faint); font-size: 12px; }
+.world-breakdown label { display: flex; gap: 8px; align-items: center; }
+.world-format summary { color: var(--faint); font-size: 12.5px; cursor: pointer; }
+
+/* Shot Stage: the sheet body becomes shot list · view · shot detail */
+.studio-shell .sheet-workspace-body.studio-rails { display: grid; grid-template-columns: 230px minmax(0, 1fr) 320px; }
+.studio-shell .sheet-workspace-body.studio-rails > .sheet-side-panel { width: auto; flex: none; }
+.studio-shell .studio-rails .sheet-main-view { position: relative; padding: 12px 16px; overflow: auto; }
+.studio-shell .sheet-workspace-body.studio-rails .sheet-main-view > .sheet-review { position: relative; inset: auto; height: auto; min-height: 0; flex: 1 1 auto; z-index: auto; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.studio-shell .studio-rails .sheet-review > header { background: transparent; }
+.shot-filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px 8px; }
+.studio-shell .shot-filters button { height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.studio-shell .shot-filters button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); color: #f5b656; }
+.shot-list h3 { margin: 8px 6px 4px; color: var(--faint); font-size: 11.5px; font-weight: 500; }
+.shot-list ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.studio-shell .shot-list ol button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.studio-shell .shot-list ol button:hover { background: var(--hover-bg); }
+.studio-shell .shot-list ol button[aria-current] { background: var(--active); box-shadow: inset 2px 0 0 var(--accent); }
+.shot-list-thumb { flex: none; width: 56px; height: 32px; border-radius: 4px; overflow: hidden; background: #17191d; }
+.shot-list-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.shot-list-blank { display: block; width: 100%; height: 100%; border: 1px dashed #5a3a3e; border-radius: 4px; box-sizing: border-box; }
+.shot-list-text { display: grid; flex: 1; min-width: 0; line-height: 1.3; }
+.shot-list-text b { font: 600 12px ui-monospace, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shot-list-text small { color: var(--faint); font-size: 11.5px; }
+.shot-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #5d6068; }
+.shot-dot.inprogress { background: #6ea8fe; } .shot-dot.waiting { background: var(--accent); } .shot-dot.stuck { background: #ff7a7a; } .shot-dot.done { background: #6fd6a1; }
+.shot-detail > header { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.shot-detail > header b { font-size: 16px; }
+.shot-missing { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(255, 122, 122, .1); color: #ff9b9b; font-size: 12.5px; }
+.shot-primary { display: grid; gap: 6px; }
+.studio-shell .shot-detail .review-presets { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
+.studio-shell .shot-detail .review-presets > strong { color: var(--faint); font-size: 12px; font-weight: 500; }
+.studio-shell .shot-detail .review-presets > small { color: var(--text); font-size: 13px; line-height: 1.5; }
+.studio-shell .shot-detail .sheet-panel-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.shot-compare { display: grid; gap: 12px; }
+.shot-compare-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.shot-compare-pair figure { margin: 0; display: grid; gap: 6px; }
+.shot-compare-pair video, .shot-compare-missing { width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: #000; object-fit: contain; }
+.shot-compare-pair figure:last-child video { outline: 2px solid var(--accent); outline-offset: -2px; }
+.shot-compare-missing { display: grid; place-items: center; color: var(--faint); font-size: 13px; border: 1px dashed var(--control); box-sizing: border-box; }
+.shot-compare-pair figcaption { color: var(--muted); font-size: 12px; }
+.shot-compare-clock { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #121316; }
+.shot-compare-clock input { flex: 1; accent-color: var(--accent); }
+.shot-compare-clock .num { color: var(--muted); font: 500 12px ui-monospace, Consolas, monospace; }
+.studio-shell .shot-play { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--text); color: #111215; font-size: 11px; cursor: pointer; }
+
+@media (max-width: 1100px) {
+  .studio-space, .studio-shell .sheet-workspace-body.studio-rails { grid-template-columns: minmax(0, 1fr); }
+  .studio-shell.surface-story .main { height: auto; overflow: visible; }
+  .studio-space { height: auto; }
+  .space-list, .shot-list { max-height: 240px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .space-detail, .shot-detail { border-left: 0; border-top: 1px solid var(--line); }
+  .shot-compare-pair { grid-template-columns: minmax(0, 1fr); }
+}
+.story-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.story-pills > span { min-width: 104px; color: var(--faint); font-size: 12px; }
+.studio-shell .story-pills > button { height: 28px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+.studio-shell .story-pills > button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); color: #f5b656; }
+.studio-fill { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* Shot Stage overview: a cover grid, the current shot ringed; the detail column's secondary actions stay quiet */
+.studio-shell .studio-rails .sheet-gallery { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.studio-shell .studio-rails .sheet-card[aria-current] { box-shadow: 0 0 0 2px var(--accent); }
+.studio-shell .studio-rails .sheet-card-summary > div:nth-child(n+2) { display: none; }
+.studio-shell .shot-detail .sheet-panel-actions button, .studio-shell .shot-detail .review-presets > button { height: 28px; padding: 0 10px; font-size: 12px; border-color: var(--line); color: var(--muted); }
+.studio-shell .shot-detail .review-presets > button { justify-self: start; }
+.studio-shell .shot-detail .modal-field { margin: 0; }
+
+/* One amber action per screen: inside the Shot Stage view, primaries (Block in 3D, run steps) fall back to outlined. */
+.studio-shell .studio-rails .sheet-main-view button.primary.primary.primary { background: transparent; border-color: var(--control); color: var(--text); }

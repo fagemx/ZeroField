@@ -251,6 +251,13 @@ class FilmCutTests(unittest.TestCase):
                  shot("S03", "cinema-studio", None), shot("VFX-02", "openjutsu-lab", "/vfx2", "Approved")]
         self.assertEqual(story.film_cut(items), ["/s02", "/s10", "/vfx2"])  # S02 before S10; no video, no unapproved lab sample
 
+    def test_previs_fills_unshot_slate_shots_only_when_asked(self):
+        shot = lambda index, tab, url, previs=None: {"shotIndex": index, "tabKey": tab, "selectedVideoUrl": url, "previsVideoUrl": previs, "reviewStatus": ""}
+        items = [shot("S01", "cinema-studio", "/s01", "/p01"), shot("S02", "cinema-studio", None, "/p02"), shot("S03", "cinema-studio", None),
+                 shot("VFX-01", "openjutsu-lab", None, "/pvfx")]
+        self.assertEqual(story.film_cut(items), ["/s01"])
+        self.assertEqual(story.film_cut(items, fill_previs=True), ["/s01", "/p02"])  # a take wins; no previs, no clip; lab rows never fill
+
 
 @unittest.skipUnless(os.environ.get("OPENBENCH_TEST_DB_URI"), "set OPENBENCH_TEST_DB_URI for Story HTTP tests")
 class StoryHTTPTests(unittest.TestCase):

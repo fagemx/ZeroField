@@ -8,9 +8,8 @@ import { episodeId, shotId, selectedTake, storyList, storyRequest, waitStoryTask
 import { normalizeStatus, statusLabel } from './format.js';
 import { ProposalRaceView } from './assistant/ProposalRaceView.jsx';
 import { allocationPath, escalationPath, allocationDispatchBody, approvedCompositionSource, allocationBlockerLabel, GRADE_ACTIVE, gradesActive, takeGrade } from './storyModel.js';
-import { sourceDraft, editStoryScreenplay, needsStoryAdaptation, adaptStoryDraft, buildStoryFromDraft, storyComposition, missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
+import { missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
 import './story-workbench.css';
-import { Icon } from './Icon.jsx';
 
 function useStoryAction(onChanged) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [task, setTask] = useState(null);
@@ -37,153 +36,19 @@ function ActionState({action}) {
   return <>{action.error && <p role="alert" className="canvas-error">{action.error}</p>}{action.busy && <p role="status">{t('story.working')}{action.task && <> · {action.task.taskId}</>}</p>}</>;
 }
 
-export function StoryWorkbench({slug, tab, me, version, onReload, onNavigate, flush, activeEpisode, onEpisode, onConsole}) {
-  useLocale();
-  const [modal, setModal] = useState(null), [episodes, setEpisodes] = useState([]), [ep, setEp] = useState(null), [error, setError] = useState('');
-  const [film, setFilm] = useState(null);
-  const epId = activeEpisode || episodeId(slug);
-  const action = useStoryAction(onReload);
-  const writable = me?.can_write !== false;
-  useEffect(() => {
-    let alive = true;
-    storyList('/projects/pj_' + slug + '/episodes').then(items => {if (alive) {setEpisodes(items); setError('');}}).catch(e => {if (alive) setError(e.message);});
-    storyRequest('/episodes/' + epId).then(data => {if (alive) setEp(data);}).catch(e => {if (alive) setError(e.message);});
-    return () => {alive = false;};
-  }, [slug, epId, version, modal]);
-  const open = async next => {if (await flush?.() === false) return; setModal(next);};
-  const confirm = () => action.run(async wait => {
-    if (await flush?.() === false) return;
-    await wait(await storyRequest(`/episodes/${epId}/asset-extractions`, 'POST'));
-    await wait(await storyRequest(`/episodes/${epId}/storyboards`, 'POST'));
-    setEp(await storyRequest('/episodes/' + epId));
-  });
-  return <div className="story-workbench">
-    <nav className="story-nav" aria-label={t('story.navigation')}>
-      <button disabled={!writable || action.busy} onClick={() => open('import')}><Icon name="sparkle" />{t('story.startCreating')}</button>
-      <button aria-current={!modal ? 'page' : undefined} onClick={() => {setModal(null); onNavigate?.('cinema-studio');}}><Icon name="clapper" />{t('story.myProjects')}</button>
-      <button onClick={() => open('assets')}><Icon name="layers" />{t('story.assetVault')}</button>
-      {/* Engineering tools stay in the markup (native details), one menu instead of three standing buttons. */}
-      <details className="story-engine-menu">
-        <summary><Icon name="toolbox" />{t('story.studioEngine')}</summary>
-        <div className="story-engine-dropdown" onClick={e => {e.currentTarget.parentElement.open = false;}}>
-          <button onClick={() => open('toolbox')}><Icon name="toolbox" />{t('story.toolbox')}</button>
-          <button onClick={() => open('api')}><Icon name="code" />{t('story.openApi')}</button>
-          <button onClick={onConsole}><Icon name="terminal" />{t('console.entry')}</button>
-        </div>
-      </details>
-      {episodes.length > 0 && <label>{t('story.episode')} <select value={epId} disabled={action.busy} onChange={async event => {const next=event.target.value;if(await flush?.()===false)return;onEpisode?.(next);setFilm(null);}}>{episodes.map(item => <option key={item.episodeId} value={item.episodeId}>{item.title}</option>)}</select></label>}
-    </nav>
-    {error && <p role="alert">{error}</p>}
-    {ep && ['director-brief','cinema-studio','openjutsu-lab',ep.tabKey].includes(tab?.key) && <div className={'story-macro'+(ep.scriptDirty ? ' is-dirty' : '')}>
-      <span>{t(ep.scriptDirty ? 'story.scriptDirty' : 'story.scriptConfirmed')}</span>
-      <button disabled={!writable || action.busy} onClick={confirm}>{t('story.confirmScript')}</button>
-      <button disabled={!writable || action.busy} onClick={() => action.run(async wait => {
-        if (await flush?.() === false) return;
-        const result = await wait(await storyRequest(`/episodes/${epId}/films`, 'POST'));
-        setFilm(result.videoUrl);
-      })}>{t('story.exportFilm')}</button>
-      {action.busy && action.task && <button onClick={() => storyRequest('/tasks/' + action.task.taskId + '/cancellations', 'POST').catch(err => setError(err.message))}>{t('story.cancelTask')}</button>}
-    </div>}
-    <ActionState action={action}/>
-    {film && <video className="story-film" src={film} controls playsInline preload="metadata" aria-label={t('story.episodeFilm')}/>}
-    {modal === 'import' && <StoryImportModal epId={epId} writable={writable} onClose={() => setModal(null)} onDone={async () => {await onReload?.(); setModal(null); onNavigate?.('cinema-studio');}}/>}
-    {modal === 'assets' && <AssetVaultModal epId={epId} writable={writable} onClose={() => setModal(null)} onChanged={onReload} onNavigate={() => {setModal(null); onNavigate?.('soul-cast');}}/>}
-    {modal === 'toolbox' && <ToolboxModal writable={writable} onClose={() => setModal(null)}/>}
-    {modal === 'api' && <OpenApiModal slug={slug} epId={epId} onClose={() => setModal(null)}/>}
-  </div>;
-}
-
-export function StoryImportModal({epId, writable, onClose, onDone}) {
-  const [drafts, setDrafts] = useState(() => ({script:sourceDraft(), idea:sourceDraft(), novel:sourceDraft()}));
-  const [sourceMode, setSourceMode] = useState('script'), [targetScenes, setTargetScenes] = useState(3), [breakdownMode, setBreakdownMode] = useState('auto');
-  const [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123');
-  const [styles, setStyles] = useState([]), [error, setError] = useState(''), [loading, setLoading] = useState(true), [reading, setReading] = useState(false);
-  const [comp, setComp] = useState({medium:'', genre:'general', collisions:null, unchecked:[], focus:'overall', extra:''});
-  const fileRead = useRef(false), mounted = useRef(true);
-  const action = useStoryAction();
-  const draft = drafts[sourceMode], isSource = sourceMode !== 'script';
-  const disabled = action.busy || loading || reading || !writable;
-  const composition = isSource ? storyComposition(comp) : null;
-  const updateDraft = update => setDrafts(current => ({...current, [sourceMode]:{...current[sourceMode], ...update}}));
-  const needsAdaptation = needsStoryAdaptation(sourceMode, draft, targetScenes, composition);
-  const changeComposition = patch => {
-    if (patch.medium === 'manju') setRatio('9:16');  // micro-drama is vertical by convention
-    setComp(current => ({...current, ...patch}));
-  };
-  const collide = () => action.run(async () => {
-    const result = await storyRequest(`/episodes/${epId}/story-collisions`, 'POST', {sourceText:draft.sourceText, mediumLens:comp.medium, genreLens:comp.genre});
-    setComp(current => ({...current, collisions:result, unchecked:[]}));
-  });
-  useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
-  useEffect(() => {
-    let alive = true; setLoading(true); setError('');
-    Promise.all([storyRequest('/episodes/' + epId), storyList('/catalog/styles')]).then(([ep, presets]) => {
-      if (alive) {
-        setDrafts({script:sourceDraft(ep.scriptContent || ''), idea:sourceDraft(), novel:sourceDraft()});
-        setStyles(presets); setRatio(ep.settings?.aspectRatio || '16:9'); setStyle(ep.settings?.stylePresetId || '88123');
-        setBreakdownMode(['auto','scene','cinematic'].includes(ep.settings?.breakdownMode) ? ep.settings.breakdownMode : 'auto');
-      }
-    }).catch(e => {if (alive) setError(t('story.importLoadFailed',{message:e.message}));}).finally(() => {if (alive) setLoading(false);});
-    return () => {alive = false;};
-  }, [epId]);
-  return <SheetDialog title={t('story.startCreating')} wide onClose={action.busy || reading ? () => {} : onClose}>
-    <p>{t('story.importHelp')}</p>
-    <label className="modal-field">{t('story.sourceMode')}<select value={sourceMode} disabled={disabled} onChange={e => {setSourceMode(e.target.value); setError('');}}>{['idea','novel','script'].map(mode => <option key={mode} value={mode}>{t('story.sourceMode_'+mode)}</option>)}</select></label>
-    {isSource && <>
-      <label className="modal-field">{t('story.sourceText')}<textarea rows={6} value={draft.sourceText} maxLength={500000} disabled={disabled} onChange={e => updateDraft({sourceText:e.target.value})}/></label>
-      <p>{t('story.sourceDraftHelp')}</p>
-      <label className="modal-field">{t('story.targetScenes')}<input type="number" min={1} max={12} step={1} value={targetScenes} disabled={disabled} onChange={e => setTargetScenes(Math.max(1, Math.min(12, Math.trunc(Number(e.target.value)) || 1)))}/></label>
-      <CompositionPanel value={comp} disabled={disabled} onChange={changeComposition} onCollide={draft.sourceText.trim() ? collide : null}/>
-    </>}
-    <label className="modal-field">{t('story.script')}<textarea rows={13} value={draft.script} maxLength={500000} disabled={disabled} onChange={e => updateDraft(editStoryScreenplay(sourceMode, draft, e.target.value, targetScenes, composition))}/></label>
-    {isSource && <p>{t(needsAdaptation && draft.adaptationKey ? 'story.sourceChangedHelp' : 'story.screenplayEditHelp')}</p>}
-    <label className="modal-field">{t('story.uploadScript')}<input type="file" accept=".txt,.md,text/plain,text/markdown" disabled={disabled} onChange={async e => {
-      const file = e.target.files?.[0]; e.target.value = ''; if (!file || fileRead.current || disabled) return;
-      if (!/\.(txt|md)$/i.test(file.name)) {setError(t('story.scriptFileType')); return;}
-      if (file.size > 2000000) {setError(t('story.scriptTooLarge')); return;}
-      fileRead.current = true; setReading(true);
-      try {
-        const text = await file.text();
-        if (text.length > 500000) throw new Error(t('story.scriptTextTooLong'));
-        if (mounted.current) {updateDraft(isSource ? {sourceText:text} : {script:text}); setError('');}
-      } catch (err) {if (mounted.current) setError(err.message);}
-      finally {fileRead.current = false; if (mounted.current) setReading(false);}
-    }}/></label>
-    {isSource && <button disabled={disabled || !draft.sourceText.trim() || !needsAdaptation} onClick={() => action.run(async () => {
-      if (fileRead.current) return;
-      setError('');
-      await storyRequest(`/episodes/${epId}/settings`, 'PUT', {aspectRatio:ratio, stylePresetId:style, breakdownMode});
-      updateDraft(await adaptStoryDraft({epId, sourceMode, draft, targetScenes, breakdownMode, composition, request:storyRequest}));
-    })}>{t('story.adaptScript')}</button>}
-    {isSource && <CompositionReport report={draft.report}/>}
-    <label className="modal-field">{t('story.breakdownMode')}<select value={breakdownMode} disabled={disabled} onChange={e => setBreakdownMode(e.target.value)}>{['auto','scene','cinematic'].map(mode => <option key={mode} value={mode}>{t('story.breakdownMode_'+mode)}</option>)}</select></label>
-    <p>{t('story.breakdownHelp')}</p>
-    <label className="modal-field">{t('story.aspectRatio')}<select value={ratio} disabled={disabled} onChange={e => setRatio(e.target.value)}>{['16:9','9:16','1:1','21:9'].map(r => <option key={r}>{r}</option>)}</select></label>
-    <label className="modal-field">{t('story.style')}<select value={style} disabled={disabled} onChange={e => setStyle(e.target.value)}>{styles.map(s => <option key={s.stylePresetId} value={s.stylePresetId}>{s.name}</option>)}</select></label>
-    {(loading || reading) && <p role="status">{t(loading ? 'story.importLoading' : 'story.importReading')}</p>}
-    {error && <p role="alert">{error}</p>}<ActionState action={action}/>
-    {action.error && <p>{t('story.importRetryHelp')}</p>}
-    <button className="primary" disabled={disabled || !(draft.script.trim() || (isSource && draft.sourceText.trim()))} onClick={() => action.run(async wait => {
-      if (fileRead.current) return;
-      setError('');
-      await buildStoryFromDraft({epId, sourceMode, draft, targetScenes, breakdownMode, composition,
-        settings:{aspectRatio:ratio, stylePresetId:style}, request:storyRequest, wait, onPrepared:updateDraft, onDone});
-    })}>{t('story.confirmAndBuild')}</button>
-  </SheetDialog>;
-}
-
 // SPEC_14 P5 lenses and the P3 choice trace: keep or strike collision cards, pick a focus, add one condition.
 // Off (no medium lens) keeps the classic adaptation and its request unchanged.
 export function CompositionPanel({value, disabled, onChange, onCollide}) {
   useLocale();
   const {medium, genre, collisions, unchecked, focus, extra} = value;
   const reset = {collisions:null, unchecked:[]};
+  // Lenses and focus are light pills on the page (SPEC_15), one pressed per group.
+  const pills = (label, options, current, key, pick) => <div className="story-pills" role="group" aria-label={label}><span>{label}</span>
+    {options.map(option => <button key={option} type="button" aria-pressed={current === option} disabled={disabled} onClick={() => pick(option)}>{t(key + (option || 'off'))}</button>)}</div>;
   return <fieldset className="story-composition"><legend>{t('story.composition')}</legend>
-    <label className="modal-field">{t('story.mediumLens')}<select value={medium} disabled={disabled} onChange={e => onChange({medium:e.target.value, ...reset})}>
-      {['', 'manju', 'cinema', 'storybook'].map(m => <option key={m} value={m}>{t('story.mediumLens_' + (m || 'off'))}</option>)}</select></label>
+    {pills(t('story.mediumLens'), ['', 'manju', 'cinema', 'storybook'], medium, 'story.mediumLens_', m => onChange({medium:m, ...reset}))}
     {medium && <>
-      <label className="modal-field">{t('story.genreLens')}<select value={genre} disabled={disabled} onChange={e => onChange({genre:e.target.value, ...reset})}>
-        {['general', 'melodrama', 'xianxia', 'comedy', 'suspense'].map(g => <option key={g} value={g}>{t('story.genreLens_' + g)}</option>)}</select></label>
+      {pills(t('story.genreLens'), ['general', 'melodrama', 'xianxia', 'comedy', 'suspense'], genre, 'story.genreLens_', g => onChange({genre:g, ...reset}))}
       <button type="button" disabled={disabled || !onCollide} onClick={onCollide}>{t('story.collideConditions')}</button>
       {collisions && <>
         <p>{t('story.collisionHelp')}</p>
@@ -194,8 +59,7 @@ export function CompositionPanel({value, disabled, onChange, onCollide}) {
             <span><strong>{card.label}</strong> · {t('story.focus_' + card.focus)}<br/>{card.conditionA} × {card.conditionB}</span>
           </label></li>;
         })}</ul>
-        <label className="modal-field">{t('story.choiceFocus')}<select value={focus} disabled={disabled} onChange={e => onChange({focus:e.target.value})}>
-          {['overall', 'collision', 'restraint', 'reversal', 'negative_space'].map(f => <option key={f} value={f}>{t('story.focus_' + f)}</option>)}</select></label>
+        {pills(t('story.choiceFocus'), ['overall', 'collision', 'restraint', 'reversal', 'negative_space'], focus, 'story.focus_', f => onChange({focus:f}))}
         <label className="modal-field">{t('story.extraCondition')}<input value={extra} maxLength={500} disabled={disabled} placeholder={t('story.extraConditionHint')} onChange={e => onChange({extra:e.target.value})}/></label>
       </>}
     </>}
@@ -310,7 +174,7 @@ export function ToolboxModal({writable, onClose}) {
   </SheetDialog>;
 }
 
-function OpenApiModal({slug, epId, onClose}) {
+export function OpenApiModal({slug, epId, onClose}) {
   const [cards, setCards] = useState([]), [selected, setSelected] = useState(''), [operation, setOperation] = useState('video-generations'), [target, setTarget] = useState('');
   const [result, setResult] = useState(''), [copied, setCopied] = useState(false), [error, setError] = useState('');
   useEffect(() => {let alive = true; api.get('/openapi/v2/cards').then(data => {if (alive) {setCards(data.cards); setSelected(data.cards[0]?.card_id || '');}}).catch(e => {if (alive) setError(e.message);}); return () => {alive = false;};}, []);

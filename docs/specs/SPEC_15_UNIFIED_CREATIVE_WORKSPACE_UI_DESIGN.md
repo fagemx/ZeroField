@@ -119,3 +119,25 @@
   - 直接展開全集播放器與底部 `S01 ──► S08` 膠片時間軸。
   - 已核准/已拍好的 7 鏡直接播正片；還沒拍的 `S07` 自動播 3D 片場預演墊底（標示 `預演墊底`），讓導演隨時能看整集 45 秒的節奏！
   - 右下角唯一琥珀色按鈕：**`匯出整集 MP4`**。
+
+---
+
+## 5. 實作狀態（2026-10-23）
+
+**已套用到 `ui/`**（只作用於含 `cinema-studio` 的製作；其他範本維持原外殼）：
+
+| 設計 | 實作位置 |
+|---|---|
+| 頂欄兩空間（不編號）＋狀態膠囊、`Ctrl K`、助理、`▷ 成片 n/m` | `ui/src/StudioShell.jsx`（`StudioTopBar`）、`App.jsx` |
+| `Ctrl K` 指令面板：所有頁面、Asset Vault、Toolbox、Open API、Agent Console、標註、修改紀錄 | `StudioShell.jsx`（`CommandPalette`）；舊 `StoryWorkbench` 模式列與頁面側欄預設收起 |
+| 故事與世界：場次｜點子／小說／劇本＋SPEC_14 透鏡膠囊、碰撞卡保留／劃掉、走向、補一句限制、P4 反差預告、道具三段狀態、無標籤檢查｜世界設定原地生成、拆鏡密度、唯一琥珀「更新分鏡並進片場」 | `ui/src/StoryWorld.jsx`（取代 `StoryImportModal`） |
+| 分鏡片場：左鏡頭清單（篩選）＋中間「網格總覽／3D 片場／審片挑片／並排對照」＋右鏡頭詳情（依狀態的唯一琥珀主按鈕）、`↑↓`／`A`／`R`／`G` | `ui/src/ShotStage.jsx`、`SheetWorkspace.jsx`、`studioModel.js`（`primaryShotAction`） |
+| 成片疊層：剪接順序連播、未拍鏡頭用 3D 預演墊底、匯出 MP4（可選預演墊底） | `StudioShell.jsx`（`FilmOverlay`）、後端 `film_cut(fill_previs)` 與 `shot_view.previsVideoUrl` |
+
+**尚未實作的落差（需後端資料或另開工作）**：
+1. 繪本跨頁與漫劇直式成片框：表現形式透鏡只存在 `choice_traces`，集數沒有記住 `mediumLens`，工作台無從切換。
+2. 在分鏡片場改台詞／動作同步回劇本那一行：鏡頭與劇本行之間沒有對應關係。
+3. 角色造型指定到場次、場景 2.5D 圖層、道具三段狀態常駐右欄：造型變體仍在 Asset Vault 編輯；道具狀態只在碰撞提案時出現。
+4. 俯視圖拖曳走位與演出節拍軌：3D 片場沿用 `PrevisStage` 既有控制。
+5. OpenJutsu 作為單鏡「鏡頭來源」切換：仍是獨立的 `openjutsu-lab` 表（`Ctrl K` 可達，歸在分鏡片場）。
+6. 連戲監督建議卡放進右欄：評分與重拍提示目前在審片挑片的 `TakeGrades`。

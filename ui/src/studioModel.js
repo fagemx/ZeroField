@@ -1,5 +1,6 @@
 import { t } from './i18n/index.js';
 import { mediaOf, tablesOf } from './sheetModel.js';
+import { normalizeStatus } from './format.js';
 
 export const OPTICAL_PRESETS = ['ARRI Alexa 65 / 35mm Anamorphic f/1.4', 'RED V-Raptor / 85mm Prime f/1.8', '35mm Film / Vintage Anamorphic', '16mm Bolex Vintage Film', 'DV Camcorder / Clean Sharp'];
 export const MOTION_PRESETS = ['Slow Dolly Push-In', 'Tracking Shot', 'Static Tripod', 'Handheld Urgency', 'Crane Rise High-Angle', 'Drone Orbit 180°', 'Rack Focus', 'Whip Pan', 'POV'];
@@ -166,4 +167,23 @@ export async function queueStudioRun(api, base, input, {tabKey, revision} = {}) 
   if (!preflight.ready) throw new Error(preflight.errors?.[0]?.message || t('studio.preflightAttention'));
   if (tabKey in (preflight.source_revisions || {}) && preflight.source_revisions[tabKey] !== revision) throw new Error(t('studio.sourceChanged'));
   return api.post(base + '/runs', {...input, source_revisions:preflight.source_revisions});
+}
+
+// SPEC_15 Shot Stage filters and the one amber action a shot offers.
+export const SHOT_FILTERS = {
+  all:() => true,
+  review:({status}) => normalizeStatus(status) === 'Pending Review',
+  retake:({status}) => normalizeStatus(status) === 'Retake',
+  missing:({info}) => Boolean(info?.readiness?.missingAssets?.length),
+};
+
+// The one amber action a shot offers, chosen by where it stands.
+export function primaryShotAction({status, missing = [], hasPipeline}) {
+  const value = normalizeStatus(status);
+  if (value === 'Pending Review') return 'approve';
+  if (missing.length) return 'references';
+  if (value === 'Approved') return 'next';
+  if (value === 'Retake') return hasPipeline ? 'reshoot' : 'review';
+  if (/^(Rendering|In Progress)/.test(value)) return 'review';
+  return hasPipeline ? 'shoot' : 'review';
 }

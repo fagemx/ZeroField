@@ -5,7 +5,8 @@ import { STATUSES, LEGACY_STATUSES, statusLabel, normalizeStatus } from './forma
 import { assetReferences, assetVariants, mediaStages, resolveAssetReference } from './studioModel.js';
 import { sceneKey } from './storyModel.js';
 
-const MODES = ['grid', 'canvas', 'stage', 'gallery', 'kanban'];
+// review and compare are Shot Stage views of one shot (SPEC_15); a production sheet opens on the gallery overview.
+const MODES = ['grid', 'canvas', 'stage', 'gallery', 'kanban', 'review', 'compare'];
 const COMMON_STATUSES = STATUSES;
 
 function viewColumns(parsed) {
@@ -79,15 +80,15 @@ export function viewPreferences(parsed, preferences) {
   return {...preferences, signature: signature(parsed)};
 }
 
-export function restoreViewPreferences(raw, parsed) {
+export function restoreViewPreferences(raw, parsed, fallback = 'grid') {
   try {
     const data = JSON.parse(raw);
-    const mode = MODES.includes(data?.mode) ? data.mode : 'grid';
+    const mode = MODES.includes(data?.mode) ? data.mode : fallback;
     if (!data || data.signature !== signature(parsed)) return {mode};
     const {statusColumns, coverColumns} = viewColumns(parsed);
     return {mode,
       ...(data.coverColumn === -1 || coverColumns.some(c => c.index === data.coverColumn) ? {coverColumn: data.coverColumn} : {}),
       ...(statusColumns.some(c => c.index === data.groupColumn) ? {groupColumn: data.groupColumn} : {}),
     };
-  } catch { return {mode: 'grid'}; }
+  } catch { return {mode: fallback}; }
 }

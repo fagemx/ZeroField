@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { META_CACHE, getMediaMeta } from '../src/mediaMeta.js';
-import { benchLinks, buildAssetLookup, assetReferences, mediaStages, presetsFor, presetLabel, applyPreset, studioRunInput, queueStudioRun } from '../src/studioModel.js';
+import { benchLinks, buildAssetLookup, assetReferences, mediaStages, presetsFor, presetLabel, applyPreset, studioRunInput, queueStudioRun, primaryShotAction, SHOT_FILTERS } from '../src/studioModel.js';
 import { sheetViewModel } from '../src/sheetViews.js';
 import { flowToCanvas } from '../src/flowModel.js';
 import { setLocale } from '../src/i18n/index.js';
@@ -117,4 +117,13 @@ test('canvas bench links fan footage out to every pass and merge passes into the
   assert.deepEqual(vfx.links.map(([a, b]) => a.label + '>' + b.label), ['Source Driving Video>First Frame', 'Source Driving Video>Motion Structure', 'Source Driving Video>Anchor Keyframe',
     'First Frame>Remastered Video', 'Motion Structure>Remastered Video', 'Anchor Keyframe>Remastered Video', 'Remastered Video>Split-Screen MP4']);
   assert.deepEqual(benchLinks(['Keyframe', 'Cinema Shot'].map(stage)).links.map(([a, b]) => a.label + '>' + b.label), ['Keyframe>Cinema Shot']);
+});
+
+test('a shot offers one primary action by status, legacy statuses included, and the filters agree with it',()=>{
+  const cases=[[{status:'Pending Review',missing:['CAST-02']},'approve'],[{status:'等待審核'},'approve'],[{status:'Queued',missing:['CAST-02'],hasPipeline:true},'references'],
+    [{status:'Approved'},'next'],[{status:'Retake',hasPipeline:true},'reshoot'],[{status:'Retake'},'review'],[{status:'Rendering Video',hasPipeline:true},'review'],
+    [{status:'Queued',hasPipeline:true},'shoot'],[{status:''},'review']];
+  for(const [input,expected] of cases) assert.equal(primaryShotAction(input),expected,JSON.stringify(input));
+  assert.equal(SHOT_FILTERS.review({status:'等待回覆'}),true);assert.equal(SHOT_FILTERS.retake({status:'重抽'}),true);
+  assert.equal(SHOT_FILTERS.missing({info:{readiness:{missingAssets:['CAST-02']}}}),true);assert.equal(SHOT_FILTERS.missing({}),false);
 });

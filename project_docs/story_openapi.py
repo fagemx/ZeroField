@@ -376,6 +376,7 @@ def shot_view(conn, slug, row):
     known = {a["assetCode"]: a for a in (asset_view(slug, r) for r in table_rows(conn, slug, "soul-cast"))}
     missing = [c for c in refs if c.startswith(("CAST-", "SET-", "LOC-")) and not known.get(c, {}).get("selectedImageUrl")]
     has_previs = any(media_url(v) for k, v in fields.items() if re.search(r"previs|pose.*skeleton", k, re.I))
+    previs = next((media_url(v) for k, v in fields.items() if re.search(r"previs|blockout", k, re.I) and media_url(v)), None)
     return {**meta, "shotId": identifier, "rowId": row["rid"], "tabKey": row["tabKey"], "shotIndex": row["cells"][0],
             "description": next((v for k, v in fields.items() if re.search("prompt", k, re.I)), ""),
             "opticalRig": next((v for k, v in fields.items() if re.search(r"optical|rig", k, re.I)), ""),
@@ -384,13 +385,15 @@ def shot_view(conn, slug, row):
             "complexity": worker.evaluate_shot_complexity({**fields, "reviewStatus": status}),
             "readiness": {"ready": bool(output("image") or has_previs or not missing), "missingAssets": missing,
                           "hasPrevis": has_previs, "hasDialogue": bool(meta.get("dialogue"))},
-            "selectedImageUrl": output("image"), "selectedVideoUrl": output("video")}
+            "selectedImageUrl": output("image"), "selectedVideoUrl": output("video"), "previsVideoUrl": previs}
 
 
-def film_cut(items):
-    """Video URLs of an episode film in shot order: the cinema slate is the cut; a lab clip joins once it is approved."""
+def film_cut(items, fill_previs=False):
+    """Video URLs of an episode film in shot order: the cinema slate is the cut; a lab clip joins once it is approved.
+    fill_previs: a slate shot without a take plays its grey previs, so the whole episode can be watched before it is shot."""
     ordered = sorted(items, key=lambda s: tuple((0, int(part)) if part.isdigit() else (1, part.casefold()) for part in re.split(r"(\d+)", str(s["shotIndex"]))))
-    return [s["selectedVideoUrl"] for s in ordered if s["selectedVideoUrl"]
+    take = lambda s: s["selectedVideoUrl"] or (fill_previs and s["tabKey"] == "cinema-studio" and s.get("previsVideoUrl")) or None
+    return [take(s) for s in ordered if take(s)
             and (s["tabKey"] == "cinema-studio" or s.get("reviewStatus") in ("Approved", "已完成"))]
 
 
@@ -1343,7 +1346,7 @@ def dispatch(conn, me, method, path, body, query, actions):
             if method == "GET":
                 return page([f for f in records(conn, "film", slug) if f["episodeId"] == ep["episodeId"]], query)
             if method == "POST":
-                urls = film_cut(shots(conn, ep))
+                urls = film_cut(shots(conn, ep), fill_previs=body.get("fillPrevis") is True)
                 if not urls:
                     raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Select at least one shot video before exporting a film.")
                 return queue_task(conn, me, slug, "FILM_EXPORT", {"episodeId": ep["episodeId"], "urls": urls, "config": {}}, actions)
