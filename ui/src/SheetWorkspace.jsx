@@ -13,7 +13,7 @@ import { episodeId, replaceAssetVariant, storyList, storyRequest, waitStoryTask 
 import { freezeSheetScope, historyForRow, inverseOperation, rangeTSV, rebaseOperation, selectionRange, sheetRequest, visiblePastePayload } from './sheetInteraction.js';
 import { restoreViewPreferences, sheetViewModel, statusOptions, viewPreferences } from './sheetViews.js';
 import { shortTime, statusClass, statusLabel } from './format.js';
-import { ShotList, ShotCompare } from './ShotStage.jsx';
+import { ShotList, ShotCompare, ShotSourceBadge } from './ShotStage.jsx';
 import './sheet-workspace.css';
 import { SheetAgentRequest } from './assistant/SheetAgentRequest.jsx';
 import { ShotBench, ShotStrip } from './ShotBench.jsx';
@@ -23,7 +23,7 @@ const PrevisStage = lazy(() => import('./previs/PrevisStage.jsx'));
 
 const TYPES = {get text() { return uiText("sheetWorkspace.text"); },get number() { return uiText("sheetWorkspace.number"); },get formula() { return uiText("sheetWorkspace.formula"); },get image() { return uiText("sheetWorkspace.image"); },get video() { return uiText("sheetWorkspace.videoAttachment"); },get audio() { return uiText("sheetWorkspace.audio"); },get status() { return uiText("sheetWorkspace.status"); }};
 
-export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[],controlRef,onReloadTab,onAskAgent,onSwitchDocMode,onToast,onError,onPanelChange,assistantOpen,focusRow,agents=[],onAgentRouted, storyEpisode, onOpenWorld, onFilm}) {
+export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[],controlRef,onReloadTab,onAskAgent,onSwitchDocMode,onToast,onError,onPanelChange,assistantOpen,focusRow,agents=[],onAgentRouted, storyEpisode, onOpenWorld, onFilm, writingAlignment}) {
   const locale = useLocale();
   const tables = useMemo(()=>tablesOf(tab.doc,values),[tab.doc,values]);
   const [tableId,setTableId]=useState(null);
@@ -333,6 +333,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
     const writes=['approve','reshoot','shoot'].includes(action);
     return <aside className="shot-detail" aria-label={uiText('stage.shotDetail')}>
       <header><b className="num">{String(currentRow.cells[0]?.value||'—')}</b><span className="spacer"/><span className={'shot-dot '+statusClass(status)} aria-hidden="true"/><span>{status?statusLabel(status):'—'}</span></header>
+      <ShotSourceBadge alignment={writingAlignment} shotId={info?.shotId} onSource={onOpenWorld}/>
       {missing.length>0&&<p className="shot-missing">{uiText('stage.missing',{codes:missing.map(code=>'@'+code).join(', ')})}</p>}
       <div className="shot-primary"><button type="button" className="primary studio-primary" disabled={writes&&(!writable||busy||dirty)} onClick={run}>{uiText(action==='next'&&!waiting?'stage.primary_film':'stage.primary_'+action)}</button>
         {action==='approve'&&writable&&<button type="button" disabled={busy||dirty} onClick={()=>setShotStatus(currentRow,'Retake')}>{uiText('stage.retakeKey')}</button>}</div>

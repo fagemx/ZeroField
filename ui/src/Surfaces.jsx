@@ -20,7 +20,7 @@ export const PROJECT_STATUS = {
   archived: { get label() { return uiText("surfaces.archived"); }, color: "var(--faint)", bg: "#161616" },
 };
 
-export function IdentityBadge({ me, members }) {
+export function IdentityBadge({ me, members, beforeIdentity }) {
   const locale = useLocale();
   const list = members || [];
   if (list.length <= 1 || me.auth_mode !== "dev") {
@@ -38,9 +38,11 @@ export function IdentityBadge({ me, members }) {
       <select
         aria-label={uiText("surfaces.switchIdentity")}
         value={me.actor_id}
-        onChange={(e) => {
+        onChange={async (e) => {
+          const actor = e.target.value;
+          if (beforeIdentity && !await beforeIdentity()) return;
           const next = encodeURIComponent(window.location.pathname + window.location.hash);
-          window.location.href = `/__who?actor=${encodeURIComponent(e.target.value)}&next=${next}`;
+          window.location.href = `/__who?actor=${encodeURIComponent(actor)}&next=${next}`;
         }}
         style={{ border: "none", background: "transparent", font: "inherit", fontWeight: 600, cursor: "pointer" }}
       >

@@ -5,6 +5,7 @@ import { episodeId, storyList, storyRequest, waitStoryTask } from './storyModel.
 import { SHOT_FILTERS } from './studioModel.js';
 import { Icon } from './Icon.jsx';
 import './studio-shell.css';
+import { semanticEnumKey } from './writing/writingModel.js';
 
 // SPEC_15: a studio production has two creative spaces instead of six numbered stations.
 // Story & World holds the script and the world it names; Shot Stage holds every shot. Other pages stay one Ctrl K away.
@@ -16,15 +17,15 @@ export const spaceOf = key => STORY_TABS.includes(key) ? 'story' : STAGE_TABS.in
 
 // One episode's state for the top bar, both spaces and the film: refreshed when a page saves (version) or on demand.
 export function useEpisode(slug, epId, version, enabled = true) {
-  const [state, setState] = useState({episodes:[], ep:null, shots:[], error:''});
+  const [state, setState] = useState({episodes:[], ep:null, shots:[], alignment:null, error:''});
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
     if (!enabled) return undefined;
     let alive = true, error = '';
     // Each part loads on its own: a missing episode list must not keep the episode itself from loading.
     const settle = request => request.catch(failure => {error = error || failure.message; return null;});
-    Promise.all([settle(storyList('/projects/pj_' + slug + '/episodes')), settle(storyRequest('/episodes/' + epId)), settle(storyList('/episodes/' + epId + '/shots'))])
-      .then(([episodes, ep, shots]) => {if (alive) setState(current => ({episodes:episodes || current.episodes, ep, shots:shots || [], error}));});
+    Promise.all([settle(storyList('/projects/pj_' + slug + '/episodes')), settle(storyRequest('/episodes/' + epId)), settle(storyList('/episodes/' + epId + '/shots')), settle(storyRequest('/episodes/' + epId + '/writing/alignment'))])
+      .then(([episodes, ep, shots, alignment]) => {if (alive) setState(current => ({episodes:episodes || current.episodes, ep, shots:shots || [], alignment, error}));});
     return () => {alive = false;};
   }, [slug, epId, version, nonce, enabled]);
   return {...state, reload:() => setNonce(n => n + 1)};
@@ -44,7 +45,7 @@ export function episodeCounts(ep, shots) {
   };
 }
 
-export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTitle, counts, onSpace, onCommand, assistant, film, identity, settings}) {
+export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTitle, counts, onSpace, onCommand, assistant, film, identity, settings, writingStatus}) {
   useLocale();
   const storyNote = [counts.scriptDirty && t('shell.storyUpdated'), counts.missing && t('shell.missingImages', {count:counts.missing})].filter(Boolean).join(' · ');
   const stageNote = [t('shell.shotCount', {count:counts.shots}), counts.review && t('shell.toReview', {count:counts.review})].filter(Boolean).join(' · ');
@@ -58,7 +59,7 @@ export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTit
     </div>
     <nav className="studio-spaces" aria-label={t('shell.spaces')}>
       <button type="button" aria-current={space === 'story' ? 'page' : undefined} onClick={() => onSpace('story')}>
-        {t('shell.storyWorld')}{storyNote && <span className={'studio-note' + (counts.scriptDirty || counts.missing ? ' warn' : '')}>{storyNote}</span>}</button>
+        {t('shell.storyWorld')}{writingStatus && <span className="studio-note" role="status">{t('writing.authoring.' + semanticEnumKey('state', writingStatus.state))}</span>}{storyNote && <span className={'studio-note' + (counts.scriptDirty || counts.missing ? ' warn' : '')}>{storyNote}</span>}</button>
       <button type="button" aria-current={space === 'stage' ? 'page' : undefined} onClick={() => onSpace('stage')}>
         {t('shell.shotStage')}<span className="studio-note">{stageNote}</span></button>
       {pageTitle && <span className="studio-page" title={pageTitle}>{pageTitle}</span>}
@@ -124,6 +125,13 @@ export function FilmOverlay({epId, shots, writable, onClose}) {
   const cut = useMemo(() => orderedShots(shots).map(shot => ({...shot, play:shot.selectedVideoUrl || shot.previsVideoUrl || null, fill:!shot.selectedVideoUrl && Boolean(shot.previsVideoUrl)})), [shots]);
   const [at, setAt] = useState(0), [exporting, setExporting] = useState(false), [film, setFilm] = useState(null), [error, setError] = useState('');
   const [fill, setFill] = useState(true);
+  const [alignment, setAlignment] = useState(null), [alignmentError, setAlignmentError] = useState('');
+  useEffect(() => {
+    let active = true; setAlignment(null); setAlignmentError('');
+    storyRequest(`/episodes/${epId}/writing/alignment`).then(data => {if (active) setAlignment(data);}).catch(error => {if (active) setAlignmentError(error.message);});
+    return () => {active = false;};
+  }, [epId, shots]);
+  const differing = alignment?.items.filter(item => item.storyAlignment?.state !== 'in_sync' || item.storyAlignment?.mediaOutdated) || [];
   const video = useRef(null), box = useRef(null), alive = useRef(true);
   const current = cut[at];
   useEffect(() => {alive.current = true; box.current?.focus(); return () => {alive.current = false;};}, []);
@@ -147,6 +155,8 @@ export function FilmOverlay({epId, shots, writable, onClose}) {
       onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); onClose();}}}>
       <header><h2>{t('shell.filmTitle')}</h2><span className="studio-note">{t('shell.filmSummary', {filmed:cut.filter(s => s.selectedVideoUrl).length, total:cut.length})}</span>
         <span className="spacer"/><button type="button" className="icon-btn" aria-label={t('sheetDialog.closePanel')} onClick={onClose}><Icon name="close" /></button></header>
+      {alignmentError && <p role="alert">{t('writing.integration.alignmentUnavailable')} {alignmentError}</p>}
+      {!!differing.length && <p role="status">{t('writing.integration.filmWarning', {shots:differing.map(item => item.shotIndex).join(', ')})}</p>}
       <div className="studio-film-screen">
         {film ? <video src={film} controls autoPlay playsInline preload="metadata" aria-label={t('story.episodeFilm')}/>
           : current?.play ? <video ref={video} key={current.shotId} src={current.play} controls autoPlay playsInline preload="metadata"

@@ -73,14 +73,13 @@ test('new count and usage labels interpolate in both interface languages',async(
   await setLocale('en');
 });
 
-test('Story & World keeps every Start Creating field on the page, defaults to Screenplay and has one amber action',()=>{
-  const html=render('StoryWorld',{epId:'ep_demo_02',writable:true});
-  for(const name of ['Scenes','Story','Script','Aspect Ratio','Style Preset','Idea / Logline','Novel / Story Chapter','Screenplay','Storyboard Density','World','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
-  assert.match(html,/aria-pressed="true"[^>]*>Screenplay/);
-  assert.match(html,/accept="\.txt,\.md,text\/plain,text\/markdown"/);
+test('Story & World composes the persisted workspace and retains production settings and asset access',()=>{
+  const html=render('StoryWorld',{slug:'demo',me:{actor_id:'actor'},epId:'ep_demo_02',writable:true});
+  for(const name of ['Aspect Ratio','Style Preset','Storyboard Density','Asset Vault']) assert.ok(html.includes(name),name);
   for(const mode of ['auto','scene','cinematic']) assert.ok(html.includes(`value="${mode}"`));
-  assert.equal((html.match(/class="primary/g)||[]).length,1,'one primary action');
-  assert.match(render('StoryWorld',{epId:'ep_demo_02',writable:true,shots:[{shotId:'s1',sceneId:'sc1'}]}),/Update Storyboard &amp; Open Shot Stage/);
+  assert.match(html,/class="authoring-workspace" aria-busy="true"/,'the authenticated workspace loads before exposing an editable manuscript');
+  assert.doesNotMatch(html,/<textarea/,'no unpersisted ep.scriptContent mirror');
+  // Actual loaded primary actions/source modes/import/compare/build are exercised by the integrated production-browser journey.
 });
 
 test('adapting preserves the original source and screenplay edits while a changed source requires a fresh adaptation',async()=>{
@@ -149,7 +148,7 @@ test('the composition panel stays folded to one lens choice until a lens is pick
   html=render('CompositionPanel',{value:{...value,medium:'storybook',collisions:{candidates:cards}},onChange:()=>{}});
   for(const text of ['表現形式透鏡','繪本／視覺故事書','條件碰撞類型','補一句限制條件','正面相撞']) assert.ok(html.includes(text),text);
   await components.setLocale('en');
-  assert.doesNotMatch(render('StoryWorld',{epId:'ep_demo_02',writable:true}),/Medium Lens/,'Screenplay mode shows no composition controls');
+  assert.doesNotMatch(render('StoryWorld',{slug:'demo',me:{actor_id:'actor'},epId:'ep_demo_02',writable:true}),/Medium Lens/,'Screenplay mode shows no composition controls');
 });
 
 test('one-click novel creation adapts, saves, extracts and builds the selected episode before onDone',async()=>{
