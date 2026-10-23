@@ -25,7 +25,7 @@ class WritingProductBrowserTests(unittest.TestCase):
         self.f.tearDown()
 
     @contextmanager
-    def browser(self, width=1920):
+    def browser(self, width=1920, expected_fault_errors=()):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             browser = p.chromium.launch()
@@ -41,7 +41,7 @@ class WritingProductBrowserTests(unittest.TestCase):
                 page.get_by_role('textbox',name='Manuscript editor').wait_for(timeout=30000)
                 yield page, context, base
                 page.wait_for_load_state('networkidle')
-                self.assertEqual(errors, [])
+                self.assertEqual([error for error in errors if error not in expected_fault_errors], [])
                 page.screenshot(path=str(self.artifacts/(self._testMethodName+'.png')), full_page=True)
             except Exception:
                 page.screenshot(path=str(self.artifacts/(self._testMethodName+'-failure.png')), full_page=True)
@@ -223,6 +223,56 @@ class WritingProductBrowserTests(unittest.TestCase):
             finally:
                 self.f.conn.execute('delete from projectops.member where actor_id=%s',(actor,));self.f.conn.commit()
             self.assertNotIn('Private novel never shared',other.locator('body').inner_text())
+
+    def test_root_logout_requires_exact_private_preservation_and_isolates_next_actor(self):
+        from playwright.sync_api import expect
+        from project_docs import repository as repo
+        import uuid
+        self.f.init();self.f.save_doc(core.document('Scene 01: Room','Shared text'))
+        # Deliberately throwing from the browser's IDB API also emits the exact injected window error.
+        # Only that explicit fault is allowed; normal journeys still require zero page errors.
+        with self.browser(expected_fault_errors=('Injected unavailable storage',)) as (page,context,base):
+            logout=[];bible_mutations=[]
+            page.on('request',lambda request: logout.append(request.method) if request.url==base+'/logout' else None)
+            page.on('request',lambda request: bible_mutations.append(request.method) if '/writing/bible' in request.url and request.method in ('POST','PATCH') else None)
+            editor=page.get_by_role('textbox',name='Manuscript editor')
+            context.set_offline(True);editor.fill('Offline manuscript awaiting its own ACK');page.keyboard.press('Control+s')
+            expect(page.locator('.writing-status')).to_contain_text('Saved on this device only')
+            page.get_by_role('button',name='Sign out',exact=True).click();page.wait_for_timeout(400)
+            self.assertEqual(logout,[]);self.assertIn('/projects/'+self.f.slug,page.url)
+            context.set_offline(False);page.keyboard.press('Control+s');expect(page.locator('.writing-status')).to_contain_text('Saved on server')
+            self.tools(page,'World & notes')
+            page.evaluate("() => {window.__spec16Put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(){throw new DOMException('Injected unavailable storage','QuotaExceededError');};}")
+            page.locator('#writing-tools-bible fieldset select').first.select_option('note')
+            page.get_by_role('textbox',name='Title',exact=True).fill('Sole actor A private note')
+            notes=page.locator('#writing-tools-bible').get_by_role('textbox',name='Notes',exact=True)
+            notes.fill('This private text must never become actor B content.')
+            expect(page.get_by_text('Local draft checkpoint failed.',exact=False)).to_be_visible()
+            page.get_by_role('button',name='Sign out',exact=True).click();page.wait_for_timeout(400)
+            self.assertEqual(logout,[]);self.assertEqual(bible_mutations,[])
+            page.evaluate('() => {IDBObjectStore.prototype.put=window.__spec16Put;}')
+            page.get_by_role('button',name='Retry local checkpoint',exact=True).click()
+            page.get_by_role('button',name='Keep this exact draft privately on this device for my account',exact=True).click()
+            notes.fill('A later edit invalidates that preservation decision.')
+            page.get_by_role('button',name='Sign out',exact=True).click();page.wait_for_timeout(400)
+            self.assertEqual(logout,[])
+            page.get_by_role('button',name='Keep this exact draft privately on this device for my account',exact=True).click()
+            page.get_by_role('button',name='Sign out',exact=True).click();page.wait_for_url('**/login')
+            self.assertEqual(logout,['POST']);self.assertEqual(bible_mutations,[])
+            self.assertEqual(context.request.get(base+'/projects/api/'+self.f.slug).status,401)
+            actor=str(uuid.uuid4());token='test-browser-'+uuid.uuid4().hex
+            repo.upsert_member(self.f.conn,actor,'Second browser author','admin');self.f.conn.commit()
+            tokens=json.loads(os.environ['OPENBENCH_TOKENS']);tokens[token]=actor;os.environ['OPENBENCH_TOKENS']=json.dumps(tokens)
+            try:
+                context.request.post(base+'/login',form={'token':token})
+                page.goto(base+'/projects/'+self.f.slug+'/#story-world');page.get_by_role('textbox',name='Manuscript editor').wait_for()
+                self.tools(page,'World & notes')
+                self.assertNotIn('Sole actor A private note',page.locator('body').inner_text())
+                self.assertNotIn('A later edit invalidates',page.locator('body').inner_text())
+                self.assertEqual(page.get_by_role('button',name='Restore private draft for review',exact=True).count(),0)
+                self.assertEqual(bible_mutations,[])
+            finally:
+                self.f.conn.execute('delete from projectops.member where actor_id=%s',(actor,));self.f.conn.commit()
 
     def test_real_long_script_timings_and_text_only_build(self):
         from playwright.sync_api import expect

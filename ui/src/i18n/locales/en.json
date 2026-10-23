@@ -3009,7 +3009,8 @@
       "storySource": "Story source",
       "oldMedia": "Existing media was made from an earlier or unknown manuscript. Review before calling it current.",
       "filmWarning": "Story source differences or unknown provenance: {{shots}}. Existing takes remain playable.",
-      "signIn": "Sign in as the original author"
+      "signIn": "Sign in as the original author",
+      "signOut": "Sign out"
     }
   }
 }

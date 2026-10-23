@@ -583,6 +583,16 @@ function ProjectPage({ slug }) {
   if (!data) return <div className="center-note">{uiText("app.loading")}</div>;
 
   const me = data.me;
+  const signOut = async () => {
+    if (!await flushIdentity()) return;
+    try {
+      // Existing token endpoint: same-origin + projects CSRF header, 303 clears the HttpOnly session.
+      const response = await fetch('/logout', {method:'POST', credentials:'same-origin',
+        headers:{'X-Requested-With':'projects','Content-Type':'application/x-www-form-urlencoded'}, body:''});
+      if (!response.ok) {const payload = await response.json().catch(() => null); throw new Error(payload?.error || response.statusText);}
+      window.location.assign('/login');
+    } catch (error) {onError(error.message);}
+  };
   const tabs = data.tabs;
   const tab = tabKey ? docs[tabKey] : null;
   const todo = todoCount(data.annotations, me);
@@ -632,7 +642,7 @@ function ProjectPage({ slug }) {
           {assistantButton}</>}
         film={{ open: filmOpen, onToggle: () => setFilmOpen((open) => !open) }}
         settings={<WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />}
-        identity={<IdentityBadge me={me} members={data.members} beforeIdentity={flushIdentity} />} /> :
+        identity={<IdentityBadge me={me} members={data.members} beforeIdentity={flushIdentity} onSignOut={signOut} />} /> :
       <header className="top">
         <button type="button" className="icon-btn" onClick={() => (window.innerWidth <= 860 ? setRailOpen(!railOpen) : setRailHidden(!railHidden))}
           aria-label={uiText("app.togglePages")}><Icon name="menu" /> <span className="label">{uiText("app.pages")}</span></button>
@@ -662,7 +672,7 @@ function ProjectPage({ slug }) {
         </button>
         <button type="button" className="icon-btn" onClick={openConsole} aria-label={uiText('console.entry')}><Icon name="terminal" /><span className="label">{uiText('console.entry')}</span></button>
         <LanguageSwitch /><WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
-        <IdentityBadge me={me} members={data.members} beforeIdentity={flushIdentity} />
+        <IdentityBadge me={me} members={data.members} beforeIdentity={flushIdentity} onSignOut={signOut} />
       </header>}
       <ViewMenu open={Boolean(viewMenu)} rect={viewMenu} view={view} showResolved={showResolved}
         onView={setView} onResolved={setShowResolved} onClose={() => setViewMenu(null)} />

@@ -20,7 +20,7 @@ export const PROJECT_STATUS = {
   archived: { get label() { return uiText("surfaces.archived"); }, color: "var(--faint)", bg: "#161616" },
 };
 
-export function IdentityBadge({ me, members, beforeIdentity }) {
+export function IdentityBadge({ me, members, beforeIdentity, onSignOut }) {
   const locale = useLocale();
   const list = members || [];
   if (list.length <= 1 || me.auth_mode !== "dev") {
@@ -29,6 +29,7 @@ export function IdentityBadge({ me, members, beforeIdentity }) {
         <Avatar id={me.actor_id} name={me.name} size={26} />
         <span className="name">{me.name}</span>
         <small>{roleLabel(me.role, me.role_label)}</small>
+        {me.auth_mode === 'token' && onSignOut && <button type="button" onClick={onSignOut}>{uiText('writing.integration.signOut')}</button>}
       </span>
     );
   }
