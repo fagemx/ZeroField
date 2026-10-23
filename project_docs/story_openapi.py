@@ -576,8 +576,14 @@ def candidate_list(conn, identifier, kind):
         urls.append(current)
     urls.extend(c["url"] for c in records(conn, "candidate", slug) if c["entityId"] == identifier and c["kind"] == kind)
     prefix, key = ("im_", "imageId") if kind == "image" else ("vd_", "videoId")
-    return [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current}
-            for url in dict.fromkeys(urls)]
+    result = [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current}
+              for url in dict.fromkeys(urls)]
+    if entity == 'shot':
+        from project_docs import writing_impact
+        evidence = [c for c in records(conn, 'candidate', slug) + records(conn, 'story_media_receipt', slug)
+                    if c['entityId'] == identifier and c['kind'] == kind]
+        result = [writing_impact.candidate_view(c, writing_impact.candidate_evidence(evidence, c['url'])) for c in result]
+    return result
 
 
 def select_candidate(conn, me, identifier, kind, body):
@@ -723,6 +729,10 @@ def generation_job(conn, me, identifier, kind, body):
     episode_id = shot_view(conn, slug, row).get('episodeId', 'ep_' + slug + '_01') if identifier.startswith('sh_') else None
     job = {"episodeId": episode_id, "entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
            "card": card, "workflow": workflow, "values": values, "column": column, "production_policy": policy}
+    if identifier.startswith('sh_'):
+        from project_docs import writing_impact
+        job['storyProvenance'] = writing_impact.freeze_for_shot(conn, me, identifier)
+        writing_impact.validate_frozen_row(job['storyProvenance'], job['row']['cells'])
     if body.get("_allocation"):
         job["allocation"] = copy.deepcopy(body["_allocation"])
         job['_accounting_prefix'] = body.get('_accountingPrefix') or 'generation:' + uuid.uuid4().hex
@@ -957,11 +967,16 @@ def execute_task(identifier):
                 if not output["content_type"].startswith(job["kind"] + "/"):
                     raise worker.WorkerError("The card produced the wrong media type.")
                 result = {job["kind"] + "Url": output["asset_url"]}
-                store(conn, "ca_" + identifier, "candidate", {"entityId": job["entityId"], "kind": job["kind"], "url": output["asset_url"]}, slug)
+                from project_docs import writing_impact
+                evidence = job.get('storyProvenance')
+                if job['entityId'].startswith('sh_'):
+                    result = writing_impact.candidate_view(result, evidence)
+                store(conn, "ca_" + identifier, "candidate", {"entityId": job["entityId"], "kind": job["kind"], "url": output["asset_url"],
+                      **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
                 repo.get_tab_for_update(conn, slug, job["row"]["tabKey"])
                 _, row = find_row(conn, job["entityId"], "shot" if job["entityId"].startswith("sh_") else "asset")
                 # A delayed render is kept as a candidate, not allowed to overwrite a newer selection.
-                if row["cells"] == job["row"]["cells"]:
+                if row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
                     mutate_row(conn, me, slug, row["tabKey"], row["rid"], {job["column"]: f"[{job['kind']}]({output['asset_url']})"})
                     result["selected"] = True
                 else:
@@ -1511,6 +1526,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             rid = mutate_row(conn, me, slug, row["tabKey"], cells=dict(enumerate(second)), after=row["rid"])
             other = f"sh_{slug}_{rid}"
             store(conn, "meta_" + other, "shot_meta", shot_meta(conn, identifier), slug)
+            from project_docs import writing_impact
+            writing_impact.split_lineage(conn, slug, identifier, other)
             return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1])]}
     if parts[0] == "scenes" and len(parts) >= 2:
         ep, scene = locate_scene(conn, parts[1]); tail = "/".join(parts[2:])
@@ -1540,6 +1557,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             slug, row = found[0]
             column = next((i for i, h in enumerate(row["headers"]) if re.search("prompt", h, re.I)), 3)
             mutate_row(conn, me, slug, row["tabKey"], row["rid"], {column: "\n".join(r["cells"][column] for _, r in found)})
+            from project_docs import writing_impact
+            writing_impact.merge_lineage(conn, slug, ids)
             for lost_id, (_, other) in zip(ids[1:], found[1:]):
                 for kind in ('image', 'video'):
                     try:
@@ -1548,7 +1567,8 @@ def dispatch(conn, me, method, path, body, query, actions):
                         candidates = []
                     for candidate in candidates:
                         store(conn, 'ca_merge_' + digest([ids[0], kind, candidate['url']]), 'candidate',
-                              {'entityId': ids[0], 'kind': kind, 'url': candidate['url']}, slug)
+                              {'entityId': ids[0], 'kind': kind, 'url': candidate['url'],
+                               'storyProvenance': candidate.get('storyProvenance')}, slug)
                 mutate_row(conn, me, slug, row["tabKey"], other["rid"], delete=True)
             return shot_view(conn, slug, find_row(conn, ids[0], "shot")[1])
         found = [locate_scene(conn, i) for i in ids]

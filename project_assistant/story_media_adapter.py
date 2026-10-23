@@ -48,6 +48,9 @@ def verify_task(conn, task):
     target = task["target"]
     if slug != job["slug"] or target.get("tab_key") != row["tabKey"] or target.get("row_id") != row["rid"] or target.get("col_index") != story.media_column(row, "video"):
         raise cp.OrchestrationError(403, "The media output exceeds its production/shot/video scope.")
+    from project_docs import writing_impact
+    if not writing_impact.provenance_matches(conn, me, job['entityId'], job.get('storyProvenance'), check_row=False):
+        raise cp.OrchestrationError(409, 'Story origin or production baseline changed; create a new allocation.', 'SOURCE_CHANGED')
     policy = story.production_policy(conn, slug)
     if job["production_policy"] != policy:
         raise cp.OrchestrationError(409, "Production policy changed; create a new allocation.")
@@ -93,6 +96,8 @@ def enqueue(conn, me, slug, identifier, allocation, sources, actions, *, frozen_
     sponsor=agent_registry.get_agent(conn,slug,execution_agent_key)
     envelope=sponsor['outcome_grader'] if grading_objective is not None else None
     job = {"accounting_session_key": accounting_session_key, "budget_cap_usd": str(budget_cap_usd) if budget_cap_usd is not None else None, "grading_objective": grading_objective, "outcome_grader": envelope, "episode_id": episode_id, "execution_agent_key": execution_agent_key, "operation_keys": operation_keys, "slug": slug, "entityId": identifier, "production_policy": story.production_policy(conn, slug), "sources": sources, "steps": {}}
+    from project_docs import writing_impact
+    job['storyProvenance'] = writing_impact.freeze_for_shot(conn, me, identifier)
     mapped = {}
     plans = allocation.get("race_plans")
     if plans:
@@ -142,6 +147,11 @@ def add_task(conn, me, slug, run, target, scope, base, name, step, dependencies,
                           depends_on=dependencies, strategy="race" if race else "single", write_mode="analysis_only" if not race and step["kind"] == "prepare" else "proposal",
                           _media_principal=_PRINCIPAL, _media_job=job)
     snapshots = task["input_snapshot"]
+    from project_docs import writing_impact
+    frozen_tab = snapshots['tabs'][target['tab_key']]
+    frozen_row = next(r for t in frozen_tab['doc']['content'] if t.get('type') == 'table'
+                      for r in t['content'] if r.get('attrs', {}).get('bid') == target['row_id'])
+    writing_impact.validate_frozen_row(job['storyProvenance'], [story.cell_value(c, frozen_tab['values']) for c in frozen_row['content']])
     if repo.get_tab(conn, slug, "soul-cast"):
         snapshots["tabs"]["soul-cast"] = cp.freeze_tab(conn, slug, "soul-cast")
         db.execute(conn, "UPDATE projectops.orchestration_task SET input_snapshot=%s::jsonb WHERE id=%s", (json.dumps(snapshots), task["id"]))
@@ -230,9 +240,14 @@ def execute(dispatch):
                             output={'text':'Needs You: media outcome check failed.','outcome_grader':card,'candidate':output},proposal_ids=[])
                     return
                 output={**output,'outcome_grader':card}
+        # Exact provenance stays in the local frozen job/receipt, never a remote
+        # grader payload or the M8 scrubbed prose output (which masks hash strings).
         with http.open_connection() as conn:
             cp.leased_dispatch(conn, _PRINCIPAL, dispatch["handle"], dispatch["lease_token"])
             ctx = SimpleNamespace(worker_id=_PRINCIPAL, slug=job["slug"], dispatch_id=dispatch["id"], admission_no=dispatch["admission_no"], lease_token=dispatch["lease_token"], me=service.Identity(run["created_by"], "Studio media", "member"))
+            if step['kind'] == 'generate':
+                from project_docs import writing_impact
+                writing_impact.record_candidate_receipt(conn, job['slug'], job['entityId'], output, job['storyProvenance'], dispatch['id'])
             proposals = cp.prepare_dispatch_output(conn, ctx, output)
             cp.complete_dispatch(conn, _PRINCIPAL, dispatch["handle"], dispatch["lease_token"], outcome="succeeded", output=output, proposal_ids=proposals)
     except Exception:
