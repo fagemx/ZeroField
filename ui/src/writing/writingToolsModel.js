@@ -106,5 +106,7 @@ export function cleanPrintHtml(html, Parser = DOMParser) {
     return `<${tag}>${content}</${tag}>`;
   }
   const content = Array.from(parsed.body.childNodes, serialize).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{font:12pt/1.6 system-ui,sans-serif;color:#111;background:#fff;margin:18mm}pre{white-space:pre-wrap;font:inherit}section,article{break-before:auto}h1,h2,h3{break-after:avoid}table{border-collapse:collapse}td,th{border:1px solid #777;padding:4pt}@media print{h2{break-before:page}}</style></head><body>${content}</body></html>`;
+  // The server emits escaped manuscript hard breaks as literal newlines in paragraphs.
+  // Preserve those and empty paragraphs using only fixed application-owned CSS.
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{font:12pt/1.6 system-ui,sans-serif;color:#111;background:#fff;margin:18mm}p,pre{white-space:pre-wrap}p{min-height:1.6em}pre{font:inherit}section,article{break-before:auto}h1,h2,h3{break-after:avoid}table{border-collapse:collapse}td,th{border:1px solid #777;padding:4pt}@media print{h2{break-before:page}}</style></head><body>${content}</body></html>`;
 }
