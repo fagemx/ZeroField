@@ -1,4 +1,5 @@
 import { bidOf, computeOps, stable, mergeServer } from '../blocks.js';
+import { impactSelection } from './writingImpactAdapter.js';
 export { stable };
 export const emptyDoc = () => ({type:'doc',content:[]});
 export const clone = value => structuredClone(value);
@@ -66,11 +67,20 @@ export function baselineState(workspace) {
   if (baseline?.confirmedHash || workspace?.confirmedHash) return {kind:'legacy',dirty:!!(baseline?.scriptDirty ?? workspace.scriptDirty)};
   return {kind:'none',dirty:!!workspace?.scriptDirty};
 }
+export function promotionProjection(preview) {
+  const proposal=preview.proposedChanges || {};
+  if(!proposal.sourceDoc)return proposal.doc;
+  if(proposal.whole!==false)return proposal.sourceDoc;
+  const keys=new Set((preview.allowedActions || []).filter(action=>['adopt_scene','add_scene'].includes(action.kind)).map(action=>action.sceneKey));
+  const bids=new Set((proposal.sourceStructure?.scenes || []).filter(scene=>keys.has(scene.sceneKey)).flatMap(scene=>[scene.headingBid,...(scene.blockBids || [])]));
+  return {...proposal.sourceDoc,content:(proposal.sourceDoc.content || []).filter(node=>bids.has(bidOf(node)))};
+}
 export function defaultImpactSelection(preview) {
   // Nothing destructive or manually overridden is preselected. Explicit review is safer.
   return {actions:[]};
 }
 export function allowedSelection(preview, selected) {
+  if(preview.kind==='impact')return impactSelection(preview,selected);
   const actions = preview.allowedActions || [];
   return {actions:selected.map(item=>{
     const allowed = actions.find(action=>action.actionId===item.actionId && action.kind===item.kind);

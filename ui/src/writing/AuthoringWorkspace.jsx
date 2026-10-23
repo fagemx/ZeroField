@@ -13,7 +13,9 @@ import { WritingRecovery } from './WritingRecovery.jsx';
 import { WritingConflict } from './WritingConflict.jsx';
 import { WritingSourceTools } from './WritingSourceTools.jsx';
 import { createTextStoryboardAction } from './writingTasks.js';
-import { impactContractValidated } from './writingImpactAdapter.js';
+import { impactRequest, impactSelection } from './writingImpactAdapter.js';
+import { WritingImpactSetup } from './WritingImpactSetup.jsx';
+import { WritingToolControls } from './writingToolControls.js';
 import './authoring.css';
 const p='writing.authoring.';
 const blankResource=()=>({doc:emptyDoc(),version:0,docHash:null,structure:{chapters:[],sections:[]},composition:{}});
@@ -30,6 +32,9 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   const [workspace,setWorkspace]=useState(null),[resourceRef,setResourceRef]=useState({kind:'working'}),[resource,setResource]=useState(null),[snapshot,setSnapshot]=useState(null),[error,setError]=useState(null),[panel,setPanel]=useState(null),[preview,setPreview]=useState(null),[selectedScene,setSelectedScene]=useState(null),[focusBid,setFocusBid]=useState(null),[focus,setFocus]=useState(false),[outlineOpen,setOutlineOpen]=useState(true),[fontSize,setFontSize]=useState(18),[lineHeight,setLineHeight]=useState(1.8),[pageWidth,setPageWidth]=useState(720),[duplicate,setDuplicate]=useState(false),[busy,setBusy]=useState(false),[switching,setSwitching]=useState(false);
   const taskAbort=useRef(new AbortController());
   const persistence=useRef(null),latest=useRef({}),mounted=useRef(true),loadSequence=useRef(0),editor=useRef(null),actionRetry=useRef(null),structureUndo=useRef(null);
+  const [toolRevision,setToolRevision]=useState(0);
+  const toolControls=useMemo(()=>new WritingToolControls(()=>{if(mounted.current)setToolRevision(value=>value+1);}),[]);
+  const registerToolControl=useCallback((key,control)=>toolControls.register(key,control),[toolControls]);
   latest.current={workspace,resourceRef,resource,snapshot,writable,onChanged,onStatus,selectedScene,panel,translate:t};
   const report=useCallback(error=>{if(mounted.current)setError(error);},[]);
   const fetchResource=useCallback(async(ref,data)=>{
@@ -63,36 +68,43 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     persistence.current=instance;setSnapshot(instance.snapshot());await instance.discover();return data;
   },[transport,fetchResource,journal,slug,me.actor_id,epId,writable,report]);
   useEffect(()=>{mounted.current=true;taskAbort.current=new AbortController();load({kind:'working'}).catch(report);return()=>{mounted.current=false;loadSequence.current++;persistence.current?.dispose();taskAbort.current.abort();};},[load,report]);
-  const flush=useCallback(async(options)=>persistence.current?await persistence.current.flush(options):!!latest.current.resource,[ ]);
+  // Tool callers get this manuscript-only boundary: previews must not submit unrelated forms.
+  const flushDocument=useCallback(async(options={})=>persistence.current?await persistence.current.flush(options.reason==='identity'?{...options,requireServer:true}:options):!!latest.current.resource,[]);
+  const flush=useCallback(async(options={})=>{
+    const documentSafe=await flushDocument(options);
+    if(options.requireServer&&options.reason!=='identity')return documentSafe;
+    const toolsSafe=await toolControls.flush(options);return documentSafe&&toolsSafe;
+  },[flushDocument,toolControls]);
   const selectResource=async ref=>{setSwitching(true);try{if(await flush()){setError(null);return await load(ref);}}catch(error){report(error);}finally{setSwitching(false);}};
   const navigateShots=useCallback(async value=>{if(await flush()&&mounted.current)await onStage?.(value);},[flush,onStage]);
   const navigateSource=useCallback(async ref=>{
     let data=latest.current.workspace;
     if(latest.current.resourceRef.kind!=='working'){if(!await flush())return;try{setSwitching(true);data=await load({kind:'working'});}catch(error){report(error);return;}finally{setSwitching(false);}}
     const scene=(data?.structure?.scenes || []).find(scene=>scene.sceneKey===ref.sceneKey);
-    if(!scene)return;setSelectedScene(scene.sceneKey);setFocusBid((scene.beats || []).find(beat=>beat.beatKey===ref.beatKey)?.blockBids?.[0] || scene.headingBid);
+    if(!scene){report(new Error(latest.current.translate(p+'sourceNotInWorking')));return false;}setSelectedScene(scene.sceneKey);setFocusBid((scene.beats || []).find(beat=>beat.beatKey===ref.beatKey)?.blockBids?.[0] || scene.headingBid);
   },[flush,load,report]);
   const workspaceReady=!!workspace;
   useEffect(()=>{if(focusSource&&workspaceReady)navigateSource(focusSource);},[focusSource,workspaceReady,navigateSource]);
   useEffect(()=>{
     if(!controlRef)return;
-    const instance={flush,isDirty:()=>!!persistence.current?.isDirty(),recoveryState:()=>persistence.current?.recoveryState() || {state:'readonly',recoverable:false},consoleContext:()=>({episodeId:epId,sourceRef:latest.current.resourceRef,sceneKeys:latest.current.selectedScene?[latest.current.selectedScene]:[],docHash:persistence.current?.base.docHash || latest.current.resource?.docHash}),focusSource:navigateSource};
+    const summary=()=>toolControls.summary(persistence.current?.snapshot() || {state:'readonly',dirty:false,recoverable:false});
+    const instance={flush,isDirty:()=>summary().dirty,recoveryState:()=>summary(),consoleContext:()=>({episodeId:epId,sourceRef:latest.current.resourceRef,sceneKeys:latest.current.selectedScene?[latest.current.selectedScene]:[],docHash:persistence.current?.base.docHash || latest.current.resource?.docHash}),focusSource:navigateSource};
     controlRef.current=instance;return()=>{if(controlRef.current===instance)controlRef.current=null;};
-  },[controlRef,epId,flush,navigateSource]);
-  useEffect(()=>{if(snapshot)onStatus?.({state:snapshot.state,dirty:snapshot.dirty,recoverable:snapshot.recoverable,docHash:snapshot.docHash});},[snapshot,onStatus]);
+  },[controlRef,epId,flush,navigateSource,toolControls]);
+  useEffect(()=>{if(snapshot)onStatus?.({...toolControls.summary(snapshot),docHash:snapshot.docHash});},[snapshot,onStatus,toolControls,toolRevision]);
   useEffect(()=>{
-    const unload=event=>{const current=persistence.current;if(current?.isDirty()&&!current.recoveryState().recoverable){event.preventDefault();event.returnValue='';}};
+    const unload=event=>{const state=toolControls.summary(persistence.current?.snapshot());if(state.dirty&&!state.recoverable){event.preventDefault();event.returnValue='';}};
     const reconnect=()=>{if(persistence.current?.state==='local_only')persistence.current.save();};
     window.addEventListener('beforeunload',unload);window.addEventListener('online',reconnect);
     return()=>{window.removeEventListener('beforeunload',unload);window.removeEventListener('online',reconnect);};
-  },[]);
+  },[toolControls]);
   useEffect(()=>{
     if(!globalThis.BroadcastChannel)return;
     const channel=new BroadcastChannel('zerofield-writing-'+JSON.stringify([slug,me.actor_id,epId,refKey(resourceRef)]));
     channel.onmessage=event=>{if(event.data.tabId!==tabId.current){setDuplicate(true);if(event.data.kind==='hello')channel.postMessage({kind:'present',tabId:tabId.current});}};
     channel.postMessage({kind:'hello',tabId:tabId.current});return()=>channel.close();
   },[slug,me.actor_id,epId,resourceRef]);
-  const requireServer=async()=>{if(!await flush({requireServer:true}))throw new Error(t(p+'serverSaveRequired'));};
+  const requireServer=async()=>{if(!await flushDocument({requireServer:true}))throw new Error(t(p+'serverSaveRequired'));};
   const run=async fn=>{if(busy)return;setBusy(true);setError(null);try{await fn();}catch(error){report(error);}finally{if(mounted.current)setBusy(false);}};
   const post=async(tail,body)=>{
     const retry=writingAction(transport,tail,body);actionRetry.current=async()=>{const result=await retry();if(tail==='previews'){setPreview(result);setPanel('preview');}else if(tail.endsWith('/apply')){setPreview(null);setPanel(null);}return result;};
@@ -102,8 +114,21 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   const previewStructure=operation=>run(async()=>{await requireServer();const current=await transport('workspace');const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation});setPreview(result);setPanel('preview');});
   const metadata=(scenePatch,lanePatch)=>run(async()=>{await requireServer();const result=await transport('structure/metadata','PATCH',{baseVersion:structure.version,clientMutationId:mutationId(),scenePatches:scenePatch?[scenePatch]:[],lanePatches:lanePatch?[lanePatch]:[]});await reload();if(mounted.current)onChanged?.(result);});
   const apply=async selection=>{
-    await requireServer();const result=await post(`previews/${encodeURIComponent(preview.previewId)}/apply`,{expectedPreviewVersion:preview.version,selection});
+    await requireServer();
+    let active=preview;
+    if(preview.kind==='impact'){
+      active=await transport(`previews/${encodeURIComponent(preview.previewId)}`);setPreview(active);
+      if(active.status!=='pending'||active.expiresAt*1000<=Date.now())throw new Error(t(p+'stalePreview'));
+      selection=impactSelection(active,selection.actions);
+    }
+    const result=await post(`previews/${encodeURIComponent(active.previewId)}/apply`,{expectedPreviewVersion:active.version,selection});
     structureUndo.current=preview.kind==='structure'&&result.beforeVersionId ? {snapshotId:result.beforeVersionId,docHash:result.docHash,structureHash:result.structure?.structureHash} : null;setPreview(null);setPanel(null);if(['promotion','adaptation'].includes(preview.kind))await load({kind:'working'});else await reload();if(mounted.current)onChanged?.(result);
+  };
+  const previewImpact=async options=>{
+    await requireServer();
+    const target=options.targetRef.kind==='working'?await transport('workspace'):await transport(`versions/${encodeURIComponent(options.targetRef.id)}`);
+    const body=impactRequest({...options,expectedSourceHash:target.docHash || target.snapshot?.docHash});
+    const result=await post('previews',body);setPreview(result);setPanel('preview');
   };
   const adaptation=()=>run(async()=>{await requireServer();const current=persistence.current.base;const result=await post('previews',{kind:'adaptation',sourceRef:resourceRef,expectedSourceHash:current.docHash,targetDocHash:workspace.docHash,targetScenes:4,breakdownMode:'auto',...(current.composition || {})});setPreview(result);setPanel('preview');await reload();});
   const buildText=()=>run(async()=>{await requireServer();const action=createTextStoryboardAction(request,epId,{breakdownMode:ep?.settings?.breakdownMode || 'auto',signal:taskAbort.current.signal});actionRetry.current=async()=>{const result=await action();if(!mounted.current)return result;await onChanged?.(result);await reload();if(mounted.current)onStage?.({shotIds:[]});return result;};await actionRetry.current();actionRetry.current=null;});
@@ -124,7 +149,8 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   const doc=snapshot.doc,scene=selectedScene?structure.scenes?.find(scene=>scene.sceneKey===selectedScene):null;
   const shown=scene?sceneBlocks(doc,scene):doc,baseline=baselineState(workspace);
   const editable=!!writable&&!switching&&resourceRef.kind!=='version'&&!resource.locked&&!snapshot.recoveries?.length&&!['conflict','auth_lost'].includes(snapshot.state);
-  const toolProps={slug,epId,me,writable,workspace,resourceRef,selectedSceneKeys:selectedScene?[selectedScene]:[],selectedSubjectId:null,transport,flush,reload,onNavigateSource:navigateSource,onNavigateShots:navigateShots,onError:report,onChanged};
+  const aggregate=toolControls.summary(snapshot),toolSummary=toolControls.summary();
+  const toolProps={slug,epId,me,writable,workspace,resourceRef,selectedSceneKeys:selectedScene?[selectedScene]:[],selectedSubjectId:null,transport,flush:flushDocument,registerToolControl,reload,onNavigateSource:navigateSource,onNavigateShots:navigateShots,onError:report,onChanged};
   return <section className={`authoring-workspace${focus?' writing-focus':''}`} onKeyDown={keyboard} style={{'--writing-font':fontSize+'px','--writing-line-height':lineHeight,'--writing-width':pageWidth+'px'}}>
     <header className="writing-toolbar">
       <label>{t(p+'manuscript')}<select aria-label={t(p+'manuscript')} value={refKey(resourceRef)} onChange={event=>{const [kind,value]=event.target.value.split(':');selectResource(kind==='working'?{kind}:kind==='source'?{kind,mode:value}:{kind,id:value});}}>
@@ -156,15 +182,17 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
       </main>
       <aside className="writing-right" hidden={!panel}>
         {panel&&<button type="button" onClick={()=>setPanel(null)}>{t(p+'closePanel')}</button>}
-        {panel==='versions'&&<WritingVersions workspace={workspace} resourceRef={resourceRef} resource={()=>persistence.current?.base || resource} writable={writable} transport={transport} flush={flush} reload={reload} onSelect={selectResource} onPreview={result=>{setPreview(result);setPanel('preview');}} onError={report}/>}
-        {panel==='preview'&&preview&&<WritingPreview key={preview.previewId} preview={preview} shots={shots} writable={writable} onApply={apply} onClose={()=>setPanel(null)} onShots={navigateShots} onSource={navigateSource}/>}
+        {panel==='versions'&&<WritingVersions workspace={workspace} resourceRef={resourceRef} resource={()=>persistence.current?.base || resource} writable={writable} transport={transport} flush={flushDocument} reload={reload} onSelect={selectResource} onPreview={result=>{setPreview(result);setPanel('preview');}} onError={report}/>}
+        {panel==='impact'&&<WritingImpactSetup key={refKey(resourceRef)} targetRef={resourceRef.kind==='version'?{kind:'version',id:resourceRef.id}:{kind:'working'}} structure={resourceRef.kind==='version'?resource.structure:structure} shots={shots} confirmBaseline={!!workspace.baseline?.scriptDirty || !workspace.baseline?.versionId} writable={writable} onPreview={previewImpact}/>}
+        {panel==='preview'&&preview&&<WritingPreview key={preview.previewId} preview={preview} shots={shots} writable={writable} onApply={apply} onClose={()=>setPanel(null)} onShots={navigateShots} onSource={navigateSource} onRevise={preview.kind==='impact'?()=>setPanel('impact'):undefined} onRefresh={preview.kind==='impact'?async()=>{const fresh=await transport(`previews/${encodeURIComponent(preview.previewId)}`);setPreview(fresh);}:undefined}/>}
         {/* Keep tool/editor instances alive through panel toggles. */}
         {renderTools&&<div hidden={panel!=='tools'}>{renderTools(toolProps)}</div>}
       </aside>
     </div>
     <footer className="writing-status"><span role="status" aria-live="polite">{t(p+semanticEnumKey('state',snapshot.state))}{snapshot.savedAt&&snapshot.state==='saved'?' · '+new Date(snapshot.savedAt).toLocaleTimeString():''}</span>
+      {aggregate.tools.some(item=>item.dirty||item.recoverable)&&<span data-writing-tool-status="true">{t(p+'toolDraftStatus',{state:t(p+semanticEnumKey('state',toolSummary.state))})}</span>}
       <span title={t(p+'wordCountRule')}>{t(p+'counts',counts)}</span><span>{t(p+semanticEnumKey('baseline',baseline.kind),{name:baseline.name})}{baseline.dirty?' · '+t(p+'scriptChanged'):''}</span>
-      {writable&&resourceRef.kind==='source'?<button type="button" className="writing-primary" disabled={busy || !editable} onClick={adaptation}>{t(p+'previewAdaptation')}</button>:resourceRef.kind==='working'&&<button type="button" className="writing-primary" disabled={busy||!writable||!!shots.length&&!impactContractValidated} title={shots.length&&!impactContractValidated?t(p+'impactUnavailable'):undefined} onClick={shots.length?undefined:buildText}>{t(p+(shots.length?'reviewImpact':'confirmAndBuild'))}</button>}
+      {writable&&resourceRef.kind==='source'?<button type="button" className={panel?undefined:'writing-primary'} disabled={busy || !editable} onClick={adaptation}>{t(p+'previewAdaptation')}</button>:['working','version'].includes(resourceRef.kind)&&<button type="button" className={panel?undefined:'writing-primary'} disabled={busy||!writable} onClick={shots.length||resourceRef.kind==='version'?()=>setPanel('impact'):buildText}>{t(p+(shots.length||resourceRef.kind==='version'?'reviewImpact':'confirmAndBuild'))}</button>}
       <button type="button" onClick={()=>navigateShots({shotIds:[]})}>{t(p+'goToStage')}</button>
     </footer>
   </section>;
