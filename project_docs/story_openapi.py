@@ -1729,6 +1729,10 @@ def handle(handler, parsed, method):
                 refused = http._write_allowed(handler)
                 if refused:
                     raise StoryError(400, "DRAMA_REQUEST_FAILED", refused)
+        # Bound authoring callers also use legacy tools. Check their expectation before
+        # body-driven work, early responses or idempotency replay; header-less clients
+        # keep the existing legacy contract. Authentication and CSRF remain independent.
+        writing_http.validate_expected_actor(handler, me.actor_id)
         path = parsed.path[len(BASE):] or "/"
         body, raw = {}, b""
         is_file = path == "/files" and method == "POST"
