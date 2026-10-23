@@ -162,6 +162,194 @@ class WritingHTTPTests(unittest.TestCase):
         text=story.doc_text(self.writing('workspace')['doc']);self.assertIn('New Alpha',text);self.assertNotIn('New Beta',text)
         self.assertTrue(applied['beforeVersionId'])
 
+    def test_limits_settings_and_historical_baseline_are_not_fabricated(self):
+        self.init();self.save_doc(document('Scene 01: First','Before'))
+        self.ok(f'/episodes/{self.ep}/asset-extractions','POST',{})
+        first=self.writing('workspace')['baseline']['versionId']
+        self.save_doc(document('Scene 01: First','After'))
+        current=self.writing('workspace');self.assertEqual(current['baseline']['versionId'],first)
+        scope=store.scope_for(self.conn,service.Identity(self.actor,'Test','admin'),self.ep,write=True)
+        from project_docs import writing_versions
+        with self.assertRaises(story.StoryError): writing_versions.confirm_baseline(self.conn,scope,expected_doc_hash=current['docHash'])
+        self.conn.rollback()
+        self.assertEqual(self.writing('workspace')['baseline']['versionId'],first)
+        self.ok(f'/episodes/{self.ep}/asset-extractions','POST',{})
+        second=self.writing('workspace')['baseline']['versionId'];self.assertNotEqual(first,second)
+        self.error('versions/'+first,'PATCH',{'baseCatalogVersion':1,'clientMutationId':'historic-unlock','locked':False},409)
+        self.error('sources/idea','PUT',{'baseVersion':0,'clientMutationId':'too-long','doc':document('x'*500001),'structure':{},'composition':{}},413)
+        self.assertIsNone(self.writing('sources/idea'))
+
+    def test_scopes_locked_branches_and_catalog_snapshot_privacy(self):
+        self.init();source=self.writing('sources/novel','PUT',{'baseVersion':0,'clientMutationId':'private-original','doc':document('Private original material'),'structure':{},'composition':{'mediumLens':'cinema','genreLens':'general','choiceTrace':{'focus':'restraint','extraCondition':'private choice'}}})
+        self.error('versions','POST',{'name':'Not shared','sourceRef':{'kind':'source','mode':'novel'},'expectedSourceHash':source['docHash'],'share':True},422)
+        ws=self.writing('workspace');branch=self.writing('branches','POST',{'sourceRef':{'kind':'working'},'name':'Private branch','expectedSourceHash':ws['docHash']})
+        locked=self.writing('branches/'+branch['branchId'],'PATCH',{'baseVersion':1,'clientMutationId':'lock','locked':True})
+        self.error('branches/'+branch['branchId'],'PUT',{'baseVersion':locked['version'],'clientMutationId':'overwrite','doc':document('Forbidden'),'structure':{}},409)
+        version=self.writing('versions','POST',{'name':'Shared selected script','sourceRef':{'kind':'branch','id':branch['branchId']},'expectedSourceHash':branch['docHash'],'share':True})
+        self.assertNotIn('Private original material',json.dumps(version))
+        self.assertNotIn('private choice',json.dumps(version))
+        self.assertNotIn('snapshot',self.writing('versions')['items'][0])
+        other=self.ok('/projects','POST',{'title':'Other production'});self.extra_projects.append(other['slug'])
+        other_ep=f'ep_{other["slug"]}_01'
+        self.assertEqual(self.call(f'/episodes/{other_ep}/writing/branches/{branch["branchId"]}')[0],404)
+        self.assertEqual(self.call(f'/episodes/{other_ep}/writing/versions/{version["versionId"]}')[0],404)
+
+    def test_browser_cookie_csrf_is_checked_before_replay(self):
+        self.init();ws=self.writing('workspace')
+        body={'sourceRef':{'kind':'working'},'name':'Cookie branch','expectedSourceHash':ws['docHash']}
+        code,_,headers=self.request('/login',method='POST',raw=('token='+self.member_token).encode(),authenticated=False,headers={'Content-Type':'application/x-www-form-urlencoded'})
+        self.assertEqual(code,303)
+        cookie=headers['Set-Cookie'].split(';')[0]
+        path=story.BASE+f'/episodes/{self.ep}/writing/branches'
+        headers={'Cookie':cookie,'Idempotency-Key':'cookie-create'}
+        code,payload,_=self.request(path,method='POST',data=body,authenticated=False,headers=headers)
+        self.assertEqual(code,200,payload)
+        headers['Origin']='https://foreign.invalid'
+        self.assertEqual(self.request(path,method='POST',data=body,authenticated=False,headers=headers)[0],403)
+
+    def test_readonly_gets_do_not_initialize_and_blank_saves_are_real(self):
+        for tail in ('workspace','structure','sources/idea','branches','versions'):
+            self.writing(tail)
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM projectops.story_record WHERE project_slug=%s AND kind LIKE 'writing_%%'",(self.slug,))
+            self.assertEqual(cur.fetchone()[0],0)
+        self.init()
+        ack=self.save_doc(document(''))
+        self.assertEqual(story.doc_text(ack['doc']),'')
+        self.assertEqual(self.writing('workspace')['docHash'],ack['docHash'])
+        self.assertEqual(self.call(f'/episodes/{self.ep}/asset-extractions','POST',{})[0],422)
+
+    def test_block_mutation_identity_and_concurrent_conflicts(self):
+        self.init();self.save_doc(document('Scene 01: Room','Alpha','Beta'))
+        ws=self.writing('workspace');base=ws['doc']['content'][1];node=copy.deepcopy(base);node['content'][0]['text']='Updated'
+        body={'ops':[{'op':'put','bid':structure.bid(base),'base':base,'node':node}],'clientMutationId':'same-text-action','session_id':'coalesce'}
+        first=self.writing('script/ops','POST',body)
+        self.assertEqual(self.writing('script/ops','POST',body),first)  # distinct POST keys, same text mutation identity
+        altered=copy.deepcopy(body);altered['ops'][0]['node']['content'][0]['text']='Different body'
+        self.error('script/ops','POST',altered,409)
+        base=self.writing('workspace')['doc']['content'][2]
+        barrier=threading.Barrier(2);responses=[]
+        def save(number):
+            node=copy.deepcopy(base);node['content'][0]['text']='Concurrent '+str(number)
+            request={'ops':[{'op':'put','bid':structure.bid(base),'base':base,'node':node}],'clientMutationId':str(number),'session_id':'parallel'}
+            barrier.wait();responses.append(self.call(f'/episodes/{self.ep}/writing/script/ops','POST',request,{'Idempotency-Key':'parallel-'+str(number)}))
+        threads=[threading.Thread(target=save,args=(i,)) for i in range(2)]
+        for thread in threads: thread.start()
+        for thread in threads: thread.join(15)
+        self.assertEqual([r[0] for r in responses],[200,200])
+        self.assertEqual(sorted(r[1]['data']['applied'] for r in responses),[0,1])
+        self.assertEqual(sum(bool(r[1]['data']['conflicts']) for r in responses),1)
+
+    def test_stale_preview_and_locks_do_not_partially_adopt(self):
+        self.init();self.save_doc(document('Scene 01: A','Alpha','Scene 02: B','Beta'))
+        ws=self.writing('workspace');branch=self.writing('branches','POST',{'sourceRef':{'kind':'working'},'name':'Alternate','expectedSourceHash':ws['docHash']})
+        edited=copy.deepcopy(branch['doc']);edited['content'][1]['content'][0]['text']='Alternate Alpha';edited['content'][3]['content'][0]['text']='Alternate Beta'
+        branch=self.writing('branches/'+branch['branchId'],'PUT',{'baseVersion':1,'clientMutationId':'branch-save','doc':edited,'structure':branch['structure']})
+        build={'kind':'promotion','sourceRef':{'kind':'branch','id':branch['branchId']},'expectedSourceHash':branch['docHash'],'targetDocHash':ws['docHash'],'whole':True}
+        preview=self.writing('previews','POST',build)
+        body={'expectedPreviewVersion':1,'selection':{'actions':[{'actionId':'whole','kind':'adopt_whole'}]}}
+        from project_docs import writing_service
+        original=repo.tab_locks
+        def locked(conn,slug,key):
+            return original(conn,slug,key)|{structure.bid(ws['doc']['content'][3]):'another-writer'}
+        before_count=len(self.writing('versions')['items'])
+        with patch.object(repo,'tab_locks',locked): self.error('previews/'+preview['previewId']+'/apply','POST',body,409)
+        self.assertEqual(self.writing('workspace')['docHash'],ws['docHash'])
+        self.assertEqual(len(self.writing('versions')['items']),before_count)
+        self.assertEqual(self.writing('previews/'+preview['previewId'])['status'],'pending')
+        self.ok(f'/episodes/{self.ep}/settings','PUT',{'aspectRatio':'9:16'})
+        self.error('previews/'+preview['previewId']+'/apply','POST',body,409)
+        self.assertTrue(self.writing('previews/'+preview['previewId'])['stale'])
+        # Even direct immutable helper access cannot mutate snapshot payloads.
+        version=self.writing('versions','POST',{'name':'Snapshot','sourceRef':{'kind':'working'},'expectedSourceHash':ws['docHash'],'share':True})
+        scope=store.scope_for(self.conn,service.Identity(self.actor,'Test','admin'),self.ep,write=True)
+        with self.assertRaises(story.StoryError): store.cas_record(self.conn,scope,'writing_version',version['versionId'],base_version=1,changes={'snapshot':{}})
+        self.conn.rollback()
+
+    def test_candidate_survives_preview_expiry_and_source_composition_stales(self):
+        self.init();source=self.writing('sources/novel','PUT',{'baseVersion':0,'clientMutationId':'novel','doc':document('A keeper enters the station.'),'structure':{},'composition':{}})
+        ws=self.writing('workspace')
+        preview=self.writing('previews','POST',{'kind':'adaptation','sourceRef':{'kind':'source','mode':'novel'},'expectedSourceHash':source['docHash'],'targetDocHash':ws['docHash']})
+        self.writing('sources/novel','PUT',{'baseVersion':1,'clientMutationId':'lens','doc':source['doc'],'structure':{},'composition':{'mediumLens':'cinema','genreLens':'suspense'}})
+        self.assertTrue(self.writing('previews/'+preview['previewId'])['stale'])
+        self.error('previews/'+preview['previewId']+'/apply','POST',{'expectedPreviewVersion':1,'selection':{'actions':[{'actionId':'whole','kind':'adopt_whole'}]}},409)
+        with self.conn.cursor() as cur:
+            cur.execute("UPDATE projectops.story_record SET data=jsonb_set(data,'{expiresAt}','0') WHERE id=%s",(preview['previewId'],))
+        self.conn.commit()
+        self.error('previews/'+preview['previewId'],'GET',None,409)
+        self.assertEqual(self.writing('branches/'+preview['candidateBranchId'])['version'],1)
+
+    def test_structure_add_split_merge_delete_and_legacy_reorder(self):
+        self.init();self.save_doc(document('Scene 01: A','First','Second','Scene 02: B','Third'))
+        def operation(value):
+            ws=self.writing('workspace')
+            preview=self.writing('previews','POST',{'kind':'structure','targetDocHash':ws['docHash'],'structureVersion':ws['structure']['version'],'operation':value})
+            return self.writing('previews/'+preview['previewId']+'/apply','POST',{'expectedPreviewVersion':1,'selection':{'actions':[{k:a[k] for k in ('actionId','kind')} for a in preview['allowedActions']]}})
+        ws=self.writing('workspace');first=ws['structure']['scenes'][0]
+        result=operation({'type':'split','sceneKey':first['sceneKey'],'atBid':first['blockBids'][1],'title':'New half'})
+        self.assertFalse(self.writing('workspace')['structure']['stale'])
+        self.assertEqual(result['structure']['scenes'][0]['sceneKey'],first['sceneKey'])
+        split_key=result['structure']['scenes'][1]['sceneKey']
+        result=operation({'type':'merge','sceneKeys':[first['sceneKey'],split_key],'keepSceneKey':first['sceneKey']})
+        self.assertEqual(result['structure']['scenes'][0]['sceneKey'],first['sceneKey'])
+        result=operation({'type':'add','afterSceneKey':first['sceneKey'],'title':'New scene'})
+        new_key=result['structure']['scenes'][1]['sceneKey']
+        self.assertFalse(self.writing('workspace')['structure']['stale'])
+        result=operation({'type':'remove','sceneKey':new_key})
+        self.assertTrue(any(t.get('sceneKey')==new_key for t in result['structure']['tombstones']))
+        before=self.writing('workspace')['structure']['scenes'];old_keys=[s['sceneKey'] for s in before]
+        ep=story.episode(self.conn,self.ep)
+        items=list(reversed(story.scenes(self.conn,ep)))
+        story.write_scenes(self.conn,service.Identity(self.actor,'Test','admin'),ep,items)
+        self.conn.commit()
+        after=self.writing('workspace')['structure']
+        self.assertFalse(after['stale'])
+        self.assertEqual([s['sceneKey'] for s in after['scenes']],list(reversed(old_keys)))
+
+    def test_raw_binary_feature_slots_and_successful_null_replay(self):
+        import types
+        import sys
+        from project_docs.writing_http import BinaryResponse
+        observed=[]
+        def files_dispatch(conn,scope,method,tail,body,query,*,raw=None,headers=None):
+            observed.append((tail,raw,dict(headers or {})))
+            self.assertNotIn('Authorization',headers or {})
+            if tail=='imports':
+                store.lock_project(conn,scope)
+                return store.create_preview(conn,scope,'import',{'uploadHash':store.hash_value(list(raw)),'allowedActions':[],'sourceFingerprints':[],'targetFingerprints':[]})
+            if tail=='exports':
+                store.lock_project(conn,scope)
+                identifier='wexp_'+uuid.uuid4().hex
+                return store.insert_record(conn,scope,'writing_export',identifier,{'exportId':identifier,'sourceRef':body['sourceRef'],'expiresAt':time.time()+1800})
+            if tail.endswith('/content'):
+                return BinaryResponse(b'<html><body>&lt;script&gt;</body></html>','text/html; charset=utf-8',headers={'Content-Disposition':'inline; filename="safe.html"'})
+            return store.UNHANDLED
+        tools_calls=[]
+        def tools_dispatch(*args,**kwargs): tools_calls.append(1);return None
+        modules={'project_docs.writing_files':types.SimpleNamespace(dispatch=files_dispatch),'project_docs.writing_tools':types.SimpleNamespace(dispatch=tools_dispatch)}
+        self.init();ws=self.writing('workspace')
+        with patch.dict(sys.modules,modules):
+            path=story.BASE+f'/episodes/{self.ep}/writing/imports'
+            headers={'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','X-File-Name':'novel.docx','X-File-Purpose':'novel','Idempotency-Key':'raw-import'}
+            code,payload,_=self.request(path,method='POST',raw=b'PK synthetic raw fixture',headers=headers)
+            self.assertEqual(code,200,payload);self.assertTrue(payload['data']['previewId'])
+            self.assertEqual(observed[0][1],b'PK synthetic raw fixture')
+            self.assertEqual(self.request(path,method='POST',raw=b'PK synthetic raw fixture',headers=headers)[0],200)
+            self.assertEqual(len(observed),1)
+            self.assertEqual(self.request(path,method='POST',raw=b'changed',headers=headers)[0],409)
+            repo.upsert_member(self.conn,self.actor,'Viewer','viewer');self.conn.commit()
+            self.assertIsNone(self.writing('search','POST',{'query':'x'},key='null-search'))
+            self.assertIsNone(self.writing('search','POST',{'query':'x'},key='null-search'))
+            self.assertEqual(len(tools_calls),1)
+            export=self.writing('exports','POST',{'sourceRef':{'kind':'working'},'expectedHash':ws['docHash'],'format':'print','include':{}},key='export')
+            code,body,headers=self.request(story.BASE+f'/episodes/{self.ep}/writing/exports/{export["exportId"]}/content')
+            self.assertEqual(code,200);self.assertIsInstance(body,bytes)
+            self.assertEqual(headers['Cache-Control'],'private, no-store')
+            self.assertIn("default-src 'none'",headers['Content-Security-Policy'])
+            from project_assistant import store as assistant_store
+            assistant_store.set_member_enabled(self.conn,self.slug,self.actor,False,self.actor);self.conn.commit()
+            self.assertEqual(self.request(story.BASE+f'/episodes/{self.ep}/writing/exports/{export["exportId"]}/content')[0],403)
+
     def test_viewer_read_post_exceptions_and_private_owner(self):
         self.init();ws=self.writing('workspace')
         branch=self.writing('branches','POST',{'sourceRef':{'kind':'working'},'name':'Private','expectedSourceHash':ws['docHash']})

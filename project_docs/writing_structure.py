@@ -41,6 +41,7 @@ def _content_hash(nodes):
 
 def reconcile_structure(doc, previous, *, lineage=None):
     doc=store.checked_doc(doc)
+    document_hash=store.doc_hash(doc)
     previous=previous or {}
     old=previous.get('scenes',[])
     parts=sections(doc)
@@ -64,7 +65,7 @@ def reconcile_structure(doc, previous, *, lineage=None):
         if explicit:
             candidates=[s for s in old if s['sceneKey']==explicit and s['sceneKey'] not in used_s]
         matched=candidates[0] if len(candidates)==1 else None
-        key=matched['sceneKey'] if matched else 'wsc_'+uuid.uuid4().hex
+        key=matched['sceneKey'] if matched else 'wsc_'+uuid.uuid5(uuid.NAMESPACE_URL,'writing-scene:'+document_hash+':'+str(heading_bid or [bid(n) for n in part['nodes']])).hex
         used_s.add(key)
         scene={k:copy.deepcopy(v) for k,v in (matched or {}).items() if k in ('summary','storyTime','act','plot','foreshadowing','payoff')}
         scene.update(sceneKey=key,headingBid=heading_bid,blockBids=[bid(n) for n in part['nodes']],
@@ -80,7 +81,7 @@ def reconcile_structure(doc, previous, *, lineage=None):
             if explicit:
                 candidates=[b for b in all_beats if b['beatKey']==explicit and b['beatKey'] not in used_b]
             matched_b=candidates[0] if len(candidates)==1 else None
-            bkey=matched_b['beatKey'] if matched_b else 'wbt_'+uuid.uuid4().hex
+            bkey=matched_b['beatKey'] if matched_b else 'wbt_'+uuid.uuid5(uuid.NAMESPACE_URL,'writing-beat:'+document_hash+':'+str(bid(node))).hex
             used_b.add(bkey)
             scene['beats'].append({'beatKey':bkey,'blockBids':[bid(node)],'textHash':store.hash_value(node_text(node)),
                 'contentHash':content,'mapping':'exact' if matched_b or not old else 'unresolved'})
@@ -94,13 +95,13 @@ def reconcile_structure(doc, previous, *, lineage=None):
             if b['beatKey'] not in used_b and b['beatKey'] not in existing:
                 tombstones.append({'beatKey':b['beatKey'],'sceneKey':s['sceneKey'],'reason':'source_removed'})
     result={'scenes':output,'lanes':copy.deepcopy(previous.get('lanes',[])), 'tombstones':tombstones,
-        'lineage':copy.deepcopy(previous.get('lineage',{}))|lineage,'docHash':store.doc_hash(doc)}
+        'lineage':copy.deepcopy(previous.get('lineage',{}))|lineage,'legacyBindings':copy.deepcopy(previous.get('legacyBindings',[])),'docHash':document_hash}
     result['structureHash']=fingerprint(result)
     return result
 
 
 def fingerprint(value):
-    return store.hash_value({k:value.get(k,[]) for k in ('scenes','lanes','tombstones','lineage')})
+    return store.hash_value({k:value.get(k,[]) for k in ('scenes','lanes','tombstones','lineage','legacyBindings')})
 
 
 def read_structure(conn, scope):
@@ -108,6 +109,7 @@ def read_structure(conn, scope):
     saved=store.get_record(conn,scope,'writing_structure',identifier(scope),required=False)
     stale=bool(saved and saved['docHash']!=store.doc_hash(doc))
     result=reconcile_structure(doc,saved) if not saved or stale else copy.deepcopy(saved)
+    result.setdefault('legacyBindings',[])
     for scene in result['scenes']:
         scene['legacySceneId']=f"sc_{scope.slug}_{scope.episode['episodeIndex']:02d}_S{scene['order']:02d}"
     # Legacy compatibility IDs are derived, never identity/freshness authority.
@@ -117,7 +119,7 @@ def read_structure(conn, scope):
 
 
 def persist(conn, scope, value, *, base_version=None):
-    data={k:copy.deepcopy(value[k]) for k in ('docHash','scenes','lanes','tombstones','lineage','structureHash')}
+    data={k:copy.deepcopy(value.get(k,[]) if k=='legacyBindings' else value[k]) for k in ('docHash','scenes','lanes','tombstones','lineage','legacyBindings','structureHash')}
     data['structureHash']=fingerprint(data)
     saved=store.get_record(conn,scope,'writing_structure',identifier(scope),required=False,lock=True)
     if saved:
@@ -133,7 +135,12 @@ def initialize(conn, scope, expected_doc_hash):
     if store.doc_hash(doc)!=expected_doc_hash: store.fail()
     saved=store.get_record(conn,scope,'writing_structure',identifier(scope),required=False)
     if not saved or saved['docHash']!=expected_doc_hash:
-        persist(conn,scope,read_structure(conn,scope))
+        current=read_structure(conn,scope)
+        if not saved:
+            by_legacy={s['legacySceneId']:s['sceneKey'] for s in current['scenes']}
+            current['legacyBindings']=[{'shotId':shot['shotId'],'sceneKey':by_legacy.get(shot.get('sceneId')),
+                'mapping':'scene_only' if shot.get('sceneId') in by_legacy else 'unresolved'} for shot in story.shots(conn,scope.episode)]
+        persist(conn,scope,current)
     return read_structure(conn,scope)
 
 
@@ -143,6 +150,8 @@ def metadata_patch(conn, scope, body):
     if not current['initialized'] or current['stale'] or current['version']!=body['baseVersion']:
         store.fail(message='Initialize or reload the current structure before editing metadata.')
     current=copy.deepcopy(current)
+    if any(not isinstance(body.get(k,[]),list) or len(body.get(k,[]))>1000 for k in ('scenePatches','lanePatches')):
+        story.invalid('Use bounded scene and lane patch arrays.')
     scenes={s['sceneKey']:s for s in current['scenes']}
     for patch in body.get('scenePatches',[]):
         store.fields(patch,{'sceneKey','summary','storyTime','act','plot','foreshadowing','payoff'},{'sceneKey'})
@@ -156,6 +165,8 @@ def metadata_patch(conn, scope, body):
     for patch in body.get('lanePatches',[]):
         store.fields(patch,{'laneId','name','order','remove'},{'laneId'})
         if patch.get('remove'): story.invalid('Lane deletion requires a structure preview.')
+        if not isinstance(patch['laneId'],str) or not 1<=len(patch['laneId'])<=128: story.invalid('Invalid lane ID.')
+        if 'order' in patch and (type(patch['order']) is not int or not 0<=patch['order']<=8): story.invalid('Invalid lane order.')
         lane=next((l for l in current['lanes'] if l['laneId']==patch['laneId']),None)
         if not lane:
             lane={'laneId':patch['laneId'],'name':'','order':len(current['lanes'])+1};current['lanes'].append(lane)
@@ -179,8 +190,14 @@ def build_preview(conn, scope, body):
         if key not in lookup: store.fail('MAPPING_REQUIRED')
         return lookup[key]
     typ=operation['type']
+    operation_fields={'add':{'afterSceneKey','title'},'move':{'sceneKey','afterSceneKey'},'remove':{'sceneKey'},
+        'split':{'sceneKey','atBid','title'},'merge':{'sceneKeys','keepSceneKey'},'remove_lane':{'laneId'},'restore':{'snapshotId'}}
+    if not isinstance(typ,str) or typ not in operation_fields: story.invalid('Unknown structure operation.')
+    store.fields(operation,operation_fields[typ]|{'type'})
     if typ=='add':
-        heading={'type':'heading','attrs':{'bid':new_id('b'),'level':2},'content':[{'type':'text','text':operation.get('title','Scene 01: New scene')}]}
+        title=operation.get('title','New scene')
+        if not isinstance(title,str) or not 1<=len(title.strip())<=200: story.invalid('Use a scene title of 1–200 characters.')
+        heading={'type':'heading','attrs':{'bid':new_id('b'),'level':2},'content':[{'type':'text','text':title if HEADING.match(title) else 'Scene 01: '+title}]}
         at=0 if operation.get('afterSceneKey') is None else index(operation['afterSceneKey'])+1
         groups.insert(at,{'heading':heading,'nodes':[]})
     elif typ=='move':
@@ -195,7 +212,9 @@ def build_preview(conn, scope, body):
         i=index(operation.get('sceneKey'));group=groups[i]
         at=next((j for j,n in enumerate(group['nodes']) if bid(n)==operation.get('atBid')),None)
         if at is None or at==0: story.invalid('Split at a body block after the first beat.')
-        heading={'type':'heading','attrs':{'bid':new_id('b'),'level':2},'content':[{'type':'text','text':operation.get('title','Scene 01: Split scene')}]}
+        title=operation.get('title','Split scene')
+        if not isinstance(title,str) or not 1<=len(title.strip())<=200: story.invalid('Use a scene title of 1–200 characters.')
+        heading={'type':'heading','attrs':{'bid':new_id('b'),'level':2},'content':[{'type':'text','text':title if HEADING.match(title) else 'Scene 01: '+title}]}
         groups.insert(i+1,{'heading':heading,'nodes':group['nodes'][at:]});group['nodes']=group['nodes'][:at]
         lineage[bid(heading)]='split:'+operation['sceneKey']
     elif typ=='merge':
@@ -218,9 +237,11 @@ def build_preview(conn, scope, body):
         first=next((i for i,n in enumerate(doc['content']) if HEADING.match(node_text(n))),len(doc['content']))
         preamble=doc['content'][:first] if any(g['heading'] for g in sections(doc)) else []
         doc['content']=preamble+[n for g in groups for n in ([g['heading']] if g['heading'] else [])+g['nodes']]
+    doc=store.checked_doc(doc,scope.slug)
     proposed=reconcile_structure(doc,current,lineage=lineage)
     return {'sourceFingerprints':[],'targetFingerprints':[{'sourceRef':{'kind':'working'},'docHash':target['docHash'],'structureHash':target['structureHash']}],
-        'allowedActions':[{'actionId':'structure','kind':typ}], 'proposedChanges':{'doc':doc,'structure':proposed,'operation':operation},'warnings':[]}
+        'allowedActions':[{'actionId':'structure','kind':typ}], 'proposedChanges':{'doc':doc,'structure':proposed,'operation':operation},
+        'warnings':['Automatic SC-prefixed shot labels follow scene order. Manually named shot labels retain their film order; review shot ordering separately.'] if typ=='move' else []}
 
 
 def apply_preview(conn, scope, preview, selection):
@@ -231,7 +252,9 @@ def apply_preview(conn, scope, preview, selection):
     store.insert_snapshot(conn,scope,version_id,snapshot,name='Before structure change',created_by=scope.actor_id)
     proposed=preview['proposedChanges']
     service.replace_working(conn,scope,proposed['doc'],expected_hash=before['docHash'])
-    result=persist(conn,scope,proposed['structure'])
+    actual=repo.get_tab(conn,scope.slug,scope.episode['tabKey'])['doc']
+    reconciled=reconcile_structure(actual,proposed['structure'])
+    result=persist(conn,scope,reconciled)
     # Remap only proven surviving stable keys, keeping rows/takes and shot identities.
     old_ids={s['legacySceneId']:s['sceneKey'] for s in before['structure']['scenes']}
     new_ids={s['sceneKey']:(f"sc_{scope.slug}_{scope.episode['episodeIndex']:02d}_S{i:02d}",i) for i,s in enumerate(result['scenes'],1)}

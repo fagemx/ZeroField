@@ -2,6 +2,7 @@
 from __future__ import annotations
 import copy
 import importlib
+import hashlib
 import re
 from project_docs import writing_store as store, writing_structure as structure, writing_versions as versions
 from project_docs import repository as repo, story_openapi as story, service
@@ -28,6 +29,10 @@ def authorize_references(conn, scope, value):
     if isinstance(value,list):
         for item in value: authorize_references(conn,scope,item)
     elif isinstance(value,dict):
+        if value.get('episodeId') and any(k in value for k in ('sourceRef','resourceRef')):
+            referenced=store.scope_for(conn,scope.me,value['episodeId'],credential_scope=scope.credential_scope)
+            if referenced.slug!=scope.slug: raise story.StoryError(404,'DRAMA_NOT_FOUND','Writing resource not found.')
+            scope=referenced
         for key,item in value.items():
             if key in ('sourceRef','leftRef','rightRef','targetRef') and isinstance(item,dict):
                 store.resolve_ref(conn,scope,item)
@@ -36,6 +41,8 @@ def authorize_references(conn, scope, value):
                 authorize_references(conn,scope,preview.get('sourceFingerprints',[]))
             elif key=='candidateBranchId' and isinstance(item,str):
                 store.get_record(conn,scope,'writing_branch',item)
+            elif key=='bibleIds' and isinstance(item,list):
+                for identifier in item: store.get_record(conn,scope,'writing_bible',identifier)
             else: authorize_references(conn,scope,item)
 
 
@@ -77,7 +84,9 @@ def _source_structure(value):
         count=0
         for item in items:
             store.fields(item,{'key','title','blockBids','sections','chapterKey','sectionKey' })
-            if not all(isinstance(x,str) for x in item.get('blockBids',[])): story.invalid('Invalid source block IDs.')
+            if not isinstance(item.get('blockBids',[]),list) or not all(isinstance(x,str) for x in item.get('blockBids',[])): story.invalid('Invalid source block IDs.')
+            if 'title' in item and (not isinstance(item['title'],str) or len(item['title'])>200): story.invalid('Invalid source section title.')
+            if any(not isinstance(item[k],str) or not 1<=len(item[k])<=128 for k in ('key','chapterKey','sectionKey') if k in item): story.invalid('Invalid source section key.')
             count+=1+walk(item['sections'],level+1) if 'sections' in item else 1
         return count
     if walk(value.get('chapters',[]))+walk(value.get('sections',[]))>1000:
@@ -115,7 +124,7 @@ def save_source(conn, scope, mode, body):
         result=store.insert_record(conn,scope,'writing_source',identifier,data|{'sourceId':identifier,'mode':mode})
     else:
         result=store.cas_record(conn,scope,'writing_source',identifier,base_version=body['baseVersion'],changes=data)
-    return result|{'clientMutationId':body['clientMutationId'],'savedAt':result['updatedAt']}
+    return {k:v for k,v in result.items() if k!='beforeCheckpoint'}|{'clientMutationId':body['clientMutationId'],'savedAt':result['updatedAt']}
 
 
 def save_script(conn, scope, body):
@@ -164,10 +173,14 @@ def replace_working(conn, scope, doc, *, expected_hash):
 
 
 def validate_fingerprints(conn, scope, preview):
+    from dataclasses import replace
+    live_scope=replace(scope,episode=story.episode(conn,scope.episode_id))
+    if 'productionInputsHash' in preview and store.hash_value(store.production_inputs(live_scope))!=preview['productionInputsHash']:
+        store.fail('PREVIEW_STALE','Production settings changed.')
     for frozen in preview.get('sourceFingerprints',[])+preview.get('targetFingerprints',[]):
         if 'sourceRef' not in frozen: continue  # feature owners validate shot/domain fingerprints
         current=store.resolve_ref(conn,scope,frozen['sourceRef'])
-        if any(key in frozen and current.get(key)!=frozen[key] for key in ('docHash','structureHash','version','productionInputsHash')):
+        if any(key in frozen and current.get(key)!=frozen[key] for key in ('docHash','structureHash','version','compositionHash','productionInputsHash')):
             store.fail('PREVIEW_STALE','The frozen source or target changed.')
 
 
@@ -177,23 +190,30 @@ def _selection(preview, selection):
     allowed={a['actionId']:a for a in preview.get('allowedActions',[])}
     seen=set()
     for action in selection['actions']:
-        store.fields(action,{'actionId','kind','fields'},{'actionId','kind'})
+        store.fields(action,{'actionId','kind','fields'},{'actionId'})
         identifier=action['actionId'];frozen=allowed.get(identifier)
-        if identifier in seen or not frozen or action['kind']!=frozen['kind']: story.invalid('Selection must be a subset of frozen actions.')
+        if identifier in seen or not frozen or ('kind' in action and action['kind']!=frozen.get('kind')): story.invalid('Selection must be a subset of frozen actions.')
         seen.add(identifier)
         if 'fields' in action:
             if not isinstance(action['fields'],list) or set(action['fields'])-set(frozen.get('fields',[])): story.invalid('Unknown frozen fields.')
     if preview['kind']=='structure' and len(selection['actions'])!=len(allowed): story.invalid('A structure operation is indivisible.')
 
 
-def build_preview(conn, scope, body):
-    kind=body.get('kind');proposal=preview_owner(kind).build_preview(conn,scope,body)
+def build_preview(conn, scope, body, *, prepared=None):
+    kind=body.get('kind')
+    proposal=preview_owner(kind).build_preview(conn,scope,body) if prepared is None else copy.deepcopy(prepared)
+    store.lock_project(conn,scope)
+    authorize_references(conn,scope,body)
+    candidate=proposal.pop('_candidateRecord',None)
+    if candidate:
+        store.insert_record(conn,scope,'writing_branch',proposal['candidateBranchId'],candidate)
+    validate_fingerprints(conn,scope,proposal)
     return store.create_preview(conn,scope,kind,proposal)
 
 
 def apply_preview(conn, scope, preview_id, body):
     store.fields(body,{'selection','expectedPreviewVersion'},{'selection','expectedPreviewVersion'})
-    preview=store.get_preview(conn,scope,preview_id,lock=True)
+    preview=store.get_preview(conn,scope,preview_id)
     if type(body['expectedPreviewVersion']) is not int or preview['version']!=body['expectedPreviewVersion'] or preview['status']!='pending': store.fail('PREVIEW_STALE')
     _selection(preview,body['selection']);validate_fingerprints(conn,scope,preview)
     result=preview_owner(preview['kind']).apply_preview(conn,scope,preview,body['selection'])
@@ -207,21 +227,49 @@ def dispatch(conn, scope, method, tail, body, query, *, raw=None, headers=None):
     mutation=method in ('POST','PUT','PATCH')
     resource=method+' /episodes/'+scope.episode_id+'/writing/'+tail
     identity=headers.get('Idempotency-Key') if method=='POST' else body.get('clientMutationId')
-    body_hash=store.hash_value(body) if raw is None else store.hash_value([store.hash_value(list(raw)),headers.get('X-File-Name'),headers.get('X-File-Purpose'),resource])
-    if mutation:
-        # One project lock precedes tab/metadata/receipt locks; this serializes create-only races too.
-        store.lock_project(conn,scope)
-        authorize_route(conn,scope,method,tail,body)
+    body_hash=store.hash_value(body) if raw is None else store.hash_value([hashlib.sha256(raw).hexdigest(),headers.get('X-Filename',headers.get('X-File-Name')),headers.get('X-Writing-Purpose',headers.get('X-File-Purpose')),resource])
+    def replay():
         cached=store.replay_receipt(conn,scope,resource,identity,body_hash)
         if cached is not None:
             authorize_references(conn,scope,cached)
             return cached
-    result=_dispatch(conn,scope,method,tail,body,query,raw=raw,headers=headers)
+        return None
+    if mutation:
+        cached=replay()
+        if cached is not None: return cached['value']
+    # Parse/diff proposals and readonly computation on fixed authorized inputs, before DB locks.
+    prepared=None
+    if method=='POST' and tail=='previews': prepared=preview_owner(body.get('kind')).build_preview(conn,scope,body)
+    computation=method=='POST' and tail in ('compare','search','imports','exports')
+    result=store.UNHANDLED
+    if computation:
+        # Imports/exports own their parse -> project lock -> hash recheck -> insert boundary.
+        result=_dispatch(conn,scope,method,tail,body,query,raw=raw,headers=headers)
+    if mutation:
+        store.lock_project(conn,scope)
+        scope=store.scope_for(conn,scope.me,scope.episode_id,write=not (method=='POST' and tail in ('search','compare','exports')),credential_scope=scope.credential_scope)
+        authorize_route(conn,scope,method,tail,body)
+        # Acquire affected tabs in lexical order before metadata/receipt writes.
+        tabs=set()
+        if tail.startswith(('script/','structure')) or tail=='initialize':
+            tabs.add(scope.episode['tabKey'])
+        if re.fullmatch(r'previews/[^/]+/apply',tail):
+            preview=store.get_record(conn,scope,'writing_preview',tail.split('/')[1])
+            if preview['kind'] in ('adaptation','promotion','structure','impact'): tabs.add(scope.episode['tabKey'])
+            if preview['kind'] in ('structure','impact'): tabs.add('cinema-studio')
+            if preview['kind']=='impact': tabs.add('soul-cast')
+        for key in sorted(tabs): repo.get_tab_for_update(conn,scope.slug,key)
+        cached=replay()
+        if cached is not None: return cached['value']
+    if method=='POST' and tail=='previews':
+        result=build_preview(conn,scope,body,prepared=prepared)
+    elif not computation:
+        result=_dispatch(conn,scope,method,tail,body,query,raw=raw,headers=headers)
     if result is store.UNHANDLED: raise story.StoryError(404,'DRAMA_NOT_FOUND','Writing route not found.')
     if mutation:
         from project_docs.writing_http import BinaryResponse
         if isinstance(result,BinaryResponse): story.invalid('Binary results cannot be mutation receipts.')
-        store.save_receipt(conn,scope,resource,identity,body_hash,result)
+        store.save_receipt(conn,scope,resource,identity,body_hash,{'value':result})
     return result
 
 

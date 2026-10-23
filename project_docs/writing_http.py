@@ -6,7 +6,7 @@ from urllib.parse import parse_qs
 from project_docs import writing_store as store, writing_service as service, story_openapi as story
 
 ROUTE=re.compile(r'^/episodes/([A-Za-z0-9_-]+)/writing(?:/(.*))?$')
-HEADER_NAMES=('Idempotency-Key','Content-Type','X-File-Name','X-File-Purpose')
+HEADER_NAMES=('Idempotency-Key','Content-Type','X-File-Name','X-File-Purpose','X-Filename','X-Writing-Purpose')
 
 
 class BinaryResponse:
@@ -34,9 +34,19 @@ def handle(handler, parsed, method, me):
             refused=http._write_allowed(handler)
             if refused: raise story.StoryError(403,'DRAMA_OPERATION_NOT_ALLOWED',refused)
         conn=http.open_connection();http._ensure_schema(conn)
-        credential=hashlib.sha256(handler.headers.get('Authorization','cookie').encode()).hexdigest()
+        from http.cookies import SimpleCookie
+        cookie=SimpleCookie()
+        try: cookie.load(handler.headers.get('Cookie',''))
+        except Exception: cookie=SimpleCookie()
+        session=cookie.get('openbench_session')
+        credential=hashlib.sha256((handler.headers.get('Authorization') or (session.value if session else 'ambient')).encode()).hexdigest()
         scope=store.scope_for(conn,me,match[1],write=not readonly,credential_scope=credential)
         headers={name:handler.headers[name] for name in HEADER_NAMES if handler.headers.get(name) is not None}
+        for canonical,alias in (('X-File-Name','X-Filename'),('X-File-Purpose','X-Writing-Purpose')):
+            if canonical in headers and alias in headers and headers[canonical]!=headers[alias]:
+                story.invalid('Conflicting writing upload headers.')
+            if canonical in headers: headers.setdefault(alias,headers[canonical])
+            if alias in headers: headers.setdefault(canonical,headers[alias])
         body={};raw=None
         if method in ('POST','PUT','PATCH'):
             if method=='POST' and tail=='imports':
@@ -47,7 +57,7 @@ def handle(handler, parsed, method, me):
                 if len(raw)!=length: story.invalid('Incomplete writing upload.')
             else:
                 body,error=http._json_body(handler)
-                if error: raise story.StoryError(error[0],'DRAMA_VALIDATION_FAILED',error[1]['error'])
+                if error: raise story.StoryError(error[0],'DRAMA_WRITING_LIMIT_EXCEEDED' if error[0]==413 else 'DRAMA_VALIDATION_FAILED',error[1]['error'])
         query={k:v[0] for k,v in parse_qs(parsed.query).items()}
         result=dispatch(conn,scope,method,tail,body,query,raw=raw,headers=headers)
         conn.commit()

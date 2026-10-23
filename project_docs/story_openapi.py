@@ -418,6 +418,12 @@ def locate_scene(conn, identifier):
 
 
 def write_scenes(conn, me, ep, items, redirects=None):
+    from project_docs import writing_store, writing_structure
+    writing_scope = writing_store.scope_for(conn, me, ep['episodeId'], write=True)
+    writing_store.lock_project(conn, writing_scope)
+    # This legacy operation supplies explicit old scene IDs, unlike blind whole-script writes.
+    before_structure = writing_structure.read_structure(conn, writing_scope)
+    old_stable = {s['legacySceneId']: s['sceneKey'] for s in before_structure['scenes']} if before_structure['initialized'] else {}
     mapping = {s['sceneId']: (f"sc_{ep['slug']}_{ep['episodeIndex']:02d}_S{i:02d}", i)
                for i, s in enumerate(items, 1) if s.get('sceneId')}
     content = []
@@ -425,6 +431,16 @@ def write_scenes(conn, me, ep, items, redirects=None):
         title = re.sub(r"^Scene\s*\d+\s*[:：.-]?\s*", "", item['title'], flags=re.I) or "Scene"
         content.append(f"## Scene {i:02d}: {title}\n\n{item['content'].strip()}")
     result = set_script(conn, me, ep, "\n\n".join(content))
+    if old_stable:
+        current_doc = repo.get_tab(conn, ep['slug'], ep['tabKey'])['doc']
+        current_sections = writing_structure.sections(current_doc)
+        lineage = {writing_structure.bid(section['heading']): old_stable[item['sceneId']]
+                   for section, item in zip(current_sections, items)
+                   if section['heading'] and item.get('sceneId') in old_stable}
+        lineage.update({old_stable[old]: old_stable[new] for old, new in (redirects or {}).items()
+                        if old in old_stable and new in old_stable})
+        reconciled = writing_structure.reconcile_structure(current_doc, before_structure, lineage=lineage)
+        writing_structure.persist(conn, writing_scope, reconciled)
     for shot in shots(conn, ep):
         old = shot.get('sceneId')
         new = mapping.get((redirects or {}).get(old, old))
@@ -480,7 +496,7 @@ def extract(conn, me, ep):
     from project_docs import writing_store, writing_versions
     writing_scope = writing_store.scope_for(conn, me, ep['episodeId'], write=True)
     writing_versions.confirm_baseline(conn, writing_scope, expected_doc_hash=writing_store.doc_hash(repo.get_tab(conn, ep['slug'], ep['tabKey'])['doc']), extracted=True)
-    ep.update(writing_scope.episode)
+    ep.update(episode(conn, ep['episodeId']))
     return completed_task(conn, me, ep["slug"], "ASSET_EXTRACT", {"assetsCount": len(existing.keys() | details.keys()), "scenesCount": len(scenes(conn, ep))})
 
 
@@ -1111,6 +1127,8 @@ def dispatch(conn, me, method, path, body, query, actions):
         target = parts[1] if len(parts) > 1 else str(body.get("slug", "new-production"))
         match = re.match(r"(?:pj_|ep_|as_|sh_|sc_)([a-z0-9-]+)(?:_|$)", target)
         scope = match[1] if match else target
+        from project_assistant.orchestrator import lock_project
+        lock_project(conn, scope)
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("story-write:" + scope,))
     if path == "/capabilities" and method == "GET":

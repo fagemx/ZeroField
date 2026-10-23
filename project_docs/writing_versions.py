@@ -19,6 +19,9 @@ def create_version(conn, scope, body):
     if body['share'] is not True: story.invalid('Explicit share:true is required to create a shared snapshot.')
     source=store.resolve_ref(conn,scope,body['sourceRef'])
     if source['docHash']!=body['expectedSourceHash']: store.fail()
+    if body['sourceRef']['kind']=='working' and (not source['structure']['initialized'] or source['structure']['stale']):
+        structure.initialize(conn,scope,source['docHash'])
+        source=store.resolve_ref(conn,scope,body['sourceRef'])
     if body['sourceRef']['kind']=='source':
         story.invalid('Adapt a private idea or novel into a screenplay branch before sharing.')
     identifier='wver_'+uuid.uuid4().hex
@@ -32,7 +35,7 @@ def update_catalog(conn, scope, version_id, body):
         raise story.StoryError(403,'DRAMA_OPERATION_NOT_ALLOWED','Only the creator or Showrunner manages version catalogs.')
     if type(body['baseCatalogVersion']) is not int or body['baseCatalogVersion']!=data['catalogVersion']: store.fail()
     ep=story.episode(conn,scope.episode_id)
-    if ep.get('productionScriptVersionId')==version_id and (body.get('locked') is False or body.get('archived') is True):
+    if (data.get('productionPinned') or ep.get('productionScriptVersionId')==version_id) and (body.get('locked') is False or body.get('archived') is True):
         store.fail('LOCKED','Production baselines cannot be unlocked or archived.')
     changes={k:body[k] for k in ('name','locked','archived') if k in body}
     if data.get('locked') and changes!={'locked':False}:
@@ -48,6 +51,9 @@ def create_branch(conn, scope, body):
     store.fields(body,{'sourceRef','name','expectedSourceHash'},{'sourceRef','name','expectedSourceHash'})
     source=store.resolve_ref(conn,scope,body['sourceRef'])
     if source['docHash']!=body['expectedSourceHash']: store.fail()
+    if body['sourceRef']['kind']=='working' and (not source['structure']['initialized'] or source['structure']['stale']):
+        structure.initialize(conn,scope,source['docHash'])
+        source=store.resolve_ref(conn,scope,body['sourceRef'])
     name=body['name']
     if not isinstance(name,str) or not 1<=len(name.strip())<=200: story.invalid('A branch name is required.')
     identifier='wbr_'+uuid.uuid4().hex
@@ -69,7 +75,7 @@ def save_branch(conn, scope, branch_id, body):
     elif 'structure' in body or 'composition' in body:
         story.invalid('Structure/composition content requires the branch document.')
     data=store.cas_record(conn,scope,'writing_branch',branch_id,base_version=body['baseVersion'],changes=changes)
-    return data|{'clientMutationId':body['clientMutationId'],'savedAt':data['updatedAt']}
+    return {k:v for k,v in data.items() if k!='beforeCheckpoint'}|{'clientMutationId':body['clientMutationId'],'savedAt':data['updatedAt']}
 
 
 def compare(conn, scope, body):
@@ -101,7 +107,8 @@ def build_preview(conn, scope, body):
     target=store.resolve_ref(conn,scope,{'kind':'working'})
     if source['docHash']!=body['expectedSourceHash'] or target['docHash']!=body['targetDocHash']: store.fail('PREVIEW_STALE')
     if not target['structure']['initialized'] or target['structure']['stale']: store.fail('MAPPING_REQUIRED','Initialize the current script structure first.')
-    fingerprints=[{'sourceRef':body['sourceRef'],'docHash':source['docHash'],'structureHash':source['structureHash']}]
+    fingerprints=[{'sourceRef':body['sourceRef'],'docHash':source['docHash'],'structureHash':source['structureHash'],
+        'version':source['version'],'compositionHash':source['compositionHash']}]
     candidate=None
     if kind=='adaptation':
         if body['sourceRef'].get('kind')!='source': story.invalid('Adaptation requires your saved idea or novel source.')
@@ -117,10 +124,11 @@ def build_preview(conn, scope, body):
         doc=store.checked_doc(doc,scope.slug)
         proposed_structure=structure.reconcile_structure(doc,{})
         candidate='wbr_'+uuid.uuid4().hex
-        store.insert_record(conn,scope,'writing_branch',candidate,{'branchId':candidate,'name':'Adaptation candidate','doc':doc,
+        candidate_record={'branchId':candidate,'name':'Adaptation candidate','doc':doc,
             'docHash':store.doc_hash(doc),'structure':proposed_structure,'structureHash':proposed_structure['structureHash'],
-            'composition':store.composition(doc),'locked':False,'archived':False,'baseFingerprint':fingerprints[0]})
-        fingerprints.append({'sourceRef':{'kind':'branch','id':candidate},'docHash':store.doc_hash(doc),'structureHash':proposed_structure['structureHash']})
+            'composition':store.composition(doc),'locked':False,'archived':False,'baseFingerprint':fingerprints[0]}
+        fingerprints.append({'sourceRef':{'kind':'branch','id':candidate},'docHash':store.doc_hash(doc),'structureHash':proposed_structure['structureHash'],
+            'version':1,'compositionHash':store.hash_value(store.composition(doc))})
         source={'doc':doc,'docHash':store.doc_hash(doc),'structure':proposed_structure,'structureHash':proposed_structure['structureHash']}
         whole=True
     elif kind=='promotion':
@@ -138,13 +146,17 @@ def build_preview(conn, scope, body):
     else:
         sm={s['sceneKey']:s for s in source['structure'].get('scenes',[])}
         tm={s['sceneKey']:s for s in target['structure']['scenes']}
-        if set(keys)-set(sm) or set(keys)-set(tm): store.fail('MAPPING_REQUIRED','Only explicitly aligned whole scenes can be adopted; use whole for unmatched scenes.')
+        if set(keys)-(set(sm)|set(tm)): store.fail('MAPPING_REQUIRED','Select existing source or target scene keys.')
         doc=copy.deepcopy(target['doc']);proposed_structure=None
-        actions=[{'actionId':key,'kind':'adopt_scene','sceneKey':key} for key in keys]
+        actions=[{'actionId':key,'kind':'adopt_scene' if key in sm and key in tm else 'add_scene' if key in sm else 'remove_scene','sceneKey':key} for key in keys]
     result={'sourceFingerprints':fingerprints,'targetFingerprints':[{'sourceRef':{'kind':'working'},'docHash':target['docHash'],'structureHash':target['structureHash']}],
+        'productionInputsHash':target['productionInputsHash'],
         'allowedActions':actions,'proposedChanges':{'doc':doc,'structure':proposed_structure,'sourceDoc':source['doc'],
-            'sourceStructure':source['structure'],'whole':whole},'warnings':[]}
-    if candidate: result['candidateBranchId']=candidate
+            'sourceStructure':source['structure'],'whole':whole},
+        'warnings':['Unaligned selected source scenes are added at the end, never guessed as replacements.'] if any(a['kind']=='add_scene' for a in actions) else []}
+    if candidate:
+        result['candidateBranchId']=candidate
+        result['_candidateRecord']=candidate_record
     return result
 
 
@@ -157,33 +169,44 @@ def apply_preview(conn, scope, preview, selection):
         source_nodes={structure.bid(n):n for n in proposed['sourceDoc']['content']}
         source_scenes={s['sceneKey']:s for s in proposed['sourceStructure']['scenes']}
         target_scenes={s['sceneKey']:s for s in before['structure']['scenes']}
-        replacements={};removed=set()
-        for key in selected:
-            src=source_scenes[key];tgt=target_scenes[key]
-            old=[tgt.get('headingBid')]+tgt['blockBids']
-            new=[src.get('headingBid')]+src['blockBids']
-            first=next((b for b in old if b),None)
-            replacements[first]=[copy.deepcopy(source_nodes[b]) for b in new if b]
-            removed.update(old)
+        replacements={};removed=set();additions=[]
+        for key in [a['actionId'] for a in preview['allowedActions'] if a['actionId'] in selected]:
+            src=source_scenes.get(key);tgt=target_scenes.get(key)
+            old=([tgt.get('headingBid')]+tgt['blockBids']) if tgt else []
+            new=([src.get('headingBid')]+src['blockBids']) if src else []
+            nodes=[copy.deepcopy(source_nodes[b]) for b in new if b]
+            if tgt:
+                first=next((b for b in old if b),None)
+                replacements[first]=nodes
+                removed.update(old)
+            else:
+                additions.extend(nodes)
         content=[]
         for node in doc['content']:
             key=structure.bid(node)
             if key in replacements: content.extend(replacements[key])
             elif key not in removed: content.append(node)
-        doc['content']=content
+        doc['content']=content+additions
     version_id='wver_'+uuid.uuid4().hex
     store.insert_snapshot(conn,scope,version_id,snapshot_of(scope,before),name='Before adoption',created_by=scope.actor_id)
     service.replace_working(conn,scope,doc,expected_hash=before['docHash'])
     actual=repo.get_tab(conn,scope.slug,scope.episode['tabKey'])['doc']
-    reconciled=structure.reconcile_structure(actual,proposed['sourceStructure'] if proposed['whole'] else before['structure'])
+    previous=copy.deepcopy(proposed['sourceStructure'] if proposed['whole'] else before['structure'])
+    if not proposed['whole']:
+        known={s['sceneKey'] for s in previous['scenes']}
+        previous['scenes'].extend(copy.deepcopy(s) for s in proposed['sourceStructure'].get('scenes',[])
+            if s['sceneKey'] in selected and s['sceneKey'] not in known)
+    reconciled=structure.reconcile_structure(actual,previous)
     structure.persist(conn,scope,reconciled)
     return {'docHash':store.doc_hash(actual),'beforeVersionId':version_id,'candidateBranchId':preview.get('candidateBranchId'),'savedAt':story.now()}
 
 
 def confirm_baseline(conn, scope, *, expected_doc_hash, extracted=False):
     store.reauthorize(conn,scope,write=True)
-    current=store.resolve_ref(conn,scope,{'kind':'working'})
+    store.lock_project(conn,scope)
+    repo.get_tab_for_update(conn,scope.slug,scope.episode['tabKey'])
     ep=story.episode(conn,scope.episode_id)
+    current=store.resolve_ref(conn,scope,{'kind':'working'})
     if current['docHash']!=expected_doc_hash: store.fail('PREVIEW_STALE')
     if not doc_text(current['doc']).strip(): story.invalid('Confirm a nonempty screenplay.')
     if ep.get('confirmedHash')!=story.digest(doc_text(current['doc'])):
@@ -192,16 +215,15 @@ def confirm_baseline(conn, scope, *, expected_doc_hash, extracted=False):
     existing=ep.get('productionScriptVersionId')
     if existing:
         saved=store.get_record(conn,scope,'writing_version',existing)
-        if saved['snapshot']['docHash']==current['docHash'] and saved['snapshot'].get('productionInputsHash')==store.hash_value(store.production_inputs(scope)):
+        if saved['snapshot']['docHash']==current['docHash'] and saved['snapshot'].get('productionInputsHash')==current['productionInputsHash']:
             return saved
     if not current['structure']['initialized'] or current['structure']['stale']:
         structure.initialize(conn,scope,expected_doc_hash)
         current=store.resolve_ref(conn,scope,{'kind':'working'})
     identifier='wver_'+uuid.uuid4().hex
     data=store.insert_snapshot(conn,scope,identifier,snapshot_of(scope,current),name='Production baseline',created_by=scope.actor_id)
-    data['locked']=True
+    data.update(locked=True,productionPinned=True)
     store._replace(conn,scope,'writing_version',identifier,data)
     ep['productionScriptVersionId']=identifier
     story.store(conn,scope.episode_id,'episode',ep,scope.slug)
-    scope.episode.update(ep)
     return data
