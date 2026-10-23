@@ -306,6 +306,12 @@ def _dispatch(conn, scope, method, tail, body, query, *, raw=None, headers=None)
         except story.StoryError as exc:
             if exc.code!='DRAMA_WRITING_PREVIEW_STALE': raise
             stale=True
+        if preview['kind']=='impact':
+            # Read projection only: selected-domain apply remains authoritative.
+            # In particular, a stale unselected row must not block valid selections.
+            domain=feature('impact').validate_preview(conn,scope,preview)
+            return preview|{'sharedStale':stale,'staleActionIds':domain['staleActionIds'],
+                'stale':stale or domain['stale']}
         return preview|{'stale':stale}
     if len(parts)==3 and parts[0]=='previews' and parts[2]=='apply' and method=='POST': return apply_preview(conn,scope,parts[1],body)
     name='files' if parts[0] in ('imports','exports') else 'tools' if parts[0] in ('bible','appearances','search') else 'impact' if parts[0] in ('impact','alignment') else None
