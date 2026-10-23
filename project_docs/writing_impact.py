@@ -37,9 +37,8 @@ def _source(target, origin):
     lineage = target['structure'].get('lineage', {})
     if any(v == 'split:' + key for key in scenes for v in lineage.values()):
         return [], 'ambiguous'
-    resolved = [lineage.get(k, k) for k in scenes]
-    present = {s['sceneKey'] for s in target['structure'].get('scenes', [])}
-    if not scenes or set(resolved) - present:
+    resolved = [structure.resolve_scene_key(target['structure'], k) for k in scenes]
+    if not scenes or None in resolved:
         return [], 'source_removed' if scenes else 'unbound'
     return [u for u in units if u['sceneKey'] in resolved], None
 

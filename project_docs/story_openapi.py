@@ -443,10 +443,20 @@ def write_scenes(conn, me, ep, items, redirects=None):
                         if old in old_stable and new in old_stable})
         reconciled = writing_structure.reconcile_structure(current_doc, before_structure, lineage=lineage)
         writing_structure.persist(conn, writing_scope, reconciled)
+        writing_structure.remap_shot_associations(conn, writing_scope, before_structure, reconciled)
+        return result
     for shot in shots(conn, ep):
         old = shot.get('sceneId')
         new = mapping.get((redirects or {}).get(old, old))
-        if not new or new[0] == old:
+        if not new:
+            if old:
+                from project_docs import writing_impact
+                writing_impact._check_row(conn, writing_scope, shot)
+                meta = shot_meta(conn, shot['shotId']) | {'sceneId': None,
+                    'detachedScene': {'legacySceneId': old, 'sceneKeys': [], 'state': 'source_removed'}}
+                store(conn, 'meta_' + shot['shotId'], 'shot_meta', meta, ep['slug'])
+            continue
+        if new[0] == old:
             continue
         meta = shot_meta(conn, shot['shotId']) | {'sceneId': new[0]}
         store(conn, 'meta_' + shot['shotId'], 'shot_meta', meta, ep['slug'])
@@ -513,6 +523,15 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     if ep.get("confirmedHash") != digest(script(conn, ep)) or not scenes(conn, ep):
         raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before building storyboards.")
     previous = shots(conn, ep)
+    from project_docs import writing_store, writing_structure
+    writing_scope = writing_store.scope_for(conn, me, ep['episodeId'], write=True)
+    current_structure = writing_structure.read_structure(conn, writing_scope)
+    stable_scenes = {s['legacySceneId']: s['sceneKey'] for s in current_structure['scenes']}
+    def belongs(shot, scene):
+        if not current_structure['initialized']:
+            return shot.get('sceneId') == scene['sceneId']
+        keys, _, missing = writing_structure.compatibility_relationship(current_structure, shot)
+        return not missing and keys == [stable_scenes.get(scene['sceneId'])]
     medium = script_medium_lens(script(conn, ep))  # a composed script carries its Lens line
     plans = [(scene, scene_shot_beats(scene["content"], mode) or [scene["title"]]) for scene in scenes(conn, ep)
              if not only_scene or scene["sceneId"] == only_scene]
@@ -521,7 +540,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     created = []
     origin_updated = []
     for scene, beats in plans:
-        matches = [s for s in previous if s.get("sceneId") == scene["sceneId"] and s["tabKey"] == "cinema-studio"]
+        matches = [s for s in previous if s["tabKey"] == "cinema-studio" and belongs(s, scene)]
         scene_refs = [asset_code(m[1]) for m in ASSET_RE.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-"))]
         scene_refs = list(dict.fromkeys(scene_refs)) or [f"SET-{scene['sceneIndex']:02d}"]
         cast = {a["name"].casefold(): a["assetCode"] for a in assets(conn, ep) if a["type"] == "CHARACTER" and a["isDefault"]}
@@ -544,6 +563,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
                 rid = mutate_row(conn, me, ep["slug"], "cinema-studio", cells=cells | {6: "Queued"})
             identifier = f"sh_{ep['slug']}_{rid}"
             meta = shot_meta(conn, identifier) | {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"], "dialogue": grammar["dialogue"], "previsPlan": grammar["previsPlan"]}
+            meta.pop('detachedScene', None)  # Only an actual current derivation clears the detach marker.
             store(conn, "meta_" + identifier, "shot_meta", meta, ep["slug"])
             created.append({"shotId": identifier})
             origin_updated.append(identifier)
