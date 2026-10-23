@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { useTranslation } from '../i18n/react.jsx';
 import { documentText,stable,clone } from './writingModel.js';
+import { i18n } from '../i18n/index.js';
+import en from './locales/review1-auth.en.json';
+import zhTW from './locales/review1-auth.zh-TW.json';
+i18n.addResourceBundle('en','translation',en,true,true);
+i18n.addResourceBundle('zh-TW','translation',zhTW,true,true);
 const p='writing.authoring.';
 export function WritingConflict({persistence,fetchServer,onError,onDownload}) {
   const {t}=useTranslation();const [server,setServer]=useState(null),[chosen,setChosen]=useState([]),[busy,setBusy]=useState(false),[keepMetadata,setKeepMetadata]=useState(false);
@@ -19,8 +24,9 @@ export function WritingConflict({persistence,fetchServer,onError,onDownload}) {
     await persistence.resolveWithCurrentBase(doc,server,{keepMetadata});
   };
   return <section role="alert" className="writing-conflict"><h2>{t(p+'conflict')}</h2><p>{t(p+'conflictExplanation')}</p><button type="button" onClick={onDownload}>{t(p+'downloadDraft')}</button>
-    <button type="button" disabled={busy} onClick={()=>run(async()=>{setServer(await fetchServer());setChosen([]);})}>{t(p+'loadConflictBase')}</button>
-    {server&&<><p>{t(p+'mergeExplanation')}</p>{persistence.resourceRef.kind==='source'&&<div><label><input type="checkbox" checked={keepMetadata} onChange={event=>setKeepMetadata(event.target.checked)}/>{t(p+'keepDeviceMetadata')}</label><div className="writing-compare-columns"><pre>{JSON.stringify({structure:server.structure,composition:server.composition},null,2)}</pre><pre>{JSON.stringify({structure:persistence.draftStructure,composition:persistence.draftComposition},null,2)}</pre></div></div>}{bids.map(bid=><article key={bid}>
+    {persistence.conflict?.metadata&&<p>{t('writing.reviewIdentity.metadataConflict')}</p>}
+    <button type="button" disabled={busy} onClick={()=>run(async()=>{setServer(await fetchServer());setChosen([]);setKeepMetadata(false);})}>{t(p+'loadConflictBase')}</button>
+    {server&&<><p>{t(p+'mergeExplanation')}</p>{persistence.resourceRef.kind!=='working'&&<div><label><input type="checkbox" checked={keepMetadata} onChange={event=>setKeepMetadata(event.target.checked)}/>{t(p+'keepDeviceMetadata')}</label><div className="writing-compare-columns"><pre>{JSON.stringify({structure:server.structure,composition:server.composition},null,2)}</pre><pre>{JSON.stringify({structure:persistence.draftStructure,composition:persistence.draftComposition},null,2)}</pre></div></div>}{bids.map(bid=><article key={bid}>
       <label><input type="checkbox" checked={chosen.includes(bid)} disabled={busy} onChange={event=>setChosen(items=>event.target.checked?[...items,bid]:items.filter(item=>item!==bid))}/>{t(p+'useDeviceBlock',{id:bid})}</label>
       <div className="writing-compare-columns"><div><h3>{t(p+'serverCopy')}</h3><pre>{documentText(remote.get(bid)) || t(p+'removedBlock')}</pre></div><div><h3>{t(p+'deviceCopy')}</h3><pre>{documentText(nodes.get(bid)) || t(p+'removedBlock')}</pre></div></div>
     </article>)}<button type="button" disabled={busy} onClick={()=>run(merge)}>{t(p+'saveExplicitMerge')}</button></>}

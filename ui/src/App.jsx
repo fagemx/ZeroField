@@ -81,6 +81,7 @@ function ProjectPage({ slug }) {
   const [data, setData] = useState(null);
   const [fatal, setFatal] = useState(null);
   const expectedActor = useRef(null), [identityLost, setIdentityLost] = useState(false);
+  const loseWritingIdentity = useCallback(() => setIdentityLost(true), []);
   const rememberedHash = () => {try {return sessionStorage.getItem('zf.production:'+slug) || '';} catch {return '';}};
   const [consoleView, setConsoleView] = useState(() => consoleRoute(window.location.hash));
   const [tabKey, setTabKey] = useState(() => parseLocation(window.location.pathname, consoleRoute(window.location.hash) ? rememberedHash() : window.location.hash).tab);
@@ -136,6 +137,7 @@ function ProjectPage({ slug }) {
       document.title = payload.project.title;
       return payload;
     } catch (error) {
+      if (expectedActor.current && [401,403].includes(error.status)) setIdentityLost(true);
       setData((current) => {
         if (!current) setFatal(error);
         else onError(error.message);
@@ -691,8 +693,8 @@ function ProjectPage({ slug }) {
           onError={onError} onToast={showToast} />
         <main className="main">
           <div className="doc-host">
-          {storyView && <StoryWorld slug={slug} epId={storyEpisode} me={me} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
-            controlRef={surfaceControl} onStatus={setWritingStatus} focusSource={writingFocus}
+          {storyView && !identityLost && <StoryWorld slug={slug} epId={storyEpisode} me={me} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
+            controlRef={surfaceControl} onStatus={setWritingStatus} focusSource={writingFocus} onIdentityLost={loseWritingIdentity}
             onChanged={reloadAll} onStage={async ({shotIds = []} = {}) => { if (await navigate(STAGE_TAB) && shotIds.length) { const shot = episode.shots.find(item => item.shotId === shotIds[0]); if (shot) setSheetFocus({tabKey:STAGE_TAB,rowId:shot.rowId,openRow:true,nonce:Date.now()}); } }} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")} />}
           {!tab && !storyView && <div className="center-note">{uiText("app.loading")}</div>}
           {tab && tab.surface_type === "sheet" && !versionsFor && !(docModeTabs && docModeTabs[tab.key]) && (

@@ -41,6 +41,12 @@ def handle(handler, parsed, method, me):
         session=cookie.get('openbench_session')
         credential=hashlib.sha256((handler.headers.get('Authorization') or (session.value if session else 'ambient')).encode()).hexdigest()
         scope=store.scope_for(conn,me,match[1],write=not readonly,credential_scope=credential)
+        # Consistency only: never use a browser's expectation to select/authorize an actor.
+        # Validate before dispatch, including cached POST/PUT receipts and private reads.
+        expected=handler.headers.get('X-Writing-Expected-Actor')
+        bearer=handler.headers.get('Authorization','').startswith('Bearer ')
+        if (expected is not None and expected!=scope.actor_id) or (method!='GET' and not bearer and not expected):
+            store.fail('IDENTITY_MISMATCH','Writing identity changed; sign in again to recover your draft.',401)
         headers={name:handler.headers[name] for name in HEADER_NAMES if handler.headers.get(name) is not None}
         for canonical,alias in (('X-File-Name','X-Filename'),('X-File-Purpose','X-Writing-Purpose')):
             if canonical in headers and alias in headers and headers[canonical]!=headers[alias]:

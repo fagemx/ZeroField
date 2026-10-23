@@ -1,0 +1,9 @@
+{
+  "writing": {
+    "reviewIdentity": {
+      "metadataChanged": "The server's chapter, structure or lens metadata changed after this device checkpoint. Restoring requires an explicit conflict choice; the saved base version will not be updated automatically.",
+      "metadataConflict": "Manuscript text may match, but private metadata or its version has changed. Compare the current server metadata and choose explicitly which metadata to keep.",
+      "metadataCopies": "Chapter, structure and lens metadata (server / device)"
+    }
+  }
+}

@@ -1,21 +1,25 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { api, ApiError } from './api.js';
 import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
 import { AuthoringWorkspace } from './writing/AuthoringWorkspace.jsx';
 import { WritingToolsPanel } from './writing/WritingToolsPanel.jsx';
 import { storyRequest } from './storyModel.js';
+import { createActorBoundRequest } from './writing/writingTransport.js';
 
 // The episode tab remains the only editable mainline. No ep.scriptContent draft mirror.
 const renderTools = props => <WritingToolsPanel {...props}/>;
-export function StoryWorld({slug, epId, me, ep, shots = [], loadError, writable, controlRef, onChanged, onStage, onAssets, onVault, onStatus, focusSource}) {
+export function StoryWorld({slug, epId, me, ep, shots = [], loadError, writable, controlRef, onChanged, onStage, onAssets, onVault, onStatus, focusSource, onIdentityLost}) {
   useLocale();
   // Cookies can change in another tab. Never upload this mounted actor's private draft as a new actor.
-  const request = useCallback(async (path, method, body, options) => {
+  const request = useMemo(() => createActorBoundRequest(me.actor_id, async (path, method, body, options) => {
     const current = await api.get(`/projects/api/${slug}`);
     if (current.me.actor_id !== me.actor_id) throw new ApiError(401, t('writing.integration.identityChanged'));
+    // The preflight is just an early warning; the server binding closes its TOCTOU window.
+    if (options.signal.aborted) throw new DOMException('Writing session disposed', 'AbortError');
     return storyRequest(path, method, body, options);
-  }, [slug, me.actor_id]);
+  }, onIdentityLost), [slug, me.actor_id, onIdentityLost]);
+  useLayoutEffect(() => () => request.dispose(), [request]);
   const [styles, setStyles] = useState([]), [settingsError, setSettingsError] = useState('');
   useEffect(() => {let active = true; request('/catalog/styles').then(data => {if (active) setStyles(data.items || []);}).catch(error => {if (active) setSettingsError(error.message);}); return () => {active = false;};}, [request]);
   const setting = async patch => {

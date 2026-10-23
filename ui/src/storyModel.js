@@ -7,6 +7,8 @@ export const shotId = (slug, rid) => `sh_${slug}_${rid}`;
 
 export async function storyRequest(path, method = 'GET', body, options = {}) {
   const headers = new Headers(options.headers || {});
+  // Fixed by the mounted authoring session, not inferred from ambient cookies.
+  if (options.expectedActorId != null) headers.set('X-Writing-Expected-Actor', options.expectedActorId);
   headers.set('Accept', options.responseType === 'json' || !options.responseType ? 'application/json' : '*/*');
   if (method !== 'GET') headers.set('X-Requested-With', 'projects');
   if (!options.raw && method !== 'GET') headers.set('Content-Type', 'application/json');

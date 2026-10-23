@@ -18,6 +18,7 @@ export class WritingPersistence {
   async discover() {
     try {
       const entries=await this.journal.list(this.scope);
+      if (this.disposed) return [];
       const synced=entry=>stable(entry.doc)===stable(this.base.doc) && (this.resourceRef.kind==='working' || stable(entry.structure || {})===stable(this.base.structure || {}) && stable(entry.composition || {})===stable(this.base.composition || {}));
       this.recoveries=entries.filter(entry=>!synced(entry));
       for (const entry of entries.filter(synced)) await this.journal.remove(entry.key,entry.localSequence);
@@ -46,7 +47,7 @@ export class WritingPersistence {
   clearTimers() { this.clock.clearTimeout(this.timer);this.clock.clearTimeout(this.maximum);this.timer=null;this.maximum=null; }
   checkpoint() {
     const sequence=this.sequence;
-    const value={scope:this.scope,tabId:this.tabId,resourceRef:this.resourceRef,baseHash:this.base.docHash,baseVersion:this.base.version,baseDoc:clone(this.base.doc),doc:clone(this.doc),structure:clone(this.draftStructure),composition:clone(this.draftComposition),pending:this.pending ? clone(this.pending) : null,localSequence:sequence,updatedAt:new Date().toISOString()};
+    const value={scope:this.scope,tabId:this.tabId,resourceRef:this.resourceRef,baseHash:this.base.docHash,baseVersion:this.base.version,baseDoc:clone(this.base.doc),baseStructure:clone(this.base.structure || {}),baseComposition:clone(this.base.composition || {}),baseStructureFingerprint:stable(this.base.structure || {}),baseCompositionFingerprint:stable(this.base.composition || {}),doc:clone(this.doc),structure:clone(this.draftStructure),composition:clone(this.draftComposition),pending:this.pending ? clone(this.pending) : null,localSequence:sequence,updatedAt:new Date().toISOString()};
     const work=this.journalWork.catch(()=>{}).then(()=>this.journal.put(this.key,value)).then(()=>{
       this.journalSequence=Math.max(this.journalSequence,sequence); this.localError=null;
       if (this.isDirty() && this.state==='save_failed') this.state='local_only';
@@ -93,6 +94,8 @@ export class WritingPersistence {
       if (this.disposed || this.stopped) return false;
       try {
         const ack=await this.transport(pending.tail,pending.method,pending.body,{idempotencyKey:pending.idempotencyKey});
+        // Neither a late ACK nor a failed/aborted response may mutate/delete the old actor's recovery.
+        if (this.disposed || this.stopped) return false;
         if (ack.clientMutationId!==pending.body.clientMutationId) throw Object.assign(new Error('Unexpected save acknowledgement'),{status:409});
         if (ack.conflicts?.length) {
           this.conflict={server:ack.doc,local:clone(this.doc),conflicts:ack.conflicts};this.state='conflict';this.error=null;await this.checkpoint();return false;
@@ -111,6 +114,7 @@ export class WritingPersistence {
         }
         return true;
       } catch(error) {
+        if (this.disposed || this.stopped) return false;
         this.error=error;
         if ([401,403].includes(error.status)) {this.stopped=true;this.state='auth_lost';}
         else if (error.status===409) {this.conflict={local:clone(this.doc),details:error.details || error.data?.details};this.state='conflict';}
@@ -128,6 +132,7 @@ export class WritingPersistence {
   }
   async flush({requireServer=false}={}) {
     this.clearTimers();
+    if (this.disposed) return false;
     if (!this.isDirty()) return !this.recoveries.length && !this.stopped && !this.conflict;
     await this.checkpoint();
     if (this.composing || this.stopped || this.conflict || this.recoveries.length) return false;
@@ -139,11 +144,23 @@ export class WritingPersistence {
     if (this.isDirty() || this.composing || this.recoveries.length) return false;
     this.base=clone(next);this.doc=clone(next.doc);this.draftStructure=clone(next.structure || {});this.draftComposition=clone(next.composition || {});this.emit();return true;
   }
+  recoveryDivergence(entry) {
+    const content=entry.baseHash!==this.base.docHash;
+    // Private CAS versions include chapter/lens changes, unlike coalesced mainline revisions.
+    const metadata=this.resourceRef.kind!=='working' && (entry.baseVersion!==this.base.version ||
+      entry.baseStructureFingerprint!=null && entry.baseStructureFingerprint!==stable(this.base.structure || {}) ||
+      entry.baseCompositionFingerprint!=null && entry.baseCompositionFingerprint!==stable(this.base.composition || {}));
+    return {content,metadata,metadataOnly:metadata&&!content};
+  }
   async restore(entry) {
+    if (this.disposed) return;
     if (!this.recoveries.some(item=>item.key===entry.key)) throw new Error('Unknown recovery');
+    const server=clone(this.base),divergence=this.recoveryDivergence(entry);
     this.doc=clone(entry.doc);this.draftStructure=clone(entry.structure || this.base.structure || {});this.draftComposition=clone(entry.composition || this.base.composition || {});this.sequence++;this.recoveries=[];
-    if (entry.baseHash!==this.base.docHash) {
-      this.conflict={server:this.base.doc,local:entry.doc,base:entry.baseDoc};this.state='conflict';
+    if(this.resourceRef.kind!=='working')this.base={...this.base,doc:clone(entry.baseDoc || this.base.doc),docHash:entry.baseHash,version:entry.baseVersion ?? 0,structure:clone(entry.baseStructure || {}),composition:clone(entry.baseComposition || {})};
+    if (divergence.content || divergence.metadata) {
+      this.pending=null;
+      this.conflict={server:server.doc,serverMetadata:{structure:server.structure,composition:server.composition},local:entry.doc,base:entry.baseDoc,...divergence};this.state='conflict';
     } else {
       this.pending=entry.pending ? {...clone(entry.pending),sequence:stable(entry.pending.doc)===stable(entry.doc)?this.sequence:this.sequence-1} : null;
       this.state='dirty';
@@ -158,7 +175,11 @@ export class WritingPersistence {
     this.pending=null;this.base=clone(server);this.conflict=null;this.doc=clone(doc);
     if(!keepMetadata){this.draftStructure=clone(server.structure || {});this.draftComposition=clone(server.composition || {});}
     if(this.resourceRef.kind==='source')this.draftStructure=sourceStructureForDoc(this.draftStructure,doc);
-    this.sequence++;this.state='dirty';await this.checkpoint();this.emit();this.schedule();
+    this.sequence++;this.state='dirty';
+    // Branches normally derive lens changes from their screenplay. An explicit conflict
+    // choice instead freezes the selected metadata with this one replayable merge.
+    if(this.resourceRef.kind==='branch'){this.pending=this.makePending();this.pending.body.composition=clone(this.draftComposition);}
+    await this.checkpoint();this.emit();this.schedule();
   }
-  dispose() {this.clearTimers();this.disposed=true;/* In-flight ACK may finish, but never sends another resource's draft. */}
+  dispose() {this.clearTimers();this.disposed=true;/* Keep the actor-scoped journal; ignore late ACKs. */}
 }

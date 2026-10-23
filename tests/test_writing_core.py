@@ -273,7 +273,7 @@ class WritingHTTPTests(unittest.TestCase):
         self.assertEqual(code,303)
         cookie=headers['Set-Cookie'].split(';')[0]
         path=story.BASE+f'/episodes/{self.ep}/writing/branches'
-        headers={'Cookie':cookie,'Idempotency-Key':'cookie-create'}
+        headers={'Cookie':cookie,'Idempotency-Key':'cookie-create','X-Writing-Expected-Actor':self.actor}
         code,payload,_=self.request(path,method='POST',data=body,authenticated=False,headers=headers)
         self.assertEqual(code,200,payload)
         headers['Origin']='https://foreign.invalid'
