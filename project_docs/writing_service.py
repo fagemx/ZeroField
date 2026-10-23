@@ -70,7 +70,7 @@ def workspace(conn, scope):
     baseline={'versionId':version_id,'legacy':not bool(version_id),'retained':bool(version_id),'confirmedHash':ep.get('confirmedHash'),
         'scriptDirty':ep.get('confirmedHash')!=story.digest(doc_text(current['doc']))}
     return {'episodeId':scope.episode_id,'projectSlug':scope.slug,'doc':current['doc'],'docHash':current['docHash'],
-        'revision':current['version'],'structure':current['structure'],'structureHash':current['structureHash'],
+        'revision':current['version'],'structure':structure.project_references(conn,scope,current['structure'],current['doc']),'structureHash':current['structureHash'],
         'versions':store.list_records(conn,scope,'writing_version'),'sources':store.list_records(conn,scope,'writing_source'),
         'branches':store.list_records(conn,scope,'writing_branch'),'baseline':baseline,'composition':current['composition'],
         'productionInputs':current['productionInputs'],'productionInputsHash':current['productionInputsHash'],
@@ -282,7 +282,9 @@ def _dispatch(conn, scope, method, tail, body, query, *, raw=None, headers=None)
         if method=='GET': return store.get_record(conn,scope,'writing_source',store.source_id(scope,parts[1]),required=False)
         if method=='PUT': return save_source(conn,scope,parts[1],body)
     if tail=='script/ops' and method=='POST': return save_script(conn,scope,body)
-    if tail=='structure' and method=='GET': return structure.read_structure(conn,scope)
+    if tail=='structure' and method=='GET':
+        current=store.resolve_ref(conn,scope,{'kind':'working'})
+        return structure.project_references(conn,scope,current['structure'],current['doc'])
     if tail=='structure/metadata' and method=='PATCH': return structure.metadata_patch(conn,scope,body)
     if tail=='versions':
         if method=='GET': return store.list_records(conn,scope,'writing_version',query=query)

@@ -150,8 +150,17 @@ def reconcile_structure(doc, previous, *, lineage=None):
     return result
 
 
+READ_SCENE_FIELDS=frozenset(('assetCodes','shotIds','shotLinks'))
+
+
+def _scene_authority(scene):
+    return {k:copy.deepcopy(v) for k,v in scene.items() if k not in READ_SCENE_FIELDS}
+
+
 def fingerprint(value):
-    return store.hash_value({k:value.get(k,[]) for k in ('scenes','lanes','tombstones','lineage','legacyBindings')})
+    authority={k:value.get(k,[]) for k in ('scenes','lanes','tombstones','lineage','legacyBindings')}
+    authority['scenes']=[_scene_authority(s) for s in authority['scenes']]
+    return store.hash_value(authority)
 
 
 def read_structure(conn, scope):
@@ -168,8 +177,110 @@ def read_structure(conn, scope):
     return result
 
 
+def resolve_scene_key(value, key):
+    """Follow only explicit merge lineage; an active key wins after an Undo."""
+    present={s['sceneKey'] for s in value.get('scenes',[])}
+    lineage=value.get('lineage',{});seen=set()
+    while key not in present:
+        if key in seen or key not in lineage: return None
+        seen.add(key);key=lineage[key]
+    return key
+
+
+def shot_relationship(value, shot):
+    """Current source projection, never inferred from a positional sceneId/title."""
+    origin=shot.get('storyOrigin')
+    if origin is None:
+        binding=next((b for b in value.get('legacyBindings',[]) if b['shotId']==shot['shotId']),{})
+        origin={'sceneKeys':[binding['sceneKey']] if binding.get('sceneKey') else [],
+            'mapping':binding.get('mapping','unbound')}
+    mapping=origin.get('mapping','unbound')
+    if mapping not in ('exact','scene_only'): return [],mapping,'ambiguous' if mapping=='ambiguous' else 'unbound'
+    beats=origin.get('beatKeys',[])
+    if beats:
+        by_beat={b['beatKey']:s['sceneKey'] for s in value.get('scenes',[]) for b in s.get('beats',[])}
+        if set(beats)-set(by_beat): return [],mapping,'source_removed'
+        return list(dict.fromkeys(by_beat[k] for k in beats)),mapping,None
+    keys=origin.get('sceneKeys',[])
+    if any(v=='split:'+k for k in keys for v in value.get('lineage',{}).values()):
+        return [],mapping,'ambiguous'
+    resolved=[resolve_scene_key(value,k) for k in keys]
+    if not keys or None in resolved: return [],mapping,'source_removed' if keys else 'unbound'
+    return list(dict.fromkeys(resolved)),mapping,None
+
+
+def compatibility_relationship(value, shot):
+    """Legacy rebuild is scene-wide: a proven surviving scene can replace its beats.
+
+    This is NOT an exact beat/media origin and must not be used by the outline or
+    alignment. Deleted scenes cannot fall back to their reused positional ID.
+    """
+    keys,mapping,missing=shot_relationship(value,shot)
+    origin=shot.get('storyOrigin')
+    if missing=='source_removed' and origin and origin.get('sceneKeys'):
+        scene_only=copy.deepcopy(origin);scene_only['beatKeys']=[]
+        return shot_relationship(value,shot|{'storyOrigin':scene_only})
+    return keys,mapping,missing
+
+
+def project_references(conn, scope, value, doc):
+    """Authorized READ-only outline fields. Never pass this projection to persistence."""
+    store.reauthorize(conn,scope)
+    result=copy.deepcopy(value)
+    nodes={bid(n):node_text(n) for n in doc.get('content',[])}
+    scenes={s['sceneKey']:s for s in result['scenes']}
+    for scene in scenes.values():
+        text='\n'.join(nodes.get(k,'') for k in [scene.get('headingBid')]+scene.get('blockBids',[]))
+        scene['assetCodes']=list(dict.fromkeys(story.asset_code(m[1]) for m in story.ASSET_RE.finditer(text)))
+        scene['shotIds']=[];scene['shotLinks']=[]
+    for shot in story.shots(conn,scope.episode):
+        keys,mapping,missing=shot_relationship(value,shot)
+        if missing: continue
+        for key in keys:
+            scenes[key]['shotIds'].append(shot['shotId'])
+            scenes[key]['shotLinks'].append({'shotId':shot['shotId'],'mapping':mapping})
+    return result
+
+
+def remap_shot_associations(conn, scope, before, after):
+    """Detach deleted/uncertain compatibility links in the same structure transaction.
+
+    Origins and all takes remain untouched. Explicit merges redirect compatibility
+    associations; split scene-only relationships cannot safely choose either half.
+    """
+    from project_docs import writing_impact
+    old_ids={s['legacySceneId']:s['sceneKey'] for s in before['scenes']}
+    new_ids={s['sceneKey']:(f"sc_{scope.slug}_{scope.episode['episodeIndex']:02d}_S{i:02d}",i)
+        for i,s in enumerate(after['scenes'],1)}
+    for shot in story.shots(conn,scope.episode):
+        keys,mapping,missing=compatibility_relationship(after,shot)
+        old_key=old_ids.get(shot.get('sceneId'))
+        # The typed operation also carries a frozen compatibility snapshot for
+        # legacy rows not yet bound. Never use this fallback for an explicit origin.
+        bound=any(b['shotId']==shot['shotId'] for b in before.get('legacyBindings',[]))
+        if shot.get('storyOrigin') is None and not bound and old_key:
+            keys,mapping,missing=shot_relationship(after,{'shotId':shot['shotId'],
+                'storyOrigin':{'sceneKeys':[old_key],'mapping':'scene_only'}})
+        if not old_key and not shot.get('sceneId') and not shot.get('detachedScene'): continue
+        legacy,index=new_ids[keys[0]] if not missing and len(keys)==1 else (None,None)
+        if legacy==shot.get('sceneId'): continue
+        writing_impact._check_row(conn,scope,shot)
+        meta=story.shot_meta(conn,shot['shotId'])|{'sceneId':legacy}
+        if legacy is None:
+            meta['detachedScene']={'sceneKeys':copy.deepcopy((shot.get('storyOrigin') or {}).get('sceneKeys') or ([old_key] if old_key else [])),
+                'legacySceneId':shot.get('detachedScene',{}).get('legacySceneId',shot.get('sceneId')),
+                'state':missing or 'ambiguous'}
+        else:
+            meta.pop('detachedScene',None)
+            label=re.sub(r'^SC\d+',f'SC{index:02d}',shot['shotIndex'],flags=re.I)
+            if label!=shot['shotIndex']:
+                story.mutate_row(conn,scope.me,scope.slug,shot['tabKey'],shot['rowId'],{0:label})
+        story.store(conn,'meta_'+shot['shotId'],'shot_meta',meta,scope.slug)
+
+
 def persist(conn, scope, value, *, base_version=None):
     data={k:copy.deepcopy(value.get(k,[]) if k=='legacyBindings' else value[k]) for k in ('docHash','scenes','lanes','tombstones','lineage','legacyBindings','structureHash')}
+    data['scenes']=[_scene_authority(s) for s in data['scenes']]
     data['structureHash']=fingerprint(data)
     saved=store.get_record(conn,scope,'writing_structure',identifier(scope),required=False,lock=True)
     if saved:
@@ -316,16 +427,5 @@ def apply_preview(conn, scope, preview, selection):
     actual=repo.get_tab(conn,scope.slug,scope.episode['tabKey'])['doc']
     reconciled=reconcile_structure(actual,proposed['structure'])
     result=persist(conn,scope,reconciled)
-    # Remap only proven surviving stable keys, keeping rows/takes and shot identities.
-    old_ids={s['legacySceneId']:s['sceneKey'] for s in before['structure']['scenes']}
-    new_ids={s['sceneKey']:(f"sc_{scope.slug}_{scope.episode['episodeIndex']:02d}_S{i:02d}",i) for i,s in enumerate(result['scenes'],1)}
-    for shot in story.shots(conn,scope.episode):
-        key=old_ids.get(shot.get('sceneId'))
-        if key in new_ids:
-            legacy,index=new_ids[key]
-            if legacy!=shot.get('sceneId'):
-                meta=story.shot_meta(conn,shot['shotId'])|{'sceneId':legacy}
-                story.store(conn,'meta_'+shot['shotId'],'shot_meta',meta,scope.slug)
-                label=re.sub(r'^SC\d+',f'SC{index:02d}',shot['shotIndex'],flags=re.I)
-                story.mutate_row(conn,scope.me,scope.slug,shot['tabKey'],shot['rowId'],{0:label})
+    remap_shot_associations(conn,scope,before['structure'],result)
     return {'docHash':store.doc_hash(repo.get_tab(conn,scope.slug,scope.episode['tabKey'])['doc']),'structure':read_structure(conn,scope),'beforeVersionId':version_id}
