@@ -34,7 +34,9 @@ def current_shots(conn, ep, ids=None):
 
 
 def source_guard(conn, items):
-    return {s["shotId"]: story.digest(story.snapshot(conn, *story.find_row(conn, s["shotId"], "shot"))) for s in items}
+    from project_docs import writing_impact
+    return {s['shotId']: story.digest([story.snapshot(conn, *story.find_row(conn, s['shotId'], 'shot')),
+                                      writing_impact.allocation_source_guard(conn, s)]) for s in items}
 
 
 def public_plan(plan):
@@ -205,8 +207,10 @@ def plan(conn, me, ep, body, *, local_comfy_online=None):
     result["ready"] = all(a["ready"] for a in result["allocations"])
     result["readiness_scope"] = "configuration_and_inputs"
     identifier = "al_" + uuid.uuid4().hex
+    from project_docs import writing_impact
     saved = {"allocationId": identifier, "episodeId": ep["episodeId"], "slug": ep["slug"], "options": opts,
              "guards": source_guard(conn, items), "plan": result,
+             "storyProvenance": {s['shotId']: writing_impact.freeze_for_shot(conn, me, s['shotId']) for s in items},
              "cards": cards}
     story.store(conn, identifier, "allocation", saved, ep["slug"], me.actor_id)
     return {"allocationId": identifier, "productionPolicy": opts["production_policy"], **public_plan(result)}
