@@ -67,8 +67,39 @@ At exact final `de16d59`, integration RAN **680 backend tests**, **270 frontend 
 
 The full frontend/backend, final production-root journeys, compact logout/identity behavior, long-manuscript timings and exact installed-wheel/resource results belong to the current receipt. Component synthetic transports are expressly distinguished from real root HTTP/PG behavior. The print boundary is Chromium-rendered sanitized HTML, **not OS print/PDF saving**.
 
+## Second review of `d9bb1b3`: safety OK with notes, journey BLOCK (historical, unchanged)
+
+The round-2 safety re-review closed S1 and S2. The journey re-review closed J3–J5 but returned **BLOCK** for two P1 and one P2 findings: **N1** (cached scene membership hid a saved paragraph and reordered it on the next edit), **N2** (version/branch adoption and direct block removal left a retained shot's persisted `sceneId` aliased to a surviving scene) and **N3** (one author's manuscript save self-conflicted their pending outline save). The reports are `review-safety-r2.md` and `review-journey-r2.md` under the `34e6c269-…/spec16/` artifact directory named above. The round-1 receipt is preserved byte-identically at [round1-integration.json](verification/spec16/round1-integration.json).
+
+Repairs: authoring `f2f664b` (N1, N3) and structure `1f13163` (N2), integrated with root locales, a rebuilt production bundle and the real root/PostgreSQL/Chromium journeys `tests/test_writing_review2_product.py` in `12087ce`.
+
+## Third review of `12087ce`: safety OK with notes, journey OK with notes
+
+Two fresh read-only reviewers read the `d9bb1b3..12087ce` diff. They were not given this record's conclusions, were told not to touch the shared PostgreSQL cluster, and ran no database tests; they are the same model family as the integrator, so this is an independent read, not an independent vendor. Neither found a P0 or P1.
+
+| Finding | Round-3 disposition |
+|---|---|
+| N1 | **Closed.** Insert-before/after, deletes, undo/redo, remote refresh, rapid view toggles and offline variants held in mounted Chromium; the real root journey passes. |
+| N2 | **Closed at the data level.** Raw persisted `sceneId`, no alias, `source_removed` alignment and C remapped are asserted. The reviewer noted the test never read Shot Stage headings; `a0bed56` now asserts the user-visible grouping (removed shot in the headingless group, two headed groups, or a single headingless group after adaptation). |
+| N3 | **Closed with two P2 notes** (below). |
+
+Safety notes: `trusted_writer` is a Python-only argument with five in-process callers and cannot be reached from a request; write authority is rechecked before every association write; the hook never takes the project advisory lock while holding a tab lock; the savepoint helper does not commit the caller's transaction; association writes touch only `meta.sceneId`, `detachedScene` and the shot label, never row IDs, `storyOrigin`, media or takes; nothing in the hook triggers generation, Judge debit or provider calls.
+
+Open or fixed P2 notes (full list with IDs in [the current receipt](spec16-verification.json)):
+
+- **Fixed in `a0bed56`:** `table_edits.apply` re-raised every `StoryError` except the two writing lock/conflict codes, so a 403/413/mapping error from the new save hook escaped the `(status, result)` contract that `flow_runner` converts to `ExecutionError`. It now returns the real status and code; plain `ValueError` still maps to 400. A new regression errors on the old code and passes on the new.
+- **Open, residual risk:** the save hook reads every `writing_structure` record and reconciles twice per screenplay autosave while holding the source-tab lock (not measured server-side); `association_changes` snapshots shots before the tab locks are taken, so a concurrent Story-lane label edit can be overwritten or a concurrent shot DELETE can 500 (nothing is lost, the savepoint rolls back); enrolled-episode saves now fail at save time for unresolved mappings, the 500,000 code-point cap and cross-project images.
+- **Open, user decision:** the outline merge form labels fields with raw `scenePatches:{sceneKey}:{field}` paths instead of the scene title or lane name, and saving it with the default (shared) choices permanently discards unselected private draft values without a confirmation or automatic export.
+- P3 polish items are listed in the receipt.
+
+## Integration evidence at `a0bed56`
+
+RAN, zero failures/errors/skips: full backend **704**, frontend **278**, the six real root/PostgreSQL/Chromium N1–N3 journeys, the installed wheel built from the exact archive and tested outside the checkout (**113**), with all **170** declared installed-file identities byte-identical. The production build ran at `12087ce`; `ui/src` is unchanged since. The original checkout was verified unchanged (HEAD, branch, index, status, 810/810 file hashes).
+
+The session was interrupted once while the owned PostgreSQL cluster was running. The first full-backend log (27 tests) is kept as incomplete evidence. On restart, Windows' excluded TCP port range 50273–50372 now covered the historical port 50367, so the same data directory was started on loopback 55471; the cluster is stopped again.
+
 ## Current review status
 
-**Independent re-review pending.** The original BLOCK remains the valid historical verdict for `3d303a2`. Scoped repair readiness and passing integration regressions do not predeclare the next reviewers' result, user acceptance, model quality, billing guarantees or publication authorization.
+Both round-3 independent reviews returned **OK with notes** with no P0/P1. The notes marked open above are not closed by this record. User acceptance is the user's decision; engineering readiness here does not predeclare model quality, billing guarantees or publication authorization.
 
 No push, deployment, model/provider inference, root-checkout promotion, global default change or foreign service stop is authorized by this record.
