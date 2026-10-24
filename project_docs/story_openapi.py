@@ -361,6 +361,7 @@ def shot_meta(conn, identifier):
 
 
 def shot_view(conn, slug, row):
+    from project_docs import story_trim
     identifier = shot_id(slug, row)
     meta = shot_meta(conn, identifier)
     fields = dict(zip(row["headers"], row["cells"]))
@@ -385,16 +386,22 @@ def shot_view(conn, slug, row):
             "complexity": worker.evaluate_shot_complexity({**fields, "reviewStatus": status}),
             "readiness": {"ready": bool(output("image") or has_previs or not missing), "missingAssets": missing,
                           "hasPrevis": has_previs, "hasDialogue": bool(meta.get("dialogue"))},
-            "selectedImageUrl": output("image"), "selectedVideoUrl": output("video"), "previsVideoUrl": previs}
+            "selectedImageUrl": output("image"), "selectedVideoUrl": output("video"), "previsVideoUrl": previs,
+            "trim": story_trim.view(meta, output("video"))}
 
 
-def film_cut(items, fill_previs=False):
-    """Video URLs of an episode film in shot order: the cinema slate is the cut; a lab clip joins once it is approved.
+def film_shots(items, fill_previs=False):
+    """(shot, video URL) of an episode film in shot order: the cinema slate is the cut; a lab clip joins once it is approved.
     fill_previs: a slate shot without a take plays its grey previs, so the whole episode can be watched before it is shot."""
     ordered = sorted(items, key=lambda s: tuple((0, int(part)) if part.isdigit() else (1, part.casefold()) for part in re.split(r"(\d+)", str(s["shotIndex"]))))
     take = lambda s: s["selectedVideoUrl"] or (fill_previs and s["tabKey"] == "cinema-studio" and s.get("previsVideoUrl")) or None
-    return [take(s) for s in ordered if take(s)
+    return [(s, take(s)) for s in ordered if take(s)
             and (s["tabKey"] == "cinema-studio" or s.get("reviewStatus") in ("Approved", "已完成"))]
+
+
+def film_cut(items, fill_previs=False):
+    """Video URLs of an episode film in shot order (see film_shots)."""
+    return [url for _, url in film_shots(items, fill_previs)]
 
 
 def shots(conn, ep):
@@ -552,6 +559,9 @@ def select_candidate(conn, me, identifier, kind, body):
     slug, row = find_row(conn, identifier, "shot" if identifier.startswith("sh_") else "asset")
     column = media_column(row, kind)
     mutate_row(conn, me, slug, row["tabKey"], row["rid"], {column: f"[{'Image' if kind == 'image' else 'Video'}]({chosen['url']})"})
+    if kind == "video" and identifier.startswith("sh_"):
+        from project_docs import story_trim
+        story_trim.reset(conn, slug, identifier)
     return chosen
 
 
@@ -877,7 +887,8 @@ def execute_task(identifier):
             output = {"scriptContent": result.answer}
         elif task["type"] == "FILM_EXPORT":
             from project_assistant import execution_governance as governance
-            output = governance.run_operation(head.accounting_context, identifier + ':export', lambda: worker.ffmpeg({"id": identifier, "input": {"rows": [{"row_id": str(i), "cells": [url]} for i, url in enumerate(job["urls"])]}},
+            from project_docs import story_trim
+            output = governance.run_operation(head.accounting_context, identifier + ':export', lambda: worker.ffmpeg({"id": identifier, "input": {"rows": story_trim.film_rows(job)}},
                                    dict(job["config"], timeout=head.outbound_timeout(job['config'].get('timeout',1800)),
                                         probe_timeout=head.outbound_timeout(job['config'].get('probe_timeout',60))), head))
         else:
@@ -927,6 +938,9 @@ def execute_task(identifier):
                 # A delayed render is kept as a candidate, not allowed to overwrite a newer selection.
                 if row["cells"] == job["row"]["cells"]:
                     mutate_row(conn, me, slug, row["tabKey"], row["rid"], {job["column"]: f"[{job['kind']}]({output['asset_url']})"})
+                    if job["kind"] == "video" and job["entityId"].startswith("sh_"):
+                        from project_docs import story_trim
+                        story_trim.reset(conn, slug, job["entityId"])
                     result["selected"] = True
                 else:
                     result["selected"] = False
@@ -1074,6 +1088,10 @@ def notify(owner, task):
 
 def dispatch(conn, me, method, path, body, query, actions):
     """Return unwrapped data; callers own commit, rollback and post-commit launches."""
+    from project_docs import story_alignment
+    previewed = story_alignment.dispatch(conn, me, method, path, body)  # read-only previews, open to viewers
+    if previewed is not None:
+        return previewed
     if method != "GET" and not me.can_write:
         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
     parts = path.strip("/").split("/")
@@ -1346,10 +1364,12 @@ def dispatch(conn, me, method, path, body, query, actions):
             if method == "GET":
                 return page([f for f in records(conn, "film", slug) if f["episodeId"] == ep["episodeId"]], query)
             if method == "POST":
-                urls = film_cut(shots(conn, ep), fill_previs=body.get("fillPrevis") is True)
-                if not urls:
+                from project_docs import story_trim
+                clips = film_shots(shots(conn, ep), fill_previs=body.get("fillPrevis") is True)
+                if not clips:
                     raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Select at least one shot video before exporting a film.")
-                return queue_task(conn, me, slug, "FILM_EXPORT", {"episodeId": ep["episodeId"], "urls": urls, "config": {}}, actions)
+                return queue_task(conn, me, slug, "FILM_EXPORT", {"episodeId": ep["episodeId"], "urls": [url for _, url in clips],
+                                                                   "trims": story_trim.film_trims(clips), "config": {}}, actions)
     if parts[0] in ("assets", "shots") and len(parts) >= 2:
         identifier = parts[1]; entity = "asset" if parts[0] == "assets" else "shot"
         slug, row = find_row(conn, identifier, entity); tail = "/".join(parts[2:])
@@ -1391,6 +1411,10 @@ def dispatch(conn, me, method, path, body, query, actions):
             return next(c for c in candidate_list(conn, identifier, "image") if c["url"] == url)
         if tail in ("selected-image", "selected-video") and method == "PUT":
             return select_candidate(conn, me, identifier, "image" if tail.endswith("image") else "video", body)
+        if entity == "shot" and tail == "trim" and method == "PUT":
+            from project_docs import story_trim
+            story_trim.set_trim(conn, slug, identifier, row, body)
+            return view()
         if entity == "shot" and tail == "grades":
             from project_assistant import take_grader
             if method == "GET":
@@ -1466,7 +1490,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             mutate_row(conn, me, slug, row["tabKey"], row["rid"], dict(enumerate(first)))
             rid = mutate_row(conn, me, slug, row["tabKey"], cells=dict(enumerate(second)), after=row["rid"])
             other = f"sh_{slug}_{rid}"
-            store(conn, "meta_" + other, "shot_meta", shot_meta(conn, identifier), slug)
+            from project_docs import story_trim
+            store(conn, "meta_" + other, "shot_meta", story_trim.strip(shot_meta(conn, identifier)), slug)  # the new half has no take yet
             return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1])]}
     if parts[0] == "scenes" and len(parts) >= 2:
         ep, scene = locate_scene(conn, parts[1]); tail = "/".join(parts[2:])
@@ -1635,7 +1660,7 @@ def handle(handler, parsed, method):
         if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
             raise StoryError(400, "DRAMA_REQUEST_FAILED", "Unsupported method.")
         if method != "GET":
-            if not me.can_write:
+            if not me.can_write and not re.fullmatch(BASE + r"/episodes/[^/]+/script-impact/?", parsed.path):  # a read-only preview
                 raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
             # Explicit bearer credentials are not ambient cookies; browser writes retain CSRF checks.
             if not handler.headers.get("Authorization", "").startswith("Bearer "):

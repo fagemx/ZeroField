@@ -242,8 +242,25 @@ def prepare_reference_media(task, config, head, mode):
                     **({"asset_id": identifier} if re.fullmatch(r"pa_[0-9a-f]{32}", identifier) else {}))
 
 
+def _trim_window(trim, clip_seconds, fps, position):
+    """(start, length) in seconds of the part of a clip that an {'in', 'out'} trim keeps; an out past the end plays to the end."""
+    try:
+        start = float(trim.get("in") or 0)
+        end = clip_seconds if trim.get("out") is None else min(float(trim["out"]), clip_seconds)
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        raise runtime.WorkerError(f"Clip {position + 1} has an invalid trim") from None
+    if not (math.isfinite(start) and math.isfinite(end)) or start < 0:
+        raise runtime.WorkerError(f"Clip {position + 1} has an invalid trim")
+    if end - start < 0.5 / fps:
+        raise runtime.WorkerError(f"Clip {position + 1} is trimmed to start at {start:.2f}s but its take ends at {end:.2f}s")
+    return start, end - start
+
+
 def assemble_files(clips, destination, config):
-    """Normalize videos/stills with optional paired narration; concatenate in row order."""
+    """Normalize videos/stills with optional paired narration; concatenate in row order.
+
+    A clip is (path, mime, audio) or (path, mime, audio, trim); trim is {'in': seconds, 'out': seconds or None}.
+    Only video is trimmed (stills are not), cut on the output frame grid so each part is a whole number of frames."""
     binary = config.get("ffmpeg", "ffmpeg")
     width, height, fps = (int(config.get(k, default)) for k, default in (("width", 1280), ("height", 720), ("fps", 24)))
     if not (16 <= width <= 4096 and 16 <= height <= 4096 and width % 2 == height % 2 == 0 and 1 <= fps <= 120):
@@ -276,7 +293,8 @@ def assemble_files(clips, destination, config):
     with tempfile.TemporaryDirectory(prefix="openbench-render-") as folder:
         normalized = []
         for i, clip in enumerate(clips):
-            path, mime, audio = clip
+            path, mime, audio = clip[:3]
+            trim = clip[3] if len(clip) > 3 and not mime.startswith("image/") else None
             target = Path(folder) / f"clip-{i:04d}.mp4"
             probe = config.get("ffprobe", "ffprobe")
             try:
@@ -290,20 +308,25 @@ def assemble_files(clips, destination, config):
                     raise ValueError("Invalid video duration")
             except (OSError, subprocess.SubprocessError, ValueError, KeyError, StopIteration):
                 raise runtime.WorkerError("FFprobe could not inspect the media input and duration") from None
-            args = (["-loop", "1"] if mime.startswith("image/") else []) + ["-i", str(path)]
+            seek, frames = [], None
+            if trim:
+                start, kept = _trim_window(trim, clip_seconds, fps, i)
+                seek, frames = ["-ss", f"{start:.6f}"], max(1, round(kept * fps))
+            args = (["-loop", "1"] if mime.startswith("image/") else []) + seek + ["-i", str(path)]
             if audio:
-                args += ["-i", str(audio), "-map", "0:v:0", "-map", "1:a:0"]
+                args += seek + ["-i", str(audio), "-map", "0:v:0", "-map", "1:a:0"]
             else:
                 # Normalize with a silent track if input has no audio; retain existing audio.
                 if has_audio:
                     args += ["-map", "0:v:0", "-map", "0:a:0"]
                 else:
                     args += ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-map", "0:v:0", "-map", "1:a:0"]
-            args += ["-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}",
+            # A trimmed clip restarts its clock so the first kept frame lands on 0 whatever frame the cut fell in.
+            args += ["-vf", ("setpts=PTS-STARTPTS," if frames else "") + f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}",
                      "-c:v", "libx264", "-preset", config.get("preset", "veryfast"), "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-af", "apad", "-shortest"]
             # Explicit duration prevents AAC padding / shortest mux buffering from
             # growing each normalized clip and introducing gaps during concat.
-            args += ["-t", str(clip_seconds)]
+            args += ["-frames:v", str(frames), "-t", f"{frames / fps:.6f}"] if frames else ["-t", str(clip_seconds)]
             run(args + ["-movflags", "+faststart", str(target)])
             normalized.append(target)
         if not normalized:
@@ -355,10 +378,12 @@ def ffmpeg(task, config, head):
             if destination.stat().st_size > legacy.MAX_MEDIA:
                 raise runtime.WorkerError("Assembled movie exceeds 64 MB; reduce resolution or duration")
             return head.upload(task, destination.read_bytes(), "video/mp4")
-    groups = {}
+    groups, trims = {}, {}
     # Freeze sheet order first; predecessor outputs override older assets in each row.
     for i, row in enumerate(source.get("rows", [])):
         groups[row.get("row_id") or str(i)] = context_compiler._media_urls(row)
+        if row.get("trim"):
+            trims[row.get("row_id") or str(i)] = row["trim"]  # a row's {'in', 'out'} cut of its video
     for result in source.get("predecessor_tasks", []):
         key = result.get("row_id") or result.get("node_id")
         groups.setdefault(key, []).extend(context_compiler._media_urls(result.get("output", {})))
@@ -368,7 +393,7 @@ def ffmpeg(task, config, head):
             groups[str(i)] = [url]
     with tempfile.TemporaryDirectory(prefix="openbench-assets-") as folder:
         clips = []
-        for index, urls in enumerate(groups.values()):
+        for index, (key, urls) in enumerate(groups.items()):
             candidates, audio = [], None
             for j, url in enumerate(dict.fromkeys(urls)):
                 data, mime = head.asset(task, url)
@@ -380,7 +405,7 @@ def ffmpeg(task, config, head):
                     audio = path
             if candidates:
                 visual = next((c for c in reversed(candidates) if c[1].startswith("video/")), candidates[-1])
-                clips.append((*visual, audio))
+                clips.append((*visual, audio, trims[key]) if key in trims else (*visual, audio))
         destination = Path(folder) / "movie.mp4"
         legacy.assemble_files(clips, destination, dict(config, _lease_lost=getattr(head, "lease_lost", lambda: False)))
         if destination.stat().st_size > legacy.MAX_MEDIA:
