@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {WritingOutlineRecovery,outlineReviewFields} from '../src/writing/writingOutlineRecovery.js';
+import {WritingOutlineRecovery,outlineReviewFields,outlineNames} from '../src/writing/writingOutlineRecovery.js';
 import {draftSceneMembership,replaceSceneBlocks,sceneBlocks,sceneSliceBoundary,sceneSliceBlocks,replaceSceneSlice} from '../src/writing/writingModel.js';
 import {readFile} from 'node:fs/promises';
 const memory=()=>{const rows=new Map();return {rows,list:async scope=>[...rows.values()].filter(row=>row.scope===scope),put:async(key,value)=>{rows.set(key,structuredClone({...value,key}));},remove:async(key,sequence)=>{if(rows.get(key)?.localSequence<=sequence)rows.delete(key);}};};
@@ -106,6 +106,15 @@ test('N3 same metadata values alone do not authorize an unproven version swap or
  const form=await create({journal,flushDocument:async()=>({safe:true,structure:remote,ownDocumentAdvance:false}),transport:async()=>{calls++;}});
  form.change({sceneKey:'s',summary:'mine'});assert.equal(await form.save(),false);assert.equal(form.base.version,1);assert.equal(form.state,'conflict');assert.equal(calls,0);
  const review=form.reviewCurrent(remote);form.change({sceneKey:'s',storyTime:'new input invalidates review'});assert.equal(await form.resolveReviewed(review,Object.fromEntries(review.fields.map(f=>[f.path,'local'])),remote),false);form.dispose();
+});
+test('merge review names come from the shared structure, then the base, then the private draft',async()=>{
+ const base=structure(1);base.scenes[0].title='Scene 01: Old';
+ const current=structure(2);current.scenes[0].title='Scene 01: New';current.lanes=[{laneId:'lane',name:'Renamed',order:1}];
+ assert.deepEqual(outlineNames(base,current,{scenePatches:[],lanePatches:[{laneId:'draftOnly',name:'Draft lane'},{laneId:'lane',name:'Ignored draft rename'}]}),
+  {scenes:{s:{title:'Scene 01: New',number:1}},lanes:{lane:'Renamed',draftOnly:'Draft lane'}});
+ const form=await create({});const remote=structure(2);remote.scenes[0].title='Scene 01: Shared';
+ form.change({sceneKey:'s',summary:'mine'});form.conflict=true;form.state='conflict';
+ assert.equal(form.reviewCurrent(remote).names.scenes.s.title,'Scene 01: Shared');form.dispose();
 });
 test('lane-local bilingual additions have matching semantic keys and interpolation variables',async()=>{
  const en=JSON.parse(await readFile(new URL('../src/writing/locales/review2-authoring.en.json',import.meta.url)));

@@ -3,7 +3,7 @@
   "outlineConflictReviewNotice": "The shared structure changed. This draft keeps base version {{version}} and will not overwrite the current metadata. Review the current shared fields and explicitly choose which draft values to merge, or keep/download this private draft.",
   "reviewOutline": "Read current outline for reviewed merge",
   "outlineMerge": "Review outline metadata merge",
-  "outlineMergeInstructions": "Compare your original base, current shared version {{version}}, and private draft. Choose each field explicitly. Saving writes only chosen draft fields with this reviewed version as the CAS base.",
+  "outlineMergeInstructions": "Compare your original base, current shared version {{version}}, and private draft. Choose each field explicitly. Saving writes only the draft fields you choose, on top of this reviewed version.",
   "outlineMergeBase": "Original base",
   "outlineMergeServer": "Current shared value",
   "outlineMergeLocal": "Private draft value",
@@ -13,5 +13,15 @@
   "outlineUnset": "Not set",
   "outlineIdentityChanged": "This scene or lane identity is missing or changed. Its draft field cannot be applied to a different source.",
   "saveReviewedOutline": "Save explicitly reviewed outline merge",
-  "outlineReviewStale": "The outline or draft changed after review. Read and review the current fields again."
+  "outlineReviewStale": "The outline or draft changed after review. Read and review the current fields again.",
+  "outlineMergeLane": "Plot lane “{{name}}”",
+  "outlineMergePlot": "Plot cells",
+  "outlineMergeLaneName": "Lane name",
+  "outlineMergeLaneOrder": "Lane order",
+  "outlineMergeFieldLabel": "{{subject}} · {{field}}",
+  "outlineDropTitle": "{{count}} private draft values will be discarded",
+  "outlineDropExplain": "You kept the current shared value for the fields below, so your private draft values for them will be permanently removed when you save. Download them first if you may still need them.",
+  "outlineDropDownload": "Download discarded values",
+  "outlineDropBack": "Go back and choose again",
+  "outlineDropConfirm": "Discard these values and save"
 }

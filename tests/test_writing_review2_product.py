@@ -90,11 +90,39 @@ class WritingReview2ProductTests(unittest.TestCase):
             page.get_by_role('button',name='Read current outline for reviewed merge',exact=True).click()
             form=page.get_by_role('form',name='Review outline metadata merge',exact=True)
             expect(form).to_contain_text('Remote concurrent summary');expect(form).to_contain_text('Private concurrent summary')
-            form.get_by_label('Value to keep scenePatches:'+key+':summary',exact=True).select_option('local')
+            expect(form).not_to_contain_text(key);expect(form).not_to_contain_text('scenePatches')
+            form.get_by_label('Value to keep Scene 01: Joint · Summary',exact=True).select_option('local')
             form.get_by_role('button',name='Save explicitly reviewed outline merge',exact=True).click()
             expect(page.locator('.writing-outline-recovery')).to_have_count(0,timeout=15000)
             final=self.f.writing('workspace');self.assertEqual(final['structure']['scenes'][0]['summary'],'Private concurrent summary');self.assertEqual(final['structure']['scenes'][0]['payoff'],'Unrelated remote payoff')
             self.assertEqual(len(patches),2)
+
+    def test_N3_keeping_the_shared_value_confirms_before_discarding_the_private_draft(self):
+        from playwright.sync_api import expect
+        self.f.init();self.f.save_doc(core.document('Scene 01: Joint','Existing action.'))
+        ws=self.f.writing('workspace');body=ws['doc']['content'][1]['attrs']['bid'];key=ws['structure']['scenes'][0]['sceneKey']
+        with self.browser() as (page,context,base):
+            editor=page.get_by_role('textbox',name='Manuscript editor');page.get_by_role('button',name='Plot overview',exact=True).click()
+            patches=[]
+            page.on('request',lambda req:patches.append(req.post_data_json) if req.method=='PATCH' and req.url.endswith('/writing/structure/metadata') else None)
+            self.at(editor,body,text=' Own manuscript advance.')
+            page.get_by_role('textbox',name='Summary',exact=True).fill('Private summary to protect')
+            self.f.writing('structure/metadata','PATCH',{'baseVersion':ws['structure']['version'],'clientMutationId':uuid.uuid4().hex,'scenePatches':[{'sceneKey':key,'summary':'Remote summary wins'}],'lanePatches':[]})
+            page.keyboard.press('Control+s')
+            expect(page.locator('.writing-outline-recovery')).to_contain_text('Conflict',timeout=15000)
+            page.get_by_role('button',name='Read current outline for reviewed merge',exact=True).click()
+            form=page.get_by_role('form',name='Review outline metadata merge',exact=True)
+            expect(form.get_by_label('Value to keep Scene 01: Joint · Summary',exact=True)).to_have_value('server')
+            form.get_by_role('button',name='Save explicitly reviewed outline merge',exact=True).click()
+            alert=form.get_by_role('alert').filter(has_text='private draft values will be discarded')
+            expect(alert).to_contain_text('Private summary to protect');expect(alert).to_be_focused()
+            self.assertEqual(self.f.writing('workspace')['structure']['scenes'][0]['summary'],'Remote summary wins')
+            with page.expect_download() as download:alert.get_by_role('button',name='Download discarded values',exact=True).click()
+            self.assertIn('Private summary to protect',Path(download.value.path()).read_text(encoding='utf8'))
+            alert.get_by_role('button',name='Discard these values and save',exact=True).click()
+            expect(page.locator('.writing-outline-recovery')).to_have_count(0,timeout=15000)
+            final=self.f.writing('workspace');self.assertEqual(final['structure']['scenes'][0]['summary'],'Remote summary wins')
+            self.assertIn('Own manuscript advance.',json.dumps(final['doc']));self.assertEqual(patches,[])
 
     def prepare_abc(self):
         from project_docs import story_openapi as story

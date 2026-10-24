@@ -1,23 +1,59 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n/react.jsx';
-import { documentText, sceneBlocks } from './writingModel.js';
+import { documentText, sceneBlocks, stable } from './writingModel.js';
 const key='writing.authoring.';
+const sceneFields=['summary','storyTime','act','foreshadowing','payoff'];
+// Private draft values that the chosen merge would drop: the author kept the shared value instead.
+const droppedFields=(review,choices)=>review.fields.filter(field=>choices[field.path]==='server'&&field.local!==undefined&&stable(field.local)!==stable(field.server));
 export function WritingOutlineMerge({review,onApply}) {
   const {t}=useTranslation();
   const [choices,setChoices]=useState(()=>Object.fromEntries(review.fields.map(field=>[field.path,field.unchanged?'local':'server'])));
-  const value=text=>text===undefined?t(key+'outlineUnset'):JSON.stringify(text,null,2);
-  return <form aria-label={t(key+'outlineMerge')} onSubmit={event=>{event.preventDefault();onApply(choices);}}>
+  const [confirming,setConfirming]=useState(false);
+  const warning=useRef(null);
+  useEffect(()=>{if(confirming)warning.current?.focus();},[confirming]);
+  const names=review.names||{scenes:{},lanes:{}};
+  const laneName=id=>names.lanes[id]||id;
+  const sceneName=id=>{
+    const scene=names.scenes[id],name=scene?.title||(scene?t(key+'sceneNumber',{number:scene.number}):id);
+    // Two scenes may share a title; the number keeps them apart without showing internal IDs.
+    return scene&&Object.entries(names.scenes).some(([other,item])=>other!==id&&item.title===scene.title)?name+' (#'+scene.number+')':name;
+  };
+  const subject=field=>field.kind==='scenePatches'?sceneName(field.id):t(key+'outlineMergeLane',{name:laneName(field.id)});
+  const fieldName=field=>field.kind==='scenePatches'
+    ?(sceneFields.includes(field.field)?t(key+field.field):field.field==='plot'?t(key+'outlineMergePlot'):field.field)
+    :(field.field==='name'?t(key+'outlineMergeLaneName'):field.field==='order'?t(key+'outlineMergeLaneOrder'):field.field);
+  const label=field=>t(key+'outlineMergeFieldLabel',{subject:subject(field),field:fieldName(field)});
+  const show=(field,value)=>{
+    if(value===undefined)return t(key+'outlineUnset');
+    if(field.field==='plot'&&value&&typeof value==='object')return Object.entries(value).map(([id,text])=>laneName(id)+': '+text).join('\n')||t(key+'outlineUnset');
+    return typeof value==='string'?value:JSON.stringify(value,null,2);
+  };
+  const dropped=droppedFields(review,choices);
+  const choose=(path,value)=>{setConfirming(false);setChoices(current=>({...current,[path]:value}));};
+  const download=()=>{
+    const blob=new Blob([JSON.stringify({kind:'outline-discarded-values',baseVersion:review.structure.version,fields:dropped.map(field=>({subject:subject(field),field:fieldName(field),privateDraftValue:field.local,keptSharedValue:field.server}))},null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='outline-discarded-values.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);
+  };
+  return <form aria-label={t(key+'outlineMerge')} onSubmit={event=>{event.preventDefault();if(dropped.length)setConfirming(true);else onApply(choices);}}>
     <p>{t(key+'outlineMergeInstructions',{version:review.structure.version})}</p>
-    {review.fields.map(field=><fieldset key={field.path}><legend><code>{field.path}</code></legend>
-      <label>{t(key+'outlineMergeBase')}<pre>{value(field.base)}</pre></label>
-      <label>{t(key+'outlineMergeServer')}<pre>{value(field.server)}</pre></label>
-      <label>{t(key+'outlineMergeLocal')}<pre>{value(field.local)}</pre></label>
+    {review.fields.map(field=><fieldset key={field.path}><legend>{label(field)}</legend>
+      <div><strong>{t(key+'outlineMergeBase')}</strong><pre>{show(field,field.base)}</pre></div>
+      <div><strong>{t(key+'outlineMergeServer')}</strong><pre>{show(field,field.server)}</pre></div>
+      <div><strong>{t(key+'outlineMergeLocal')}</strong><pre>{show(field,field.local)}</pre></div>
       {!field.mergeable&&<p role="alert">{t(key+'outlineIdentityChanged')}</p>}
-      <label>{t(key+'outlineMergeChoice')}<select aria-label={t(key+'outlineMergeChoice')+' '+field.path} value={choices[field.path]} onChange={event=>setChoices(current=>({...current,[field.path]:event.target.value}))}>
+      <label>{t(key+'outlineMergeChoice')}<select aria-label={t(key+'outlineMergeChoice')+' '+label(field)} value={choices[field.path]} onChange={event=>choose(field.path,event.target.value)}>
         <option value="server">{t(key+'outlineUseServer')}</option><option value="local" disabled={!field.mergeable}>{t(key+'outlineUseLocal')}</option>
       </select></label>
     </fieldset>)}
-    <button type="submit">{t(key+'saveReviewedOutline')}</button>
+    <button type="submit" disabled={confirming}>{t(key+'saveReviewedOutline')}</button>
+    {confirming&&<div role="alert" tabIndex={-1} ref={warning} className="writing-outline-discard">
+      <h3>{t(key+'outlineDropTitle',{count:dropped.length})}</h3>
+      <p>{t(key+'outlineDropExplain')}</p>
+      <ul>{dropped.map(field=><li key={field.path}><strong>{label(field)}</strong><pre>{show(field,field.local)}</pre></li>)}</ul>
+      <button type="button" onClick={download}>{t(key+'outlineDropDownload')}</button>
+      <button type="button" onClick={()=>setConfirming(false)}>{t(key+'outlineDropBack')}</button>
+      <button type="button" onClick={()=>onApply(choices)}>{t(key+'outlineDropConfirm')}</button>
+    </div>}
   </form>;
 }
 export function WritingOutline({structure,metadataDraft,doc,writable,selected,onSelect,onMetadata,onStructure,onShots,onUndo,onComposition}) {

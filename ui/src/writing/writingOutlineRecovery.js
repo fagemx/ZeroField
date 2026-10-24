@@ -21,6 +21,18 @@ export function outlineReviewFields(base,current,draft) {
   return fields;
 }
 
+// Names the merge form shows instead of stable IDs: the current shared structure wins, then the original base,
+// and a lane created only in the private draft keeps its draft name.
+export function outlineNames(base,current,draft) {
+  const scenes={},lanes={};
+  for(const source of [base,current]){
+    (source.scenes||[]).forEach((scene,index)=>{scenes[scene.sceneKey]={title:scene.title||scene.heading||'',number:index+1};});
+    (source.lanes||[]).forEach(lane=>{lanes[lane.laneId]=lane.name||'';});
+  }
+  for(const patch of draft.lanePatches||[])if(patch.name&&!lanes[patch.laneId])lanes[patch.laneId]=patch.name;
+  return {scenes,lanes};
+}
+
 // Metadata-only adapter over the same bounded, actor-scoped manuscript journal.
 // A draft retains the structure CAS it was authored against, including after reload.
 export class WritingOutlineRecovery {
@@ -137,7 +149,7 @@ export class WritingOutlineRecovery {
   }
   reviewCurrent(current){
     if(!this.conflict||this.state==='auth_lost'||this.inflight)return false;
-    this.review={structure:clone(current),sequence:this.sequence,fields:outlineReviewFields(this.base,current,this.draft)};this.emit();return this.review;
+    this.review={structure:clone(current),sequence:this.sequence,fields:outlineReviewFields(this.base,current,this.draft),names:outlineNames(this.base,current,this.draft)};this.emit();return this.review;
   }
   async resolveReviewed(review,choices,current){
     if(this.disposed||this.inflight||this.state==='auth_lost'||!this.conflict||review!==this.review||review.sequence!==this.sequence||review.structure.version!==current.version||stable(review.structure)!==stable(current))return false;

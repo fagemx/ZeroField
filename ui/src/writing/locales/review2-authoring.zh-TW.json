@@ -3,7 +3,7 @@
   "outlineConflictReviewNotice": "共享結構已變更。此草稿保留基底版本 {{version}}，不會覆寫目前的中繼資料。請檢視目前共享欄位，明確選擇要合併的草稿值，或保留／下載此私人草稿。",
   "reviewOutline": "讀取目前情節總覽以檢視合併",
   "outlineMerge": "檢視情節總覽中繼資料合併",
-  "outlineMergeInstructions": "比較原始基底、目前共享版本 {{version}} 與私人草稿。請明確選擇每個欄位。儲存僅寫入選定的草稿欄位，並以此檢視版本作為 CAS 基底。",
+  "outlineMergeInstructions": "比較原始基底、目前共享版本 {{version}} 與私人草稿。請明確選擇每個欄位。儲存時只會把您選定的草稿欄位寫在此檢視版本之上。",
   "outlineMergeBase": "原始基底",
   "outlineMergeServer": "目前共享值",
   "outlineMergeLocal": "私人草稿值",
@@ -13,5 +13,15 @@
   "outlineUnset": "未設定",
   "outlineIdentityChanged": "此場次或情節線的身分已遺失或變更。不可將其草稿欄位套用至不同來源。",
   "saveReviewedOutline": "儲存明確檢視的情節總覽合併",
-  "outlineReviewStale": "檢視後情節總覽或草稿已變更。請重新讀取並檢視目前欄位。"
+  "outlineReviewStale": "檢視後情節總覽或草稿已變更。請重新讀取並檢視目前欄位。",
+  "outlineMergeLane": "情節線「{{name}}」",
+  "outlineMergePlot": "情節格",
+  "outlineMergeLaneName": "情節線名稱",
+  "outlineMergeLaneOrder": "情節線順序",
+  "outlineMergeFieldLabel": "{{subject}} · {{field}}",
+  "outlineDropTitle": "將捨棄 {{count}} 個私人草稿值",
+  "outlineDropExplain": "您對下列欄位保留了目前的共享值，因此儲存後這些私人草稿值會被永久移除。若之後可能還需要，請先下載。",
+  "outlineDropDownload": "下載將捨棄的值",
+  "outlineDropBack": "返回重新選擇",
+  "outlineDropConfirm": "捨棄這些值並儲存"
 }

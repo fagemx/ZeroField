@@ -281,16 +281,39 @@ test('N3 true concurrent metadata is preserved and resolved only by a fresh expl
  merge=page.get_by_role('form',name='Review outline metadata merge',exact=True)
  expect(merge).to_contain_text('Remote summary')
  expect(merge).to_contain_text('Private summary')
- expect(merge.get_by_label('Value to keep scenePatches:sceneB:summary',exact=True)).to_have_value('server')
- merge.get_by_label('Value to keep scenePatches:sceneB:summary',exact=True).select_option('local')
+ # The form names scenes and lanes the way the author sees them, never by internal path or ID.
+ expect(merge).to_contain_text('Scene 02: Selected')
+ expect(merge).to_contain_text('Signal: Remote plot')
+ expect(merge).not_to_contain_text('scenePatches')
+ expect(merge).not_to_contain_text('sceneB')
+ expect(merge.get_by_label('Value to keep Scene 02: Selected · Summary',exact=True)).to_have_value('server')
+ merge.get_by_label('Value to keep Scene 02: Selected · Summary',exact=True).select_option('local')
  # A newer version after review invalidates the entire selection; no stale merge request is sent.
  page.evaluate("sceneMetadata.B.storyTime='Remote time after review';version++")
  merge.get_by_role('button',name='Save explicitly reviewed outline merge',exact=True).click()
+ merge.get_by_role('alert').filter(has_text='private draft values will be discarded').get_by_role('button',name='Discard these values and save',exact=True).click()
  expect(page.get_by_text('The outline or draft changed after review.',exact=False)).to_be_visible()
  assert page.evaluate("calls.filter(c=>c.path.endsWith('structure/metadata')).length")==0
- merge.get_by_label('Value to keep scenePatches:sceneB:summary',exact=True).select_option('local')
- merge.get_by_label('Value to keep scenePatches:sceneB:plot',exact=True).select_option('local')
+ merge.get_by_label('Value to keep Scene 02: Selected · Summary',exact=True).select_option('local')
+ merge.get_by_label('Value to keep Scene 02: Selected · Plot cells',exact=True).select_option('local')
+ # Story time stays on the shared value, so the private value would be dropped: confirm first, offer a download, allow going back.
  merge.get_by_role('button',name='Save explicitly reviewed outline merge',exact=True).click()
+ alert=merge.get_by_role('alert').filter(has_text='private draft values will be discarded')
+ expect(alert).to_contain_text('1 private draft values will be discarded')
+ expect(alert).to_contain_text('Scene 02: Selected · Story time')
+ expect(alert).to_contain_text('Private time')
+ expect(alert).to_be_focused()
+ assert page.evaluate("calls.filter(c=>c.path.endsWith('structure/metadata')).length")==0
+ with page.expect_download() as download:
+  alert.get_by_role('button',name='Download discarded values',exact=True).click()
+ assert download.value.suggested_filename=='outline-discarded-values.json'
+ saved=open(download.value.path(),encoding='utf8').read()
+ assert 'Private time' in saved and 'Scene 02: Selected' in saved and 'scenePatches' not in saved
+ alert.get_by_role('button',name='Go back and choose again',exact=True).click()
+ expect(alert).to_have_count(0)
+ assert page.evaluate("calls.filter(c=>c.path.endsWith('structure/metadata')).length")==0
+ merge.get_by_role('button',name='Save explicitly reviewed outline merge',exact=True).click()
+ merge.get_by_role('alert').filter(has_text='private draft values will be discarded').get_by_role('button',name='Discard these values and save',exact=True).click()
  page.wait_for_function('control.current.isDirty()===false')
  assert page.evaluate('sceneMetadata.B.summary')=='Private summary'
  assert page.evaluate('sceneMetadata.B.storyTime')=='Remote time after review'
