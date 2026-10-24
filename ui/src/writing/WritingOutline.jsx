@@ -4,19 +4,22 @@ import { documentText, sceneBlocks, stable } from './writingModel.js';
 const key='writing.authoring.';
 const sceneFields=['summary','storyTime','act','foreshadowing','payoff'];
 // Private draft values that the chosen merge would drop: the author kept the shared value instead.
-const droppedFields=(review,choices)=>review.fields.filter(field=>choices[field.path]==='server'&&field.local!==undefined&&stable(field.local)!==stable(field.server));
+// A value the author never changed from their own base (edited and restored) is not a discard.
+const droppedFields=(review,choices)=>review.fields.filter(field=>choices[field.path]==='server'&&field.local!==undefined&&stable(field.local)!==stable(field.server)&&stable(field.local)!==stable(field.base));
 export function WritingOutlineMerge({review,onApply}) {
   const {t}=useTranslation();
   const [choices,setChoices]=useState(()=>Object.fromEntries(review.fields.map(field=>[field.path,field.unchanged?'local':'server'])));
   const [confirming,setConfirming]=useState(false);
-  const warning=useRef(null);
-  useEffect(()=>{if(confirming)warning.current?.focus();},[confirming]);
+  const warning=useRef(null),save=useRef(null),returning=useRef(false);
+  // Focus the warning when it opens and give focus back to Save when the author goes back (the Back button unmounts).
+  useEffect(()=>{if(confirming)warning.current?.focus();else if(returning.current){returning.current=false;save.current?.focus();}},[confirming]);
   const names=review.names||{scenes:{},lanes:{}};
-  const laneName=id=>names.lanes[id]||id;
+  const laneName=id=>names.lanes[id]||t(key+'outlineMergeLaneUnnamed');
   const sceneName=id=>{
-    const scene=names.scenes[id],name=scene?.title||(scene?t(key+'sceneNumber',{number:scene.number}):id);
+    const scene=names.scenes[id];if(!scene)return t(key+'outlineMergeSceneUnknown');
+    const name=scene.title||t(key+'sceneNumber',{number:scene.number});
     // Two scenes may share a title; the number keeps them apart without showing internal IDs.
-    return scene&&Object.entries(names.scenes).some(([other,item])=>other!==id&&item.title===scene.title)?name+' (#'+scene.number+')':name;
+    return scene.title&&Object.entries(names.scenes).some(([other,item])=>other!==id&&item.title===scene.title)?t(key+'outlineMergeSceneDuplicate',{name,number:scene.number}):name;
   };
   const subject=field=>field.kind==='scenePatches'?sceneName(field.id):t(key+'outlineMergeLane',{name:laneName(field.id)});
   const fieldName=field=>field.kind==='scenePatches'
@@ -24,14 +27,16 @@ export function WritingOutlineMerge({review,onApply}) {
     :(field.field==='name'?t(key+'outlineMergeLaneName'):field.field==='order'?t(key+'outlineMergeLaneOrder'):field.field);
   const label=field=>t(key+'outlineMergeFieldLabel',{subject:subject(field),field:fieldName(field)});
   const show=(field,value)=>{
-    if(value===undefined)return t(key+'outlineUnset');
-    if(field.field==='plot'&&value&&typeof value==='object')return Object.entries(value).map(([id,text])=>laneName(id)+': '+text).join('\n')||t(key+'outlineUnset');
+    if(value===undefined||value==='')return t(key+'outlineUnset');
+    if(field.field==='plot'&&value&&typeof value==='object')return Object.entries(value).map(([id,text])=>t(key+'outlineMergePlotCell',{lane:laneName(id),text})).join('\n')||t(key+'outlineUnset');
     return typeof value==='string'?value:JSON.stringify(value,null,2);
   };
+  // The exported file carries the same names the author saw, never lane or scene IDs.
+  const plain=(field,value)=>field.field==='plot'&&value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([id,text])=>[laneName(id),text])):value;
   const dropped=droppedFields(review,choices);
   const choose=(path,value)=>{setConfirming(false);setChoices(current=>({...current,[path]:value}));};
   const download=()=>{
-    const blob=new Blob([JSON.stringify({kind:'outline-discarded-values',baseVersion:review.structure.version,fields:dropped.map(field=>({subject:subject(field),field:fieldName(field),privateDraftValue:field.local,keptSharedValue:field.server}))},null,2)],{type:'application/json'});
+    const blob=new Blob([JSON.stringify({kind:'outline-discarded-values',sharedVersionAtReview:review.structure.version,fields:dropped.map(field=>({subject:subject(field),field:fieldName(field),privateDraftValue:plain(field,field.local)}))},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='outline-discarded-values.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);
   };
   return <form aria-label={t(key+'outlineMerge')} onSubmit={event=>{event.preventDefault();if(dropped.length)setConfirming(true);else onApply(choices);}}>
@@ -45,13 +50,13 @@ export function WritingOutlineMerge({review,onApply}) {
         <option value="server">{t(key+'outlineUseServer')}</option><option value="local" disabled={!field.mergeable}>{t(key+'outlineUseLocal')}</option>
       </select></label>
     </fieldset>)}
-    <button type="submit" disabled={confirming}>{t(key+'saveReviewedOutline')}</button>
+    <button type="submit" ref={save} disabled={confirming}>{t(key+'saveReviewedOutline')}</button>
     {confirming&&<div role="alert" tabIndex={-1} ref={warning} className="writing-outline-discard">
       <h3>{t(key+'outlineDropTitle',{count:dropped.length})}</h3>
       <p>{t(key+'outlineDropExplain')}</p>
       <ul>{dropped.map(field=><li key={field.path}><strong>{label(field)}</strong><pre>{show(field,field.local)}</pre></li>)}</ul>
       <button type="button" onClick={download}>{t(key+'outlineDropDownload')}</button>
-      <button type="button" onClick={()=>setConfirming(false)}>{t(key+'outlineDropBack')}</button>
+      <button type="button" onClick={()=>{returning.current=true;setConfirming(false);}}>{t(key+'outlineDropBack')}</button>
       <button type="button" onClick={()=>onApply(choices)}>{t(key+'outlineDropConfirm')}</button>
     </div>}
   </form>;

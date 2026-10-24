@@ -114,7 +114,7 @@ class WritingReview2ProductTests(unittest.TestCase):
             form=page.get_by_role('form',name='Review outline metadata merge',exact=True)
             expect(form.get_by_label('Value to keep Scene 01: Joint · Summary',exact=True)).to_have_value('server')
             form.get_by_role('button',name='Save explicitly reviewed outline merge',exact=True).click()
-            alert=form.get_by_role('alert').filter(has_text='private draft values will be discarded')
+            alert=form.get_by_role('alert').filter(has_text='Private draft values to be discarded')
             expect(alert).to_contain_text('Private summary to protect');expect(alert).to_be_focused()
             self.assertEqual(self.f.writing('workspace')['structure']['scenes'][0]['summary'],'Remote summary wins')
             with page.expect_download() as download:alert.get_by_role('button',name='Download discarded values',exact=True).click()

@@ -2866,11 +2866,15 @@
       "outlineMergeLaneName": "Lane name",
       "outlineMergeLaneOrder": "Lane order",
       "outlineMergeFieldLabel": "{{subject}} · {{field}}",
-      "outlineDropTitle": "{{count}} private draft values will be discarded",
+      "outlineDropTitle": "Private draft values to be discarded: {{count}}",
       "outlineDropExplain": "You kept the current shared value for the fields below, so your private draft values for them will be permanently removed when you save. Download them first if you may still need them.",
       "outlineDropDownload": "Download discarded values",
       "outlineDropBack": "Go back and choose again",
-      "outlineDropConfirm": "Discard these values and save"
+      "outlineDropConfirm": "Discard these values and save",
+      "outlineMergeSceneDuplicate": "{{name}} (#{{number}})",
+      "outlineMergeSceneUnknown": "Unknown scene",
+      "outlineMergePlotCell": "{{lane}}: {{text}}",
+      "outlineMergeLaneUnnamed": "Unnamed plot lane"
     },
     "tools": {
       "title": "Writing tools",

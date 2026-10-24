@@ -19,9 +19,13 @@
   "outlineMergeLaneName": "情節線名稱",
   "outlineMergeLaneOrder": "情節線順序",
   "outlineMergeFieldLabel": "{{subject}} · {{field}}",
-  "outlineDropTitle": "將捨棄 {{count}} 個私人草稿值",
+  "outlineDropTitle": "將捨棄的私人草稿值：{{count}} 個",
   "outlineDropExplain": "您對下列欄位保留了目前的共享值，因此儲存後這些私人草稿值會被永久移除。若之後可能還需要，請先下載。",
   "outlineDropDownload": "下載將捨棄的值",
   "outlineDropBack": "返回重新選擇",
-  "outlineDropConfirm": "捨棄這些值並儲存"
+  "outlineDropConfirm": "捨棄這些值並儲存",
+  "outlineMergeSceneDuplicate": "{{name}}（#{{number}}）",
+  "outlineMergeSceneUnknown": "未知的場次",
+  "outlineMergePlotCell": "{{lane}}：{{text}}",
+  "outlineMergeLaneUnnamed": "未命名的情節線"
 }
