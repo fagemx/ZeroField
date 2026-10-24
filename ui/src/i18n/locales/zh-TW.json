@@ -2845,7 +2845,22 @@
       "discardOutline": "捨棄情節總覽草稿並讀取目前結構",
       "keepOutline": "為我的帳戶私下保留此確切的情節總覽草稿",
       "downloadOutline": "下載情節總覽草稿",
-      "outlineNoRebase": "共享結構已變更。此草稿保留基底版本 {{version}}，不會覆寫目前的中繼資料。請先下載再捨棄，然後檢視目前結構並重新輸入您的變更。"
+      "outlineNoRebase": "共享結構已變更。此草稿保留基底版本 {{version}}，不會覆寫目前的中繼資料。請先下載再捨棄，然後檢視目前結構並重新輸入您的變更。",
+      "sceneBoundaryChanged": "此場次的外部邊界已變更。草稿仍完整保留在全文中；請切換至完整稿件檢視，不臆測場次歸屬。",
+      "outlineConflictReviewNotice": "共享結構已變更。此草稿保留基底版本 {{version}}，不會覆寫目前的中繼資料。請檢視目前共享欄位，明確選擇要合併的草稿值，或保留／下載此私人草稿。",
+      "reviewOutline": "讀取目前情節總覽以檢視合併",
+      "outlineMerge": "檢視情節總覽中繼資料合併",
+      "outlineMergeInstructions": "比較原始基底、目前共享版本 {{version}} 與私人草稿。請明確選擇每個欄位。儲存僅寫入選定的草稿欄位，並以此檢視版本作為 CAS 基底。",
+      "outlineMergeBase": "原始基底",
+      "outlineMergeServer": "目前共享值",
+      "outlineMergeLocal": "私人草稿值",
+      "outlineMergeChoice": "要保留的值",
+      "outlineUseServer": "保留目前共享值",
+      "outlineUseLocal": "使用已檢視的私人草稿值",
+      "outlineUnset": "未設定",
+      "outlineIdentityChanged": "此場次或情節線的身分已遺失或變更。不可將其草稿欄位套用至不同來源。",
+      "saveReviewedOutline": "儲存明確檢視的情節總覽合併",
+      "outlineReviewStale": "檢視後情節總覽或草稿已變更。請重新讀取並檢視目前欄位。"
     },
     "tools": {
       "title": "寫作工具",
