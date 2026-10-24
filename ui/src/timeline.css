@@ -1,0 +1,171 @@
+/* SPEC_15 Timeline space: shot rhythm · cut preview · clip inspector, with the timeline across the bottom. Midnight tokens and the
+   panel toggles (hide-left, hide-bottom, hide-right) come from studio-shell.css. Buttons carry .studio-shell so they outrank the
+   page-wide button rules in studio.css and workbench.css, which load after this file. */
+.studio-timeline { --ghost: rgba(255, 255, 255, .42); --hatch: rgba(255, 255, 255, .09);
+  display: grid; grid-template-columns: 232px minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr) 300px; gap: var(--gap); height: 100%; min-height: 0; }
+.studio-shell.hide-left .studio-timeline { grid-template-columns: minmax(0, 1fr) 300px; }
+.studio-shell.hide-right .studio-timeline { grid-template-columns: 232px minmax(0, 1fr); }
+.studio-shell.hide-left.hide-right .studio-timeline { grid-template-columns: minmax(0, 1fr); }
+.studio-shell.hide-left .studio-timeline > .tl-list, .studio-shell.hide-right .studio-timeline > .tl-inspector { display: none; }
+.studio-shell.hide-bottom .studio-timeline { grid-template-rows: minmax(0, 1fr); }
+.studio-shell.hide-bottom .studio-timeline > .tl-track { display: none; }
+
+.tl-panel, .tl-track { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-panel); }
+.studio-timeline > .tl-track { grid-column: 1 / -1; }
+.tl-panel > header, .tl-track-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.tl-panel h2, .tl-track h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.tl-panel h2 > span { font-weight: 400; color: var(--faint); }
+.tl-panel > header > span, .tl-follow { display: inline-flex; align-items: center; gap: 6px; color: var(--faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.tl-empty { margin: 0; padding: 14px; color: var(--faint); font-size: 12.5px; line-height: 1.6; }
+
+/* Left: each shot as a bar as long as it runs */
+.tl-list ol { flex: 1; min-height: 0; margin: 0; padding: 8px 0; list-style: none; display: flex; flex-direction: column; overflow: auto; }
+.studio-shell .tl-list li button { display: flex; align-items: center; gap: 8px; width: calc(100% - 16px); height: 38px; margin: 0 8px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; text-align: left; cursor: pointer; }
+.studio-shell .tl-list li button:hover { background: var(--hover-bg); }
+.studio-shell .tl-list li button[aria-current] { background: var(--active); box-shadow: inset 0 0 0 1px var(--accent); }
+.tl-list li button b { flex: none; width: 28px; font: 500 12px ui-monospace, Consolas, monospace; }
+.tl-meter { position: relative; flex: 1; height: 6px; }
+.tl-meter i { position: absolute; left: 0; top: 0; height: 6px; box-sizing: border-box; border-radius: 3px; background: rgba(255, 255, 255, .18); }
+.tl-meter i.is-ghost { background: transparent; border: 1px dashed var(--ghost); }
+.tl-list li button[aria-current] .tl-meter i:not(.is-ghost) { background: var(--text); }
+.tl-list li button em { flex: none; width: 30px; font-style: normal; text-align: right; color: var(--faint); font-variant-numeric: tabular-nums; }
+.tl-list li button[aria-current] b, .tl-list li button[aria-current] em { color: var(--text); }
+.tl-list > footer { flex: none; padding: 12px 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11.5px; line-height: 1.7; }
+
+/* Middle: the cut as two frames; while playing, the one player */
+.tl-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 18px 16px 6px; overflow: hidden; }
+.tl-pair { display: flex; justify-content: center; gap: 16px; width: 100%; }
+.tl-pair figure { flex: 1 1 0; max-width: 340px; min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.tl-frame { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #1a1a1a; }
+.tl-frame.is-empty { border-style: dashed; border-color: var(--control); background: transparent; }
+.tl-frame video, .tl-frame img { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.tl-frame-tag { position: absolute; left: 8px; top: 8px; padding: 2px 7px; border-radius: 4px; background: rgba(0, 0, 0, .6); color: #eee; font-size: 11.5px; }
+.tl-slate { display: grid; gap: 4px; place-items: center; padding: 8px; color: var(--faint); font-size: 12px; text-align: center; }
+.tl-slate b { font: 600 22px ui-monospace, Consolas, monospace; color: var(--text); }
+.tl-pair figcaption { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tl-pair figcaption b { color: var(--text); font-weight: 600; }
+.tl-film-line { margin: 0; color: var(--muted); font-size: 12.5px; }
+.tl-player { display: none; width: 100%; height: 100%; min-height: 0; border-radius: 6px; background: #000; object-fit: contain; }
+.tl-player.is-on { display: block; flex: 1; }
+.tl-preview > footer { flex: none; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; border-top: 1px solid var(--line); }
+.tl-preview > footer .spacer, .tl-track-head .spacer { flex: 1; }
+.studio-shell .tl-play { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: var(--active); color: var(--text); cursor: pointer; }
+.studio-shell .tl-play:hover:not(:disabled) { background: var(--raised); }
+.tl-clock { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.studio-shell .tl-hop { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--text); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.studio-shell .tl-hop:hover:not(:disabled) { border-color: var(--control); }
+.studio-shell .tl-hop:disabled, .studio-shell .tl-play:disabled { opacity: .4; cursor: default; }
+.tl-status { flex: none; margin: 0; padding: 7px 14px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+.tl-status.is-error { color: #f0728a; }
+.tl-status a { color: var(--text); }
+
+/* Bottom: ruler, rhythm, the cut, other takes, dialogue */
+.tl-track-head { justify-content: flex-start; font-size: 12.5px; }
+.tl-track-head h2 { margin-right: 8px; }
+.studio-shell .tl-tool { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12.5px; white-space: nowrap; cursor: pointer; }
+.studio-shell .tl-tool:hover { color: var(--text); }
+.studio-shell .tl-tool.is-on, .studio-shell .tl-tool[aria-pressed="true"] { background: var(--active); color: var(--text); font-weight: 600; }
+.studio-shell .tl-tool.is-on { cursor: default; }
+.tl-zoom { display: inline-flex; align-items: center; gap: 8px; color: var(--faint); font-size: 12px; }
+.studio-shell .tl-zoom input { width: 96px; height: 3px; padding: 0; border: 0; background: transparent; accent-color: var(--muted); }
+.studio-shell .tl-export { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border-radius: 6px; font-weight: 600; }
+.tl-body { flex: 1; min-height: 0; display: flex; padding: 10px 0 0 16px; }
+.tl-labels { flex: none; width: 84px; display: flex; flex-direction: column; gap: 8px; color: var(--muted); font-size: 12px; }
+.tl-ruler-label { height: 22px; }
+.tl-label { display: flex; align-items: center; }
+.tl-label-rhythm, .tl-rhythm { height: 40px; }
+.tl-label-video, .tl-video { height: 72px; }
+.tl-label-takes, .tl-takes { height: 38px; }
+.tl-label-dialogue, .tl-dialogue { height: 40px; }
+.tl-scroll { flex: 1; min-width: 0; overflow: auto hidden; padding: 0 16px 8px 0; scrollbar-width: thin; scrollbar-color: var(--active) transparent; }
+.tl-canvas { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 100%; }
+.tl-ruler { position: relative; flex: none; height: 22px; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; cursor: ew-resize; background-repeat: no-repeat; background-size: 100% 5px; background-position: 0 100%; user-select: none; touch-action: none; }
+.tl-ruler span { position: absolute; top: 0; padding-left: 3px; border-left: 1px solid var(--line-2); line-height: 14px; }
+.tl-row { position: relative; flex: none; border-radius: 4px; background: var(--ground); }
+.tl-rhythm { cursor: ew-resize; touch-action: none; }
+.tl-bar { position: absolute; bottom: 0; box-sizing: border-box; border-radius: 3px 3px 0 0; background: rgba(255, 255, 255, .14); }
+.tl-bar.is-now { background: var(--text); }
+.tl-bar.is-ghost { background: transparent; border: 1px dashed var(--ghost); border-bottom: 0; }
+.tl-bar.is-long { box-shadow: inset 0 3px 0 #f5b656; }
+.tl-hint { position: absolute; top: 2px; color: #f5b656; font-size: 11px; white-space: nowrap; pointer-events: none; }
+.tl-clip { position: absolute; top: 3px; height: 66px; box-sizing: border-box; border-radius: 4px; background: var(--active); overflow: hidden; cursor: pointer; outline: none; touch-action: none; user-select: none; }
+.tl-film { display: block; height: 38px; background: #232323 repeat-x 0 0 / auto 100%; }
+.tl-clip.is-previs, .tl-clip.is-plan { border: 1px dashed var(--ghost); background: repeating-linear-gradient(135deg, var(--hatch) 0 5px, transparent 5px 10px), var(--surface); }
+.tl-clip.is-previs .tl-film, .tl-clip.is-plan .tl-film { display: none; }
+.tl-clip-label { display: flex; gap: 6px; padding: 6px 8px; overflow: hidden; font-size: 11.5px; white-space: nowrap; }
+.tl-clip-label i { flex: none; font: normal 11.5px ui-monospace, Consolas, monospace; color: var(--muted); }
+.tl-clip-label span { overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.tl-clip.is-previs .tl-clip-label, .tl-clip.is-plan .tl-clip-label { padding-top: 10px; }
+.tl-clip.is-now { box-shadow: 0 0 0 1.5px var(--accent); }
+.tl-clip.is-now .tl-clip-label i { color: var(--text); }
+.tl-clip:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.tl-tag { position: absolute; right: 5px; top: 5px; padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, .6); color: #f5b656; font-size: 10.5px; font-weight: 500; }
+.tl-tag.is-trim { top: auto; bottom: 5px; color: var(--text); font-variant-numeric: tabular-nums; }
+.tl-edge { position: absolute; top: 18px; width: 3px; height: 28px; border-radius: 2px; background: var(--text); opacity: 0; outline: none; cursor: ew-resize; touch-action: none; }
+.tl-edge::before { content: ""; position: absolute; inset: -18px -9px; }
+.tl-edge-in { left: 3px; } .tl-edge-out { right: 3px; }
+.tl-clip.is-now .tl-edge, .tl-clip:hover .tl-edge, .tl-edge:focus-visible { opacity: 1; }
+.tl-edge:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.studio-shell .tl-ghost { position: absolute; top: 3px; height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px dashed var(--ghost); border-radius: 4px; background: repeating-linear-gradient(135deg, var(--hatch) 0 5px, transparent 5px 10px), var(--surface); color: var(--text); font-size: 11.5px; text-align: left; white-space: nowrap; cursor: pointer; }
+.tl-line { position: absolute; top: 3px; height: 34px; box-sizing: border-box; padding: 4px 8px; border-radius: 4px; background: var(--active); color: var(--muted); font-size: 11px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-line i { margin-right: 6px; font-style: normal; color: var(--text); }
+.tl-line.is-now { box-shadow: 0 0 0 1.5px var(--accent); }
+.tl-playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; }
+.tl-playhead span { position: absolute; left: 6px; top: 0; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: #14110a; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Right: the clip in hand. The control kit reads the same palette, forced here by .ctl-palette. */
+.tl-inspector-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--active) transparent; }
+.tl-sec { flex: none; display: flex; flex-direction: column; gap: 10px; }
+.tl-sec + .tl-sec { padding-top: 14px; border-top: 1px solid var(--line); }
+.tl-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tl-sec-head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+.studio-shell .tl-switch { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.tl-switch i { position: relative; display: inline-block; width: 28px; height: 16px; border-radius: 8px; background: var(--active); transition: background .12s; }
+.tl-switch i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 999px; background: var(--muted); transition: transform .12s, background .12s; }
+.tl-switch[aria-checked="true"] i { background: var(--text); }
+.tl-switch[aria-checked="true"] i::after { background: var(--ground); transform: translateX(12px); }
+.tl-layer { display: flex; align-items: flex-start; gap: 10px; }
+.tl-lay { flex: none; display: flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 5px; background: var(--active); color: var(--muted); font-size: 12px; font-weight: 600; }
+.tl-layer-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.tl-layer-body form { margin: 0; }
+.studio-shell .tl-say { width: 100%; height: 30px; margin: 0; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--ground); color: var(--text); font-size: 12.5px; }
+.studio-shell .tl-say:focus-visible { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(242, 179, 61, .25); }
+.studio-shell .tl-say:disabled { opacity: .5; }
+.tl-say-note { margin: 4px 0 0; color: #f0728a; font-size: 11.5px; line-height: 1.5; }
+.tl-readout { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; color: var(--faint); font-size: 12px; }
+.tl-readout em { font-style: normal; color: var(--text); }
+.tl-layer-body .ctl-rg { margin-top: 14px; }
+.tl-points { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tl-points label { display: block; min-width: 0; }
+.tl-points label > span { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; color: var(--faint); font-size: 11.5px; }
+.tl-points label > span.is-modified { color: var(--text); }
+.tl-points label > span.is-modified::before { content: ""; width: 5px; height: 5px; border-radius: 999px; background: var(--text); }
+.tl-points .ctl-tcf { width: 100%; justify-content: center; gap: 0; padding: 0 2px; font-size: 12px; }
+.tl-points .ctl-tcf.is-modified { padding-left: 12px; }
+.tl-points .ctl-tcf .ctl-sg { min-width: 0; padding: 0 2px; }
+.studio-shell .tl-reset { align-self: flex-start; height: 26px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.studio-shell .tl-reset:hover:not(:disabled) { color: var(--text); border-color: var(--control); }
+.tl-hint-text { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.tl-why { margin: 0; padding: 8px 10px; border: 1px dashed var(--control); border-radius: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.tl-saving { margin: 0; color: var(--faint); font-size: 11.5px; }
+.tl-hint-card { display: grid; gap: 8px; padding: 8px 10px; border: 1px dashed var(--ghost); border-radius: 8px; color: var(--text); font-size: 12px; line-height: 1.5;
+  background: repeating-linear-gradient(135deg, var(--hatch) 0 5px, transparent 5px 10px), var(--surface); }
+.studio-shell .tl-hint-card button { justify-self: start; height: 26px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.studio-shell .tl-hint-card button:hover { border-color: var(--control); }
+.tl-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.tl-lines li { display: grid; gap: 2px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.tl-lines b { color: var(--text); font-size: 12px; font-weight: 600; }
+.tl-lines small { color: var(--faint); font-size: 11.5px; }
+.tl-takes-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.tl-takes-list li { display: grid; grid-template-columns: 72px 1fr auto; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; }
+.tl-takes-list video { width: 72px; height: 40px; border-radius: 4px; object-fit: cover; background: #000; }
+.studio-shell .tl-takes-list button { height: 26px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.studio-shell .tl-takes-list button:hover:not(:disabled) { border-color: var(--control); }
+
+@media (max-width: 1100px) {
+  .studio-timeline, .studio-shell.hide-left .studio-timeline, .studio-shell.hide-right .studio-timeline, .studio-shell.hide-left.hide-right .studio-timeline { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; height: auto; }
+  .tl-list { max-height: 240px; }
+  .tl-preview { min-height: 360px; }
+  .tl-track { min-height: 300px; }
+  .tl-pair { flex-direction: column; align-items: center; }
+}

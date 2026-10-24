@@ -13,19 +13,32 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 let temporary, components;
 before(async()=>{
   temporary=await mkdtemp(join(root,'tests/.story-render-'));
-  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette} from './src/StudioShell.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
+  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette,spaceNote,SPACES,spaceOf,tabOfSpace} from './src/StudioShell.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
   const output=join(temporary,'components.mjs');await writeFile(output,result.outputFiles[0].text);components=await import(pathToFileURL(output));
 });
 after(async()=>{if(temporary)await rm(temporary,{recursive:true,force:true});});
 const render=(name,props)=>renderToStaticMarkup(React.createElement(components[name],props));
 
-test('the studio top bar holds two unnumbered spaces with their status, Ctrl K and one film entry',()=>{
-  const html=render('StudioTopBar',{project:{title:'The Last Signal'},episodes:[{episodeId:'ep_demo_01',title:'Episode 1'}],epId:'ep_demo_01',space:'stage',counts:{shots:8,review:2,missing:1,filmed:6,scriptDirty:true},onEpisode(){},onSpace(){},onCommand(){},film:{open:false,onToggle(){}}});
-  assert.match(html,/<button type="button">Story &amp; World<span class="studio-note warn">Script changed · 1 missing images<\/span><\/button>/);
-  assert.match(html,/<button type="button" aria-current="page">Shot Stage<span class="studio-note">8 shots · 2 to review<\/span><\/button>/);
+test('the studio top bar is a breadcrumb: one space button that opens a menu, no standing tabs, the focus, Ctrl K and one film entry',()=>{
+  const html=render('StudioTopBar',{project:{title:'The Last Signal'},episodes:[{episodeId:'ep_demo_01',title:'Episode 1'}],epId:'ep_demo_01',space:'stage',crumbs:{scene:'Scene 02 · Signal',shot:'S03'},counts:{shots:8,review:2,missing:1,filmed:6,scriptDirty:true},onEpisode(){},onSpace(){},onCommand(){},film:{open:false,onToggle(){}}});
+  assert.match(html,/<button type="button" class="studio-space-btn" aria-haspopup="menu" aria-expanded="false"[^>]*>[\s\S]*?<span>Shot Stage<\/span>/);
+  assert.doesNotMatch(html,/role="menu"|studio-spaces|aria-current="page"|>Story &amp; World<|>Timeline</,'the other spaces are offered only when the menu is open');
+  assert.match(html,/<span class="studio-focus" title="Scene 02 · Signal">Scene 02 · Signal<\/span>/);
+  assert.match(html,/<b class="studio-focus is-now" title="S03"><i class="studio-dot" aria-hidden="true"><\/i>S03<\/b>/,'the shot in focus ends the breadcrumb');
+  assert.match(html,/role="group" aria-label="Panels"/);assert.doesNotMatch(html,/aria-label="Bottom panel"/,'only a space with a bottom panel offers its toggle');
   assert.match(html,/Ctrl K/);assert.match(html,/Film<span class="num">6\/8<\/span>/);
   assert.doesNotMatch(html,/[①②③④⑤⑥]|Start Creating|My Projects|Studio Engine/,'no numbered stations and no second set of entries');
   assert.equal((html.match(/>Film</g)||[]).length,1,'one film entry');
+});
+
+test('three spaces map to their pages, and the space menu says what each one needs',()=>{
+  assert.deepEqual(components.SPACES.map(space=>[space.key,space.tab]),[['story','story-world'],['stage','cinema-studio'],['timeline','timeline']]);
+  assert.equal(components.spaceOf('timeline'),'timeline');assert.equal(components.spaceOf('soul-cast'),'story');assert.equal(components.spaceOf('openjutsu-lab'),'stage');assert.equal(components.spaceOf('other'),null);
+  assert.equal(components.tabOfSpace('timeline'),'timeline');assert.equal(components.tabOfSpace('nope'),'cinema-studio');
+  const counts={shots:8,review:2,missing:1,filmed:6,scriptDirty:true};
+  assert.equal(components.spaceNote('story',counts),'Script changed · 1 missing images');
+  assert.equal(components.spaceNote('stage',counts),'8 shots · 2 to review');
+  assert.equal(components.spaceNote('timeline',counts),'6 of 8 shots have a take');
 });
 
 test('Toolbox, Open API and Agent Console are commands in the Ctrl K palette',()=>{

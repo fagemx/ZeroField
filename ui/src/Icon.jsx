@@ -41,6 +41,17 @@ const PATHS = {
   arrowUp: 'M12 19V5M6 11l6-6 6 6',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
   rocket: 'M5 15l-1 5 5-1M9 15l6-6M14 4c3 0 6 3 6 6l-6 6-6-6z',
+  timeline: 'M4 6h8M9 12h11M6 18h9',
+  chevronDown: 'M6 9l6 6 6-6',
+  panelLeft: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM9 5v14',
+  panelBottom: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 14h18',
+  panelRight: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM15 5v14',
+  pause: 'M8 5v14M16 5v14',
+  skipPrev: 'M19 5v14L9 12zM5 5v14',
+  skipNext: 'M5 5v14l10-7zM19 5v14',
+  cursor: 'M5 3l14 7-6.2 2L10.5 18.5z',
+  ripple: 'M4 12h6M14 12h6M10 8v8M14 8v8',
+  magnet: 'M6 4v8a6 6 0 0 0 12 0V4M6 8h4M14 8h4',
 };
 
 export function Icon({ name, size = 16, className = 'ico' }) {

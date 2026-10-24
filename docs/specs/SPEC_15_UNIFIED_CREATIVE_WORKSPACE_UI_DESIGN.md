@@ -141,3 +141,26 @@
 4. 俯視圖拖曳走位與演出節拍軌：3D 片場沿用 `PrevisStage` 既有控制。
 5. OpenJutsu 作為單鏡「鏡頭來源」切換：仍是獨立的 `openjutsu-lab` 表（`Ctrl K` 可達，歸在分鏡片場）。
 6. 連戲監督建議卡放進右欄：評分與重拍提示目前在審片挑片的 `TakeGrades`。
+
+---
+
+## 6. 三空間版實作狀態（2026-10-25）
+
+§1–§5 的兩空間版已改成**三個創作空間**：故事與世界（結構）、分鏡片場（空間）、節奏台（時間）。外殼改為午夜藍灰浮動面板，沒有常駐分頁；空間名稱只在麵包屑出現，點它開選單（`Ctrl`／`Alt`＋`1`·`2`·`3` 或 `Ctrl K`）。麵包屑的最後兩段是**全域焦點**（場、鏡頭），在三個空間之間帶著走；右上三個開關收放左、下、右面板（只存在於自己的瀏覽器）。
+
+| 設計 | 實作位置 |
+|---|---|
+| 外殼、色票、麵包屑空間選單、版面開關、全域焦點 | `StudioShell.jsx`、`studio-shell.css`、`App.jsx`（`focus`、`goStage`、`openShot`、`openWorld`） |
+| 節奏台：左邊鏡頭節奏表（條長＝秒數）、中間接點預覽（出點與入點並排）、右邊片段檢視（說／調／拖三層）、底部時間軸（節奏、影像 V1、其他版本 V2、台詞 A1）；拖邊緣修剪、波紋開關（關＝滾動剪輯，全集長度不變）、吸附、播放整集（尊重修剪） | `Timeline.jsx`、`TimelineTrack.jsx`、`TimelineInspector.jsx`、`timelineModel.js`、`timeline.css` |
+| 每鏡修剪存在後端，匯出整集時套用；換版本、重拍或切鏡頭會讓修剪歸零 | `project_docs/story_trim.py`（`PUT /shots/{id}/trim`、鏡頭資料的 `trim`）、`project_assistant/studio/media_prep.py` |
+| 控制元件庫：參數列、可拖標籤與數值欄、滑桿、範圍滑桿、時間碼欄位、關鍵幀菱形、重設、曲線編輯器（`plan.easing`） | `ui/src/controls/` |
+| 劇本每一段對應到哪一鏡，改稿前先列出會動到的鏡頭（唯讀） | `ScriptOutline.jsx`、`project_docs/story_alignment.py`（`GET /episodes/{id}/script-alignment`、`POST /episodes/{id}/script-impact`） |
+| 劇組提案就地審：鏡頭詳情裡原文劃掉、新文並列，套用或拒絕；鏡頭類提案在 3D 片場以虛線虛影機位出現，可「透過提案機位看」 | `ShotProposals.jsx`、`proposalModel.js`、`previs/scene.js`（`shotGuides` 的 `ghost`） |
+| 3D 片場的「拖」：俯視圖拖演員站位（走位跟著搬）與機位關鍵幀 K1–Kn，吸附 0.1 m；底部節拍軌（機位關鍵幀與動作節拍，拖方塊移動、拖右緣改長度，節拍不互推）；「運鏡」摺疊區用範圍滑桿、時間碼與曲線調起訖與緩動 | `previs/blocking.js`、`PlanHandles.jsx`、`BeatTrack.jsx`、`CameraMove.jsx`、`previs/plan.js`（`motionBeats`、`plan.easing`） |
+
+**仍未實作**：
+1. 在片場或節奏台改台詞後寫回劇本那一行：對應目前靠「第 i 段 ↔ 該場第 i 個鏡頭」與提示詞比對重建，唯讀；要寫回需要 SPEC_16 的 `beatKey`。
+2. 聲音進出（J／L cut）與環境音軌：系統沒有音訊素材，只畫台詞文字。
+3. 時間軸的「剪斷」（razor）：把一鏡切開會產生新鏡頭與新素材，不是剪輯動作。
+4. 節奏提案不是 AI 提案：節奏台的「偏長」提示是本機規則（比全集平均長 20% 以上且多出至少 0.5 秒）。
+5. 節拍軌只能編輯「走入」與帶 `plan.use` 動作技能的鏡頭；內建的轉身伸手（`turnreach`）、站立固定時間，只顯示機位關鍵幀。多點樣條與新增節拍類型未做。

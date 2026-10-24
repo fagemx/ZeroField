@@ -281,22 +281,25 @@ export function buildStage(plan, opts = {}) {
 export function shotGuides(entries) {
   const paths = new Map();
   for (const e of entries) {
-    const key = JSON.stringify(cameraKeys(e.plan)), at = paths.get(key);
+    const key = (e.ghost ? 'ghost:' : '') + JSON.stringify(cameraKeys(e.plan)), at = paths.get(key);
     if (at) { at.id += ' · ' + e.id; at.selected ||= e.selected; } else paths.set(key, { ...e });
   }
   const group = new THREE.Group(), parts = [];
   const glyphGeo = new THREE.BufferGeometry().setFromPoints([[0, 0, 0], [-0.22, -0.13, 0.4], [0, 0, 0], [0.22, -0.13, 0.4], [0, 0, 0], [0.22, 0.13, 0.4],
     [0, 0, 0], [-0.22, 0.13, 0.4], [-0.22, -0.13, 0.4], [0.22, -0.13, 0.4], [0.22, -0.13, 0.4], [0.22, 0.13, 0.4], [0.22, 0.13, 0.4], [-0.22, 0.13, 0.4],
     [-0.22, 0.13, 0.4], [-0.22, -0.13, 0.4], [-0.08, 0.16, 0.4], [0, 0.26, 0.4], [0, 0.26, 0.4], [0.08, 0.16, 0.4]].map(v => new THREE.Vector3(...v)));
-  for (const { id, plan, selected } of paths.values()) {
-    const color = selected ? 0xf2b33d : 0x06b6d4, opacity = selected ? 1 : 0.55;
-    const line = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
+  for (const { id, plan, selected, ghost } of paths.values()) {
+    // A ghost is a crew member's proposed camera: dashed and pale, never amber (amber is what you are touching).
+    const color = ghost ? 0xe6eaf0 : selected ? 0xf2b33d : 0x06b6d4, opacity = ghost ? 0.8 : selected ? 1 : 0.55;
+    const line = ghost ? new THREE.LineDashedMaterial({ color, transparent: true, opacity, depthTest: false, dashSize: 0.22, gapSize: 0.14 })
+      : new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
     const points = Array.from({ length: 49 }, (_, i) => new THREE.Vector3(...sampleCamera(plan, i * (framesOf(plan) - 1) / 48).position));
     const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), line);
-    const glyph = new THREE.LineSegments(glyphGeo, line);
+    if (ghost) path.computeLineDistances();
+    const glyph = new THREE.LineSegments(glyphGeo, ghost ? new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false }) : line);
     const canvas = document.createElement('canvas'), g = canvas.getContext('2d'), font = '600 30px system-ui, sans-serif';
     g.font = font; canvas.width = Math.ceil(g.measureText(id).width) + 24; canvas.height = 48;
-    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = selected ? '#f2b33d' : '#67e8f9'; g.fillText(id, canvas.width / 2, 25);
+    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ghost ? '#e6eaf0' : selected ? '#f2b33d' : '#67e8f9'; g.fillText(id, canvas.width / 2, 25);
     const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }));
     const base = 0.3 * canvas.width / 48;
     for (const o of [path, glyph, label]) { o.renderOrder = selected ? 3 : 2; group.add(o); }
@@ -314,7 +317,7 @@ export function shotGuides(entries) {
   }
   function dispose() {
     glyphGeo.dispose();
-    for (const { path, label } of parts) { path.geometry.dispose(); path.material.dispose(); label.material.map.dispose(); label.material.dispose(); }
+    for (const { path, glyph, label } of parts) { path.geometry.dispose(); path.material.dispose(); if (glyph.material !== path.material) glyph.material.dispose(); label.material.map.dispose(); label.material.dispose(); }
   }
   return { group, update, dispose };
 }

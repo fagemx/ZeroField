@@ -1,6 +1,7 @@
 // Previs plans as plain data: camera keys, lens and actor action for one shot. No three.js here, so it is testable in node.
 // Coordinates are station-local: the actor stands at the console station facing +z (toward the glass); his reaching
 // arm is on -x, which a camera behind him sees on screen right (the same screen layout as the Blender blockouts).
+import { bezierAt } from '../controls/controlsModel.js';
 
 export const FPS = 24, WIDTH = 1280, HEIGHT = 704;
 export const DURATIONS = [4, 6, 8, 10];  // seconds; LTX-2.5 takes 8n+1 frames, including a 241-frame rehearsal
@@ -79,11 +80,13 @@ function insideDome(aim, offset) {
 // Camera at frame f: eased piecewise interpolation between keys.
 // A smooth path through every key (Hermite with Catmull-Rom tangents on the key beats), eased in and out over the
 // whole shot: multi-key moves flow through their middle keys instead of stopping at each one. Two keys stay a plain ease.
+// plan.easing [x1, y1, x2, y2] (a cubic-bezier, as the control kit's curve editor writes it) replaces the in-and-out ease for the
+// move between the first and last key; a y beyond 0..1 overshoots the end key and settles back.
 export function sampleCamera(plan, frame) {
   const keys = cameraKeys(plan), first = keys[0][0], end = keys[keys.length - 1][0], b = beat(plan, frame);
   if (b <= first) return { position: keys[0][1], aim: keys[0][2] };
   if (b >= end) return { position: keys[keys.length - 1][1], aim: keys[keys.length - 1][2] };  // land exactly on the end key
-  const u = first + ease((b - first) / (end - first)) * (end - first);
+  const progress = (b - first) / (end - first), u = first + (Array.isArray(plan.easing) ? bezierAt(plan.easing, progress) : ease(progress)) * (end - first);
   let i = 0;
   while (i < keys.length - 2 && u > keys[i + 1][0]) i++;
   const k0 = keys[Math.max(0, i - 1)], k1 = keys[i], k2 = keys[i + 1], k3 = keys[Math.min(keys.length - 1, i + 2)];
@@ -420,16 +423,40 @@ export function compileMotionSkills(plan) {
   return { acts, pins, checks };
 }
 
+// The Walk in action as the one skill it plays as: in from the console side to the mark, or out from it when facing the room.
+export function walkinUse(plan) {
+  const mark = plan.mark || [0, 0], room = plan.facing === 'room';
+  const from = room ? [...mark] : [mark[0], mark[1] - 2.2], to = room ? [mark[0], mark[1] - 2.2] : [...mark];
+  return [{ skill: 'walkTo', frames: Math.round((framesOf(plan) - 1) * 0.72), args: { from, to } }];
+}
+
+// Where each step of plan.use starts and ends, as compileMotionSkills places them, so a timeline can draw and edit them.
+// resizable names what a drag on a beat's right edge sets: the step's frames, a standIdle's until, or a reachGrip's hold;
+// null for a step that does nothing (a walkTo with no goal, a grip on an unknown anchor).
+export function motionBeats(plan) {
+  const p = withRanges(plan, ([lo, hi]) => (lo + hi) / 2), mark = p.mark || [0, 0];
+  let cur = { f: 0, pos: [...mark] };
+  return (p.use || []).map((step, index) => {
+    const a = step.args || {}, start = step.f0 ?? cur.f;
+    let end = start, resizable = null;
+    if (step.skill === 'standIdle') { end = a.until ?? start + (step.frames ?? 24); resizable = a.until != null ? 'until' : 'frames'; cur = { f: end, pos: a.at ?? cur.pos }; }
+    else if (step.skill === 'walkTo' && a.to) {
+      const from = a.from ?? cur.pos, D = Math.hypot(a.to[0] - from[0], a.to[1] - from[1]);
+      end = start + (step.frames ?? Math.round(D / WALK_SPEED * FPS) + 2 * SETTLE); resizable = 'frames'; cur = { f: end, pos: a.to };
+    } else if (step.skill === 'reachGrip' && (typeof a.anchor === 'string' ? SCENE_ANCHORS[a.anchor]?.pos : a.anchor)) {
+      end = start + (a.reach ?? 12) + (a.hold ?? 24) + (a.release ?? 12); resizable = 'hold'; cur = { ...cur, f: end };
+    } else if (step.skill === 'turnLook') { end = start + (step.frames ?? 16); resizable = 'frames'; cur = { ...cur, f: end }; }
+    else if (step.skill === 'kneelDown') { end = start + (step.frames ?? a.duration ?? 24); resizable = 'frames'; cur = { ...cur, f: end }; }
+    return { index, skill: step.skill, start, end, frames: end - start, resizable };
+  });
+}
+
 // A plan as the stage plays it: open ranges at their midpoints (searchMotionPlan picks better values) and plan.use
 // compiled into the plan's own acts and pins (and dropped, so a played plan plays the same again).
 export function motionPlan(plan) {
   const p = withRanges(plan, ([lo, hi]) => (lo + hi) / 2);
   // The visible Walk in action uses the same gait as authored skills. Explicit acting/skills retain priority.
-  if (!p.use?.length && !p.acts?.length && p.action === 'walkin') {
-    const mark = p.mark || [0, 0], room = p.facing === 'room';
-    const from = room ? [...mark] : [mark[0], mark[1] - 2.2], to = room ? [mark[0], mark[1] - 2.2] : [...mark];
-    p.use = [{ skill: 'walkTo', frames: Math.round((framesOf(p) - 1) * 0.72), args: { from, to } }];
-  }
+  if (!p.use?.length && !p.acts?.length && p.action === 'walkin') p.use = walkinUse(p);
   if (!p.use?.length) return p;
   const { acts, pins } = compileMotionSkills(p), { use, ...rest } = p;
   return { ...rest, acts: [...(p.acts || []), ...acts], pins: [...(p.pins || []), ...pins] };

@@ -9,6 +9,12 @@ import { buildStage, prepareRenderer, shotGuides } from './scene.js';
 import { encodeCanvas, fetchPlan } from './webm.js';
 import { drawSkeleton, poseKeypoints } from './skeleton.js';
 import { createMotionDemoPlan } from './demoPlan.js';
+import { applyOptions, ghostsFor } from '../proposalModel.js';
+import { moveCameraKey, moveDummy } from './blocking.js';
+import { PlanHandles } from './PlanHandles.jsx';
+import { BeatTrack } from './BeatTrack.jsx';
+import { CameraMove } from './CameraMove.jsx';
+import { Slider } from '../controls/Controls.jsx';
 
 // split: the overhead plan and the shot lens side by side on one renderer (80.lv's layout view over the camera view).
 export const VIEWS = ['split', 'lens', 'overhead', 'free'];
@@ -32,7 +38,7 @@ const pick = (label, value, options, onChange, text) => <fieldset className="pre
 // (97 frames, 24 fps) into its Previs cell, its actor matte into Actor Matte and its pose skeleton into Pose Skeleton
 // (the Layout Render frees the actor and takes the acting from the skeleton). The render carries its plan, so the
 // project keeps it.
-export default function PrevisStage({ slug, shots, focus, writable, busy, onRender, onMotion, onLayout, onShot }) {
+export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, onDismissProposal, shots, focus, writable, busy, onRender, onMotion, onLayout, onShot }) {
   useLocale();
   const [rid, setRid] = useState(() => (shots.some(s => s.rid === focus?.rid) ? focus.rid : shots[0]?.rid));
   const [drafts, setDrafts] = useState(() => Object.fromEntries(shots.map(s => [s.rid, loadDraft(slug, s.rid)]).filter(([, p]) => p)));
@@ -42,11 +48,17 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   const [showDemo, setShowDemo] = useState(false), [demoPlan] = useState(createMotionDemoPlan);
   // pip: the lens corner window in the free and overhead views; returnView: the view Look through came from (Esc goes back).
   const [pip, setPip] = useState(true), [returnView, setReturnView] = useState(null), [qa, setQa] = useState(null);
-  const host = useRef(null), live = useRef(null), progress = useRef(null), now = useRef({}), framed = useRef(null);
+  const host = useRef(null), live = useRef(null), progress = useRef(null), now = useRef({}), framed = useRef(null), bumping = useRef(0);
+  const [, setMoved] = useState(0);  // changes when the overhead plan pans or zooms, so its drag handles are placed again
+  useEffect(() => () => cancelAnimationFrame(bumping.current), []);
 
   const planOf = s => resolveShotPlan(s, { draft: drafts[s.rid], stored: stored[s.previs], rendered: rendered[s.rid] });
   const shot = shots.find(s => s.rid === rid) || shots[0];
   const plan = showDemo ? demoPlan : shot ? planOf(shot) : defaultPlan(), frames = framesOf(plan);
+  // A crew member's proposed camera for this shot: dashed on the plan, and one click puts the lens through it (a comparison, not a change).
+  const ghost = showDemo || !shot || !proposals?.length ? null : ghostsFor(proposals, shots.filter(s => s.rid === shot.rid), tabKey, planOf)[0] || null;
+  const [lookGhost, setLookGhost] = useState(false);
+  useEffect(() => { if (!ghost) setLookGhost(false); }, [ghost?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
   const statusOf = s => (drafts[s.rid] ? 'edited' : s.previs ? 'rendered' : 'none');
   const edit = patch => { const next = { ...plan, ...patch }; saveDraft(slug, shot.rid, next); setDrafts(d => ({ ...d, [shot.rid]: next })); };
   const discard = () => { saveDraft(slug, shot.rid, null); setDrafts(({ [shot.rid]: _, ...rest }) => rest); };
@@ -78,11 +90,11 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     const pan = e => {
       if (!onPlan(e) || !(e.buttons & 1)) return;
       const k = (top.right - top.left) / top.zoom / (canvas.clientWidth * (split() ? SPLIT / WIDTH : 1));
-      top.position.x += e.movementX * k; top.position.z += e.movementY * k; top.updateMatrixWorld(); now.current.draw();
+      top.position.x += e.movementX * k; top.position.z += e.movementY * k; top.updateMatrixWorld(); now.current.draw(); now.current.bump();
     };
     const zoom = e => {
       if (!onPlan(e)) return;
-      e.preventDefault(); top.zoom = Math.min(6, Math.max(0.4, top.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); top.updateProjectionMatrix(); now.current.draw();
+      e.preventDefault(); top.zoom = Math.min(6, Math.max(0.4, top.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); top.updateProjectionMatrix(); now.current.draw(); now.current.bump();
     };
     canvas.addEventListener('pointermove', pan); canvas.addEventListener('wheel', zoom, { passive: false });
     const lens = new THREE.PerspectiveCamera(verticalFov(35), WIDTH / HEIGHT, 0.05, 200);  // the PiP's shot camera; the free camera stays the user's
@@ -102,20 +114,22 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   // Motion QA of this shot's acting (scene.js motion: skills, pins, fixes), redone only when the motion changes.
   const motionKey = JSON.stringify([shot?.rid, plan.set, plan.mood, plan.use, plan.pins, plan.acts, plan.action, plan.facing, plan.seconds, plan.mark, plan.turn, plan.figure, plan.fix]);
   useEffect(() => { const ctx = live.current; if (ctx?.stage) setQa(ctx.stage.motion(plan).qa); }, [motionKey]);
-  const guideKey = JSON.stringify(showDemo ? [['Motion demo', plan, true]] : shots.map(s => [s.shot, planOf(s), s.rid === shot?.rid]));
-  useEffect(() => {  // every shot camera that shares this set
+  const guideKey = JSON.stringify(showDemo ? [['Motion demo', plan, true]] : [...shots.map(s => [s.shot, planOf(s), s.rid === shot?.rid]), ...(ghost ? [[ghost.label, ghost.plan, 'ghost']] : [])]);
+  useEffect(() => {  // every shot camera that shares this set, and the proposed camera as a dashed ghost
     const ctx = live.current; if (!ctx?.stage) return;
     if (ctx.guides) { ctx.guides.group.removeFromParent(); ctx.guides.dispose(); }
     ctx.guides = shotGuides(showDemo ? [{ id: uiText('previs.demoTitle'), plan, selected: true }]
-      : shots.filter(s => planOf(s).set === plan.set).map(s => ({ id: s.shot, plan: planOf(s), selected: s.rid === shot.rid })));
+      : [...shots.filter(s => planOf(s).set === plan.set).map(s => ({ id: s.shot, plan: planOf(s), selected: s.rid === shot.rid })),
+        ...(ghost ? [{ id: ghost.label + ' ✦', plan: ghost.plan, selected: false, ghost: true }] : [])]);
     ctx.stage.scene.add(ctx.guides.group);
   }, [guideKey]);
 
   const draw = () => {
     const ctx = live.current; if (!ctx?.stage) return;
     const { renderer, stage, guides } = ctx, split = view === 'split', top = view === 'overhead' || split;
+    const lensPlan = lookGhost && ghost ? ghost.plan : plan;  // the camera the lens looks through
     stage.pose(frame, plan); guides?.update(frame / (frames - 1), top ? 1.4 / ctx.top.zoom : 1);
-    if (view === 'lens' || split) stage.shoot(frame, plan);
+    if (view === 'lens' || split) stage.shoot(frame, lensPlan);
     else if (view === 'free') { stage.camera.fov = verticalFov(plan.lens); stage.camera.updateProjectionMatrix(); }
     const paint = (camera, plan, guided, x = 0, y = 0, w = WIDTH, h = HEIGHT) => {
       renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h);
@@ -131,14 +145,32 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     } else {
       ctx.aspect(WIDTH / HEIGHT); paint(top ? ctx.top : stage.camera, top, view !== 'lens');
       if (pip && view !== 'lens') {  // the shot lens over the corner, clean like the render: roof on, no guides
-        const c = sampleCamera(plan, frame);
-        ctx.lens.fov = verticalFov(plan.lens); ctx.lens.updateProjectionMatrix(); ctx.lens.position.set(...c.position); ctx.lens.lookAt(...c.aim);
+        const c = sampleCamera(lensPlan, frame);
+        ctx.lens.fov = verticalFov(lensPlan.lens); ctx.lens.updateProjectionMatrix(); ctx.lens.position.set(...c.position); ctx.lens.lookAt(...c.aim);
         renderer.setScissorTest(true); paint(ctx.lens, false, false, WIDTH - PIP.w - PIP.margin, PIP.margin, PIP.w, PIP.h);
         renderer.setScissorTest(false); renderer.setViewport(0, 0, WIDTH, HEIGHT);
       }
     }
   };
-  now.current = { frame, frames, rid: shot?.rid, shots, view, draw, rendering };
+  now.current = { frame, frames, rid: shot?.rid, shots, view, draw, rendering, bump };
+  // The overhead plan's handles sit on the plan, so they follow its pan and zoom (one redraw per animation frame at most).
+  function bump() { if (!bumping.current) bumping.current = requestAnimationFrame(() => { bumping.current = 0; setMoved(n => n + 1); }); }
+  const plane = () => {  // the plan's own box on the canvas: all of it, or the left half in the split view
+    const ctx = live.current; if (!ctx) return null;
+    const canvas = ctx.renderer.domElement, rect = canvas.getBoundingClientRect();
+    ctx.top.updateMatrixWorld();
+    return { top: ctx.top, rect, w: rect.width * (view === 'split' ? SPLIT / WIDTH : 1), h: rect.height };
+  };
+  const project = (x, z) => {
+    const p = plane(); if (!p || !p.w) return null;
+    const v = new THREE.Vector3(x, 0, z).project(p.top);
+    return Math.abs(v.x) > 1.02 || Math.abs(v.y) > 1.02 ? null : { x: (v.x + 1) / 2 * p.w, y: (1 - v.y) / 2 * p.h };
+  };
+  const unproject = (clientX, clientY) => {
+    const p = plane(); if (!p || !p.w) return null;
+    const v = new THREE.Vector3(((clientX - p.rect.left) / p.w) * 2 - 1, 1 - ((clientY - p.rect.top) / p.h) * 2, 0).unproject(p.top);
+    return [v.x, v.z];
+  };
   useEffect(() => { if (frame > frames - 1) setFrame(frames - 1); }, [frames]);  // a shorter shot: stay on its last frame
   useEffect(() => { if (!rendering) draw(); });  // previs scale: redraw after every change
   useEffect(() => {  // the free camera starts from the nearer key of this shot; orbiting redraws
@@ -248,6 +280,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
   };
 
   const t = (key, params) => uiText('previs.' + key, params);
+  const decide = async work => { setError(''); try { if (!(await work())) setError(uiText('shotProposal.failed')); } catch (e) { setError(e.message || String(e)); } };
   if (!shot) return <div className="sheet-empty"><p>{t('empty')}</p></div>;
   const layoutable = shot.matteCol >= 0 && shot.skeletonCol >= 0;  // the Layout Render binds both
   return <div className="previs-stage" tabIndex={-1} onKeyDown={onKey}>
@@ -269,7 +302,7 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
     <section className="previs-view">
       <div className="previs-viewport">
         <div ref={host} className={'previs-canvas view-' + view} aria-label={t('viewport')} />
-        <div className="previs-hud"><b>{showDemo ? t('demoTitle') : shot.shot}</b> · {plan.lens}mm · {(frame / FPS).toFixed(2)}s</div>
+        <div className="previs-hud"><b>{showDemo ? t('demoTitle') : shot.shot}</b> · {(lookGhost && ghost ? ghost.plan : plan).lens}mm · {(frame / FPS).toFixed(2)}s{lookGhost && ghost && <> · {t('ghostHud')}</>}</div>
         <div className="previs-views" role="group" aria-label={t('viewMode')}>{VIEWS.map(v =>
           <button type="button" key={v} aria-pressed={view === v} disabled={rendering}
             onClick={() => pickView(v)}>{t('view_' + v)}</button>)}
@@ -279,15 +312,21 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
           {view === 'lens' && returnView && <button type="button" onClick={exitLook}>{t('exitLookThrough')}</button>}
         </div>
         {pip && (view === 'free' || view === 'overhead') && <div className="previs-pip" aria-hidden="true"><span>{t('view_lens')}</span></div>}
+        {(view === 'overhead' || view === 'split') && !showDemo && !rendering && <div className="plan-layer" role="group" aria-label={t('dragHint')}>
+          <PlanHandles plan={plan} project={project} unproject={unproject} writable={writable}
+            onDummy={(id, point, options) => edit(moveDummy(plan, id, point, options))} onKey={(index, point, options) => edit(moveCameraKey(plan, index, point, options))} /></div>}
         {view === 'lens' && returnView ? <p className="previs-hint">{t('hint_return', { view: t('view_' + returnView) })}</p>
           : view !== 'lens' && <p className={'previs-hint' + (pip && view !== 'split' ? ' beside-pip' : '')}>{t('hint_' + view)}</p>}
       </div>
       <div className="previs-timeline">
         <button type="button" onClick={() => setPlaying(p => (p === 'shot' ? false : 'shot'))} disabled={rendering}>{playing === 'shot' ? t('pause') : t('playShot')}</button>
         {!showDemo && <button type="button" onClick={playScene} disabled={rendering}>{playing === 'scene' ? t('pause') : t('playScene')}</button>}
-        <input type="range" min="0" max={frames - 1} value={Math.min(frame, frames - 1)} aria-label={t('frame')} onChange={e => { setPlaying(false); setFrame(+e.target.value); }} />
+        <span className="previs-scrub ctl-palette"><Slider value={Math.min(frame, frames - 1)} min={0} max={frames - 1} step={1} ariaLabel={t('frame')}
+          valueText={f => `${f} · ${(f / FPS).toFixed(2)} s`} onChange={f => { setPlaying(false); setFrame(f); }} /></span>
         <span>{Math.min(frame, frames - 1)}/{frames - 1}</span>
       </div>
+      {!showDemo && <BeatTrack plan={plan} frames={frames} frame={Math.min(frame, frames - 1)} writable={writable && !rendering}
+        onEdit={edit} onSeek={f => { setPlaying(false); setFrame(f); }} />}
       <p className="previs-summary">{showDemo ? t('demoBeats') : describePlan(plan)}</p>
     </section>
     <aside className="previs-controls" aria-label={t('inspector')}>
@@ -315,6 +354,18 @@ export default function PrevisStage({ slug, shots, focus, writable, busy, onRend
           {drafts[shot.rid] && <button type="button" onClick={discard}>{t('discard')}</button>}
         </fieldset>
       </fieldset>}
+      {!showDemo && <CameraMove plan={plan} frames={frames} frame={Math.min(frame, frames - 1)} writable={writable && !rendering} onEdit={edit} />}
+      {ghost && <section className="previs-proposal" aria-label={uiText('shotProposal.title')}>
+        <h3>{uiText('shotProposal.title')}</h3>
+        <p className="previs-note">{t('ghostLegend', { shot: ghost.label })}</p>
+        <div className="previs-proposal-actions">
+          <button type="button" aria-pressed={lookGhost} disabled={rendering} onClick={() => setLookGhost(on => !on)}>{t(lookGhost ? 'ghostBack' : 'ghostLook')}</button>
+          {writable && onApplyProposal && <button type="button" className="apply" disabled={rendering || busy}
+            onClick={() => decide(() => onApplyProposal(ghost.entry.proposal, ghost.entry.proposal.content, applyOptions(ghost.entry)))}>
+            {uiText(ghost.entry.partial ? 'shotProposal.apply' : 'shotProposal.applyAll', { count: ghost.entry.size })}</button>}
+          {writable && onDismissProposal && <button type="button" disabled={rendering || busy} onClick={() => decide(() => onDismissProposal(ghost.entry.proposal))}>{uiText('shotProposal.reject')}</button>}
+        </div>
+      </section>}
       {qa && <section className={'previs-qa' + (qa.ok ? ' clean' : '')} aria-label={t('qaTitle')} aria-live="polite">
         {qa.ok ? <p className="previs-qa-pill">{t('qaClean')}</p> : <>
           <p className="previs-qa-pill">{t('qaIssues', { count: qa.groups.length })}</p>

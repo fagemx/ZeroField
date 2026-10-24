@@ -5,14 +5,16 @@ import { storyList, storyRequest, waitStoryTask } from './storyModel.js';
 import { sourceDraft, editStoryScreenplay, needsStoryAdaptation, adaptStoryDraft, buildStoryFromDraft, storyComposition, choiceContrast,
   missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
 import { CompositionPanel, CompositionReport, AssetGenerationState } from './StoryWorkbenchModals.jsx';
+import { ScriptOutline } from './ScriptOutline.jsx';
 import { Icon } from './Icon.jsx';
 
 const MODES = ['idea', 'novel', 'script'];
 const KINDS = {all:() => true, cast:asset => asset.type === 'CHARACTER', world:asset => asset.type !== 'CHARACTER'};
+const focusedSceneOf = (shots, rid) => (rid && shots.find(shot => shot.rowId === rid)?.sceneId) || null;
 
 // SPEC_15 Story & World: the scenes, the source the agent grows into a script (SPEC_14 lenses and collision cards on the
 // page, not behind Ctrl K), and the cast, sets and props that script names. One amber action: update the storyboard.
-export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onChanged, onStage, onAssets, onVault}) {
+export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focus = {}, onFocus, onChanged, onStage, onOpenShot, onAssets, onVault}) {
   useLocale();
   const [drafts, setDrafts] = useState(() => ({script:sourceDraft(), idea:sourceDraft(), novel:sourceDraft()}));
   const [sourceMode, setSourceMode] = useState('script'), [targetScenes, setTargetScenes] = useState(3), [breakdownMode, setBreakdownMode] = useState('auto');
@@ -20,7 +22,7 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onCh
   const [comp, setComp] = useState({medium:'', genre:'general', collisions:null, unchecked:[], focus:'overall', extra:''});
   const [assets, setAssets] = useState([]), [kind, setKind] = useState('all'), [open, setOpen] = useState(''), [detail, setDetail] = useState(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [loading, setLoading] = useState(true), [group, setGroup] = useState(null), [task, setTask] = useState(null);
-  const script = useRef(null), mounted = useRef(true), loadedFor = useRef(null), picked = useRef(false);
+  const script = useRef(null), mounted = useRef(true), loadedFor = useRef(null), picked = useRef(false), openedFor = useRef(null);
   const draft = drafts[sourceMode], isSource = sourceMode !== 'script';
   const disabled = busy || loading || !writable;
   const composition = storyComposition(comp);
@@ -41,6 +43,19 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onCh
   }, [ep, epId]);
   const loadAssets = () => storyList(`/episodes/${epId}/assets`).then(items => {if (mounted.current) setAssets(items);});
   useEffect(() => {loadAssets().catch(err => setError(err.message));}, [epId, ep]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // The shell's focus lands here: "Add references" on the Shot Stage arrives with an asset code and opens that card once; with
+  // no focus yet, the first scene is the focus so every space's breadcrumb has a place to start.
+  useEffect(() => {
+    const code = focus.assetCode?.split(':')[0];
+    if (!code || openedFor.current === focus.assetCode) return;
+    const asset = assets.find(item => item.assetCode.split(':')[0] === code);
+    if (!asset) return;
+    openedFor.current = focus.assetCode; setKind('all'); setOpen(asset.assetId);
+    requestAnimationFrame(() => document.getElementById('world-asset-' + asset.assetId)?.scrollIntoView({block:'nearest'}));
+  }, [focus.assetCode, assets]);
+  useEffect(() => {
+    if (!focus.sceneId && !focus.shotRid && ep?.scenes?.[0]) onFocus?.({sceneId:ep.scenes[0].sceneId});
+  }, [ep?.scenes, focus.sceneId, focus.shotRid]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let alive = true; setDetail(null);
     if (open) storyRequest('/assets/' + open).then(item => {if (alive) setDetail(item);}).catch(err => {if (alive) setError(err.message);});
@@ -97,6 +112,7 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onCh
   });
   // A scene in the list selects its heading in the screenplay.
   const jump = scene => {
+    onFocus?.({sceneId:scene.sceneId, shotRid:null});  // a scene is the focus now; the Shot Stage picks the shot that needs you
     if (sourceMode !== 'script') setSourceMode('script');
     requestAnimationFrame(() => {
       const box = script.current, at = box ? box.value.indexOf(scene.title) : -1;
@@ -105,6 +121,13 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onCh
       if (at >= 0) {box.setSelectionRange(at, at + scene.title.length); box.scrollTop = Math.max(0, box.value.slice(0, at).split('\n').length - 2) * 22;}
     });
   };
+  // A beat's line number selects that line in the screenplay.
+  const jumpLine = line => requestAnimationFrame(() => {
+    const box = script.current;
+    if (!box || !line) return;
+    const lines = box.value.split('\n'), start = lines.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
+    box.focus(); box.setSelectionRange(start, start + (lines[line - 1]?.length || 0)); box.scrollTop = Math.max(0, line - 3) * 22;
+  });
   const scenes = ep?.scenes || [];
   const shotsByScene = useMemo(() => shots.reduce((map, shot) => map.set(shot.sceneId, (map.get(shot.sceneId) || 0) + 1), new Map()), [shots]);
   const missing = missingAssetSheets(ep);
@@ -121,7 +144,7 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onCh
         <button type="button" aria-pressed="true">{t('world.byScene')}</button>
         <button type="button" aria-pressed="false" onClick={onAssets}>{t('world.assetWall')}</button>
       </div>
-      <ol className="space-items">{scenes.map(scene => <li key={scene.sceneId}><button type="button" onClick={() => jump(scene)}>
+      <ol className="space-items">{scenes.map(scene => <li key={scene.sceneId}><button type="button" aria-current={(focus.sceneId || focusedSceneOf(shots, focus.shotRid)) === scene.sceneId ? 'true' : undefined} onClick={() => jump(scene)}>
         <b className="num">{String(scene.sceneIndex).padStart(2, '0')}</b><span>{scene.title}</span>
         <small>{t('shell.shotCount', {count:shotsByScene.get(scene.sceneId) || 0})}</small></button></li>)}
         {!scenes.length && <li className="space-empty">{t('world.noScenes')}</li>}
@@ -160,6 +183,8 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onCh
           <span>{t('world.adjust')}</span></button>}
         {ep?.scriptDirty && <p className="story-dirty" role="status">{t('story.scriptDirty')}</p>}
         <label className="modal-field space-script">{t('story.script')}<textarea ref={script} rows={22} value={draft.script} maxLength={500000} disabled={disabled} onChange={e => updateDraft(editStoryScreenplay(sourceMode, draft, e.target.value, targetScenes))}/></label>
+        {shots.length > 0 && ep && <ScriptOutline epId={epId} script={draft.script} saved={ep.scriptContent || ''} version={(ep.confirmedHash || '') + ':' + shots.length}
+          focusRid={focus.shotRid} onFocus={onFocus} onOpen={onOpenShot} onLine={jumpLine}/>}
       </>}
       <label className="space-upload"><Icon name="arrowUp"/>{t('story.uploadScript')}<input type="file" accept=".txt,.md,text/plain,text/markdown" disabled={disabled} onChange={async e => {
         const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
@@ -181,8 +206,9 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, onCh
         </div></div>
       <ul className="world-assets">{shown.map(asset => {
         const lacks = missing.includes(asset.assetCode), expanded = open === asset.assetId;
-        return <li key={asset.assetId} className={(lacks ? 'is-missing ' : '') + (expanded ? 'is-open' : '')}>
-          <button type="button" className="world-asset" aria-expanded={expanded} onClick={() => setOpen(expanded ? '' : asset.assetId)}>
+        const focused = focus.assetCode && asset.assetCode.split(':')[0] === focus.assetCode.split(':')[0];
+        return <li key={asset.assetId} id={'world-asset-' + asset.assetId} className={(lacks ? 'is-missing ' : '') + (expanded ? 'is-open ' : '') + (focused ? 'is-focus' : '')}>
+          <button type="button" className="world-asset" aria-expanded={expanded} onClick={() => {openedFor.current = asset.assetCode; setOpen(expanded ? '' : asset.assetId); onFocus?.({assetCode:expanded ? null : asset.assetCode});}}>
             {asset.selectedImageUrl ? <img src={asset.selectedImageUrl} alt="" loading="lazy"/> : <span className="world-blank"/>}
             <span><b>{asset.name || asset.assetCode}</b><small>@{asset.assetCode}</small>{lacks && <em>{t('world.needsImage')}</em>}</span></button>
           {expanded && <div className="world-asset-detail">

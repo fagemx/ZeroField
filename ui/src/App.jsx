@@ -12,10 +12,12 @@ import { DocSurface } from "./DocSurface.jsx";
 import { HistoryPanel } from "./History.jsx";
 import { parseLocation, tabHash } from "./route.js";
 import { isOpen } from "./rules.js";
+import { SHOT_FILTERS } from "./studioModel.js";
 import { TabRail } from "./TabRail.jsx";
 import { IdentityBadge, PROJECT_STATUS, ProjectHub, SurfaceHeader } from "./Surfaces.jsx";
-import { STAGE_TAB, STORY_VIEW, CommandPalette, FilmOverlay, StudioTopBar, episodeCounts, spaceOf, useEpisode } from "./StudioShell.jsx";
+import { SPACES, STAGE_TAB, STORY_VIEW, TIMELINE_VIEW, VIRTUAL_TABS, CommandPalette, FilmOverlay, StudioTopBar, episodeCounts, orderedShots, spaceOf, tabOfSpace, useEpisode } from "./StudioShell.jsx";
 import { StoryWorld } from "./StoryWorld.jsx";
+import { Timeline } from "./Timeline.jsx";
 import { AssetVaultModal, OpenApiModal, ToolboxModal } from "./StoryWorkbenchModals.jsx";
 import { FlowSurface, SheetSurface } from "./CanvasViews.jsx";
 import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
@@ -107,6 +109,12 @@ function ProjectPage({ slug }) {
   const [paMode, setPaMode] = useState('off');
   const [paDraft, setPaDraft] = useState('');
   const [palette, setPalette] = useState(false), [filmOpen, setFilmOpen] = useState(false), [studioRail, setStudioRail] = useState(false), [studioModal, setStudioModal] = useState(null);
+  // Panel visibility is a per-browser choice. The focus (scene, shot, world asset) belongs to the shell, not to a page, so it
+  // follows you between spaces: pick scene 2 in Story & World and the Shot Stage and Timeline open on its shots.
+  const [layout, setLayout] = usePref("studio.layout", { left: true, bottom: true, right: true });
+  const [focus, setFocusState] = useState({ sceneId: null, shotRid: null, assetCode: null });
+  const setFocus = useCallback((patch) => setFocusState((current) => ({ ...current, ...patch })), []);
+  const landing = useRef(null); // a scene whose shots the next Shot Stage / Timeline visit should land on
   const versionsShown = useCallback(() => setVersionsFor(null), []);
   const annSeq = useRef(0);
   const pendingFocus = useRef((() => {
@@ -163,7 +171,7 @@ function ProjectPage({ slug }) {
     if (!data) return;
     const keys = data.tabs.map((t) => t.key);
     const studio = keys.includes(STAGE_TAB);
-    if (studio && tabKey === STORY_VIEW) return;
+    if (studio && VIRTUAL_TABS.includes(tabKey)) return;
     if (!tabKey || !keys.includes(tabKey)) {
       const first = studio ? STAGE_TAB : keys[0];
       if (first) {
@@ -174,7 +182,7 @@ function ProjectPage({ slug }) {
   }, [data, tabKey]);
 
   useEffect(() => {
-    if (!tabKey || !data || tabKey === STORY_VIEW) return;
+    if (!tabKey || !data || VIRTUAL_TABS.includes(tabKey)) return;
     const meta = data.tabs.find((t) => t.key === tabKey);
     const cached = docs[tabKey];
     if (!cached) loadTab(tabKey, true);
@@ -520,11 +528,33 @@ function ProjectPage({ slug }) {
   const flushSurface = useCallback(async () => (surfaceControl.current ? surfaceControl.current.flush() : true), []);
   const isStudio = Boolean(data?.tabs.some((t) => t.key === STAGE_TAB));
   const episode = useEpisode(slug, storyEpisode, (data?.tabs || []).map((t) => t.updated_at).join("|"), isStudio);
+  // The shot a visit lands on when it carries a scene: the first waiting for review, else one missing an image, else the scene's first.
+  const landingShot = useCallback((sceneId) => {
+    const inScene = orderedShots(episode.shots).filter((shot) => !sceneId || shot.sceneId === sceneId);
+    return inScene.find((shot) => SHOT_FILTERS.review({ status: shot.reviewStatus })) || inScene.find((shot) => SHOT_FILTERS.missing({ info: shot })) || inScene[0] || null;
+  }, [episode.shots]);
+  useEffect(() => {
+    if (!landing.current || !isStudio || !episode.shots.length || ![STAGE_TAB, TIMELINE_VIEW].includes(tabKey)) return;
+    // A shot named on the way in (a chip on the script outline) is where the visit lands; otherwise the scene's first shot needing you.
+    const shot = (landing.current.shotRid && episode.shots.find((item) => item.rowId === landing.current.shotRid)) || landingShot(landing.current.sceneId);
+    landing.current = null;
+    if (shot) setFocus({ shotRid: shot.rowId, sceneId: shot.sceneId });
+  }, [tabKey, isStudio, episode.shots, landingShot, setFocus]);
+  const goStage = useCallback((sceneId) => { landing.current = { sceneId: sceneId ?? focus.sceneId }; return navigate(STAGE_TAB); }, [navigate, focus.sceneId]);
+  const openShot = useCallback((rid, sceneId) => { landing.current = { sceneId: sceneId ?? null, shotRid: rid }; setFocus({ shotRid: rid, sceneId: sceneId ?? null }); return navigate(STAGE_TAB); }, [navigate, setFocus]);
+  const openWorld = useCallback((assetCode) => { setFocus({ assetCode: assetCode || null }); return navigate(STORY_VIEW); }, [navigate, setFocus]);
+  const focusShot = useCallback((rid) => {
+    const shot = episode.shots.find((item) => item.rowId === rid);
+    setFocus({ shotRid: rid, sceneId: shot?.sceneId ?? null });
+  }, [episode.shots, setFocus]);
   // Ctrl K opens the command palette; G opens or closes the Assistant when focus is not in a field.
   useEffect(() => {
     if (!isStudio || consoleView) return undefined;
     const keys = (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPalette((open) => !open); return; }
+      // Ctrl/Cmd/Alt + 1·2·3 switch space. A browser may keep Ctrl+digit for its own tabs, so Alt+digit works too.
+      const next = /^[1-3]$/.test(event.key) && (event.ctrlKey || event.metaKey || event.altKey) && !event.shiftKey ? SPACES[Number(event.key) - 1] : null;
+      if (next) { event.preventDefault(); navigate(next.tab); return; }
       if (event.key.toLowerCase() !== "g" || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
       if (event.target.closest?.("input,textarea,select,[contenteditable=true],.modal-scrim") || !paEnabled) return;
       event.preventDefault();
@@ -532,7 +562,7 @@ function ProjectPage({ slug }) {
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
-  }, [isStudio, consoleView, paEnabled]);
+  }, [isStudio, consoleView, paEnabled, navigate]);
   const openConsole = async () => {
     if (!(await flushSurface())) return;
     productionReturnFocus.current = document.activeElement;
@@ -558,9 +588,19 @@ function ProjectPage({ slug }) {
   const todo = todoCount(data.annotations, me);
   const openCount = (key) => data.annotations.filter((a) => a.tab_key === key && isOpen(a) && !a.orphaned_at).length;
   const storyView = isStudio && tabKey === STORY_VIEW;
+  const timelineView = isStudio && tabKey === TIMELINE_VIEW;
   const space = isStudio ? spaceOf(tabKey) : null;
   const counts = episodeCounts(episode.ep, episode.shots);
-  const reloadAll = async () => { episode.reload(); await loadProject(); if (tabKey && tabKey !== STORY_VIEW) await loadTab(tabKey, true); };
+  // The breadcrumb's last two crumbs are the shell's focus. Each space shows the panel toggles it has.
+  const focusedShot = episode.shots.find((shot) => shot.rowId === focus.shotRid) || null;
+  const focusedScene = (episode.ep?.scenes || []).find((scene) => scene.sceneId === (focusedShot?.sceneId || focus.sceneId)) || null;
+  const crumbs = isStudio ? {
+    scene: focusedScene ? uiText("shell.sceneCrumb", { index: String(focusedScene.sceneIndex).padStart(2, "0"), title: focusedScene.title }) : "",
+    shot: focusedShot ? String(focusedShot.shotIndex) : "",
+  } : {};
+  const panels = !isStudio ? [] : timelineView ? ["left", "bottom", "right"] : tabKey === STORY_VIEW || tabKey === STAGE_TAB ? ["left", "right"] : [];
+  const toggleLayout = (key) => setLayout({ ...layout, [key]: layout[key] === false });
+  const reloadAll = async () => { episode.reload(); await loadProject(); if (tabKey && !VIRTUAL_TABS.includes(tabKey)) await loadTab(tabKey, true); };
   const assistantButton = paEnabled && (
     <button type="button" className={"icon-btn pa-btn" + (paMode !== "off" ? " on" : "")} title={uiText("app.studioAssistant")} aria-keyshortcuts={isStudio ? "G" : undefined}
       onClick={() => { if (paMode === 'off') { if (assistant.orchestrationCounts?.needs_you || assistant.orchestrationCounts?.working) setPaView('agents'); openAssistant(); } else setPaMode('off'); }}>
@@ -571,8 +611,7 @@ function ProjectPage({ slug }) {
   );
   // Every page and engineering tool, one Ctrl K away instead of standing in the top bar and page rail.
   const commands = isStudio ? [
-    { id: "space-story", group: uiText("shell.groupSpaces"), label: uiText("shell.storyWorld"), icon: "doc", run: () => navigate(STORY_VIEW) },
-    { id: "space-stage", group: uiText("shell.groupSpaces"), label: uiText("shell.shotStage"), icon: "clapper", run: () => navigate(STAGE_TAB) },
+    ...SPACES.map((item, index) => ({ id: "space-" + item.key, group: uiText("shell.groupSpaces"), label: uiText(item.label), hint: "Ctrl " + (index + 1), icon: item.icon, run: () => navigate(item.tab) })),
     { id: "film", group: uiText("shell.groupSpaces"), label: uiText("shell.filmTitle"), icon: "play", run: () => setFilmOpen(true) },
     ...tabs.map((item) => ({ id: "page-" + item.key, group: uiText("shell.groupPages"), label: item.title, hint: openCount(item.key) ? uiText("shell.openNotes", { count: openCount(item.key) }) : "",
       icon: item.surface_type === "sheet" ? "table" : item.surface_type === "flow" ? "flow" : "doc", run: () => navigate(item.key) })),
@@ -588,12 +627,14 @@ function ProjectPage({ slug }) {
   return (
     <>
     {consoleView && <AgentConsoleApp key={slug+':'+me.actor_id} slug={slug} me={me} project={data.project} route={consoleView} episodeId={storyEpisode} onReturn={returnProduction}/>}
-    <div data-console-hidden={Boolean(consoleView)} inert={consoleView ? true : undefined} aria-hidden={consoleView ? true : undefined} className={"app workbench-app surface-" + (storyView ? "story" : tab?.surface_type || "doc") + (isStudio ? " studio-shell" : "") + ((isStudio ? !studioRail : railHidden) ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
+    <div data-console-hidden={Boolean(consoleView)} inert={consoleView ? true : undefined} aria-hidden={consoleView ? true : undefined} className={"app workbench-app surface-" + (storyView ? "story" : timelineView ? "timeline" : tab?.surface_type || "doc") + (isStudio ? " studio-shell" : "") + ((isStudio ? !studioRail : railHidden) ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
+      + (isStudio && layout.left === false ? " hide-left" : "") + (isStudio && layout.right === false ? " hide-right" : "") + (isStudio && layout.bottom === false ? " hide-bottom" : "")
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
       {isStudio ? <StudioTopBar project={data.project} episodes={episode.episodes} epId={storyEpisode}
         onEpisode={async (next) => { if (await flushSurface()) setStoryEpisode(next); }}
-        space={space} pageTitle={!storyView && tab && tabKey !== STAGE_TAB ? tab.title : ""} counts={counts}
-        onSpace={(next) => navigate(next === "story" ? STORY_VIEW : STAGE_TAB)} onCommand={() => setPalette(true)}
+        space={space} pageTitle={!storyView && !timelineView && tab && tabKey !== STAGE_TAB ? tab.title : ""} crumbs={crumbs} counts={counts}
+        panels={panels} layout={layout} onLayout={toggleLayout}
+        onSpace={(next) => navigate(tabOfSpace(next))} onCommand={() => setPalette(true)}
         assistant={<>{todo > 0 && <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={uiText("app.annotationsNeedsYouAndAll")}
           onClick={() => { setPanel(!panel); setHistoryOpen(false); if (!panel && paMode === "side") setPaMode("off"); }}><NoteIcon /><span className="count">{todo}</span></button>}
           {tab?.surface_type === "doc" && !storyView && <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title={uiText("app.chooseWhichHighlightsAndUnderlinesToShow")}
@@ -651,8 +692,10 @@ function ProjectPage({ slug }) {
         <main className="main">
           <div className="doc-host">
           {storyView && <StoryWorld epId={storyEpisode} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
-            onChanged={reloadAll} onStage={() => navigate(STAGE_TAB)} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")} />}
-          {!tab && !storyView && <div className="center-note">{uiText("app.loading")}</div>}
+            focus={focus} onFocus={setFocus} onChanged={reloadAll} onStage={() => goStage()} onOpenShot={openShot} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")} />}
+          {timelineView && <Timeline epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} focusRid={focus.shotRid}
+            onFocus={focusShot} onChanged={episode.reload} />}
+          {!tab && !storyView && !timelineView && <div className="center-note">{uiText("app.loading")}</div>}
           {tab && tab.surface_type === "sheet" && !versionsFor && !(docModeTabs && docModeTabs[tab.key]) && (
             <SheetSurface
               key={tab.key}
@@ -665,7 +708,9 @@ function ProjectPage({ slug }) {
               annotations={data.annotations} locks={data.locks || []}
               focusRow={sheetFocus}
               storyEpisode={storyEpisode}
-              onOpenWorld={isStudio ? () => navigate(STORY_VIEW) : undefined}
+              onOpenWorld={isStudio ? openWorld : undefined}
+              shotFocus={isStudio ? focus.shotRid : undefined} onShotFocus={isStudio ? focusShot : undefined}
+              proposals={isStudio ? assistant.state?.proposals || [] : undefined} onApplyProposal={assistant.apply} onDismissProposal={assistant.dismiss} onReloadProposals={assistant.reload}
               onFilm={isStudio ? () => setFilmOpen(true) : undefined}
               onField={setField}
               onReloadTab={async () => { await loadTab(tab.key, true); await loadProject(); }}
@@ -738,7 +783,7 @@ function ProjectPage({ slug }) {
       )}
       {railOpen && <div className="rail-scrim" onClick={() => setRailOpen(false)} />}
       {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}
-      {filmOpen && <FilmOverlay epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} onClose={() => setFilmOpen(false)} />}
+      {filmOpen && <FilmOverlay epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} onClose={() => setFilmOpen(false)} onTimeline={() => navigate(TIMELINE_VIEW)} />}
       {studioModal === "assets" && <AssetVaultModal epId={storyEpisode} writable={me.can_write !== false} onClose={() => setStudioModal(null)} onChanged={reloadAll} onNavigate={() => { setStudioModal(null); navigate("soul-cast"); }} />}
       {studioModal === "toolbox" && <ToolboxModal writable={me.can_write !== false} onClose={() => setStudioModal(null)} />}
       {studioModal === "api" && <OpenApiModal slug={slug} epId={storyEpisode} onClose={() => setStudioModal(null)} />}

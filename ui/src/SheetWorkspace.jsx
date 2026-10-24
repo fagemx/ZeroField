@@ -14,6 +14,8 @@ import { freezeSheetScope, historyForRow, inverseOperation, rangeTSV, rebaseOper
 import { restoreViewPreferences, sheetViewModel, statusOptions, viewPreferences } from './sheetViews.js';
 import { shortTime, statusClass, statusLabel } from './format.js';
 import { ShotList, ShotCompare } from './ShotStage.jsx';
+import { ShotProposals } from './ShotProposals.jsx';
+import { rowProposals } from './proposalModel.js';
 import './sheet-workspace.css';
 import { SheetAgentRequest } from './assistant/SheetAgentRequest.jsx';
 import { ShotBench, ShotStrip } from './ShotBench.jsx';
@@ -23,7 +25,7 @@ const PrevisStage = lazy(() => import('./previs/PrevisStage.jsx'));
 
 const TYPES = {get text() { return uiText("sheetWorkspace.text"); },get number() { return uiText("sheetWorkspace.number"); },get formula() { return uiText("sheetWorkspace.formula"); },get image() { return uiText("sheetWorkspace.image"); },get video() { return uiText("sheetWorkspace.videoAttachment"); },get audio() { return uiText("sheetWorkspace.audio"); },get status() { return uiText("sheetWorkspace.status"); }};
 
-export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[],controlRef,onReloadTab,onAskAgent,onSwitchDocMode,onToast,onError,onPanelChange,assistantOpen,focusRow,agents=[],onAgentRouted, storyEpisode, onOpenWorld, onFilm}) {
+export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[],controlRef,onReloadTab,onAskAgent,onSwitchDocMode,onToast,onError,onPanelChange,assistantOpen,focusRow,agents=[],onAgentRouted, storyEpisode, onOpenWorld, onFilm, shotFocus, onShotFocus, proposals=[], onApplyProposal, onDismissProposal, onReloadProposals}) {
   const locale = useLocale();
   const tables = useMemo(()=>tablesOf(tab.doc,values),[tab.doc,values]);
   const [tableId,setTableId]=useState(null);
@@ -116,6 +118,8 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
       .then(documents=>{if(alive)setAssetDocuments(documents);}).catch(()=>{if(alive)setAssetDocuments([]);});
     return()=>{alive=false;};
   },[slug,tab.key,JSON.stringify(tabs.filter(item=>item.surface_type==='sheet').map(item=>[item.key,item.revision]))]);
+  // Crew proposals are reviewed on their shot, so a production sheet reads the assistant's list when it opens.
+  useEffect(()=>{if(productionSheet)onReloadProposals?.();},[productionSheet,tab.key]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   if(!parsed)return <div className="canvas sheet-empty"><h2>{tab.title}</h2><p>{uiText("sheetWorkspace.addATableToStartPlanningYourProduction")}</p><button onClick={onSwitchDocMode}>{uiText("sheetWorkspace.editThisPage")}</button></div>;
   const attrs=parsed.table.attrs,types=attrs.column_types||[],columnIds=attrs.column_ids||[];
@@ -238,7 +242,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
     if(!previewTargetValid||!guardDraft())return;
     const at=visibleRows.findIndex(r=>r.rid===previewRow?.rid),target=targetRid?visibleRows.find(r=>r.rid===targetRid):visibleRows[at+direction];if(!target||target.rid===previewRow?.rid)return;
     const r=parsed.rows.indexOf(target),c=preview.c,media=mediaOf(target.cells[c]?.value,types[c]);
-    setPreview({...(media||{}),r,c,label:parsed.headers[c],value:target.cells[c]?.value});setRowOpen(target.rid);setComment('');setHistory(null);
+    setPreview({...(media||{}),r,c,label:parsed.headers[c],value:target.cells[c]?.value});setRowOpen(target.rid);setComment('');setHistory(null);onShotFocus?.(target.rid);
   };
   const ask=(ids=null,initial='',crew=false)=>{
     if(!guardDraft())return;
@@ -306,9 +310,15 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
   })}</section>)}</div>;
 
   // Shot Stage: one current shot across views. The list, up/down, A and R act on it; leaving Review drops its open stage.
-  const pickShot=rid=>{if(!guardDraft())return;if(previewState&&visibleRows.some(item=>item.rid===rid))stepPreview(0,rid);else setRowOpen(rid);setStageFocus({rid});};
+  const pickShot=rid=>{if(!guardDraft())return;if(previewState&&visibleRows.some(item=>item.rid===rid))stepPreview(0,rid);else setRowOpen(rid);setStageFocus({rid});onShotFocus?.(rid);};
   const pickView=key=>{if(!guardDraft())return;if(key!=='review')setPreview(null);if(key==='stage'&&currentRow)setStageFocus({rid:currentRow.rid});setView({mode:key});};
   const backToOverview=()=>{if(!guardDraft())return;setPreview(null);setView({mode:'gallery'});};
+  // The shell's focus and this view's current shot are one thing: arrive on the shot you were on in another space, or report the one shown first.
+  useEffect(()=>{
+    if(!productionSheet||!onShotFocus||!visibleRows.length)return;
+    if(shotFocus&&visibleRows.some(item=>item.rid===shotFocus)){if(currentRow?.rid!==shotFocus)pickShot(shotFocus);}
+    else if(currentRow&&shotFocus!==currentRow.rid)onShotFocus(currentRow.rid);
+  },[shotFocus,productionSheet,visibleRows.length,currentRow?.rid]);  // eslint-disable-line react-hooks/exhaustive-deps
   const setShotStatus=(item,value)=>statusCol>=0&&commit(parsed.rows.indexOf(item),statusCol,value);
   const stageKeys=e=>{
     if(!studioRails||!currentRow||editing||e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey||e.target.closest('input,textarea,select,video,[contenteditable=true]'))return;
@@ -328,7 +338,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
     const shotCol=parsed.headers.findIndex(h=>/cinema shot|remaster|output/i.test(h)),col=previewRow?.rid===currentRow.rid?preview.c:Math.max(shotCol,0);
     const action=primaryShotAction({status,missing,hasPipeline:flows.length>0&&shotCol>=0});
     const at=listedRows.findIndex(item=>item.rid===currentRow.rid),waiting=[...listedRows.slice(at+1),...listedRows.slice(0,Math.max(at,0))].find(item=>SHOT_FILTERS.review({status:shotStatus(item)}));
-    const run={approve:()=>setShotStatus(currentRow,'Approved'),references:()=>onOpenWorld?.(),next:()=>waiting?pickShot(waiting.rid):onFilm?.(),
+    const run={approve:()=>setShotStatus(currentRow,'Approved'),references:()=>onOpenWorld?.(missing[0]),next:()=>waiting?pickShot(waiting.rid):onFilm?.(),
       reshoot:()=>runStage(currentRow.rid,{type:'video',column:shotCol}),shoot:()=>runStage(currentRow.rid,{type:'video',column:shotCol}),review:()=>pickView('review')}[action];
     const writes=['approve','reshoot','shoot'].includes(action);
     return <aside className="shot-detail" aria-label={uiText('stage.shotDetail')}>
@@ -337,6 +347,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
       <div className="shot-primary"><button type="button" className="primary studio-primary" disabled={writes&&(!writable||busy||dirty)} onClick={run}>{uiText(action==='next'&&!waiting?'stage.primary_film':'stage.primary_'+action)}</button>
         {action==='approve'&&writable&&<button type="button" disabled={busy||dirty} onClick={()=>setShotStatus(currentRow,'Retake')}>{uiText('stage.retakeKey')}</button>}</div>
       {failure&&<p className="sheet-save-error" role="alert">{failure.message}</p>}
+      <ShotProposals items={rowProposals(proposals,currentRow.rid,tab.key)} writable={writable&&!busy&&!dirty} onApply={onApplyProposal} onDismiss={onDismissProposal} onShow={hasStage?()=>pickView('stage'):undefined}/>
       {shotControls(r,currentRow,col)}
       {mode!=='review'&&historyContent}
     </aside>;
@@ -378,7 +389,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
           })}<td className="row-actions"><button aria-label={uiText("sheetWorkspace.rowDetails", {v0: (r+1)})} onClick={()=>openRow(item.rid)}>↗</button>{locks.some(lock=>lock.tab_key===tab.key&&[item.rid,parsed.tableId].includes(lock.unit_id))&&<small title={uiText("sheetWorkspace.anotherCrewMemberIsEditingThisRow")}>{uiText("sheetWorkspace.locked")}</small>}</td></tr>;
         })}</tbody></table>{!visibleRows.length&&<div className="sheet-empty"><p>{query||statusFilter?uiText("sheetWorkspace.noMatchingRows"):uiText("sheetWorkspace.startWithTheFirstRow")}</p><small>{query||statusFilter?uiText("sheetWorkspace.clearFiltersOrTryAnotherSearch"):uiText("sheetWorkspace.chooseRowToAddDataThenPasteFromExcel")}</small></div>}</div>
           :mode==='kanban'&&view.groupColumn<0?<div className="sheet-empty"><h2>{uiText("sheetWorkspace.configureAStatusColumn")}</h2><p>{uiText("sheetWorkspace.setAColumnSTypeToStatusToGroup")}</p><button onClick={()=>setPanel('columns')}>{uiText("sheetWorkspace.configureColumn2")}</button></div>
-          :!visibleRows.length?<div className="sheet-empty"><p>{uiText("sheetWorkspace.noMatchingRows")}</p></div>:mode==='review'?review:mode==='compare'?<ShotCompare parsed={parsed} row={currentRow}/>:mode==='canvas'?<StoryCanvas storageKey={'zf.canvas:'+slug+':'+tab.key} model={view} parsed={parsed} scenes={storyScenes} title={tab.title} writable={writable} busy={busy||dirty} onOpen={openRow} onPreview={showPreview} onCommit={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} onUpload={pickUpload} onRunStep={runStage}/>:mode==='stage'?<Suspense fallback={null}><PrevisStage slug={slug} shots={stageShots(parsed,visibleRows,assetLookup,shotInfo)} focus={stageFocus} writable={writable} busy={busy||dirty} onRender={renderStage} onMotion={motionStage} onLayout={layoutStage} onShot={productionSheet?setRowOpen:undefined}/></Suspense>:<SheetCards model={view} mode={mode} parsed={parsed} selected={selected} onSelect={(rid,checked)=>setSelected(old=>{const next=new Set(old);if(checked)next.add(rid);else next.delete(rid);return next;})} onOpen={studioRails?pickShot:openRow} onPreview={showPreview} onStatus={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} writable={writable} busy={busy||dirty} onUpload={pickUpload} onRunStep={runStage} onVariant={cycleVariant} scenes={storyScenes} shotInfo={shotInfo} onRebuildScene={rebuildScene} compact={studioRails} current={studioRails?currentRow?.rid:null}/>}
+          :!visibleRows.length?<div className="sheet-empty"><p>{uiText("sheetWorkspace.noMatchingRows")}</p></div>:mode==='review'?review:mode==='compare'?<ShotCompare parsed={parsed} row={currentRow}/>:mode==='canvas'?<StoryCanvas storageKey={'zf.canvas:'+slug+':'+tab.key} model={view} parsed={parsed} scenes={storyScenes} title={tab.title} writable={writable} busy={busy||dirty} onOpen={openRow} onPreview={showPreview} onCommit={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} onUpload={pickUpload} onRunStep={runStage}/>:mode==='stage'?<Suspense fallback={null}><PrevisStage slug={slug} tabKey={tab.key} proposals={proposals} onApplyProposal={onApplyProposal} onDismissProposal={onDismissProposal} shots={stageShots(parsed,visibleRows,assetLookup,shotInfo)} focus={stageFocus} writable={writable} busy={busy||dirty} onRender={renderStage} onMotion={motionStage} onLayout={layoutStage} onShot={productionSheet?(rid=>{setRowOpen(rid);onShotFocus?.(rid);}):undefined}/></Suspense>:<SheetCards model={view} mode={mode} parsed={parsed} selected={selected} onSelect={(rid,checked)=>setSelected(old=>{const next=new Set(old);if(checked)next.add(rid);else next.delete(rid);return next;})} onOpen={studioRails?pickShot:openRow} onPreview={showPreview} onStatus={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} writable={writable} busy={busy||dirty} onUpload={pickUpload} onRunStep={runStage} onVariant={cycleVariant} scenes={storyScenes} shotInfo={shotInfo} onRebuildScene={rebuildScene} compact={studioRails} current={studioRails?currentRow?.rid:null}/>}
       </div>
       {panel?<aside className="sheet-side-panel" aria-label={panel==='columns'?uiText("sheetWorkspace.columnSettings"):uiText("sheetWorkspace.rowDetails2")}><header><h2>{panel==='columns'?uiText("sheetWorkspace.columnSettings"):row?.cells[0]?.value||uiText("sheetWorkspace.rowDetails2")}</h2><button aria-label={uiText("sheetWorkspace.closeSidebar")} onClick={closePanel}>×</button></header>
         {panel==='columns'?<><p className="sheet-subtle">{uiText("sheetWorkspace.sortingVisibilityAndWidthAffectThisViewOnly")}</p><div className="sheet-columns-nav">{parsed.headers.map((name,c)=><button key={c} className={columnDraft?.c===c?'active':''} onClick={()=>openColumn(c)}>{name}{hidden.includes(c)?uiText("sheetWorkspace.hidden"):''}</button>)}</div>{columnDraft&&<div className="sheet-column-form"><label>{uiText("sheetWorkspace.columnName")}<input aria-label={uiText("sheetWorkspace.columnName")} value={columnDraft.name} disabled={!writable} onChange={e=>setColumnDraft({...columnDraft,name:e.target.value})}/></label><label>{uiText("sheetWorkspace.contentType")}<select aria-label={uiText("sheetWorkspace.columnType")} value={columnDraft.type} disabled={!writable} onChange={e=>setColumnDraft({...columnDraft,type:e.target.value})}>{Object.entries(TYPES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>{columnDraft.type==='status'&&<label>{uiText("sheetWorkspace.statusOptionsOnePerLine")}<textarea aria-label={uiText("sheetWorkspace.statusOptions")} rows={5} value={columnDraft.options} disabled={!writable} onChange={e=>setColumnDraft({...columnDraft,options:e.target.value})}/></label>}<button className="primary" disabled={!writable||busy||!columnDraft.name.trim()} onClick={saveColumn}>{uiText("sheetWorkspace.applyColumnSettings")}</button><hr/><div className="sheet-panel-actions"><button onClick={()=>setSort({c:columnDraft.c,direction:'asc'})}>{uiText("sheetWorkspace.sortAscending")}</button><button onClick={()=>setSort({c:columnDraft.c,direction:'desc'})}>{uiText("sheetWorkspace.sortDescending")}</button></div><label>{uiText("sheetWorkspace.width")}<input type="number" aria-label={uiText("sheetWorkspace.columnWidth")} min={80} max={600} value={columnWidth(columnDraft.c)} onChange={e=>setWidths({...widths,[columnDraft.c]:Math.max(80,Math.min(600,Number(e.target.value)||180))})}/></label><button disabled={!hidden.includes(columnDraft.c)&&visibleColumns.length<=1} onClick={()=>setHidden(old=>old.includes(columnDraft.c)?old.filter(c=>c!==columnDraft.c):[...old,columnDraft.c])}>{hidden.includes(columnDraft.c)?uiText("sheetWorkspace.showColumn"):uiText("sheetWorkspace.hideColumn")}</button><hr/><button className="danger" disabled={!writable||busy||parsed.headers.length<=1} onClick={()=>{setSchemaPlan({operation:'delete',column_id:columnIds[columnDraft.c],label:parsed.headers[columnDraft.c]});setNewWorkbook(false);}}>{uiText("sheetWorkspace.deleteColumn")}</button></div>}

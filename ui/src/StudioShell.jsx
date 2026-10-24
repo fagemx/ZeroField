@@ -6,13 +6,27 @@ import { SHOT_FILTERS } from './studioModel.js';
 import { Icon } from './Icon.jsx';
 import './studio-shell.css';
 
-// SPEC_15: a studio production has two creative spaces instead of six numbered stations.
-// Story & World holds the script and the world it names; Shot Stage holds every shot. Other pages stay one Ctrl K away.
+// SPEC_15: a studio production has creative spaces instead of six numbered stations, now three ways of thinking:
+// Story & World (structure), Shot Stage (space) and Timeline (time). There are no standing tabs: the current space is the
+// one breadcrumb button that opens a menu (or Ctrl 1/2/3, Ctrl K, and every "go there" action). Other pages stay one Ctrl K away.
 export const STORY_VIEW = 'story-world';
 export const STAGE_TAB = 'cinema-studio';
+export const TIMELINE_VIEW = 'timeline';
 const STORY_TABS = [STORY_VIEW, 'director-brief', 'soul-cast'];
 const STAGE_TABS = [STAGE_TAB, 'openjutsu-lab'];
-export const spaceOf = key => STORY_TABS.includes(key) ? 'story' : STAGE_TABS.includes(key) ? 'stage' : null;
+export const VIRTUAL_TABS = [STORY_VIEW, TIMELINE_VIEW];  // spaces drawn by the shell itself, not by a project tab
+export const spaceOf = key => STORY_TABS.includes(key) ? 'story' : STAGE_TABS.includes(key) ? 'stage' : key === TIMELINE_VIEW ? 'timeline' : null;
+export const SPACES = [
+  {key:'story', tab:STORY_VIEW, icon:'doc', label:'shell.storyWorld'},
+  {key:'stage', tab:STAGE_TAB, icon:'clapper', label:'shell.shotStage'},
+  {key:'timeline', tab:TIMELINE_VIEW, icon:'timeline', label:'shell.timeline'},
+];
+export const tabOfSpace = key => SPACES.find(space => space.key === key)?.tab || STAGE_TAB;
+// What each space needs from you, shown only when the space menu is open: switching is on request, not a standing set of tabs.
+export const spaceNote = (key, counts = {}) => key === 'story'
+  ? [counts.scriptDirty && t('shell.storyUpdated'), counts.missing && t('shell.missingImages', {count:counts.missing})].filter(Boolean).join(' · ')
+  : key === 'stage' ? [t('shell.shotCount', {count:counts.shots || 0}), counts.review && t('shell.toReview', {count:counts.review})].filter(Boolean).join(' · ')
+    : t('shell.filmSummary', {filmed:counts.filmed || 0, total:counts.shots || 0});
 
 // One episode's state for the top bar, both spaces and the film: refreshed when a page saves (version) or on demand.
 export function useEpisode(slug, epId, version, enabled = true) {
@@ -44,36 +58,69 @@ export function episodeCounts(ep, shots) {
   };
 }
 
-export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTitle, counts, onSpace, onCommand, assistant, film, identity, settings}) {
+// The breadcrumb is also the focus line: project / episode / space (a menu) / scene / shot. The focus travels between spaces.
+// crumbs: {scene, shot} labels of the shell's current focus. panels: which panel toggles this space has (left, bottom, right).
+export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTitle, crumbs = {}, counts, onSpace, onCommand, assistant, film, identity, settings, panels = ['left', 'right'], layout = {}, onLayout}) {
   useLocale();
-  const storyNote = [counts.scriptDirty && t('shell.storyUpdated'), counts.missing && t('shell.missingImages', {count:counts.missing})].filter(Boolean).join(' · ');
-  const stageNote = [t('shell.shotCount', {count:counts.shots}), counts.review && t('shell.toReview', {count:counts.review})].filter(Boolean).join(' · ');
+  const slash = <span className="studio-slash" aria-hidden="true">/</span>;
   return <header className="top studio-top">
     <div className="studio-crumb">
       <a href="/projects/" className="brand-mark" aria-label={t('app.backToProductions')} title={t('app.backToProductions')}>ZF</a>
       <span className="doc-name studio-title">{project.title}</span>
-      {episodes.length > 0 && <><span className="studio-slash" aria-hidden="true">/</span>
+      {episodes.length > 0 && <>{slash}
         <select className="studio-episode" aria-label={t('story.episode')} value={epId} onChange={event => onEpisode(event.target.value)}>
           {episodes.map(item => <option key={item.episodeId} value={item.episodeId}>{item.title}</option>)}</select></>}
+      {slash}<SpaceMenu space={space} counts={counts} onSpace={onSpace}/>
+      {pageTitle && <>{slash}<span className="studio-focus" title={pageTitle}>{pageTitle}</span></>}
+      {crumbs.scene && <>{slash}<span className="studio-focus" title={crumbs.scene}>{crumbs.scene}</span></>}
+      {crumbs.shot && <>{slash}<b className="studio-focus is-now" title={crumbs.shot}><i className="studio-dot" aria-hidden="true"/>{crumbs.shot}</b></>}
     </div>
-    <nav className="studio-spaces" aria-label={t('shell.spaces')}>
-      <button type="button" aria-current={space === 'story' ? 'page' : undefined} onClick={() => onSpace('story')}>
-        {t('shell.storyWorld')}{storyNote && <span className={'studio-note' + (counts.scriptDirty || counts.missing ? ' warn' : '')}>{storyNote}</span>}</button>
-      <button type="button" aria-current={space === 'stage' ? 'page' : undefined} onClick={() => onSpace('stage')}>
-        {t('shell.shotStage')}<span className="studio-note">{stageNote}</span></button>
-      {pageTitle && <span className="studio-page" title={pageTitle}>{pageTitle}</span>}
-    </nav>
     <div className="studio-actions">
       <LocaleToggle />
       <button type="button" className="studio-command" onClick={onCommand} aria-label={t('shell.command')} aria-keyshortcuts="Control+K">
         <Icon name="code" /><span className="label">{t('shell.command')}</span><kbd>Ctrl K</kbd></button>
       {assistant}
+      {panels.length > 0 && <div className="studio-layout" role="group" aria-label={t('shell.panels')}>
+        {panels.map(key => <button key={key} type="button" aria-pressed={layout[key] !== false} aria-label={t('shell.panel_' + key)} title={t('shell.panel_' + key)}
+          onClick={() => onLayout?.(key)}><Icon name={'panel' + key[0].toUpperCase() + key.slice(1)} size={15}/></button>)}
+      </div>}
       <button type="button" className={'studio-film' + (film.open ? ' on' : '')} aria-pressed={film.open} onClick={film.onToggle}>
         <Icon name="play" />{t('shell.film')}<span className="num">{counts.filmed}/{counts.shots}</span></button>
       {settings}
       {identity}
     </div>
   </header>;
+}
+
+// The one place the three spaces are offered, and only on request: a quiet breadcrumb button that opens a menu.
+function SpaceMenu({space, counts = {}, onSpace}) {
+  useLocale();
+  const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  const current = SPACES.find(item => item.key === space);
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = event => {if (!root.current?.contains(event.target)) setOpen(false);};
+    const keys = event => {
+      if (event.key === 'Escape') {setOpen(false); root.current?.querySelector('.studio-space-btn')?.focus();}
+      else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        const items = [...root.current.querySelectorAll('[role="menuitemradio"]')], at = items.indexOf(document.activeElement);
+        event.preventDefault(); items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+      }
+    };
+    document.addEventListener('mousedown', away); document.addEventListener('keydown', keys);
+    root.current?.querySelector('[aria-checked="true"]')?.focus();
+    return () => {document.removeEventListener('mousedown', away); document.removeEventListener('keydown', keys);};
+  }, [open]);
+  return <div className="studio-spacemenu" ref={root}>
+    <button type="button" className="studio-space-btn" aria-haspopup="menu" aria-expanded={open} aria-keyshortcuts="Control+1 Control+2 Control+3" onClick={() => setOpen(value => !value)}>
+      <Icon name={current?.icon || 'layers'}/><span>{current ? t(current.label) : t('shell.spaces')}</span><Icon name="chevronDown" size={13}/></button>
+    {open && <div className="studio-menu" role="menu" aria-label={t('shell.spaces')}>
+      {SPACES.map((item, index) => <button key={item.key} type="button" role="menuitemradio" aria-checked={item.key === space} onClick={() => {setOpen(false); onSpace?.(item.key);}}>
+        <Icon name={item.icon}/><span className="studio-menu-name">{t(item.label)}<small>{spaceNote(item.key, counts)}</small></span><kbd>Ctrl {index + 1}</kbd></button>)}
+      <p className="studio-menu-foot">{t('shell.spaceMenuHint')}</p>
+    </div>}
+  </div>;
 }
 
 // Compact EN / 中 switch; the full LanguageSwitch stays on the production list.
@@ -119,7 +166,7 @@ export function CommandPalette({commands, onClose}) {
 }
 
 // The film overlay: the whole episode in slate order. Shots without a take fall back to their previs, then a slate card.
-export function FilmOverlay({epId, shots, writable, onClose}) {
+export function FilmOverlay({epId, shots, writable, onClose, onTimeline}) {
   useLocale();
   const cut = useMemo(() => orderedShots(shots).map(shot => ({...shot, play:shot.selectedVideoUrl || shot.previsVideoUrl || null, fill:!shot.selectedVideoUrl && Boolean(shot.previsVideoUrl)})), [shots]);
   const [at, setAt] = useState(0), [exporting, setExporting] = useState(false), [film, setFilm] = useState(null), [error, setError] = useState('');
@@ -146,7 +193,8 @@ export function FilmOverlay({epId, shots, writable, onClose}) {
     <section ref={box} tabIndex={-1} className="studio-film-overlay" role="dialog" aria-modal="true" aria-label={t('shell.filmTitle')}
       onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); onClose();}}}>
       <header><h2>{t('shell.filmTitle')}</h2><span className="studio-note">{t('shell.filmSummary', {filmed:cut.filter(s => s.selectedVideoUrl).length, total:cut.length})}</span>
-        <span className="spacer"/><button type="button" className="icon-btn" aria-label={t('sheetDialog.closePanel')} onClick={onClose}><Icon name="close" /></button></header>
+        <span className="spacer"/>{onTimeline && <button type="button" className="quiet" onClick={() => {onClose(); onTimeline();}}><Icon name="timeline" />{t('shell.openInTimeline')}</button>}
+        <button type="button" className="icon-btn" aria-label={t('sheetDialog.closePanel')} onClick={onClose}><Icon name="close" /></button></header>
       <div className="studio-film-screen">
         {film ? <video src={film} controls autoPlay playsInline preload="metadata" aria-label={t('story.episodeFilm')}/>
           : current?.play ? <video ref={video} key={current.shotId} src={current.play} controls autoPlay playsInline preload="metadata"
