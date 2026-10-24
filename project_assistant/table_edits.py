@@ -270,8 +270,8 @@ def apply(conn, me, slug, target):
         result, doc, revision, saved_at = service._run_ops(conn, me, slug, key, tab, ops, "table-" + new_id("s"), atomic=True,
                                                          delivery_mode=target.get("delivery_mode"))
     except StoryError as exc:
-        # StoryError is a ValueError: preserve 409 before the legacy 400 handler.
-        if exc.code not in ('DRAMA_WRITING_LOCKED','DRAMA_WRITING_CONFLICT'): raise
+        # StoryError is a ValueError: keep its real status/code (409 locks, 403 lost authority, 413 limits) instead of the
+        # legacy 400, and never let it escape the (status, result) contract the callers turn into ExecutionError.
         return exc.status, {"error": str(exc), "code": exc.code}
     except ValueError as exc:
         return 400, {"error": str(exc), "dependencies": getattr(exc, "dependencies", [])}

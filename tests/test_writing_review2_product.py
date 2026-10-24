@@ -150,6 +150,10 @@ class WritingReview2ProductTests(unittest.TestCase):
                 row=page.locator('.writing-scene-metadata').last;expect(row).to_contain_text('CAST-03');expect(row.get_by_role('button',name='1 linked shots',exact=True)).to_be_visible();row.get_by_role('button',name='1 linked shots',exact=True).click()
             else:page.get_by_role('button',name='Shot Stage',exact=False).first.click()
             expect(page.locator('.shot-list')).to_be_visible()
+            # User-visible grouping: the removed scene's shot sits in the headingless group, never under a surviving scene.
+            headings=page.locator('.shot-list section h3');sections=page.locator('.shot-list section')
+            if mode=='adaptation':expect(headings).to_have_count(0);expect(sections).to_have_count(1)
+            else:expect(headings).to_have_count(2);expect(sections).to_have_count(3)
             # Group headings come from current live shot metadata, not a hidden alias filter.
             self.assertNotIn(self.shots[1]['shotId'],[sid for s in ws['structure']['scenes'] for sid in s.get('shotIds',[])])
             alignment=self.f.writing('alignment');item=next(i for i in alignment['items'] if i['shotId']==self.shots[1]['shotId']);self.assertEqual(item['storyAlignment']['state'],'source_removed')

@@ -134,6 +134,26 @@ class PostgreSQLExecutionTests(unittest.TestCase):
         self.assertIn(self.claim()["node_id"], ("b", "c"))
         self.assertIn("approved prompt", str(repo.get_tab(self.conn, self.slug, "shots")["doc"]))
 
+    def test_table_edit_domain_errors_keep_status_and_code_instead_of_escaping(self):
+        from unittest.mock import patch
+        from project_assistant import store, table_edits
+        from project_docs import service, story_openapi as story
+        value = graph()
+        value["nodes"][0]["target"] = {"tab_key": "shots", "row_id": "b_shot1", "col_index": 1}
+        self.save(value)
+        flow_runner.start(self.conn, self.me, self.slug, "flow", {})
+        target = store.proposal(self.conn, self.finish(self.claim(), "approved prompt")["proposal_id"])["target"]
+        for error, expected in ((story.StoryError(409, "DRAMA_WRITING_LOCKED", "Production is busy."), 409),
+                                (story.StoryError(403, "DRAMA_OPERATION_NOT_ALLOWED", "Write access ended."), 403),
+                                (story.StoryError(409, "DRAMA_WRITING_MAPPING_REQUIRED", "Source scene boundaries are unresolved."), 409),
+                                (ValueError("Plain validation failure."), 400)):
+            with self.subTest(error=str(error)), patch.object(service, "_run_ops", side_effect=error):
+                status, result = table_edits.apply(self.conn, self.me, self.slug, target)
+                self.assertEqual(status, expected)
+                self.assertEqual(result["error"], str(error))
+                if isinstance(error, story.StoryError):
+                    self.assertEqual(result["code"], error.code)
+
     def test_expired_lease_reclaimed_and_stale_completion_rejected(self):
         self.save(graph())
         flow_runner.start(self.conn, self.me, self.slug, "flow", {})
