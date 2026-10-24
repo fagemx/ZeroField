@@ -21,6 +21,10 @@ export function outlineReviewFields(base,current,draft) {
   return fields;
 }
 
+// Plot cells as ordered {lane,text} entries. Lane names are not unique (or may be empty), so they cannot be object keys
+// without silently merging cells in the on-screen list or in the file the author downloads before discarding.
+export const plotEntries=(plot,laneName)=>Object.entries(plot).map(([id,text])=>({lane:laneName(id),text}));
+
 // Names the merge form shows instead of stable IDs: the current shared structure wins, then the original base,
 // and a lane created only in the private draft keeps its draft name.
 export function outlineNames(base,current,draft) {

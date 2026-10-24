@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {WritingOutlineRecovery,outlineReviewFields,outlineNames} from '../src/writing/writingOutlineRecovery.js';
+import {WritingOutlineRecovery,outlineReviewFields,outlineNames,plotEntries} from '../src/writing/writingOutlineRecovery.js';
 import {draftSceneMembership,replaceSceneBlocks,sceneBlocks,sceneSliceBoundary,sceneSliceBlocks,replaceSceneSlice} from '../src/writing/writingModel.js';
 import {readFile} from 'node:fs/promises';
 const memory=()=>{const rows=new Map();return {rows,list:async scope=>[...rows.values()].filter(row=>row.scope===scope),put:async(key,value)=>{rows.set(key,structuredClone({...value,key}));},remove:async(key,sequence)=>{if(rows.get(key)?.localSequence<=sequence)rows.delete(key);}};};
@@ -115,6 +115,12 @@ test('merge review names come from the shared structure, then the base, then the
  const form=await create({});const remote=structure(2);remote.scenes[0].title='Scene 01: Shared';
  form.change({sceneKey:'s',summary:'mine'});form.conflict=true;form.state='conflict';
  assert.equal(form.reviewCurrent(remote).names.scenes.s.title,'Scene 01: Shared');form.dispose();
+});
+test('plot-cell entries keep every cell when lanes share a name or have none',()=>{
+ const names={a1:'Mood',a2:'Mood',a3:'',a4:''};
+ assert.deepEqual(plotEntries({a1:'one',a2:'two',a3:'three',a4:'four'},id=>names[id]||'Unnamed'),
+  [{lane:'Mood',text:'one'},{lane:'Mood',text:'two'},{lane:'Unnamed',text:'three'},{lane:'Unnamed',text:'four'}]);
+ assert.deepEqual(plotEntries({},id=>id),[]);
 });
 test('lane-local bilingual additions have matching semantic keys and interpolation variables',async()=>{
  const en=JSON.parse(await readFile(new URL('../src/writing/locales/review2-authoring.en.json',import.meta.url)));

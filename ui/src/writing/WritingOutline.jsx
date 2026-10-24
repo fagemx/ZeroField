@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n/react.jsx';
 import { documentText, sceneBlocks, stable } from './writingModel.js';
+import { plotEntries } from './writingOutlineRecovery.js';
 const key='writing.authoring.';
 const sceneFields=['summary','storyTime','act','foreshadowing','payoff'];
 // Private draft values that the chosen merge would drop: the author kept the shared value instead.
@@ -28,11 +29,11 @@ export function WritingOutlineMerge({review,onApply}) {
   const label=field=>t(key+'outlineMergeFieldLabel',{subject:subject(field),field:fieldName(field)});
   const show=(field,value)=>{
     if(value===undefined||value==='')return t(key+'outlineUnset');
-    if(field.field==='plot'&&value&&typeof value==='object')return Object.entries(value).map(([id,text])=>t(key+'outlineMergePlotCell',{lane:laneName(id),text})).join('\n')||t(key+'outlineUnset');
+    if(field.field==='plot'&&value&&typeof value==='object')return plotEntries(value,laneName).map(entry=>t(key+'outlineMergePlotCell',entry)).join('\n')||t(key+'outlineUnset');
     return typeof value==='string'?value:JSON.stringify(value,null,2);
   };
-  // The exported file carries the same names the author saw, never lane or scene IDs.
-  const plain=(field,value)=>field.field==='plot'&&value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([id,text])=>[laneName(id),text])):value;
+  // The exported file carries the same names the author saw, never lane or scene IDs, and keeps same-named lanes apart.
+  const plain=(field,value)=>field.field==='plot'&&value&&typeof value==='object'?plotEntries(value,laneName):value;
   const dropped=droppedFields(review,choices);
   const choose=(path,value)=>{setConfirming(false);setChoices(current=>({...current,[path]:value}));};
   const download=()=>{
