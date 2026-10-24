@@ -2,12 +2,12 @@
   "schemaVersion": 3,
   "spec": "SPEC_16",
   "reviewRound": 3,
-  "status": "round3_independent_reviews_ok_with_notes_user_acceptance_pending",
-  "candidate": "a0bed5607be75181c172d3748b7b9bb6b9a825e6",
+  "status": "round3_reviews_ok_with_notes_merge_form_followup_reviewed_ok_user_acceptance_pending",
+  "candidate": "85644f7a4195b10daed9ec978f3b28f7beb5450c",
   "productIntegrationCommit": "12087ce",
   "baseCommit": "d9bb1b324066f91d5f54f161da580ea1832a0953",
   "originalSeed": "591c3e602f5f35aabd681dbdfedda93dedd0e2f9",
-  "recordedAtUtc": "2026-10-24T05:22:25.241823+00:00",
+  "recordedAtUtc": "2026-10-24T12:10:19.701796+00:00",
   "acceptance": "Engineering readiness only. Both round-3 independent reviews returned OK with notes (no P0/P1); the notes below are fixed, open or recorded as residual risk. User acceptance, promotion into the original checkout, push and deployment are NOT done and NOT authorized by this receipt.",
   "historicalReceipts": [
     {
@@ -25,64 +25,46 @@
     "authoringN1N3": "f2f664b57b88c5a93b3ad9bcf3a97ef1c6436819",
     "structureN2": "1f1316366ac76df1f4ae699ad00168887f75c2bc",
     "integrationLocalesStaticRootTests": "12087ce",
-    "tableEditsErrorContractAndShotStageAssertion": "a0bed56"
+    "tableEditsErrorContractAndShotStageAssertion": "a0bed56",
+    "mergeFormJ1J2": "e4ade86, a0fb8a6, 85644f7"
   },
   "commands": [
     {
       "command": "takeover-run.py integration-db.json discover:test_*.py (full backend, PG on loopback 55471)",
-      "candidate": "12087ce",
-      "testsRun": 703,
+      "candidate": "85644f7a4195b10daed9ec978f3b28f7beb5450c",
+      "testsRun": 705,
       "failures": 0,
       "errors": 0,
       "skips": 0,
-      "seconds": 1073.0,
-      "result": "passed"
-    },
-    {
-      "command": "takeover-run.py integration-db.json discover:test_*.py (full backend, PG on loopback 55471)",
-      "candidate": "a0bed5607be75181c172d3748b7b9bb6b9a825e6",
-      "testsRun": 704,
-      "failures": 0,
-      "errors": 0,
-      "skips": 0,
-      "seconds": 1111.6,
+      "seconds": 1117.5,
       "result": "passed"
     },
     {
       "command": "npm test --prefix ui",
-      "candidate": "a0bed5607be75181c172d3748b7b9bb6b9a825e6",
-      "testsRun": 278,
+      "candidate": "85644f7a4195b10daed9ec978f3b28f7beb5450c",
+      "testsRun": 280,
       "failures": 0,
       "skips": 0,
       "result": "passed",
-      "note": "ui/src unchanged between 12087ce and a0bed56"
+      "note": "Run on the working tree that 85644f7 committed unchanged."
     },
     {
       "command": "npm run build --prefix ui",
-      "candidate": "12087ce",
+      "candidate": "85644f7a4195b10daed9ec978f3b28f7beb5450c",
       "result": "passed",
-      "note": "393 modules; existing large-chunk warning. ui/src unchanged afterwards, so the committed static assets still correspond."
+      "note": "393 modules; existing large-chunk warning. Static assets in the commit are from this build."
     },
     {
-      "command": "takeover-run.py browser-db.json test_writing_review2_product (real root, production assets, token auth, PostgreSQL, Chromium)",
-      "testsRun": 6,
+      "command": "takeover-run.py browser-db.json test_writing_review2_product,test_writing_product_browser,test_writing_review_product (real root, production assets, token auth, PostgreSQL, Chromium)",
+      "testsRun": 18,
       "failures": 0,
       "errors": 0,
       "skips": 0,
       "result": "passed",
-      "note": "N1, N3 and four N2 journeys; the second run adds the user-visible Shot Stage grouping assertion."
+      "note": "Includes N1, N3, four N2 journeys and the new default-choice discard-confirmation journey."
     },
     {
-      "command": "takeover-run.py integration-db.json test_execution (new table_edits error-contract regression)",
-      "testsRun": 17,
-      "failures": 0,
-      "errors": 0,
-      "skips": 0,
-      "result": "passed",
-      "note": "The new test errors against the pre-fix table_edits.py (StoryError escapes) and passes with the fix."
-    },
-    {
-      "command": "python -m build --wheel --no-isolation on the exact git archive of a0bed56; pip install --force-reinstall --no-deps --no-index into review1/installed-env",
+      "command": "python -m build --wheel --no-isolation on the exact git archive of 85644f7; pip install --force-reinstall --no-deps --no-index into review1/installed-env",
       "result": "passed"
     },
     {
@@ -101,7 +83,7 @@
       "failures": 0,
       "errors": 0,
       "skips": 0,
-      "seconds": 296.2,
+      "seconds": 291.8,
       "result": "passed"
     }
   ],
@@ -127,6 +109,24 @@
         "N2": "closed at data level; Shot Stage grouping now asserted in the root journey",
         "N3": "closed with two P2 notes"
       },
+      "recordedIn": "docs/SPEC16_REVIEW.md"
+    },
+    "round4MergeForm": {
+      "candidate": "e4ade86 then a0fb8a6 then 85644f7",
+      "reviewer": "one fresh read-only subagent of the same model family as the integrator, resumed for follow-ups; no database access",
+      "verdicts": [
+        "e4ade86: OK with notes (no P0/P1)",
+        "a0fb8a6: OK with notes (one new P2)",
+        "85644f7: OK (no findings)"
+      ],
+      "p2Closed": [
+        "download file exposed lane IDs",
+        "unnamed lane fell back to its raw ID",
+        "focus lost after Go back",
+        "singular/plural title grammar",
+        "hard-coded punctuation outside locale strings",
+        "same-named plot lanes merged in the discarded-values file"
+      ],
       "recordedIn": "docs/SPEC16_REVIEW.md"
     }
   },
@@ -164,20 +164,26 @@
     {
       "id": "R3-J1",
       "severity": "P2",
-      "status": "open (user decision)",
-      "note": "The outline merge form labels fields with raw scenePatches:{sceneKey}:{field} paths (wsc_ hex ids) instead of the scene title or lane name."
+      "status": "fixed in e4ade86/a0fb8a6",
+      "note": "The outline merge form now labels fields with the scene title or lane name; internal IDs are never shown."
     },
     {
       "id": "R3-J2",
       "severity": "P2",
-      "status": "open (user decision)",
-      "note": "Saving the reviewed outline merge with the default (shared) choices permanently discards unselected private draft values with no confirmation or auto-export."
+      "status": "fixed in e4ade86/a0fb8a6/85644f7",
+      "note": "Saving the reviewed merge now confirms before dropping private draft values, lists them, offers a download that names lanes and keeps same-named lanes apart, and lets the author go back."
     },
     {
       "id": "R3-P3",
       "severity": "P3",
       "status": "open",
       "note": "Scene view silently expands to the full manuscript when a scene vanishes; generic sceneBoundaryChanged alert; CAS jargon and one engineering-note phrase in user-facing strings; unused outlineNoRebase key; merge-form focus and multi-line display; table_schema.apply maps a StoryError 409 to 400."
+    },
+    {
+      "id": "R4-P3",
+      "severity": "P3",
+      "status": "open",
+      "note": "Several unnamed lanes or unknown scenes can share one label in the alert (nothing is lost, they stay separate entries); i18next may swap {{lane}}/{{text}} if user text itself contains those tokens (display only); Escape does not cancel the alert; the heading/value pairs use div/strong rather than a description list."
     }
   ],
   "ownedServices": {
@@ -188,7 +194,8 @@
     "priorPort": 50367,
     "portChange": "Windows excluded TCP port range 50273-50372 now covers 50367, so the cluster could not bind it (\"Permission denied\"). The same data directory was started on loopback 55471; historical handoffs still name 50367.",
     "interruption": "The session ended abruptly while the cluster was running; the postmaster was killed, crash recovery completed on restart, and the first full backend log (27 tests) is preserved as incomplete evidence only.",
-    "finalStop": "pg_ctl -m smart stop returned 0; pg_ctl status 3; postmaster.pid absent; PID 38616 absent; 55471 and 50367 refuse connections. Foreign Reallusion PostgreSQL processes were not touched."
+    "finalStop": "pg_ctl -m smart stop returned 0 after zero other client backends; pg_ctl status 3; postmaster.pid absent; 55471 and 50367 refuse connections. Foreign Reallusion PostgreSQL processes were not touched.",
+    "interruptions": "The session ended abruptly three times while the owned cluster or test runs were active (once with the cluster running, again between the merge-form fix and its rerun); each time the cluster was restarted on 55471 after a crash recovery or stale pid check, and any partial log is retained as incomplete evidence only."
   },
   "sourcePreservation": {
     "sourceRoot": "C:/ai_project/ZeroField",
@@ -202,69 +209,198 @@
     "Native OS IME/assistive-technology certification, browsers other than Chromium, OS Print/Save-as-PDF completion.",
     "Real server-side performance measurement of the new save hook.",
     "Paid/credentialed provider, GPU or model inference; model downloads; push; deployment; promotion into the original checkout.",
-    "Reviewer-side PG/root-journey runs (the round-3 reviewers were forbidden to touch the shared cluster); those journeys are integration RAN evidence above."
+    "Reviewer-side PG/root-journey runs (the round-3 reviewers were forbidden to touch the shared cluster); those journeys are integration RAN evidence above.",
+    "Screen-reader and keyboard-only certification of the new confirmation alert (focus order was tested with Chromium only)."
   ],
   "artifacts": [
     {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-backend-12087ce.log",
-      "sha256": "3cc0c8a9f9a3730e740559d20e2f34f4da638c55352f9ef575e1ffd5c2e60649",
-      "bytes": 4879,
-      "note": "INCOMPLETE: interrupted by the session ending after 27 tests; not a pass"
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/final-backend-85644f7.log",
+      "sha256": "5b0e99e5d5c009146eb1fb10c6405f582c27811a9027439a26f557adb60380ca",
+      "bytes": 153002,
+      "note": "705 passed at the final candidate"
     },
     {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-backend-12087ce-run2.log",
-      "sha256": "df8c4c2ecf232313cacc9737a8daf69dd25b40bca424af88ddef18b9975a307c",
-      "bytes": 154065,
-      "note": "703 passed at 12087ce"
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/p2fix3-frontend.log",
+      "sha256": "cbe4127429533680fe6c197570470a466b4cdd42a5fa7fdab8ec4e0d2da67d6e",
+      "bytes": 29577,
+      "note": "280 passed"
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/p2fix3-build.log",
+      "sha256": "c89055c52eaa82d09b97a2ea656e68ad3f6c0e8163f5d407c7623ffd2d484c46",
+      "bytes": 1110,
+      "note": "production build"
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/p2fix3-root-browser.log",
+      "sha256": "af5f2a83b80cd3acf058d480b361418f7a3c24e944f8b9fb0c3f25c3cfd67210",
+      "bytes": 31315,
+      "note": "18 real-root journeys passed"
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/installed-85644f7.log",
+      "sha256": "a2f429477badb760db005715281d53866e4a56d3f769027b324fb2fb58278891",
+      "bytes": 25995,
+      "note": "113 installed-wheel tests"
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/final-pg-stop.log",
+      "sha256": "1cf9ecb6d8b156f9df475bd9a7ad7c0f7bc1e12816bc0364aab88967d3191eed",
+      "bytes": 41,
+      "note": "final graceful stop"
     },
     {
       "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-backend-a0bed56.log",
       "sha256": "05d1c6f4bfad2e700a507bf43eb194b67b8b95c1c2bd31d8134fbc06265735f3",
       "bytes": 157949,
-      "note": "704 passed at the candidate"
-    },
-    {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-frontend-a0bed56.log",
-      "sha256": "4bfb32dc058f5960feb852a8d62bf689c4159376608539a426a12b91d39dae0e",
-      "bytes": 29386,
-      "note": "278 passed"
-    },
-    {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-review2-product-1.log",
-      "sha256": "ce609652a8813a9646fc4fc15f49adb70e97fed5d4be648890c0764e52c95836",
-      "bytes": 1043,
-      "note": "6 passed before the Shot Stage assertion"
-    },
-    {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-review2-product-2.log",
-      "sha256": "ad9f36ef19e4f4cac2b8e479e998ae7d8fe3073a54baeb289790711400bba93f",
-      "bytes": 1043,
-      "note": "6 passed with the Shot Stage assertion"
-    },
-    {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-execution-fix.log",
-      "sha256": "f4c36b55391c05215f858595d978fc3aa6e270c97b95e9e6d9c1b10e5190b82e",
-      "bytes": 2817,
-      "note": "17 passed"
-    },
-    {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/wheel-identities-a0bed56.json",
-      "sha256": "c750d0d00cd397b8484b2b697b9f13bd6bf78a6c5c812dddd8dd20e0e880ef4b",
-      "bytes": 20134,
-      "note": "170 byte identities"
-    },
-    {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/installed-result.json",
-      "sha256": "926655a18e2640e349b1cdb3e5caa254e937e1d40186450842fb52321f5f834a",
-      "bytes": 20402,
-      "note": "113 installed-wheel tests"
-    },
-    {
-      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-pg-stop.log",
-      "sha256": "1cf9ecb6d8b156f9df475bd9a7ad7c0f7bc1e12816bc0364aab88967d3191eed",
-      "bytes": 41,
-      "note": "final graceful stop"
+      "note": "704 passed at the previous candidate (history)"
     }
   ],
-  "manualNotes": "Takeover after a provider-declined run; no alternate-provider CLI was used. The only product change made on takeover is the table_edits error-contract fix plus its regression test and one Shot Stage assertion; the rest of the candidate is the preserved review2 lane work."
+  "manualNotes": "Takeover after a provider-declined run; no alternate-provider CLI was used. Product changes made on takeover: the table_edits error-contract fix, the merge-form labels and discard confirmation (with the follow-ups the round-4 reviewer asked for), their tests, and one Shot Stage assertion. The rest of the candidate is the preserved review2 lane work. Round 3 and 4 reviewers share the integrator's model family.",
+  "previousCandidates": [
+    {
+      "candidate": "a0bed5607be75181c172d3748b7b9bb6b9a825e6",
+      "commands": [
+        {
+          "command": "takeover-run.py integration-db.json discover:test_*.py (full backend, PG on loopback 55471)",
+          "candidate": "12087ce",
+          "testsRun": 703,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "seconds": 1073.0,
+          "result": "passed"
+        },
+        {
+          "command": "takeover-run.py integration-db.json discover:test_*.py (full backend, PG on loopback 55471)",
+          "candidate": "a0bed5607be75181c172d3748b7b9bb6b9a825e6",
+          "testsRun": 704,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "seconds": 1111.6,
+          "result": "passed"
+        },
+        {
+          "command": "npm test --prefix ui",
+          "candidate": "a0bed5607be75181c172d3748b7b9bb6b9a825e6",
+          "testsRun": 278,
+          "failures": 0,
+          "skips": 0,
+          "result": "passed",
+          "note": "ui/src unchanged between 12087ce and a0bed56"
+        },
+        {
+          "command": "npm run build --prefix ui",
+          "candidate": "12087ce",
+          "result": "passed",
+          "note": "393 modules; existing large-chunk warning. ui/src unchanged afterwards, so the committed static assets still correspond."
+        },
+        {
+          "command": "takeover-run.py browser-db.json test_writing_review2_product (real root, production assets, token auth, PostgreSQL, Chromium)",
+          "testsRun": 6,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "result": "passed",
+          "note": "N1, N3 and four N2 journeys; the second run adds the user-visible Shot Stage grouping assertion."
+        },
+        {
+          "command": "takeover-run.py integration-db.json test_execution (new table_edits error-contract regression)",
+          "testsRun": 17,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "result": "passed",
+          "note": "The new test errors against the pre-fix table_edits.py (StoryError escapes) and passes with the fix."
+        },
+        {
+          "command": "python -m build --wheel --no-isolation on the exact git archive of a0bed56; pip install --force-reinstall --no-deps --no-index into review1/installed-env",
+          "result": "passed"
+        },
+        {
+          "command": "wheel-identities.py (installed bytes vs exact archive)",
+          "counts": {
+            "python": 96,
+            "data": 67,
+            "prompts": 7
+          },
+          "fileCount": 170,
+          "result": "passed"
+        },
+        {
+          "command": "installed-check.py (installed wheel outside the checkout, PG on 55471)",
+          "testsRun": 113,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "seconds": 296.2,
+          "result": "passed"
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-backend-12087ce.log",
+          "sha256": "3cc0c8a9f9a3730e740559d20e2f34f4da638c55352f9ef575e1ffd5c2e60649",
+          "bytes": 4879,
+          "note": "INCOMPLETE: interrupted by the session ending after 27 tests; not a pass"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-backend-12087ce-run2.log",
+          "sha256": "df8c4c2ecf232313cacc9737a8daf69dd25b40bca424af88ddef18b9975a307c",
+          "bytes": 154065,
+          "note": "703 passed at 12087ce"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-backend-a0bed56.log",
+          "sha256": "05d1c6f4bfad2e700a507bf43eb194b67b8b95c1c2bd31d8134fbc06265735f3",
+          "bytes": 157949,
+          "note": "704 passed at the candidate"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-frontend-a0bed56.log",
+          "sha256": "4bfb32dc058f5960feb852a8d62bf689c4159376608539a426a12b91d39dae0e",
+          "bytes": 29386,
+          "note": "278 passed"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-review2-product-1.log",
+          "sha256": "ce609652a8813a9646fc4fc15f49adb70e97fed5d4be648890c0764e52c95836",
+          "bytes": 1043,
+          "note": "6 passed before the Shot Stage assertion"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-review2-product-2.log",
+          "sha256": "ad9f36ef19e4f4cac2b8e479e998ae7d8fe3073a54baeb289790711400bba93f",
+          "bytes": 1043,
+          "note": "6 passed with the Shot Stage assertion"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-execution-fix.log",
+          "sha256": "f4c36b55391c05215f858595d978fc3aa6e270c97b95e9e6d9c1b10e5190b82e",
+          "bytes": 2817,
+          "note": "17 passed"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/wheel-identities-a0bed56.json",
+          "sha256": "c750d0d00cd397b8484b2b697b9f13bd6bf78a6c5c812dddd8dd20e0e880ef4b",
+          "bytes": 20134,
+          "note": "170 byte identities"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/installed-result.json",
+          "sha256": "926655a18e2640e349b1cdb3e5caa254e937e1d40186450842fb52321f5f834a",
+          "bytes": 20402,
+          "note": "113 installed-wheel tests"
+        },
+        {
+          "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review2/takeover-pg-stop.log",
+          "sha256": "1cf9ecb6d8b156f9df475bd9a7ad7c0f7bc1e12816bc0364aab88967d3191eed",
+          "bytes": 41,
+          "note": "final graceful stop"
+        }
+      ],
+      "note": "Receipt content for a0bed56, before the merge-form follow-up; its evidence is retained, not reused as a gate for the final candidate."
+    }
+  ]
 }

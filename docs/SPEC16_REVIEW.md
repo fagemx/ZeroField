@@ -98,8 +98,22 @@ RAN, zero failures/errors/skips: full backend **704**, frontend **278**, the six
 
 The session was interrupted once while the owned PostgreSQL cluster was running. The first full-backend log (27 tests) is kept as incomplete evidence. On restart, Windows' excluded TCP port range 50273–50372 now covered the historical port 50367, so the same data directory was started on loopback 55471; the cluster is stopped again.
 
+## Merge-form follow-up (round-3 notes J1/J2) and its re-review
+
+The user asked for the two open journey notes to be fixed, affected tests rerun, the bundle rebuilt and the change re-reviewed. Commits `e4ade86`, `a0fb8a6` and `85644f7` change only the outline reviewed-merge form (`WritingOutline.jsx`, `writingOutlineRecovery.js`), its locale keys in both languages and tests:
+
+- **J1 fixed:** every field, select and alert names the scene title or plot-lane name plus a field name (plot cells as `lane: text`); a number is added only when two scenes share a title; unnamed lanes and unknown scenes use a localized placeholder; internal IDs are never shown.
+- **J2 fixed:** when the chosen merge would drop private draft values, Save first shows a focused alert that lists them, offers **Download discarded values** and **Go back and choose again**, and applies only after **Discard these values and save**. Changing any choice clears the alert; focus returns to Save after going back. A value the author restored to their own base is not reported as a discard. The downloaded file names lanes instead of IDs and keeps same-named or unnamed lanes apart as ordered `{lane, text}` entries.
+- The user-facing "CAS" wording in the merge instructions was removed.
+
+One fresh read-only reviewer (same model family as the integrator, no database access) reviewed `e4ade86` (OK with notes, no P0/P1, no way to drop a value without the confirmation), `a0fb8a6` (OK with notes; one **new P2** introduced by the follow-up: the exported file merged plot cells of same-named lanes) and `85644f7` (**OK**, no findings). The new P2 was a defect in the first version of this fix, found by the re-review, and is closed.
+
+Evidence at `85644f7`: full backend **705**, frontend **280**, the 18 real root/PostgreSQL/Chromium journeys (including the new default-choice discard-confirmation journey), installed wheel **113** with 170 byte-identical file identities, zero failures/errors/skips. Two earlier backend runs were superseded because the bundle changed afterwards; they are not used as evidence for the final candidate. The session was interrupted twice more while the owned cluster was running; each time it was restarted on loopback 55471 and the final graceful stop was verified.
+
+Remaining P3 polish (see the receipt): several unnamed lanes can share one label in the alert, Escape does not cancel it, and i18next may swap `{{lane}}`/`{{text}}` if user text itself contains those tokens (display only).
+
 ## Current review status
 
-Both round-3 independent reviews returned **OK with notes** with no P0/P1. The notes marked open above are not closed by this record. User acceptance is the user's decision; engineering readiness here does not predeclare model quality, billing guarantees or publication authorization.
+Both round-3 independent reviews returned **OK with notes** with no P0/P1; the merge-form notes they raised are fixed and re-reviewed (**OK**). The structure-hook performance/lock-ordering notes and the accepted save-time behaviour changes remain residual risks. User acceptance is the user's decision; engineering readiness here does not predeclare model quality, billing guarantees or publication authorization.
 
 No push, deployment, model/provider inference, root-checkout promotion, global default change or foreign service stop is authorized by this record.
