@@ -43,10 +43,20 @@ class StoryImportJourney(unittest.TestCase):
                     # SPEC_15: creation lives on the Story & World page, not in a dialog; building opens the Shot Stage.
                     page.locator(".studio-space-btn").click()
                     page.get_by_role("menuitemradio", name="Story & World").click()
-                    page.get_by_role("button", name="Idea / Logline", exact=True).click()
-                    expect(page.get_by_label("Original Source")).to_be_enabled()
-                    page.get_by_label("Original Source").fill("A lone astronomer discovers a countdown and reaches for a brass dial.")
-                    page.locator(".space-detail .studio-primary").click()  # Build, or Update once the slate has shots: SPEC_18 R7 asks its questions in a dialog first
+                    # SPEC_16A: the idea is a private source in the writing workspace. Adapting it is a preview you apply to the working script, and
+                    # building the storyboard is the one primary button, which asks its questions in a dialog first (SPEC_18 R7).
+                    manuscript = page.get_by_role("combobox", name="Manuscript", exact=True)
+                    manuscript.select_option("source:idea")
+                    editor = page.get_by_role("textbox", name="Manuscript editor")
+                    expect(editor).to_have_attribute("contenteditable", "true")  # the source has loaded and can be written in
+                    editor.fill("A lone astronomer discovers a countdown and reaches for a brass dial.")
+                    page.keyboard.press("Control+s")
+                    expect(page.locator(".writing-status")).to_contain_text("Saved")
+                    page.locator(".space-detail .studio-primary").click()  # Preview adaptation
+                    page.locator(".writing-preview-action input[type=checkbox]").first.check()
+                    page.get_by_role("button", name="Apply selected content", exact=True).click()
+                    expect(manuscript).to_have_value("working:main")
+                    page.locator(".space-detail .studio-primary").click()  # Build, or Update once the slate has shots
                     page.locator(".breakdown-dialog button.primary").click()
                     page.wait_for_url("**#cinema-studio", timeout=30000)
                     shots = [shot for shot in app.ok(f"/episodes/{app.ep}/shots")["items"] if shot.get("sceneId")]
