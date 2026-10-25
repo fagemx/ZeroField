@@ -11,6 +11,13 @@ export function primaryStoryAction({manuscript = 'working', writable = false, ha
   return {action:'none', labelKey:build, disabled:true, hintKey:manuscript === 'version' ? 'world.primaryHint_version' : 'world.primaryHint_branch'};
 }
 
+// What a production started from a story (SPEC_18 R16) hands to the workspace. A screenplay becomes the working script (the new production's
+// own document: the host saves it before the workspace opens); an idea or a novel becomes the text of the private source of that name.
+export function startHandOff(start) {
+  if (!start || typeof start.text !== 'string' || !start.text.trim()) return {kind:'none'};
+  return start.mode === 'script' ? {kind:'working', text:start.text} : {kind:'source', mode:start.mode, text:start.text};
+}
+
 // What the build dialog's confirm sends. The words you wrote are already saved by the workspace (the working script is the episode's own
 // document, edited and locked by blocks), so this never sends the script itself: it makes sure the server has your text, then runs the
 // same three requests as before. The server records the production baseline when the extraction is confirmed.

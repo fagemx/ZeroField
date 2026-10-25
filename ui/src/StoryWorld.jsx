@@ -11,7 +11,7 @@ import { UNSCENED, activeItem, rememberGenerations, rememberWorld, restoredGener
 import { FALLBACK_APP, activeTasks, isActiveRun, restoredRuns, runRefused, runStarted, settleRun, startRun } from './generation/generationModel.js';
 import { BreakdownDialog } from './BreakdownDialog.jsx';
 import { BREAKDOWN_MODES, estimatesByMode } from './breakdownModel.js';
-import { buildStoryFromWorkspace, primaryStoryAction } from './storyHostModel.js';
+import { buildStoryFromWorkspace, primaryStoryAction, startHandOff } from './storyHostModel.js';
 import { takeStart } from './startModel.js';
 import { AuthoringWorkspace } from './writing/AuthoringWorkspace.jsx';
 import { WritingToolsPanel } from './writing/WritingToolsPanel.jsx';
@@ -42,6 +42,7 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
   const [runs, setRuns] = useState(() => restoredRuns(restoredGenerations(epId))), [building, setBuilding] = useState(false), [target, setTarget] = useState(null), [estimate, setEstimate] = useState(null);
   // The writing workspace: what it reports (which manuscript, its text, whether a panel is open), a jump asked from this page's rail, and the two
   // columns of the shell it renders into.
+  const [ready, setReady] = useState(false), [seed, setSeed] = useState(null);
   const [scriptStatus, setScriptStatus] = useState(null), [railFocus, setRailFocus] = useState(null), [leftSlot, setLeftSlot] = useState(null), [rightSlot, setRightSlot] = useState(null);
   const localControl = useRef(null), control = controlRef || localControl;
   const mounted = useRef(true), loadedFor = useRef(null), openedFor = useRef(null), sentTo = useRef(epId);
@@ -93,6 +94,13 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     const start = takeStart(epId);
     setRatio(start?.ratio || ep.settings?.aspectRatio || '16:9'); setStyle(start?.style || ep.settings?.stylePresetId || '88123');
     setBreakdownMode(['auto','scene','cinematic'].includes(ep.settings?.breakdownMode) ? ep.settings.breakdownMode : 'auto');
+    // Its text goes to the workspace: a screenplay is saved into the working script first (the workspace then opens on it); an idea or a novel
+    // opens as a private source with the text in it (SPEC_16A 3.5).
+    const plan = startHandOff(start);
+    if (plan.kind === 'working') {
+      storyRequest(`/episodes/${epId}/script`, 'PUT', {scriptContent:plan.text}).then(() => onChanged?.()).catch(err => {if (mounted.current) setError(err.message);})
+        .finally(() => {if (mounted.current) setReady(true);});
+    } else {setSeed(plan.kind === 'source' ? plan : null); setReady(true);}
     setGroup(restoredAssetGroup(epId));
     storyList('/catalog/styles').then(items => {if (mounted.current) setStyles(items);}).catch(err => {if (mounted.current) setError(err.message);})
       .finally(() => {if (mounted.current) setLoading(false);});
@@ -355,8 +363,9 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
           onPick={setPick} onCreate={createAsset} onGenerateMissing={generateMissing} onTable={onAssets}/>
         {notices}
       </> : <>
-        <AuthoringWorkspace slug={slug} epId={epId} me={me} ep={ep} shots={shots} writable={writable} request={request} controlRef={control}
-          onChanged={onChanged} onStage={onStage} onStatus={reportStatus} onScene={pickedScene} focusSource={jumpTo} renderTools={renderTools} slots={slots}/>
+        {ready && <AuthoringWorkspace slug={slug} epId={epId} me={me} ep={ep} shots={shots} writable={writable} request={request} controlRef={control}
+          onChanged={onChanged} onStage={onStage} onStatus={reportStatus} onScene={pickedScene} focusSource={jumpTo} renderTools={renderTools} slots={slots}
+          seed={seed} onSeeded={() => setSeed(null)}/>}
         {notices}
       </>}
     </main>

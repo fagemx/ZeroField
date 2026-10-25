@@ -6,7 +6,7 @@ import { createWritingTransport, writingAction, mutationId } from './writingTran
 import { createWritingJournal, journalScope } from './writingJournal.js';
 import { WritingPersistence } from './writingPersistence.js';
 import { WritingOutlineRecovery } from './writingOutlineRecovery.js';
-import { baselineState, documentText, emptyDoc, refKey, sceneSliceBoundary, sceneSliceBlocks, replaceSceneSlice, textCounts, stable, sourceStructureForDoc, semanticEnumKey } from './writingModel.js';
+import { baselineState, documentText, emptyDoc, textToHtml, refKey, sceneSliceBoundary, sceneSliceBlocks, replaceSceneSlice, textCounts, stable, sourceStructureForDoc, semanticEnumKey } from './writingModel.js';
 import { WritingEditor } from './WritingEditor.jsx';
 import { WritingOutline, WritingOutlineMerge } from './WritingOutline.jsx';
 import { WritingVersions } from './WritingVersions.jsx';
@@ -27,13 +27,13 @@ export function AuthoringWorkspace(props) {
   // Identity changes unmount every private state/cache/editor, including unresolved previews.
   return <WorkspaceSession key={JSON.stringify([props.slug,props.epId,props.me?.actor_id])} {...props}/>;
 }
-function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyRequest,controlRef,onChanged,onStage,onStatus,onScene,focusSource,renderTools,slots}) {
+function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyRequest,controlRef,onChanged,onStage,onStatus,onScene,focusSource,renderTools,slots,seed,onSeeded}) {
   const {t}=useTranslation();
   const transport=useMemo(()=>createWritingTransport(epId,request),[epId,request]);
   const journal=useMemo(()=>createWritingJournal(),[]),tabId=useRef(mutationId());
   const [workspace,setWorkspace]=useState(null),[resourceRef,setResourceRef]=useState({kind:'working'}),[resource,setResource]=useState(null),[snapshot,setSnapshot]=useState(null),[error,setError]=useState(null),[panel,setPanel]=useState(null),[preview,setPreview]=useState(null),[selectedScene,setSelectedScene]=useState(null),[focusBid,setFocusBid]=useState(null),[focus,setFocus]=useState(false),[outlineOpen,setOutlineOpen]=useState(true),[fontSize,setFontSize]=useState(18),[lineHeight,setLineHeight]=useState(1.8),[pageWidth,setPageWidth]=useState(720),[duplicate,setDuplicate]=useState(false),[busy,setBusy]=useState(false),[switching,setSwitching]=useState(false);
   // SPEC_16A: with `slots` ({left,right} DOM nodes) the studio shell owns the side columns, so the outline and the panels render there; the editor stays here.
-  const slotted=Boolean(slots),actions=useRef({});
+  const slotted=Boolean(slots),actions=useRef({}),[targetScenes,setTargetScenes]=useState(3),[seedTick,setSeedTick]=useState(0),seedTries=useRef(0);
   const into=(node,slot)=>slotted?(slot&&node?createPortal(node,slot):null):node;
   const taskAbort=useRef(new AbortController());
   const persistence=useRef(null),latest=useRef({}),mounted=useRef(true),loadSequence=useRef(0),editor=useRef(null),actionRetry=useRef(null),structureUndo=useRef(null);
@@ -109,6 +109,17 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   },[flush,load,report]);
   const workspaceReady=!!workspace;
   useEffect(()=>{if(focusSource&&workspaceReady)navigateSource(focusSource);},[focusSource,workspaceReady,navigateSource]);
+  // SPEC_16A 3.5: a production started from a story (SPEC_18 R16) hands its text over once. A private idea or novel opens with it in the editor,
+  // as if typed, so it is checkpointed and saved like typing; a screenplay was saved into the working script by the host before this mounted.
+  useEffect(()=>{
+    if(!seed)return;
+    if(seed.mode!=='idea'&&seed.mode!=='novel'){onSeeded?.();return;}
+    if(!writable||!snapshot||switching)return;
+    if(resourceRef.kind!=='source'||resourceRef.mode!==seed.mode){selectResource({kind:'source',mode:seed.mode});return;}
+    if(snapshot.dirty||documentText(snapshot.doc).trim()){onSeeded?.();return;}  // something is there already: the hand-off never writes over it
+    if(!editor.current){if(seedTries.current++<30)setTimeout(()=>setSeedTick(value=>value+1),100);return;}
+    editor.current.commands.setContent(textToHtml(seed.text),{emitUpdate:true});onSeeded?.();
+  },[seed,writable,snapshot,switching,resourceRef,seedTick]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{
     if(!controlRef)return;
     const summary=()=>toolControls.summary(persistence.current?.snapshot() || {state:'readonly',dirty:false,recoverable:false});
@@ -157,7 +168,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     const body=impactRequest({...options,expectedSourceHash:target.docHash || target.snapshot?.docHash});
     const result=await post('previews',body);setPreview(result);setPanel('preview');
   };
-  const adaptation=()=>run(async()=>{await requireServer();const current=persistence.current.base;const result=await post('previews',{kind:'adaptation',sourceRef:resourceRef,expectedSourceHash:current.docHash,targetDocHash:workspace.docHash,targetScenes:4,breakdownMode:'auto',...(current.composition || {})});setPreview(result);setPanel('preview');await reload();});actions.current.adaptation=adaptation;
+  const adaptation=()=>run(async()=>{await requireServer();const current=persistence.current.base;const result=await post('previews',{kind:'adaptation',sourceRef:resourceRef,expectedSourceHash:current.docHash,targetDocHash:workspace.docHash,targetScenes,breakdownMode:'auto',...(current.composition || {})});setPreview(result);setPanel('preview');await reload();});actions.current.adaptation=adaptation;
   const buildText=()=>run(async()=>{await requireServer();const action=createTextStoryboardAction(request,epId,{breakdownMode:ep?.settings?.breakdownMode || 'auto',signal:taskAbort.current.signal});actionRetry.current=async()=>{const result=await action();if(!mounted.current)return result;await onChanged?.(result);await reload();if(mounted.current)onStage?.({shotIds:[]});return result;};await actionRetry.current();actionRetry.current=null;});
   const download=()=>{
     const url=URL.createObjectURL(new Blob([documentText(persistence.current?.doc || resource.doc)],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='writing-recovery.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);
@@ -229,7 +240,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
         {snapshot.state==='auth_lost'&&<p role="alert">{t(p+'authLost')}</p>}
         {snapshot.error&&snapshot.state!=='auth_lost'&&<p role="alert">{snapshot.error.message}</p>}
         {snapshot.localError&&<p role="alert">{t(p+'localRecoveryFailed')}</p>}
-        {resourceRef.kind==='source'&&<WritingSourceTools key={resourceRef.mode} doc={doc} structure={snapshot.structure} composition={snapshot.composition} writable={editable} onDocument={next=>persistence.current.change(next)} onMetadata={patch=>persistence.current.changeMetadata(patch)} request={request} epId={epId} onError={report}/>}
+        {resourceRef.kind==='source'&&<WritingSourceTools key={resourceRef.mode} doc={doc} structure={snapshot.structure} composition={snapshot.composition} writable={editable} onDocument={next=>persistence.current.change(next)} onMetadata={patch=>persistence.current.changeMetadata(patch)} request={request} epId={epId} onError={report} targetScenes={targetScenes} onTargetScenes={setTargetScenes}/>}
         <WritingEditor key={refKey(resourceRef)} sliceKey={sliceKey} doc={shown} writable={editable} me={me} privateResource={['source','branch'].includes(resourceRef.kind)} locks={resourceRef.kind==='working'?(workspace.locks || []):[]} label={t(p+'editorLabel')} focusBid={focusBid} onReady={value=>{editor.current=value;}} onComposition={value=>persistence.current?.setComposing(value)} onChange={next=>{if(editable){if(slice){if(activeSlice.current!==slice)return;persistence.current?.change(replaceSceneSlice(persistence.current.doc,slice.boundary,next));}else persistence.current?.change(next);if(resourceRef.kind==='source')persistence.current?.changeMetadata({structure:sourceStructureForDoc(persistence.current.draftStructure,next)});}}}/>
         {['local_only','save_failed','auth_lost'].includes(snapshot.state)&&<div><button type="button" onClick={download}>{t(p+'downloadDraft')}</button>{snapshot.state!=='auth_lost'&&<button type="button" onClick={()=>persistence.current.save()}>{t(p+'retrySave')}</button>}</div>}
       </main>

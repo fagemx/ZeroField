@@ -3,7 +3,7 @@ import { useTranslation } from '../i18n/react.jsx';
 import { documentText,clone } from './writingModel.js';
 import { mutationId } from './writingTransport.js';
 const p='writing.authoring.';
-export function WritingSourceTools({doc,structure={},composition={},writable,onMetadata,onDocument,request,epId,onError}) {
+export function WritingSourceTools({doc,structure={},composition={},writable,onMetadata,onDocument,request,epId,onError,targetScenes=3,onTargetScenes}) {
   const {t}=useTranslation();const [collisions,setCollisions]=useState(null),[busy,setBusy]=useState(false),[title,setTitle]=useState(''),[bids,setBids]=useState([]);
   const chapters=structure.chapters || [],trace=composition.choiceTrace || {focus:'overall',keptLabels:[],uncheckedLabels:[],extraCondition:''};
   const updateComposition=patch=>onMetadata({composition:{...composition,...patch}});
@@ -19,6 +19,8 @@ export function WritingSourceTools({doc,structure={},composition={},writable,onM
     const selected=new Set(ordered);onDocument({...doc,content:[...ordered.filter(id=>byId.has(id)).map(id=>byId.get(id)),...(doc.content || []).filter(node=>!selected.has(node.attrs?.bid))]});updateChapters(next);
   };
   return <section className="writing-source-tools">
+    {onTargetScenes&&<label className="writing-target-scenes">{t('story.targetScenes')}<input type="number" min={1} max={12} step={1} value={targetScenes} disabled={!writable} aria-label={t('story.targetScenes')}
+      onChange={event=>onTargetScenes(Math.max(1,Math.min(12,Math.trunc(Number(event.target.value))||1)))}/></label>}
     <details><summary>{t(p+'sourceDevelopment')}</summary><p>{t(p+'sourceDevelopmentHelp')}</p>
       <label>{t('story.mediumLens')}<select aria-label={t('story.mediumLens')} value={composition.mediumLens || ''} disabled={!writable} onChange={event=>event.target.value?updateComposition({mediumLens:event.target.value,genreLens:composition.genreLens || 'general'}):onMetadata({composition:{}})}><option value="">{t('story.mediumLens_off')}</option>{['manju','cinema','storybook'].map(value=><option key={value} value={value}>{t('story.mediumLens_'+value)}</option>)}</select></label>
       {!!composition.mediumLens&&<><label>{t('story.genreLens')}<select aria-label={t('story.genreLens')} disabled={!writable} value={composition.genreLens || 'general'} onChange={event=>updateComposition({genreLens:event.target.value})}>{['general','melodrama','xianxia','comedy','suspense'].map(value=><option key={value} value={value}>{t('story.genreLens_'+value)}</option>)}</select></label>

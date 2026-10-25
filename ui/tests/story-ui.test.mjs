@@ -89,7 +89,7 @@ test('new count and usage labels interpolate in both interface languages',async(
 test('Story & World hosts the writing workspace and keeps one primary action and the format foot; the build questions wait in a dialog',()=>{
   const page=extra=>render('StoryWorld',{slug:'demo',me:{actor_id:'actor'},epId:'ep_demo_02',writable:true,...extra});
   const html=page();
-  assert.match(html,/class="authoring-workspace" aria-busy="true"/,'the workspace loads before it shows an editable manuscript');
+  // The workspace mounts once the host has decided what a production started from a story hands it (SPEC_16A 3.5), so a first render has none.
   assert.doesNotMatch(html,/<textarea/,'no second, unpersisted copy of the script on the page');
   for(const name of ['Scenes','By scene','Cast &amp; sets','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
   assert.match(html,/class="story-outline-slot"/,'the outline has its place in the left rail');

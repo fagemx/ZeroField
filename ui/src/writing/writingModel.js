@@ -3,6 +3,9 @@ import { impactSelection } from './writingImpactAdapter.js';
 export { stable };
 export const emptyDoc = () => ({type:'doc',content:[]});
 export const clone = value => structuredClone(value);
+// Plain text as the editor's content: blank lines separate paragraphs, a line break inside one stays a line break. Never markup.
+export const textToHtml = text => String(text || '').replace(/\r\n?/g, '\n').split(/\n{2,}/).filter(part => part.trim())
+  .map(part => '<p>' + part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</p>').join('');
 export const cleanMap = doc => new Map((doc.content || []).map(node => [bidOf(node),stable(node)]));
 export function documentText(node) {
   if (node?.type === 'text') return node.text || '';
