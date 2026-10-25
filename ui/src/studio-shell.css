@@ -345,3 +345,57 @@
 .outline-scenes li.is-affected .outline-chip { border-color: rgba(255, 255, 255, .55); }
 .outline-none { color: var(--faint); font-size: 11.5px; font-style: normal; }
 .outline-scenes li.is-no_shot .outline-text { color: var(--muted); }
+
+/* ---------- SPEC_18 R6: what a space needs from you, as menu items under it ---------- */
+.workbench-app.studio-shell .studio-menu button.studio-menu-shortcut { min-height: 30px; gap: 8px; padding: 4px 8px 4px 38px; font-size: 12.5px; }
+.studio-menu-shortcut > span { flex: 1; min-width: 0; text-align: left; }
+.studio-menu-shortcut .ico { flex: none; color: var(--faint); }
+
+/* ---------- SPEC_18 R4: previs -> first frame -> video ---------- */
+.shot-ladder ol { display: flex; align-items: flex-start; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.shot-ladder li { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+.studio-shell .shot-ladder li > button { display: grid; gap: 4px; width: 88px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 11.5px; text-align: left; cursor: pointer; }
+.ladder-thumb { display: grid; place-items: center; box-sizing: border-box; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--ground); color: var(--faint); }
+.ladder-thumb img, .ladder-thumb video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.shot-ladder li.is-todo .ladder-thumb { border: 1px dashed var(--control); }
+.shot-ladder li > button:hover .ladder-thumb, .shot-ladder li > button:focus-visible .ladder-thumb { border-color: var(--control); }
+.ladder-cap { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; color: var(--text); }
+.ladder-cap small { color: var(--faint); font-size: 11px; }
+.ladder-cap .ico { color: #3fc07a; }
+.shot-ladder li > .ladder-arrow { flex: none; margin-top: 18px; color: var(--faint); }
+.ladder-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 8px 0 0; color: var(--faint); font-size: 12px; }
+.studio-shell .ladder-note .quiet { height: 24px; padding: 0 9px; font-size: 12px; }
+
+/* ---------- SPEC_18 R2, R3: the cast of a shot, and @codes drawn as tags ---------- */
+.shot-cast > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.shot-cast h3 { display: flex; align-items: baseline; gap: 6px; margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.shot-cast h3 .num { color: var(--faint); font: 500 11.5px ui-monospace, Consolas, monospace; }
+.shot-cast > ul { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.shot-cast > ul > li { display: flex; align-items: center; gap: 10px; min-height: 44px; box-sizing: border-box; padding: 6px 8px; border-radius: 8px; background: var(--active); }
+.shot-cast > ul > li.is-elsewhere { opacity: .85; }
+.cast-name { flex: 1; display: grid; gap: 1px; min-width: 0; }
+.cast-name b { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.cast-name small { overflow: hidden; color: var(--faint); font: 500 10.5px ui-monospace, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.cast-name small em { color: #f0728a; font-style: normal; }
+.cast-name .cast-also { color: var(--muted); font: 400 11px/1.4 Inter, 'Noto Sans TC', system-ui, sans-serif; white-space: normal; }
+.studio-shell .shot-cast select.cast-look { flex: none; max-width: 104px; height: 26px; padding: 0 6px; font-size: 12px; }
+.cast-look-static { flex: none; color: var(--muted); font-size: 12px; }
+.studio-shell .shot-cast .cast-fix { flex: none; height: 26px; padding: 0 9px; border: 1px solid var(--control); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.studio-shell .shot-cast .cast-remove { flex: none; width: 24px; height: 24px; padding: 0; }
+.binding-thumb { flex: none; display: inline-block; box-sizing: border-box; width: 32px; height: 32px; overflow: hidden; border-radius: 6px; background: var(--ground); }
+.binding-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.binding-thumb.is-blank { border: 1px dashed #5a3a3e; }
+.binding-text { line-height: 2; }
+.binding-tag, .workbench-app.studio-shell button.binding-tag { display: inline-flex; align-items: center; gap: 5px; box-sizing: border-box; height: 22px; margin: 0 1px; padding: 0 7px 0 2px; border: 0; border-radius: 5px;
+  background: var(--active); color: var(--text); font-size: 12.5px; line-height: 1; vertical-align: middle; white-space: nowrap; }
+.workbench-app.studio-shell button.binding-tag { cursor: pointer; }
+.workbench-app.studio-shell button.binding-tag:hover { background: var(--raised); }
+.binding-tag .binding-thumb { width: 18px; height: 18px; border-radius: 4px; }
+.binding-tag.is-unknown { padding-left: 6px; background: rgba(229, 86, 111, .16); color: #f0728a; }
+.binding-add-list { display: grid; gap: 8px; max-height: 220px; margin-top: 6px; padding: 8px; overflow: auto; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-2); }
+.binding-add-list h4 { margin: 0 0 4px; color: var(--faint); font-size: 11.5px; font-weight: 500; }
+.binding-add-list ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.binding-add-list p { margin: 0; color: var(--faint); font-size: 12.5px; }
+.workbench-app.studio-shell .binding-add-list button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-size: 12.5px; text-align: left; cursor: pointer; }
+.workbench-app.studio-shell .binding-add-list button:hover { background: var(--active); }
+.binding-add-list small { display: block; color: var(--faint); font: 500 10.5px ui-monospace, Consolas, monospace; }

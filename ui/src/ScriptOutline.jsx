@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
 import { storyRequest } from './storyModel.js';
+import { BindingText } from './ShotBindings.jsx';
 
 // SPEC_15 Story & World: which shot each beat of the script became, and what an edit would leave out of step. The server replays
 // the rule that builds shots from beats (scene s, beat i is the i-th shot of that scene) and reports it without writing anything,
@@ -10,7 +11,8 @@ const first = text => String(text || '').split('\n').find(line => line.trim()) |
 const clip = (text, size = 96) => text.length > size ? text.slice(0, size - 1).trimEnd() + '…' : text;
 
 // What the outline looks like for an alignment (the saved script's, or the draft's) and the shots the draft would touch.
-export function OutlineView({view, affected = [], focusRid, checking, onFocus, onOpen, onLine}) {
+// lookup (optional): with it, an @code in a beat is drawn as a small tag with its picture, and onOpenAsset opens its card (SPEC_18 R3).
+export function OutlineView({view, affected = [], focusRid, checking, lookup, onFocus, onOpen, onLine, onOpenAsset}) {
   useLocale();
   if (!view) return <p className="space-sub" role="status">{t('outline.loading')}</p>;
   if (!view.scenes?.length) return <p className="outline-note" role="status">{t('outline.noScenes')}</p>;
@@ -25,7 +27,7 @@ export function OutlineView({view, affected = [], focusRid, checking, onFocus, o
         const now = beat.rowId && beat.rowId === focusRid, touched = beat.shotId && hit.has(beat.shotId);
         return <li key={beat.index} className={'is-' + beat.state + (touched ? ' is-affected' : '')}>
           <button type="button" className="outline-line" disabled={!beat.line} onClick={() => onLine?.(beat.line)} title={beat.line ? t('outline.findLine', {line: beat.line}) : t('outline.noLine')}>{beat.line ? 'L' + beat.line : '—'}</button>
-          <span className="outline-text">{clip(first(beat.text))}</span>
+          <span className="outline-text">{lookup ? <BindingText text={clip(first(beat.text))} lookup={lookup} onOpen={onOpenAsset}/> : clip(first(beat.text))}</span>
           {beat.rowId ? <button type="button" className="outline-chip" aria-current={now ? 'true' : undefined} title={t('outline.focusShot', {shot: beat.shotIndex})}
             onClick={() => (now ? onOpen?.(beat.rowId, scene.sceneId) : onFocus?.({shotRid: beat.rowId, sceneId: scene.sceneId}))}>{beat.shotIndex}</button>
             : <em className="outline-none">{t('outline.noShot')}</em>}
@@ -39,7 +41,7 @@ export function OutlineView({view, affected = [], focusRid, checking, onFocus, o
 }
 
 // Reads the alignment of the saved script, and, while the draft differs from it, what saving the draft would touch.
-export function ScriptOutline({epId, script, saved = '', version, focusRid, onFocus, onOpen, onLine}) {
+export function ScriptOutline({epId, script, saved = '', version, focusRid, lookup, onFocus, onOpen, onLine, onOpenAsset}) {
   useLocale();
   const [alignment, setAlignment] = useState(null), [impact, setImpact] = useState(null), [error, setError] = useState('');
   const edited = script !== saved;
@@ -62,6 +64,6 @@ export function ScriptOutline({epId, script, saved = '', version, focusRid, onFo
     <h2 id="world-outline">{t('outline.title')}</h2>
     <p className="space-sub">{t('outline.hint')}</p>
     {error && <p role="alert" className="canvas-error">{error}</p>}
-    <OutlineView view={edited && impact ? impact : alignment} affected={edited ? impact?.affectedShotIds : []} checking={edited && !impact && !error} focusRid={focusRid} onFocus={onFocus} onOpen={onOpen} onLine={onLine}/>
+    <OutlineView view={edited && impact ? impact : alignment} affected={edited ? impact?.affectedShotIds : []} checking={edited && !impact && !error} focusRid={focusRid} lookup={lookup} onFocus={onFocus} onOpen={onOpen} onLine={onLine} onOpenAsset={onOpenAsset}/>
   </section>;
 }

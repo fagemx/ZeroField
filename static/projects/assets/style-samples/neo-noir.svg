@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="Neo-Noir sample: high-contrast light and shadow stripes">
+  <rect width="320" height="180" fill="#0a0a0c"/>
+  <g fill="#d9d9dc"><path d="M0 18 L320 0 V14 L0 34 Z"/><path d="M0 52 L320 30 V44 L0 68 Z"/><path d="M0 86 L320 60 V74 L0 102 Z"/><path d="M0 120 L320 90 V104 L0 136 Z"/><path d="M0 154 L320 120 V134 L0 170 Z"/></g>
+  <path d="M120 180 L120 112 q0 -26 28 -26 q28 0 28 26 V180 Z" fill="#0a0a0c"/>
+  <rect x="0" y="168" width="320" height="12" fill="#6a6a70"/>
+</svg>

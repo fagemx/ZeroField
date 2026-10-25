@@ -41,11 +41,13 @@ class StoryImportJourney(unittest.TestCase):
                 try:
                     page.goto(f"http://127.0.0.1:{app.server.server_port}/projects/{app.slug}/#cinema-studio")
                     # SPEC_15: creation lives on the Story & World page, not in a dialog; building opens the Shot Stage.
-                    page.locator(".studio-spaces").get_by_role("button", name="Story & World").click()
+                    page.locator(".studio-space-btn").click()
+                    page.get_by_role("menuitemradio", name="Story & World").click()
                     page.get_by_role("button", name="Idea / Logline", exact=True).click()
                     expect(page.get_by_label("Original Source")).to_be_enabled()
                     page.get_by_label("Original Source").fill("A lone astronomer discovers a countdown and reaches for a brass dial.")
-                    page.locator(".space-detail .studio-primary").click()  # Build, or Update once the slate has shots
+                    page.locator(".space-detail .studio-primary").click()  # Build, or Update once the slate has shots: SPEC_18 R7 asks its questions in a dialog first
+                    page.locator(".breakdown-dialog button.primary").click()
                     page.wait_for_url("**#cinema-studio", timeout=30000)
                     shots = [shot for shot in app.ok(f"/episodes/{app.ep}/shots")["items"] if shot.get("sceneId")]
                     self.assertEqual(len(shots), 9)

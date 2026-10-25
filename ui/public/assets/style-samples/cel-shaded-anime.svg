@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="Cel-Shaded sample: flat bands of colour with a hard-edged sun and cloud">
+  <rect width="320" height="180" fill="#f1b45a"/>
+  <path d="M0 78 L320 36 V180 H0 Z" fill="#d9706b"/>
+  <path d="M0 126 L320 96 V180 H0 Z" fill="#4c66b8"/>
+  <circle cx="236" cy="52" r="26" fill="#fde9a8"/>
+  <path d="M40 70 q10 -22 34 -14 q10 -16 32 -4 q22 -4 24 18 z" fill="#fff4dc"/>
+  <path d="M40 70 h90 v6 h-90 z" fill="#f2cfae"/>
+  <path d="M0 150 L320 120 V180 H0 Z" fill="#334a8c"/>
+</svg>

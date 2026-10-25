@@ -315,7 +315,7 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
   );
 }
 
-function Chat({ assistant, tabs, compact, ownerName, onOpenTab, onStarter }) {
+function Chat({ assistant, tabs, compact, ownerName, onOpenTab, onStarter, quick = [] }) {
   const locale = useLocale();
   const ref = useRef(null);
   const thread = (assistant.state && assistant.state.thread) || [];
@@ -352,7 +352,8 @@ function Chat({ assistant, tabs, compact, ownerName, onOpenTab, onStarter }) {
             <p>{uiText("assistantViews.iWillPrepareChangesForYourReviewBeforeApplying")}</p>
           </div></div>
           <div className="chips">
-            {STARTERS().map((s) => <button type="button" key={s} className="chip" onClick={() => onStarter(s)}>{s}</button>)}
+            {/* SPEC_18 R11: where you are and what you hold decide the suggestions; with nothing to hold, the general ones. */}
+            {(quick.length ? quick : STARTERS().map((s) => ({ id: s, label: s, text: s }))).map((item) => <button type="button" key={item.id} className="chip" onClick={() => onStarter(item.text)}>{item.label}</button>)}
           </div>
         </>
       )}
@@ -607,7 +608,7 @@ function Seg({ view, onView }) {
 }
 
 export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft, inputRef, view, onView, onExpand, onClose,
-  onOpenTab, onStarter, onError, onToast, onConsole }) {
+  onOpenTab, onStarter, onError, onToast, onConsole, quick }) {
   const locale = useLocale();
   const [info, setInfo] = useState(false);
   const [history, setHistory] = useState(false);
@@ -657,7 +658,7 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
       ) : (
         <>
           {task && <div className="pa-task on"><span>{task}</span><button type="button" className="src" onClick={onExpand}>{uiText("assistantViews.openInWorkspace")}</button></div>}
-          <div className="pa-chat"><Chat assistant={assistant} tabs={tabs} ownerName={me.name} onOpenTab={onOpenTab} onStarter={onStarter} /></div>
+          <div className="pa-chat"><Chat assistant={assistant} tabs={tabs} ownerName={me.name} onOpenTab={onOpenTab} onStarter={onStarter} quick={quick} /></div>
           <Composer assistant={assistant} value={draft} onChange={onDraft} inputRef={inputRef} />
         </>
       )}
@@ -666,7 +667,7 @@ export function AssistantSide({ assistant, me, tabs, slug, focus, draft, onDraft
 }
 
 export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, draft, onDraft, inputRef, view, onView,
-  onCollapse, onOpenTab, onStarter, onError, onToast, onConsole }) {
+  onCollapse, onOpenTab, onStarter, onError, onToast, onConsole, quick }) {
   const locale = useLocale();
   const [mtab, setMtab] = useState("chat");
   const [history, setHistory] = useState(false);
@@ -732,7 +733,7 @@ export function AssistantWorkspace({ assistant, me, tabs, slug, focus, onFocus, 
                 <div className="pa-chat"><HistoryView assistant={assistant} tabs={tabs} onOpenTab={onOpenTab} onClose={() => setHistory(false)} /></div>
               ) : (
                 <>
-                  <div className="pa-chat"><Chat assistant={assistant} tabs={tabs} compact ownerName={me.name} onOpenTab={onOpenTab} onStarter={onStarter} /></div>
+                  <div className="pa-chat"><Chat assistant={assistant} tabs={tabs} compact ownerName={me.name} onOpenTab={onOpenTab} onStarter={onStarter} quick={quick} /></div>
                   <Composer assistant={assistant} value={draft} onChange={onDraft} inputRef={inputRef} />
                 </>
               )}

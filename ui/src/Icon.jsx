@@ -52,6 +52,8 @@ const PATHS = {
   cursor: 'M5 3l14 7-6.2 2L10.5 18.5z',
   ripple: 'M4 12h6M14 12h6M10 8v8M14 8v8',
   magnet: 'M6 4v8a6 6 0 0 0 12 0V4M6 8h4M14 8h4',
+  warning: 'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01',
+  cube: 'M12 3L3 7.5v9L12 21l9-4.5v-9zM3 7.5l9 4.5 9-4.5M12 12v9',
 };
 
 export function Icon({ name, size = 16, className = 'ico' }) {

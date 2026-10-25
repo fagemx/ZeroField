@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from './i18n/react.jsx';
 import { currentLocale, setLocale, t } from './i18n/index.js';
 import { episodeId, storyList, storyRequest, waitStoryTask } from './storyModel.js';
@@ -27,6 +27,14 @@ export const spaceNote = (key, counts = {}) => key === 'story'
   ? [counts.scriptDirty && t('shell.storyUpdated'), counts.missing && t('shell.missingImages', {count:counts.missing})].filter(Boolean).join(' · ')
   : key === 'stage' ? [t('shell.shotCount', {count:counts.shots || 0}), counts.review && t('shell.toReview', {count:counts.review})].filter(Boolean).join(' · ')
     : t('shell.filmSummary', {filmed:counts.filmed || 0, total:counts.shots || 0});
+// SPEC_18 R6: the same needs as things you can press. `target` is where the press goes: the shell carries it into the space ({view, facet}
+// for Story & World, {filter} for the Shot Stage) and the space takes it once. The Timeline only reports how far the film is.
+export const spaceShortcuts = (key, counts = {}) => key === 'story'
+  ? [counts.scriptDirty && {id:'script', label:t('shell.storyUpdated'), target:{view:'script'}},
+    counts.missing && {id:'missing', label:t('shell.missingImages', {count:counts.missing}), target:{view:'world', facet:'missing'}}].filter(Boolean)
+  : key === 'stage' ? [counts.review && {id:'review', label:t('shell.toReview', {count:counts.review}), target:{filter:'review'}},
+    counts.missingShots && {id:'missing', label:t('shell.shotsMissingRefs', {count:counts.missingShots}), target:{filter:'missing'}}].filter(Boolean)
+    : [{id:'filmed', label:t('shell.filmSummary', {filmed:counts.filmed || 0, total:counts.shots || 0}), target:null}];
 
 // One episode's state for the top bar, both spaces and the film: refreshed when a page saves (version) or on demand.
 export function useEpisode(slug, epId, version, enabled = true) {
@@ -53,6 +61,7 @@ export function episodeCounts(ep, shots) {
     shots:cut.length,
     review:cut.filter(shot => SHOT_FILTERS.review({status:shot.reviewStatus})).length,
     missing:ep?.missingAssetCodes?.length || 0,
+    missingShots:cut.filter(shot => SHOT_FILTERS.missing({info:shot})).length,
     filmed:cut.filter(shot => shot.selectedVideoUrl).length,
     scriptDirty:Boolean(ep?.scriptDirty),
   };
@@ -96,10 +105,12 @@ export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTit
   </header>;
 }
 
-// The one place the three spaces are offered, and only on request: a quiet breadcrumb button that opens a menu.
-function SpaceMenu({space, counts = {}, onSpace}) {
+// The one place the three spaces are offered, and only on request: a quiet breadcrumb button that opens a menu. Under each space sit
+// what it needs from you, each its own menu item (a shortcut is never a button inside the space's button): the arrow keys reach them,
+// Escape closes the menu and returns focus to the space button.
+export function SpaceMenu({space, counts = {}, defaultOpen = false, onSpace}) {
   useLocale();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const root = useRef(null);
   const current = SPACES.find(item => item.key === space);
   useEffect(() => {
@@ -108,7 +119,7 @@ function SpaceMenu({space, counts = {}, onSpace}) {
     const keys = event => {
       if (event.key === 'Escape') {setOpen(false); root.current?.querySelector('.studio-space-btn')?.focus();}
       else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        const items = [...root.current.querySelectorAll('[role="menuitemradio"]')], at = items.indexOf(document.activeElement);
+        const items = [...root.current.querySelectorAll('[role="menuitemradio"],[role="menuitem"]')], at = items.indexOf(document.activeElement);
         event.preventDefault(); items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
       }
     };
@@ -120,8 +131,13 @@ function SpaceMenu({space, counts = {}, onSpace}) {
     <button type="button" className="studio-space-btn" aria-haspopup="menu" aria-expanded={open} aria-keyshortcuts="Control+1 Control+2 Control+3" onClick={() => setOpen(value => !value)}>
       <Icon name={current?.icon || 'layers'}/><span>{current ? t(current.label) : t('shell.spaces')}</span><Icon name="chevronDown" size={13}/></button>
     {open && <div className="studio-menu" role="menu" aria-label={t('shell.spaces')}>
-      {SPACES.map((item, index) => <button key={item.key} type="button" role="menuitemradio" aria-checked={item.key === space} onClick={() => {setOpen(false); onSpace?.(item.key);}}>
-        <Icon name={item.icon}/><span className="studio-menu-name">{t(item.label)}<small>{spaceNote(item.key, counts)}</small></span><kbd>Ctrl {index + 1}</kbd></button>)}
+      {SPACES.map((item, index) => <Fragment key={item.key}>
+        <button type="button" role="menuitemradio" aria-checked={item.key === space} onClick={() => {setOpen(false); onSpace?.(item.key);}}>
+          <Icon name={item.icon}/><span className="studio-menu-name">{t(item.label)}</span><kbd>Ctrl {index + 1}</kbd></button>
+        {spaceShortcuts(item.key, counts).map(shortcut => <button key={shortcut.id} type="button" role="menuitem" className="studio-menu-shortcut"
+          onClick={() => {setOpen(false); onSpace?.(item.key, shortcut.target || undefined);}}>
+          <span>{shortcut.label}</span>{shortcut.target && <Icon name="arrowRight" size={13}/>}</button>)}
+      </Fragment>)}
       <p className="studio-menu-foot">{t('shell.spaceMenuHint')}</p>
     </div>}
   </div>;

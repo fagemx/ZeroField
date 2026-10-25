@@ -79,7 +79,7 @@ class ShotReviewInteractions(unittest.TestCase):
         self.page.locator('.sheet-view-switch').get_by_role('button',name='Review',exact=True).click()
         self.tools = self.page.locator('.story-shot-tools')
         expect(self.tools.locator('.story-takes figure').first).to_be_visible()
-        self.status = self.page.locator('.shot-detail select').first
+        self.status = self.page.locator('.shot-detail .modal-field select').first  # not the look menu of the cast block above it (SPEC_18 R2)
         self.hero = self.tools.get_by_role('button',name='Approved composition → Closed Hero',exact=True)
         self.page.evaluate('window.__sameReview=document.querySelector(".story-shot-tools")')
         self.tools.locator('details summary').click()

@@ -3,7 +3,7 @@ import { t as uiText } from './i18n/index.js';
 import { useEffect, useRef, useState } from "react";
 
 // 簡單的對話框：一行輸入（可選）、一個下拉（可選）、確定／取消。
-export function Dialog({ title, message, input, inputLabel, select, confirmLabel = uiText("dialog.confirm"), cancelLabel = uiText("dialog.cancel"), danger, onConfirm, onCancel, children, hideConfirm = false, className = '', returnFocusRef }) {
+export function Dialog({ title, message, input, inputLabel, select, confirmLabel = uiText("dialog.confirm"), cancelLabel = uiText("dialog.cancel"), danger, onConfirm, onCancel, children, hideConfirm = false, confirmDisabled = false, className = '', returnFocusRef }) {
   const locale = useLocale();
   const [text, setText] = useState(input && input.value ? input.value : "");
   const [choice, setChoice] = useState(select && select.value ? select.value : "");
@@ -54,7 +54,7 @@ export function Dialog({ title, message, input, inputLabel, select, confirmLabel
         {children}
         <div className="modal-actions">
           <button type="button" className="ghost" onClick={onCancel}>{cancelLabel}</button>
-          {!hideConfirm && <button type="submit" className={danger ? "primary danger" : "primary"}>{confirmLabel}</button>}
+          {!hideConfirm && <button type="submit" className={danger ? "primary danger" : "primary"} disabled={confirmDisabled}>{confirmLabel}</button>}
         </div>
       </form>
     </div>

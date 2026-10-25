@@ -5,6 +5,35 @@ import { mediaOf } from './sheetModel.js';
 import { mediaStages, SHOT_FILTERS } from './studioModel.js';
 import { statusClass, statusLabel } from './format.js';
 import { CameraFidelity } from './ShotBench.jsx';
+import { Icon } from './Icon.jsx';
+
+// SPEC_18 R4: the shot's three rungs, cheapest first: previs -> first frame -> video. Each shows what exists (a picture, or a paused first
+// frame; nothing here ever plays on its own) and opens the view where that rung is worked on. A shot with no previs yet is told so, with a
+// quiet way to plan one; it never blocks shooting.
+const RUNG_ICON = {previs: 'cube', frame: 'image', video: 'play'};
+function RungThumb({step}) {
+  const media = step.media;
+  if (media?.kind === 'image') return <img src={media.url} alt="" loading="lazy"/>;
+  if (media?.kind === 'video') return <video src={media.url + '#t=0.1'} preload="metadata" muted playsInline tabIndex={-1} aria-hidden="true"/>;
+  return <Icon name={RUNG_ICON[step.key]} size={16}/>;
+}
+export function MediaLadder({steps, onOpen, onPlan}) {
+  useLocale();
+  if (!steps.length) return null;
+  const planned = steps.some(step => step.key === 'previs' && !step.media);
+  return <div className="shot-ladder">
+    <ol aria-label={t('stage.ladder')}>
+      {steps.map((step, index) => <li key={step.key} className={step.media ? 'is-made' : 'is-todo'}>
+        <button type="button" title={t('stage.ladderOpen_' + step.key)} onClick={() => onOpen(step)}>
+          <span className="ladder-thumb"><RungThumb step={step}/></span>
+          <span className="ladder-cap">{step.media ? <Icon name="check" size={11}/> : null}{t('stage.ladder_' + step.key)}{!step.media && <small>{t('stage.ladderEmpty')}</small>}</span>
+        </button>
+        {index < steps.length - 1 && <Icon name="arrowRight" size={13} className="ico ladder-arrow"/>}
+      </li>)}
+    </ol>
+    {planned && <p className="ladder-note">{t('stage.noPrevis')}<button type="button" className="quiet" onClick={onPlan}>{t('stage.planPrevis')}</button></p>}
+  </div>;
+}
 
 // SPEC_15 Shot Stage: the storyboard, the 3D stage and review are views of one shot list, not three stations.
 const cover = (parsed, row) => mediaStages(parsed, row).filter(stage => stage.media).find(stage => stage.type === 'image') || null;

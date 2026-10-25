@@ -13,7 +13,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 let temporary, components;
 before(async()=>{
   temporary=await mkdtemp(join(root,'tests/.story-render-'));
-  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette,spaceNote,SPACES,spaceOf,tabOfSpace} from './src/StudioShell.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
+  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette,SpaceMenu,spaceNote,spaceShortcuts,SPACES,spaceOf,tabOfSpace} from './src/StudioShell.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {BreakdownDialog} from './src/BreakdownDialog.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
   const output=join(temporary,'components.mjs');await writeFile(output,result.outputFiles[0].text);components=await import(pathToFileURL(output));
 });
 after(async()=>{if(temporary)await rm(temporary,{recursive:true,force:true});});
@@ -86,14 +86,71 @@ test('new count and usage labels interpolate in both interface languages',async(
   await setLocale('en');
 });
 
-test('Story & World keeps every Start Creating field on the page, defaults to Screenplay and has one amber action',()=>{
+test('Story & World keeps the script, the source modes and one primary action on the page; the build questions wait in a dialog',()=>{
   const html=render('StoryWorld',{epId:'ep_demo_02',writable:true});
-  for(const name of ['Scenes','Story','Script','Aspect Ratio','Style Preset','Idea / Logline','Novel / Story Chapter','Screenplay','Storyboard Density','World','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
+  for(const name of ['Scenes','Story','Script','Idea / Logline','Novel / Story Chapter','Screenplay','World','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
   assert.match(html,/aria-pressed="true"[^>]*>Screenplay/);
   assert.match(html,/accept="\.txt,\.md,text\/plain,text\/markdown"/);
-  for(const mode of ['auto','scene','cinematic']) assert.ok(html.includes(`value="${mode}"`));
+  for(const asked of ['Aspect Ratio','Style Preset','Storyboard Density','name="breakdown"','world-format"']) assert.ok(!html.includes(asked),asked+' is asked in the dialog, it no longer stands in the column');
   assert.equal((html.match(/class="primary/g)||[]).length,1,'one primary action');
+  assert.doesNotMatch(html,/role="dialog"/,'the dialog is closed until the action is pressed');
+  assert.match(html,/<button type="button" class="space-foot world-format-btn"[^>]*aria-label="Format and style: 16:9"/,'the foot of the left rail opens the same dialog');
   assert.match(render('StoryWorld',{epId:'ep_demo_02',writable:true,shots:[{shotId:'s1',sceneId:'sc1'}]}),/Update Storyboard &amp; Open Shot Stage/);
+  assert.doesNotMatch(render('StoryWorld',{epId:'ep_demo_02',writable:false}),/world-format-btn/,'a reader sees the format, not a way to change it');
+});
+
+const dialogProps=(extra={})=>({value:{breakdownMode:'auto',ratio:'16:9',style:'88123'},styles:[{stylePresetId:'88123',name:'Sci-Fi Noir',sampleImage:'/projects/assets/style-samples/sci-fi-noir.svg'},{stylePresetId:'88124',name:'Cel-Shaded'}],rebuild:true,shots:8,onConfirm(){},onCancel(){},onImport(){},...extra});
+const estimateOf=(auto,scene,cinematic)=>({status:'ready',modes:Object.fromEntries(Object.entries({auto,scene,cinematic}).map(([key,[shotCount,newShots,plannedSeconds]])=>[key,{breakdownMode:key,shotCount,newShots,keptShots:shotCount-newShots,plannedSeconds}]))});
+
+test('the build dialog asks how to split, the ratio and the style, has one primary action and a way to import a shot table',()=>{
+  const html=render('BreakdownDialog',dialogProps());
+  assert.match(html,/role="dialog" aria-modal="true" aria-label="Update storyboard"/);
+  const radio=value=>html.match(new RegExp(`<input[^>]*value="${value}"[^>]*>`))?.[0]||'';
+  for(const mode of ['auto','scene','cinematic']) assert.match(radio(mode),/type="radio"[^>]*name="breakdown"|name="breakdown"[^>]*type="radio"/,mode);
+  assert.match(radio('auto'),/checked=""/);assert.doesNotMatch(radio('scene'),/checked=""/);
+  for(const text of ['Storyboard Density','The script&#x27;s beats decide how many shots','The leanest cut, fewest shots','Aspect Ratio','Style Preset','Sci-Fi Noir','Cel-Shaded','Have your own shot table?','Import shot table','The 8 shots you have are kept']) assert.ok(html.includes(text),text);
+  assert.equal((html.match(/class="primary/g)||[]).length,1,'one primary action in the dialog');
+  assert.match(html,/<button type="submit" class="primary">Update Storyboard &amp; Open Shot Stage<\/button>/);
+  assert.match(html,/<img src="\/projects\/assets\/style-samples\/sci-fi-noir\.svg" alt="" loading="lazy"\/>/,'a style with a sample shows it');
+  assert.match(html,/<input[^>]*value="88124"[^>]*\/><span class="breakdown-nosample"/,'a style without a sample falls back to its name card');
+  assert.doesNotMatch(html,/Target length|planned|new<\/small>/,'no estimate until the server has answered');
+  assert.doesNotMatch(render('BreakdownDialog',dialogProps({onImport:undefined})),/Import shot table/);
+  const build=render('BreakdownDialog',dialogProps({rebuild:false,shots:0}));
+  assert.match(build,/aria-label="Build storyboard"/);assert.match(build,/>Confirm Script &amp; Build Storyboard<\/button>/);assert.doesNotMatch(build,/shots you have are kept/);
+  assert.match(render('BreakdownDialog',dialogProps({confirmDisabled:true})),/<button type="submit" class="primary" disabled="">/);
+});
+
+test('the dialog shows what each way of splitting would give, marks the one nearest the target, and fails soft',()=>{
+  const estimate=estimateOf([11,3,47],[8,0,35],[15,7,63]);
+  const html=render('BreakdownDialog',dialogProps({estimate,target:45,onTarget(){}}));
+  for(const text of ['11 shots · 47 s planned','8 shots · 35 s planned','15 shots · 63 s planned','3 new','0 new','7 new','Target length for this episode','Not set','45 s','90 s','Custom','Only marks the nearest way to split']) assert.ok(html.includes(text),text);
+  assert.equal((html.match(/Nearest to 45 s/g)||[]).length,1,'one way is marked');
+  assert.match(html,/Auto — follow story beats<em class="breakdown-nearest">Nearest to 45 s<\/em>/,'the mark sits on the way that lands nearest 45 s: 47 against 35 and 63');
+  assert.match(html,/aria-pressed="true">45 s<\/button>/,'the chosen target is pressed');
+  assert.match(html,/Planned seconds are the default plan for new shots plus the shots you have/);
+  const none=render('BreakdownDialog',dialogProps({estimate,onTarget(){}}));
+  assert.doesNotMatch(none,/Nearest to/,'no target, nothing marked');assert.match(none,/aria-pressed="true">Not set<\/button>/);
+  assert.match(render('BreakdownDialog',dialogProps({estimate:{status:'error'}})),/Couldn&#x27;t estimate\. You can still build\./);
+  assert.match(render('BreakdownDialog',dialogProps({estimate:{status:'error'}})),/<button type="submit" class="primary">/,'a failed estimate never blocks the build');
+  assert.match(render('BreakdownDialog',dialogProps({estimate:{status:'loading'}})),/Counting shots…/);
+});
+
+test('the space menu lists what each space needs as items of their own, never a button inside a button',()=>{
+  const counts={shots:8,review:2,missing:2,missingShots:1,filmed:6,scriptDirty:true};
+  const html=render('SpaceMenu',{space:'stage',counts,defaultOpen:true,onSpace(){}});
+  assert.match(html,/role="menu" aria-label="Creative spaces"/);
+  assert.deepEqual([...html.matchAll(/<button type="button" role="(menuitemradio|menuitem)"/g)].map(match=>match[1]),
+    ['menuitemradio','menuitem','menuitem','menuitemradio','menuitem','menuitem','menuitemradio','menuitem'],'each shortcut follows its space, as its own item');
+  for(const text of ['Script changed','2 missing images','2 to review','1 shots missing references','6 of 8 shots have a take']) assert.ok(html.includes(text),text);
+  assert.doesNotMatch(html,/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button/,'no button inside another button');
+  assert.doesNotMatch(html,/<small>/,'the notes are items now, not small print');
+  const calm=render('SpaceMenu',{space:'story',counts:{shots:8,filmed:8},defaultOpen:true,onSpace(){}});
+  assert.deepEqual([...calm.matchAll(/role="(menuitemradio|menuitem)"/g)].map(match=>match[1]),['menuitemradio','menuitemradio','menuitemradio','menuitem'],'nothing to fix: no shortcut, only the film so far');
+  assert.doesNotMatch(render('SpaceMenu',{space:'stage',counts}),/role="menuitem"/,'closed: nothing');
+  assert.deepEqual(components.spaceShortcuts('story',counts).map(item=>[item.id,item.target]),[['script',{view:'script'}],['missing',{view:'world',facet:'missing'}]]);
+  assert.deepEqual(components.spaceShortcuts('stage',counts).map(item=>[item.id,item.target]),[['review',{filter:'review'}],['missing',{filter:'missing'}]]);
+  assert.deepEqual(components.spaceShortcuts('stage',{shots:8}),[]);
+  assert.equal(components.spaceShortcuts('timeline',counts)[0].target,null,'the film is a status, there is nowhere to filter to');
 });
 
 test('adapting preserves the original source and screenplay edits while a changed source requires a fresh adaptation',async()=>{

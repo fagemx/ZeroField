@@ -22,6 +22,7 @@ import { AssetVaultModal, OpenApiModal, ToolboxModal } from "./StoryWorkbenchMod
 import { FlowSurface, SheetSurface } from "./CanvasViews.jsx";
 import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { AssistantSide, AssistantWorkspace } from "./assistant/AssistantViews.jsx";
+import { quickActions } from "./assistant/quickActions.js";
 import { appliedLabel, assistRows, waitingCount } from "./assistant/text.js";
 import { useAssistant } from "./assistant/useAssistant.js";
 import { assignmentRequest } from './assistant/orchestrationModel.js';
@@ -114,6 +115,10 @@ function ProjectPage({ slug }) {
   const [layout, setLayout] = usePref("studio.layout", { left: true, bottom: true, right: true });
   const [focus, setFocusState] = useState({ sceneId: null, shotRid: null, assetCode: null });
   const setFocus = useCallback((patch) => setFocusState((current) => ({ ...current, ...patch })), []);
+  // SPEC_18 R6: a shortcut in the space menu names a view and a filter; the space takes it once on arrival and clears it.
+  const [intent, setIntent] = useState(null);
+  const clearIntent = useCallback(() => setIntent(null), []);
+  const railControl = useRef(null);
   const landing = useRef(null); // a scene whose shots the next Shot Stage / Timeline visit should land on
   const versionsShown = useCallback(() => setVersionsFor(null), []);
   const annSeq = useRef(0);
@@ -599,6 +604,9 @@ function ProjectPage({ slug }) {
     shot: focusedShot ? String(focusedShot.shotIndex) : "",
   } : {};
   const panels = !isStudio ? [] : timelineView ? ["left", "bottom", "right"] : tabKey === STORY_VIEW || tabKey === STAGE_TAB ? ["left", "right"] : [];
+  // SPEC_18 R11: the crew's suggestions follow where you are (space and view) and what you hold (scene, card, shot).
+  const quick = isStudio ? quickActions({ space, view: focus.view, scene: focusedScene ? { index: String(focusedScene.sceneIndex).padStart(2, "0"), title: focusedScene.title } : null,
+    asset: focus.assetCode ? { code: focus.assetCode, name: focus.assetName } : null, shot: focusedShot ? { index: String(focusedShot.shotIndex) } : null }) : [];
   const toggleLayout = (key) => setLayout({ ...layout, [key]: layout[key] === false });
   const reloadAll = async () => { episode.reload(); await loadProject(); if (tabKey && !VIRTUAL_TABS.includes(tabKey)) await loadTab(tabKey, true); };
   const assistantButton = paEnabled && (
@@ -634,7 +642,7 @@ function ProjectPage({ slug }) {
         onEpisode={async (next) => { if (await flushSurface()) setStoryEpisode(next); }}
         space={space} pageTitle={!storyView && !timelineView && tab && tabKey !== STAGE_TAB ? tab.title : ""} crumbs={crumbs} counts={counts}
         panels={panels} layout={layout} onLayout={toggleLayout}
-        onSpace={(next) => navigate(tabOfSpace(next))} onCommand={() => setPalette(true)}
+        onSpace={(next, target) => { setIntent(target ? { ...target, space: next, nonce: Date.now() } : null); navigate(tabOfSpace(next)); }} onCommand={() => setPalette(true)}
         assistant={<>{todo > 0 && <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={uiText("app.annotationsNeedsYouAndAll")}
           onClick={() => { setPanel(!panel); setHistoryOpen(false); if (!panel && paMode === "side") setPaMode("off"); }}><NoteIcon /><span className="count">{todo}</span></button>}
           {tab?.surface_type === "doc" && !storyView && <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title={uiText("app.chooseWhichHighlightsAndUnderlinesToShow")}
@@ -683,7 +691,7 @@ function ProjectPage({ slug }) {
         version={tab ? tab.updated_at : ""} onPick={pickChange} onReverted={onReverted} flush={flushSurface}
         onClose={closeHistory} onError={onError} onToast={showToast} />
       <div className="layout">
-        <TabRail slug={slug} tabs={tabs} me={me} tabKey={tabKey} openCount={openCount} onNavigate={navigate}
+        <TabRail slug={slug} tabs={tabs} me={me} tabKey={tabKey} openCount={openCount} onNavigate={navigate} controlRef={railControl}
           onTabsChanged={(next) => setData((current) => ({ ...current, tabs: next }))}
           flush={async () => (surfaceControl.current ? surfaceControl.current.flush() : true)}
           onRenamed={(key) => { if (key === tabKey) loadTab(key, true); }}
@@ -692,7 +700,8 @@ function ProjectPage({ slug }) {
         <main className="main">
           <div className="doc-host">
           {storyView && <StoryWorld epId={storyEpisode} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
-            focus={focus} onFocus={setFocus} onChanged={reloadAll} onStage={() => goStage()} onOpenShot={openShot} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")} />}
+            focus={focus} onFocus={setFocus} onChanged={reloadAll} onStage={() => goStage()} onOpenShot={openShot} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")}
+            intent={intent} onIntentDone={clearIntent} onImportTable={() => railControl.current?.updatePage(tabs.find((item) => item.key === STAGE_TAB))} />}
           {timelineView && <Timeline epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} focusRid={focus.shotRid}
             onFocus={focusShot} onChanged={episode.reload} />}
           {!tab && !storyView && !timelineView && <div className="center-note">{uiText("app.loading")}</div>}
@@ -709,6 +718,7 @@ function ProjectPage({ slug }) {
               focusRow={sheetFocus}
               storyEpisode={storyEpisode}
               onOpenWorld={isStudio ? openWorld : undefined}
+              intent={isStudio ? intent : undefined} onIntentDone={clearIntent}
               shotFocus={isStudio ? focus.shotRid : undefined} onShotFocus={isStudio ? focusShot : undefined}
               proposals={isStudio ? assistant.state?.proposals || [] : undefined} onApplyProposal={assistant.apply} onDismissProposal={assistant.dismiss} onReloadProposals={assistant.reload}
               onFilm={isStudio ? () => setFilmOpen(true) : undefined}
@@ -771,7 +781,7 @@ function ProjectPage({ slug }) {
           {paEnabled && paMode === "full" && (
             <AssistantWorkspace assistant={assistant} me={me} tabs={tabs} slug={slug} focus={paFocus} onFocus={setPaFocus}
               draft={paDraft} onDraft={setPaDraft} inputRef={paInput} view={paView} onView={setPaView}
-              onCollapse={() => setPaMode(narrow() ? "off" : "side")} onOpenTab={openFromAssistant} onStarter={starter}
+              onCollapse={() => setPaMode(narrow() ? "off" : "side")} onOpenTab={openFromAssistant} onStarter={starter} quick={quick}
               onError={onError} onToast={showToast} onConsole={openConsole} />
           )}
         </main>
@@ -779,7 +789,7 @@ function ProjectPage({ slug }) {
       {paEnabled && paMode === "side" && (
         <AssistantSide assistant={assistant} me={me} tabs={tabs} slug={slug} focus={paFocus} draft={paDraft}
           onDraft={setPaDraft} inputRef={paInput} view={paView} onView={setPaView} onExpand={() => setPaMode("full")}
-          onClose={() => setPaMode("off")} onConsole={openConsole} onOpenTab={openFromAssistant} onStarter={starter} onError={onError} onToast={showToast} />
+          onClose={() => setPaMode("off")} onConsole={openConsole} onOpenTab={openFromAssistant} onStarter={starter} quick={quick} onError={onError} onToast={showToast} />
       )}
       {railOpen && <div className="rail-scrim" onClick={() => setRailOpen(false)} />}
       {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="Dark Fantasy sample: violet dusk with black spires and a pale moon">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f1530"/><stop offset=".6" stop-color="#4a2f3b"/><stop offset="1" stop-color="#7a5a3a"/></linearGradient></defs>
+  <rect width="320" height="180" fill="url(#sky)"/>
+  <circle cx="248" cy="46" r="20" fill="#e9dfd2" opacity=".9"/><circle cx="256" cy="42" r="18" fill="#2c1d40" opacity=".55"/>
+  <path d="M0 150 L36 96 L58 130 L92 70 L120 126 L150 88 L184 140 L222 82 L262 134 L296 100 L320 130 V180 H0 Z" fill="#150f1d"/>
+  <path d="M92 70 L96 40 L100 70 Z M222 82 L226 52 L230 82 Z M150 88 L153 62 L156 88 Z" fill="#150f1d"/>
+  <path d="M0 160 L320 152 V180 H0 Z" fill="#0b0810"/>
+</svg>

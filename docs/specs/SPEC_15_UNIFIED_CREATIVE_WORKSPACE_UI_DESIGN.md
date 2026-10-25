@@ -159,6 +159,7 @@
 | 3D 片場的「拖」：俯視圖拖演員站位（走位跟著搬）與機位關鍵幀 K1–Kn，吸附 0.1 m；底部節拍軌（機位關鍵幀與動作節拍，拖方塊移動、拖右緣改長度，節拍不互推）；「運鏡」摺疊區用範圍滑桿、時間碼與曲線調起訖與緩動 | `previs/blocking.js`、`PlanHandles.jsx`、`BeatTrack.jsx`、`CameraMove.jsx`、`previs/plan.js`（`motionBeats`、`plan.easing`） |
 | 角色與場景是故事與世界的第二個檢視，不再跳去 Soul Cast 表：左欄切換「按場次｜角色與場景」；角色與場景檢視左邊依類型篩選（全部、角色、場景、道具、缺參考圖），中間是大卡牆（參考圖、狀態、出現幾鏡、外觀設定），右邊檢視當前卡片（大圖可放大、造型縮圖列、外觀／聲音／備註、出現的鏡頭縮圖可直接開那一鏡、生成、上傳、編輯、新增）；看劇本時右欄是同一批設定的快速清單，點一張就開到牆上。檢視與選到的卡片在這個分頁記住，從表格回來仍在原處 | `WorldWall.jsx`、`worldModel.js`、`world.css`、`StoryWorld.jsx`；後端 `asset_view` 多回 `voice`、`status`、`notes`；上傳走 `POST /files` → `POST /assets/{id}/images` → `PUT /assets/{id}/selected-image`（`storyModel.js` 的 `storyUpload`，圖片 8 MB 內） |
 | 從空間開出去的頁面（角色表、導演簡報、實驗室頁）沒有分頁可離開，麵包屑出現「← 返回」回到所屬空間；不屬於任何空間的頁面回分鏡片場 | `StudioShell.jsx`（`StudioTopBar` 的 `studio-back`） |
+| 角色與場景、鏡頭詳情與更新分鏡的改版（SPEC_18 包 A、B）：背景生成（卡片上生成中、取消、重試，可多張同時，重新整理後接續）、場次篩選、空間選單捷徑、預演→首幀→影片階梯、鏡頭「出場」區塊與 `@代碼` 標籤（改的只有那個代碼，走表格的儲存格提交）、更新分鏡對話框（拆法、比例、畫風樣張、目標長度與預估鏡數、匯入分鏡表）、生成列（工作流程、比例與解析度、實測時間或「時間未知」、Router 報價）、選卡片在右側大面板開啟編輯區（不是窄側欄）、外觀屬性、造型與聲音／狀態／備註就地編輯、依位置換的劇組快捷動作 | `StoryWorld.jsx`、`WorldWall.jsx`、`AssetEditor.jsx`、`BreakdownDialog.jsx`、`breakdownModel.js`、`generation/`、`AppearanceForm.jsx`、`appearanceModel.js`、`bindingModel.js`、`ShotBindings.jsx`、`ShotStage.jsx`（`MediaLadder`）、`studioModel.js`（`mediaLadder`）、`StudioShell.jsx`（`spaceShortcuts`）、`assistant/quickActions.js`；後端 `story_generation_options.py`、`story_estimates.py`、`story_asset_edit.py`；驗證見 `docs/spec18-verification.json` |
 
 **仍未實作**：
 1. 在片場或節奏台改台詞後寫回劇本那一行：對應目前靠「第 i 段 ↔ 該場第 i 個鏡頭」與提示詞比對重建，唯讀；要寫回需要 SPEC_16 的 `beatKey`。
@@ -166,4 +167,4 @@
 3. 時間軸的「剪斷」（razor）：把一鏡切開會產生新鏡頭與新素材，不是剪輯動作。
 4. 節奏提案不是 AI 提案：節奏台的「偏長」提示是本機規則（比全集平均長 20% 以上且多出至少 0.5 秒）。
 5. 節拍軌只能編輯「走入」與帶 `plan.use` 動作技能的鏡頭；內建的轉身伸手（`turnreach`）、站立固定時間，只顯示機位關鍵幀。多點樣條與新增節拍類型未做。
-6. 角色與場景檢視只顯示造型縮圖；造型（服裝、姿勢）的新增、改名與刪除仍在素材庫對話框，聲音與備註要到表格編輯（`PATCH /assets/{id}` 只收名稱與外觀）。
+6. 造型的新增、改名、刪除，以及聲音、狀態、備註的編輯，已在角色與場景檢視裡完成（SPEC_18 R12）；角色三視圖、聲音音訊與新專案入口（SPEC_18 包 C）、鏡頭詳情的生成列（SPEC_18 R8 的鏡頭部分，等待它的待決 3）還沒做。

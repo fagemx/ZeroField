@@ -1,4 +1,4 @@
-/* Story & World, "Cast & sets": the wall (main), its type filters (left), the inspector (right) and the quick list beside the script.
+/* Story & World, "Cast & sets": the wall (main), its type filters (left), the editor (right) and the quick list beside the script.
    Buttons carry .workbench-app.studio-shell (two classes on one element) because studio.css and workbench.css load after this file. */
 
 /* ---------- Left rail: type filters ---------- */
@@ -65,7 +65,7 @@
 .world-asset-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; }
 .world-asset-meta em { font-style: normal; color: #f0728a; font-size: 11.5px; }
 
-/* ---------- Right column on the wall: the inspector ---------- */
+/* ---------- Right pane on the wall: the editor's parts and the summary (the editor's layout is at the end of this file) ---------- */
 .world-inspector { display: grid; gap: 16px; align-content: start; }
 .world-hero { position: relative; display: grid; height: 300px; margin: 0; overflow: hidden; border-radius: 10px; background: var(--ground); }
 .world-hero.is-wide { height: auto; aspect-ratio: 16 / 9; }
@@ -78,8 +78,8 @@
 .world-looks button[aria-pressed="true"] img, .world-looks button[aria-pressed="true"] .world-blank { outline: 2px solid var(--accent); outline-offset: 1px; }
 .world-looks button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .world-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-.world-title > div { flex: 1 1 140px; min-width: 0; display: grid; }
-.world-title h2 { margin: 0; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.world-title > div { flex: 0 1 auto; min-width: 0; display: grid; }
+.world-title h2 { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .world-title small { color: var(--faint); font: 500 12px ui-monospace, Consolas, monospace; }
 .world-type { padding: 1px 9px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--muted); font-size: 11.5px; line-height: 18px; }
 .world-fields { display: grid; gap: 14px; margin: 0; }
@@ -101,7 +101,7 @@
 .world-lightbox img { display: block; max-width: min(94vw, 1400px); max-height: 92dvh; border-radius: 8px; object-fit: contain; }
 .world-lightbox .icon-btn { position: absolute; right: 16px; top: 16px; }
 
-/* The inspector scrolls inside its panel; the one amber action stays under it, always reachable. */
+/* The pane scrolls inside its panel; the one primary action stays under it, always reachable. */
 .studio-shell .story-world .space-detail { overflow: hidden; padding-bottom: 16px; }
 .space-detail-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; margin-right: -8px; padding-right: 8px; overflow: auto; }
 .studio-shell .story-world .space-detail > .studio-primary { flex: none; }
@@ -113,3 +113,154 @@
 .workbench-app.studio-shell .world-tool { border: 1px solid var(--line-2); background: transparent; color: var(--muted); }
 .workbench-app.studio-shell .world-act:hover:not(:disabled), .workbench-app.studio-shell .world-tool:hover:not(:disabled) { background: var(--active); color: var(--text); }
 .workbench-app.studio-shell .world-act:disabled { opacity: .45; cursor: default; }
+
+/* ---------- SPEC_18 R1: a picture in the making ---------- */
+.world-cards > li { position: relative; }
+.world-art.is-busy img { opacity: .38; }
+.world-spin { animation: world-spin 1.1s linear infinite; }
+@keyframes world-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .world-spin { animation: none; } }
+.world-run { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 2px 6px; max-width: calc(100% - 16px); padding: 2px 9px; border-radius: 6px;
+  background: rgba(14, 18, 23, .88); color: var(--text); font-size: 11.5px; line-height: 18px; }
+.world-run small { flex-basis: 100%; overflow: hidden; color: var(--muted); font-size: 11px; line-height: 1.4; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.world-run.is-failed { color: #f0728a; }
+.world-art .world-run, .world-hero > .world-run { position: absolute; left: 50%; transform: translateX(-50%); }
+.world-art .world-run.is-active, .world-hero > .world-run.is-active { top: 50%; transform: translate(-50%, -50%); }
+.world-art .world-run.is-failed, .world-art .world-run.is-canceled, .world-hero > .world-run.is-failed, .world-hero > .world-run.is-canceled { bottom: 8px; }
+.world-hero.is-busy img { opacity: .38; }
+.has-btn .world-uses { display: none; }  /* the corner belongs to cancel / retry while there is one */
+.workbench-app.studio-shell .world-run-btn { position: absolute; right: 8px; top: 8px; z-index: 2; height: 24px; padding: 0 9px; border: 1px solid var(--control); border-radius: 6px;
+  background: rgba(14, 18, 23, .88); color: var(--text); font-size: 11.5px; line-height: 1; cursor: pointer; }
+.workbench-app.studio-shell .world-run-btn:hover { background: var(--active); }
+
+/* ---------- SPEC_18 R5: scene filter above the wall ---------- */
+.world-scene-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; color: var(--faint); font-size: 12px; }
+
+/* ---------- SPEC_18 R7: the format and style tile at the foot of the left rail, and the dialog it shares with the primary action ---------- */
+.workbench-app.studio-shell .world-format-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: calc(100% - 12px); margin: auto 6px 0; padding: 8px 10px;
+  border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-2); color: var(--muted); font-size: 12.5px; text-align: left; cursor: pointer; }
+.workbench-app.studio-shell .world-format-btn:hover { border-color: var(--control); color: var(--text); }
+/* The title and the two buttons stay put; only the choices between them scroll, so Confirm is never below the fold. */
+.modal.breakdown-dialog { display: flex; flex-direction: column; width: min(640px, 94vw); max-height: 92dvh; overflow: hidden; }
+.breakdown-body { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0 -22px; padding: 0 22px 4px; }
+.breakdown-dialog .modal-actions { flex: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.breakdown-dialog fieldset { min-width: 0; margin: 0 0 14px; padding: 0; border: 0; }
+.breakdown-dialog legend { padding: 0 0 6px; color: var(--faint); font-size: 12px; }
+.breakdown-keep { margin: 0 0 12px; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.breakdown-modes { display: grid; gap: 6px; }
+.breakdown-modes > label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); cursor: pointer; }
+.breakdown-modes > label.is-on { border-color: var(--accent); background: var(--active); box-shadow: 0 0 0 1px var(--accent); }
+.breakdown-mode-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.breakdown-mode-text b { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13.5px; font-weight: 600; }
+.breakdown-mode-text small { color: var(--muted); font-size: 12px; }
+.breakdown-nearest { padding: 1px 7px; border-radius: 5px; background: var(--accent-bg); color: #f5b656; font-size: 11.5px; font-style: normal; font-weight: 500; }
+.breakdown-estimate { display: grid; gap: 2px; justify-items: end; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.breakdown-estimate small { color: var(--muted); font-size: 12px; }
+.breakdown-target { display: grid; gap: 8px; justify-items: start; }
+.breakdown-custom { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+.breakdown-custom input { width: 84px; }
+.breakdown-format { display: grid; gap: 12px; margin-bottom: 14px; }
+.breakdown-styles > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.breakdown-styles label { position: relative; display: grid; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); color: var(--muted); font-size: 12px; cursor: pointer; }
+.breakdown-styles label.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--text); }
+.breakdown-styles label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.breakdown-styles input { position: absolute; opacity: 0; pointer-events: none; }
+.breakdown-styles img, .breakdown-nosample { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 5px; object-fit: cover; background: var(--bg-2); }
+.breakdown-import { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: 8px; }
+.breakdown-import > span { display: grid; gap: 2px; font-size: 13px; }
+.breakdown-import small { color: var(--faint); font-size: 11.5px; }
+
+/* ---------- SPEC_18 R8: the generation bar ---------- */
+.gen-bar { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-2); }
+.gen-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.gen-fields label { display: grid; gap: 3px; min-width: 0; color: var(--faint); font-size: 11px; }
+.gen-fields select { min-width: 0; max-width: 100%; height: 28px; font-size: 12px; }
+.gen-style, .gen-cost { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.gen-cost { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.gen-cost b { color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+.gen-cost small, .gen-unknown { color: var(--faint); font-size: 11.5px; }
+.gen-error { margin: 0; color: #f0728a; font-size: 12px; line-height: 1.5; }
+.gen-bar .world-actions { margin: 0; }
+
+/* ---------- SPEC_18 R9: appearance as tags ---------- */
+.attr-form { display: grid; gap: 12px; }
+.attr-group { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.attr-group legend { padding: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.attr-field { display: grid; gap: 4px; }
+.attr-label, .attr-text { color: var(--faint); font-size: 11.5px; }
+.attr-text { display: grid; gap: 4px; }
+.attr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.workbench-app.studio-shell .attr-chip { height: 26px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.workbench-app.studio-shell .attr-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--active); box-shadow: inset 0 0 0 .5px var(--accent); color: var(--text); }
+.attr-swatches { display: flex; flex-wrap: wrap; gap: 10px; padding: 2px; }
+.workbench-app.studio-shell .attr-swatch { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; cursor: pointer; }
+.workbench-app.studio-shell .attr-swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.attr-preview { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--active); color: var(--text); font-size: 12.5px; line-height: 1.6; }
+.attr-ask { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--control); border-radius: 8px; background: var(--bg-2); }
+.attr-ask p { margin: 0; color: var(--text); font-size: 12.5px; line-height: 1.6; }
+
+/* ---------- SPEC_18 R12: looks and short fields edited where they stand ---------- */
+.world-look-tools { display: grid; gap: 8px; }
+.world-look-delete { display: grid; gap: 6px; padding: 10px 12px; border: 1px dashed var(--control); border-radius: 8px; background: var(--bg-2); font-size: 12.5px; }
+.world-look-delete p { margin: 0; color: var(--muted); line-height: 1.55; }
+.workbench-app.studio-shell .world-act.is-danger { border-color: rgba(229, 86, 111, .55); color: #f0728a; }
+.world-fields > div { position: relative; }
+.workbench-app.studio-shell .world-field-edit { position: absolute; right: 0; top: 0; width: 24px; height: 24px; padding: 0; color: var(--faint); }
+.world-inline-edit dd { display: grid; gap: 6px; }
+.world-inline-edit dd .world-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.world-fields select { height: 28px; font-size: 12.5px; }
+.world-lookbadge { position: absolute; left: 8px; bottom: 8px; padding: 1px 8px; border-radius: 6px; background: rgba(14, 18, 23, .88); color: #f5b656; font-size: 11.5px; line-height: 18px; }
+.world-format-btn .world-format-thumb { flex: none; width: 36px; height: 20px; border-radius: 4px; object-fit: cover; }
+.world-format-btn > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.world-art.is-busy .world-art-empty { color: transparent; }  /* "no picture yet" must not talk over "generating" */
+.world-art.is-busy .world-art-empty .ico { opacity: 0; }
+
+/* ---------- SPEC_18 R12 (revised): the card you pick opens in the large pane ---------- */
+/* Nothing opens by itself, so the wall is the whole view until you pick a card. Then the right pane grows to about three fifths of the width,
+   the wall keeps the rest as a compact picker, and x gives the view back. Below 1100px the shell stacks its panels and none of this applies. */
+@media (min-width: 1101px) {
+  .studio-shell .studio-space.story-world.is-editing { grid-template-columns: 240px minmax(300px, 2fr) minmax(500px, 3fr); }
+  .studio-shell.hide-left .studio-space.story-world.is-editing { grid-template-columns: minmax(300px, 2fr) minmax(500px, 3fr); }
+  .studio-shell.hide-right .studio-space.story-world.is-editing { grid-template-columns: 240px minmax(0, 1fr); }
+  .studio-shell.hide-left.hide-right .studio-space.story-world.is-editing { grid-template-columns: minmax(0, 1fr); }
+}
+.story-world.is-editing .world-wall { gap: 20px; }
+.story-world.is-editing .world-cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.story-world.is-editing .world-cards.is-wide { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.story-world.is-editing .world-desc { display: none; }
+.story-world.is-editing .world-card-text { padding: 8px 10px 10px; }
+.story-world.is-editing .space-detail { padding: 14px 18px 16px; }
+.story-world.is-editing .space-detail-body { margin: 0; padding: 0; overflow: hidden; }
+.studio-shell .story-world.is-editing .space-detail > .studio-primary { align-self: flex-end; width: auto; min-width: 280px; padding: 0 24px; }
+
+/* The editor: a title row, then the picture side (picture, looks, what makes it again) and the information side. The box is the size container
+   the layout asks about; the lightbox sits outside it, because a container would become the box a fixed overlay is measured against. */
+.world-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.world-editor > .world-title { flex: none; }
+.world-title .spacer { flex: 1 1 0; }
+.world-editor-box { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; container-type: inline-size; }
+.world-editor-body { flex: 1 1 auto; min-height: 0; display: grid; gap: 18px; align-content: start; overflow: auto; }
+.world-stage, .world-info { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.world-info > .studio-segmented { align-self: flex-start; }
+.world-editor .world-hero { flex: none; height: clamp(240px, 36dvh, 420px); box-shadow: inset 0 0 0 1px var(--line); }
+.world-editor .world-hero.is-wide { height: auto; aspect-ratio: 16 / 9; max-height: 50dvh; }
+.world-editor .world-zoom img { object-fit: contain; object-position: 50% 50%; }
+.world-editor .world-fields dd { font-size: 14px; line-height: 1.7; }
+/* a field's pencil sits beside its label, not at the far edge of a shared row */
+.world-editor .world-fields > div { grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; }
+.world-editor .world-fields > div > dt { grid-column: 1; grid-row: 1; }
+.world-editor .world-fields > div > dd { grid-column: 1 / -1; grid-row: 2; }
+.workbench-app.studio-shell .world-editor .world-field-edit { position: static; grid-column: 2; grid-row: 1; justify-self: start; width: 22px; height: 22px; }
+.world-editor .gen-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.world-editor .gen-bar > .gen-fields, .world-editor .gen-bar > .gen-error { flex: 1 1 100%; }
+.world-editor .gen-bar > .world-actions { margin-left: auto; }
+@container (min-width: 520px) {
+  .world-editor .world-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; }
+  .world-editor .world-fields > .is-appearance, .world-editor .world-fields > .is-long, .world-editor .world-fields > .world-edit-btn { grid-column: 1 / -1; }
+}
+@container (min-width: 760px) {
+  .world-editor-body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-content: stretch; overflow: hidden; }
+  .world-stage, .world-info { min-height: 0; overflow: auto; }
+  .world-editor .world-hero, .world-editor .world-hero.is-wide { flex: 1 1 auto; height: auto; min-height: 240px; aspect-ratio: auto; max-height: none; }
+  .world-stage > :not(.world-hero) { flex: none; }
+}

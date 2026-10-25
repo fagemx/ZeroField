@@ -18,7 +18,7 @@ import { Icon } from "./Icon.jsx";
 const SURFACE_ICON = { doc: "doc", sheet: "table", flow: "flow", board: "board" };
 
 export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsChanged, flush, onRenamed, onVersions,
-  onError, onToast }) {
+  onError, onToast, controlRef }) {
   const locale = useLocale();
   const admin = Boolean(me.can_edit);
   const [menu, setMenu] = useState(null); // { key, rect }
@@ -41,6 +41,13 @@ export function TabRail({ slug, tabs, me, tabKey, openCount, onNavigate, onTabsC
       } catch (error) { onError(error.message); }
     }
   };
+  // The studio shell reuses this import flow for "Import a shot table" (SPEC_18 R7): pick a file, then the same review as "Update page from file".
+  useEffect(() => {
+    if (!controlRef) return undefined;
+    const control = { updatePage: (target) => { if (!target) return; replacementTarget.current = target; replacementInput.current?.click(); } };
+    controlRef.current = control;
+    return () => { if (controlRef.current === control) controlRef.current = null; };
+  }, [controlRef]);
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeDialog = useCallback(() => setDialog(null), []);
   // 選單畫在 body 底下（左邊清單是 sticky，自成一層，畫在裡面會被內文蓋住）；點清單和選單以外的地方就關掉

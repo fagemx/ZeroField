@@ -42,9 +42,14 @@ ALIASES = {"H3_SHORT_VIDEO_V3": "h3-short-video-v3", "H3_REF2VA_PASS1": "h3-refe
            "LTX25_OPENJUTSU_V2V": "ltx25-openjutsu", "LTX25_CINEMA_SHOT": "ltx25-cinema",
            "FLUX3_SOUL_CAST": "flux-soul-cast", "NANO_PRO_G2_I2I_OFFICIAL": "flux-soul-cast",
            "LOCAL_SDXL_SMOKE": "local-smoke"}
-STYLES = [{"stylePresetId": str(88123 + i), "name": name} for i, name in enumerate([
-    "Sci-Fi Noir Anamorphic", "Cel-Shaded Anime Drama", "Dark Fantasy Concept", "High-Contrast Neo-Noir"])]
+# (name, sample slug): the samples ship with the UI build, served from static/projects/assets/style-samples/<slug>.svg
+STYLE_SAMPLES = [("Sci-Fi Noir Anamorphic", "sci-fi-noir"), ("Cel-Shaded Anime Drama", "cel-shaded-anime"),
+                 ("Dark Fantasy Concept", "dark-fantasy"), ("High-Contrast Neo-Noir", "neo-noir")]
+STYLES = [{"stylePresetId": str(88123 + i), "name": name, "sampleImage": f"/projects/assets/style-samples/{slug}.svg"}
+          for i, (name, slug) in enumerate(STYLE_SAMPLES)]
 RATIOS = ["16:9", "9:16", "1:1", "21:9"]
+USAGE_SCOPES = ("CHARACTER", "SCENE_PROP", "SCENE_PROP_EDIT", "FREE_CREATION_T2I", "FREE_CREATION_I2I")
+LOOK_KINDS = ("OUTFIT", "POSE", "LOOK")
 ASSET_RE = re.compile(r"@?\b((?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?)\b", re.I)
 _POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="story")
 _PROCESS = uuid.uuid4().hex
@@ -188,12 +193,15 @@ def scene_sections(content):
     return scenes or ([{"title": "Scene 01", "content": content}] if content.strip() else [])
 
 
-def scenes(conn, ep):
+def scenes_of_doc(ep, doc):
     # Preserve paragraph boundaries for shot beats without changing script hashes or API text.
-    tab = repo.get_tab(conn, ep["slug"], ep["tabKey"])
-    content = "\n\n".join(doc_text({"content": [node]}) for node in tab["doc"].get("content", []))
+    content = "\n\n".join(doc_text({"content": [node]}) for node in doc.get("content", []))
     return [{**item, "sceneId": f"sc_{ep['slug']}_{ep['episodeIndex']:02d}_S{i:02d}",
              "episodeId": ep["episodeId"], "sceneIndex": i} for i, item in enumerate(scene_sections(content), 1)]
+
+
+def scenes(conn, ep):
+    return scenes_of_doc(ep, repo.get_tab(conn, ep["slug"], ep["tabKey"])["doc"])
 
 
 def choice_traces(conn, ep):
@@ -240,12 +248,16 @@ def save_doc(conn, me, slug, key, doc):
     service.reanchor_tab(conn, slug, key, doc, actor_id=me.actor_id)
 
 
+def script_doc(slug, content):
+    """The document a saved script becomes (what scenes and storyboard builds read back); nothing is written."""
+    doc, _ = markdown_import.markdown_to_doc(screenplay_markdown(content), tab_keys=set(), image_src=lambda _: None)
+    return validate_doc(doc, slug=slug)[0]
+
+
 def set_script(conn, me, ep, content):
     if not content.strip():
         raise StoryError(422, "DRAMA_SCRIPT_INVALID", "The script cannot be empty.")
-    doc, _ = markdown_import.markdown_to_doc(screenplay_markdown(content), tab_keys=set(), image_src=lambda _: None)
-    doc, _ = validate_doc(doc, slug=ep["slug"])
-    save_doc(conn, me, ep["slug"], ep["tabKey"], doc)
+    save_doc(conn, me, ep["slug"], ep["tabKey"], script_doc(ep["slug"], content))
     store(conn, ep["episodeId"], "episode", ep, ep["slug"])
     return episode_view(conn, ep)
 
@@ -315,11 +327,17 @@ def media_column(row, kind):
     return index
 
 
+def look_kind(cells):
+    """OUTFIT/POSE/LOOK of a look-variant row (CAST-01:night); a look keeps its kind in the notes cell, so that cell is not free text."""
+    note = cells[6] if len(cells) > 6 else ""
+    return note if ":" in asset_code(cells[0]) and note in LOOK_KINDS else None
+
+
 def asset_view(slug, row):
     cells = row["cells"]
     code = cells[0].lstrip("@").upper().replace("#", ":")
     note = cells[6] if len(cells) > 6 else ""
-    kind = note if ":" in code and note in ("OUTFIT", "POSE", "LOOK") else None  # a look keeps its kind in the notes cell
+    kind = look_kind(cells)
     return {"assetId": asset_id(slug, row), "assetCode": code, "name": cells[1], "prompt": cells[2],
             "type": "CHARACTER" if code.startswith("CAST") else "PROP" if code.startswith("PROP") else "SCENE",
             "isDefault": ":" not in code, "kind": kind,
@@ -488,34 +506,34 @@ def extract(conn, me, ep):
 
 
 def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
+    from project_docs import story_estimates as planner  # the estimate asks the same planner what this build would do
     mode = ep.get("breakdownMode", ep.get("settings", {}).get("breakdownMode", "auto")) if breakdown_mode is None else breakdown_mode
     if not isinstance(mode, str) or mode not in BREAKDOWN_MODES:
         invalid("Unknown breakdownMode.")
     repo.get_tab_for_update(conn, ep["slug"], ep["tabKey"])
-    if ep.get("confirmedHash") != digest(script(conn, ep)) or not scenes(conn, ep):
+    scene_list = scenes(conn, ep)
+    if ep.get("confirmedHash") != digest(script(conn, ep)) or not scene_list:
         raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before building storyboards.")
     previous = shots(conn, ep)
     medium = script_medium_lens(script(conn, ep))  # a composed script carries its Lens line
-    plans = [(scene, scene_shot_beats(scene["content"], mode) or [scene["title"]]) for scene in scenes(conn, ep)
-             if not only_scene or scene["sceneId"] == only_scene]
-    if sum(len(beats) for _, beats in plans) > 200:
+    plans = planner.beat_plans(scene_list, mode, only_scene)
+    if sum(len(beats) for _, beats in plans) > planner.MAX_BUILD_SHOTS:
         invalid("A storyboard build supports at most 200 shots; split the script into episodes.")
     created = []
     for scene, beats in plans:
-        matches = [s for s in previous if s.get("sceneId") == scene["sceneId"] and s["tabKey"] == "cinema-studio"]
+        steps, surplus = planner.scene_steps(scene, beats, previous, rebuild=bool(only_scene))
         scene_refs = [asset_code(m[1]) for m in ASSET_RE.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-"))]
         scene_refs = list(dict.fromkeys(scene_refs)) or [f"SET-{scene['sceneIndex']:02d}"]
         cast = {a["name"].casefold(): a["assetCode"] for a in assets(conn, ep) if a["type"] == "CHARACTER" and a["isDefault"]}
-        for index, beat in enumerate(beats):
-            if index < len(matches) and not only_scene:
-                created.append(matches[index])
+        for action, index, beat, previous_shot in steps:
+            if action == "keep":
+                created.append(previous_shot)
                 continue  # A normal build fills missing beats; existing director edits stay authoritative.
             grammar = infer_shot_grammar(beat, index, len(beats), medium)
             refs = scene_refs + [code for name, code in cast.items() if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", beat, re.I)]
             prompt = beat + " " + " ".join("@" + c for c in dict.fromkeys(refs) if c not in {asset_code(m[1]) for m in ASSET_RE.finditer(beat)})
             cells = {0: f"SC{scene['sceneIndex']:02d}-S{index + 1:02d}", 1: grammar["opticalRig"], 2: grammar["cameraMotion"], 3: prompt[:10000]}
-            if index < len(matches):
-                previous_shot = matches[index]
+            if action == "rewrite":
                 # Explicit narrative rebuilds retain the established label, optics and media.
                 rid = mutate_row(conn, me, ep["slug"], previous_shot["tabKey"], previous_shot["rowId"], {3: prompt[:10000]})
                 if previous_shot.get("previsPlan"):
@@ -527,7 +545,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
             meta = shot_meta(conn, identifier) | {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"], "dialogue": grammar["dialogue"], "previsPlan": grammar["previsPlan"]}
             store(conn, "meta_" + identifier, "shot_meta", meta, ep["slug"])
             created.append({"shotId": identifier})
-        created.extend(matches[len(beats):])  # Never delete existing takes when a scene becomes shorter.
+        created.extend(surplus)  # Never delete existing takes when a scene becomes shorter.
     return completed_task(conn, me, ep["slug"], "STORYBOARD_GENERATE", {"shotsCount": len(created)})
 
 
@@ -594,7 +612,8 @@ def register_card(conn, me, body):
             "nodeInfoList": worker.build_node_info(card)}
 
 
-def catalog():
+def catalog_entries():
+    """(card, catalog item) pairs: the primary appCode of every registered card, then the card's other aliases."""
     result = []
     for card in worker.openapi_list_cards():
         ec = card.get("engine_config", {})
@@ -604,9 +623,13 @@ def catalog():
                 "imageMode": "T2I" if card["card_id"] == "local-smoke" else "I2I", "nodes": card["nodes"],
                 "frameRule": ec.get("frame_rule", ec.get("frame_formula", "none")),
                 **worker.card_execution_profile(card), "configuration": worker.provider_configuration_status(card)}
-        result.append(item)
-        result.extend(dict(item, appCode=alias) for alias, cid in ALIASES.items() if cid == card["card_id"] and alias != code)
+        result.append((card, item))
+        result.extend((card, dict(item, appCode=alias)) for alias, cid in ALIASES.items() if cid == card["card_id"] and alias != code)
     return result
+
+
+def catalog():
+    return [item for _, item in catalog_entries()]
 
 
 def resolve_app(code, kind, policy=None):
@@ -1091,8 +1114,10 @@ def notify(owner, task):
 
 def dispatch(conn, me, method, path, body, query, actions):
     """Return unwrapped data; callers own commit, rollback and post-commit launches."""
-    from project_docs import story_alignment
+    from project_docs import story_alignment, story_estimates
     previewed = story_alignment.dispatch(conn, me, method, path, body)  # read-only previews, open to viewers
+    if previewed is None:
+        previewed = story_estimates.dispatch(conn, me, method, path, body)
     if previewed is not None:
         return previewed
     if method != "GET" and not me.can_write:
@@ -1120,9 +1145,11 @@ def dispatch(conn, me, method, path, body, query, actions):
             if capability not in ("IMAGE", "VIDEO"):
                 invalid("capability must be IMAGE or VIDEO.")
             scope = query.get("usageScope")
-            if scope and scope not in ("CHARACTER", "SCENE_PROP", "SCENE_PROP_EDIT", "FREE_CREATION_T2I", "FREE_CREATION_I2I"):
+            if scope and scope not in USAGE_SCOPES:
                 invalid("Unknown usageScope.")
-            return page([c for c in catalog() if c["capability"] == capability], query)
+            from project_docs import story_generation_options as options
+            return page([item for card, item in catalog_entries() if item["capability"] == capability
+                         and (not scope or options.in_scope(card, scope))], query)
         if path == "/catalog/styles":
             return page(STYLES, query)
         if path == "/catalog/director-styles":
@@ -1319,7 +1346,9 @@ def dispatch(conn, me, method, path, body, query, actions):
                          "assetCodes": missing}, slug, me.actor_id)
         if tail == "assets":
             if method == "GET":
-                return page([a for a in assets(conn, ep) if a["isDefault"]], query)
+                from project_docs import story_asset_edit
+                everything = assets(conn, ep)
+                return page(story_asset_edit.with_looks([a for a in everything if a["isDefault"]], everything), query)
             if method == "POST":
                 prefix = {"CHARACTER": "CAST", "SCENE": "SET", "PROP": "PROP"}.get(body.get("type", "CHARACTER"))
                 if not prefix:
@@ -1394,11 +1423,17 @@ def dispatch(conn, me, method, path, body, query, actions):
                 if any(index < 0 for key, index in mapping.items() if key in body):
                     invalid("This production sheet has no matching column for the requested field.")
                 edits = {index: text(body, key) for key, index in mapping.items() if key in body}
+                if entity == "asset":
+                    from project_docs import story_asset_edit
+                    edits |= story_asset_edit.extra_edits(row, body)  # voice, status, notes
                 mutate_row(conn, me, slug, row["tabKey"], row["rid"], edits)
                 return view()
             if method == "DELETE":
                 mutate_row(conn, me, slug, row["tabKey"], row["rid"], delete=True)
                 return {"deleted": True}
+        if tail == "generation-options" and method == "GET":
+            from project_docs import story_generation_options as options
+            return options.describe(conn, slug, identifier, entity, row, query)
         if tail in ("image-generations", "video-generations") and method == "POST":
             return generation(conn, me, identifier, "image" if tail == "image-generations" else "video", body, actions)
         if tail in ("images", "videos") and method == "GET":
@@ -1663,7 +1698,7 @@ def handle(handler, parsed, method):
         if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
             raise StoryError(400, "DRAMA_REQUEST_FAILED", "Unsupported method.")
         if method != "GET":
-            if not me.can_write and not re.fullmatch(BASE + r"/episodes/[^/]+/script-impact/?", parsed.path):  # a read-only preview
+            if not me.can_write and not re.fullmatch(BASE + r"/episodes/[^/]+/(?:script-impact|storyboard-estimates)/?", parsed.path):  # read-only previews
                 raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
             # Explicit bearer credentials are not ambient cookies; browser writes retain CSRF checks.
             if not handler.headers.get("Authorization", "").startswith("Bearer "):

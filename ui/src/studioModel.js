@@ -74,6 +74,23 @@ export function mediaStages(parsed, row) {
   let next = 0;
   return stages.map(stage => stageRole(stage.label) === null ? stage : ordered[next++]);
 }
+// SPEC_18 R4, cheapest first: previs -> first frame -> video. A step appears only when the sheet has its column; `media` is null while it
+// is still to make. Previs is the Previs/Blockout column (a source video is not a previs, as in the review bench); the first frame is
+// the First Frame or Keyframe image; the video is the Cinema Shot / Remaster / Output take.
+export function mediaLadder(parsed, row) {
+  const stages = mediaStages(parsed, row), steps = [];
+  const previsColumn = parsed.headers.findIndex(label => /previs|blockout/i.test(label));
+  if (previsColumn >= 0) {
+    const stage = stages.find(item => item.column === previsColumn) || {column: previsColumn, label: parsed.headers[previsColumn], type: 'video', value: '', media: null};
+    steps.push({key: 'previs', stage, media: stage.media || null});
+  }
+  const pick = (test) => { const found = stages.filter(test); return found.find(item => item.media) || found[0] || null; };
+  const frame = pick(item => item.type === 'image' && [1, 3].includes(stageRole(item.label)));
+  if (frame) steps.push({key: 'frame', stage: frame, media: frame.media || null});
+  const video = pick(item => item.type === 'video' && stageRole(item.label) === 4);
+  if (video) steps.push({key: 'video', stage: video, media: video.media || null});
+  return steps;
+}
 export function buildAssetLookup(documents) {
   const lookup = {};
   for (const tab of documents) for (const table of tablesOf(tab.doc, tab.values || {})) for (const row of table.rows) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assetUses, activeItem, baseCode, bySlate, restoredWorld, rememberWorld, worldCounts, worldFacets, worldGroups, worldItems } from '../src/worldModel.js';
+import { assetUses, activeItem, baseCode, bySlate, restoredWorld, rememberWorld, sceneFilter, UNSCENED, worldCounts, worldFacets, worldGroups, worldItems } from '../src/worldModel.js';
 
 const asset = (code, type, image, extra = {}) => ({assetId:'as_' + code, assetCode:code, name:code, prompt:'', type, isDefault:true, selectedImageUrl:image, ...extra});
 const assets = [asset('CAST-01', 'CHARACTER', '/k.png'), asset('CAST-02', 'CHARACTER', null), asset('SET-01', 'SCENE', '/o.png'), asset('PROP-01', 'PROP', null)];
@@ -38,28 +38,42 @@ test('the wall keeps every type under All, one type under a type filter, and onl
   assert.deepEqual(worldGroups(worldItems([], []), 'all').map(g => g.items.length), [0, 0, 0]);
 });
 
-test('the inspector shows the picked card while it is on the wall, otherwise the first one', () => {
+test('the editor opens on the picked card while it is on the wall, and on nothing otherwise', () => {
   const items = worldItems(assets, shots);
   assert.equal(activeItem(worldGroups(items), 'as_SET-01').assetCode, 'SET-01');
-  assert.equal(activeItem(worldGroups(items), '').assetCode, 'CAST-01');
-  assert.equal(activeItem(worldGroups(items, 'SCENE'), 'as_CAST-02').assetCode, 'SET-01', 'a card the filter hides is not shown');
+  assert.equal(activeItem(worldGroups(items), ''), null, 'nothing opens by itself');
+  assert.equal(activeItem(worldGroups(items, 'SCENE'), 'as_CAST-02'), null, 'a card the filter hides is not open');
   assert.equal(activeItem(worldGroups([], 'all'), 'x'), null);
 });
 
-test('the view and the card in front of you survive a trip to the sheet, per episode, and storage failures start at the script', () => {
+test('the view, the card in front of you and the scene filter survive a trip to the sheet, per episode, and storage failures start at the script', () => {
   const store = new Map();
   globalThis.sessionStorage = {getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, value)};
   try {
-    assert.deepEqual(restoredWorld('ep_a'), {view:'script', pick:''});
-    rememberWorld('ep_a', {view:'world', pick:'as_CAST-02', extra:'ignored'});
-    assert.deepEqual(restoredWorld('ep_a'), {view:'world', pick:'as_CAST-02'});
-    assert.deepEqual(restoredWorld('ep_b'), {view:'script', pick:''});
-    store.set('zf.world:ep_c', '{"view":"elsewhere","pick":7}');
-    assert.deepEqual(restoredWorld('ep_c'), {view:'script', pick:''});
+    assert.deepEqual(restoredWorld('ep_a'), {view:'script', pick:'', scene:null});
+    rememberWorld('ep_a', {view:'world', pick:'as_CAST-02', scene:'sc2', extra:'ignored'});
+    assert.deepEqual(restoredWorld('ep_a'), {view:'world', pick:'as_CAST-02', scene:'sc2'});
+    rememberWorld('ep_a', {view:'world', pick:'as_CAST-02'});
+    assert.deepEqual(restoredWorld('ep_a'), {view:'world', pick:'as_CAST-02', scene:null}, 'no scene chosen is everything');
+    assert.deepEqual(restoredWorld('ep_b'), {view:'script', pick:'', scene:null});
+    store.set('zf.world:ep_c', '{"view":"elsewhere","pick":7,"scene":3}');
+    assert.deepEqual(restoredWorld('ep_c'), {view:'script', pick:'', scene:null});
     store.set('zf.world:ep_d', 'not json');
-    assert.deepEqual(restoredWorld('ep_d'), {view:'script', pick:''});
+    assert.deepEqual(restoredWorld('ep_d'), {view:'script', pick:'', scene:null});
     globalThis.sessionStorage = {getItem() {throw new Error('blocked');}, setItem() {throw new Error('blocked');}};
-    assert.deepEqual(restoredWorld('ep_a'), {view:'script', pick:''});
+    assert.deepEqual(restoredWorld('ep_a'), {view:'script', pick:'', scene:null});
     assert.doesNotThrow(() => rememberWorld('ep_a', {view:'world', pick:''}));
   } finally {delete globalThis.sessionStorage;}
+});
+
+test('the scene filter keeps one scene\'s assets, never loses an asset no shot places, and stacks with the type and needs-image filters', () => {
+  const items = worldItems(assets, [...shots, shot('S04', ['PROP-01'], undefined)]);
+  assert.equal(sceneFilter(items, null), items, 'everything is the default');
+  assert.deepEqual(sceneFilter(items, 'sc1').map(item => item.assetCode), ['CAST-01', 'SET-01']);
+  assert.deepEqual(sceneFilter(items, 'sc2').map(item => item.assetCode), ['SET-01']);
+  assert.deepEqual(sceneFilter(items, 'sc9'), [], 'a scene nothing uses shows nothing');
+  assert.deepEqual(sceneFilter(items, UNSCENED).map(item => item.assetCode), ['CAST-02', 'PROP-01'], 'an asset with no scene (nobody uses it, or only a scene-less shot) is under Unscened');
+  assert.deepEqual(worldGroups(sceneFilter(items, UNSCENED), 'missing').map(group => [group.type, group.items.map(item => item.assetCode)]), [['CHARACTER', ['CAST-02']], ['PROP', ['PROP-01']]]);
+  assert.deepEqual(worldFacets(sceneFilter(items, 'sc1')).map(facet => [facet.key, facet.count]), [['all', 2], ['CHARACTER', 1], ['SCENE', 1], ['PROP', 0], ['missing', 0]], 'counts follow the filter');
+  assert.deepEqual(sceneFilter([], 'sc1'), []);
 });

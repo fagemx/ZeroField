@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-25",
+  "stage": "SPEC_18 packs A and B (R1-R13), with the Cast & sets editor moved from a side column to a large pane",
+  "base_commit": "9b4fa1e97aaeefbccb73086996054883ac325b99",
+  "branch": "feat/spec18-studio-revision",
+  "commit": "One commit on top of base_commit. The working tree also holds other work that the commit leaves out: the SPEC_16 and SPEC_17 drafts, project_docs/story_adaptation.py together with its test in tests/test_story_openapi.py, and ui/prototypes/story-planning/ together with its test.",
+  "scope": [
+    "R1 background picture generation: per-card running, cancel and retry, several at once, resumed after a reload",
+    "R2 R3 shot cast block with @code tags; a look menu, remove and add rewrite only the code, through the sheet's own cell commit",
+    "R4 previs, first frame, video ladder in shot detail",
+    "R5 scene filter on the wall; R6 space menu shortcuts; R7 build/update dialog; R13 per-mode shot estimates and target length",
+    "R8 generation bar on cards (workflow, ratio, resolution, measured time with its sample count or 'time unknown', Router quote labelled as no price lock)",
+    "R9 appearance as tags; R10 style samples; R11 quick actions that follow where you are",
+    "R12 looks made, renamed and deleted beside the picture; voice, status, notes edited in place; looks count on the card",
+    "R12 layout revision: nothing opens by itself, a picked card opens in a pane about three fifths wide, x gives the wall the whole view back"
+  ],
+  "not_done": [
+    "R14 character three-views, R15 voice audio, R16 new-project entry (each needs its own spec)",
+    "R8 on shot detail: a read-only generation line. The shot's Generate runs the whole studio pipeline, so there is no single card to show (SPEC_18 open decision 3)",
+    "Design board 9E was not redrawn; it is retitled to say its content now lives in the large editor drawn in 9A"
+  ],
+  "backend": {
+    "command": "python -m unittest discover -s tests -v",
+    "environment": "OPENBENCH_TEST_DB_URI pointing at a fresh empty PostgreSQL 16 database; the whole working tree, which also holds the story_adaptation.py fix and its one extra test that the commit leaves out",
+    "passed": 655,
+    "failed": 0,
+    "skipped": 0,
+    "test_seconds": 648.881,
+    "database": "zf_spec18_test_20261025",
+    "database_dropped": true,
+    "commit_tree": {
+      "command": "python -m unittest discover -s tests -p \"test_story*.py\" -v",
+      "environment": "a clean export of HEAD with only this commit's files laid over it, against a fresh empty database",
+      "passed": 160,
+      "failed": 0,
+      "skipped": 0,
+      "test_seconds": 278.332,
+      "database": "zf_spec18_check_20261025",
+      "database_dropped": true
+    }
+  },
+  "frontend": {
+    "command": "npm test --prefix ui",
+    "environment": "a clean export of HEAD with only this commit's files laid over it",
+    "passed": 373,
+    "failed": 0,
+    "skipped": 0,
+    "working_tree_passed": 390,
+    "note": "The working tree also runs the 17 tests of the story-planning prototype, which the commit leaves out."
+  },
+  "build": {
+    "command": "npm run build --prefix ui",
+    "status": "passed"
+  },
+  "browser_journeys": {
+    "tool": "Playwright, headless Chromium, over real HTTP and PostgreSQL",
+    "database": "zf_spec18_browser_20261025",
+    "database_dropped": true,
+    "results": [
+      {"file": "ui/tests/storyImport.browser.py", "tests": 1, "passed": 1, "covers": "idea, build dialog confirm, nine shots in three scenes, then generate missing sheets from the vault"},
+      {"file": "ui/tests/shotReview.browser.py", "tests": 3, "passed": 3, "covers": "shot detail review, status changes, media refresh, localized preflight blockers"}
+    ],
+    "fixed_while_verifying": "storyImport.browser.py still clicked the removed always-visible space tabs; it now opens the space menu."
+  },
+  "packaging": {
+    "command": "pip wheel --no-deps --no-build-isolation . (python -m build is not usable here: the repo's ignored build/ folder shadows the module and the package is not installed)",
+    "wheel_sha256": "86b7f14b9a58978698dccd6c9aaf40a1afb83099b1d3785a0f8e6bf35adb3705",
+    "new_python_modules_included": ["project_docs/story_estimates.py", "project_docs/story_generation_options.py", "project_docs/story_asset_edit.py"],
+    "style_sample_svgs_included": 4,
+    "browser_bundle_bytes_match_static_projects": true
+  },
+  "ui_verification": {
+    "tool": "Headless Edge driven over the DevTools protocol, screenshots read back from disk",
+    "environment": "A copy of the showcase database (zf_spec18_ui_20261025, kept) behind the real server; image inference was a stand-in that accepts connections and never answers, so no model ran",
+    "viewports": ["1920x900", "1280x720", "1000x800 (stacked)"],
+    "locales": ["zh-TW", "en"],
+    "checks": [
+      "Wall with nothing open: full width, summary and primary button on the right",
+      "Pick a card: grid 240 / 653 / 980 at 1920, 240 / 397 / 596 at 1280; x closes; reload keeps it open or closed as left; hidden rails keep working",
+      "Editor in two columns at 1920 and stacked at 1280; picture, looks and generation bar on one side, appearance, voice, status, notes and usage on the other",
+      "Inline edit of voice, status and notes (writes through PATCH /assets/{id}); attribute tags with the replace-or-append question; look create, rename and delete with the used-by question",
+      "Three pictures generating at once, independent cancel, the editor and the card agreeing, no duplicate POST, state kept across a view switch and a reload",
+      "A server refusal shows the reason on the card and in the editor and turns the button into Retry",
+      "Shot detail look menu writes one table-edit with only the @code changed, and reverting restores the text; the add-reference button opens the editor on that asset",
+      "Build dialog: estimates, target length, ratio, style samples; Escape returns focus to the primary button; title and buttons stay on screen at 1280x720",
+      "Space menu reached and operated with the keyboard; the script shortcut lands on the script view",
+      "Shot Stage keys: arrows move, A approves, R retakes",
+      "Crew quick actions with a card open versus the wall with nothing open",
+      "Scene filter: an empty scene shows its message and closes the editor; Unscened brings it back"
+    ],
+    "screenshots": [
+      "docs/research/screenshots/spec18-wall-closed-zh-1920.png",
+      "docs/research/screenshots/spec18-editor-open-zh-1920.png",
+      "docs/research/screenshots/spec18-editor-open-zh-1280.png",
+      "docs/research/screenshots/spec18-generating-zh-1920.png",
+      "docs/research/screenshots/spec18-failed-zh-1920.png",
+      "docs/research/screenshots/spec18-attributes-zh-1920.png",
+      "docs/research/screenshots/spec18-build-dialog-zh-1280.png",
+      "docs/research/screenshots/spec18-shot-detail-zh-1920.png",
+      "docs/research/screenshots/spec18-add-reference-landing-zh-1920.png"
+    ],
+    "stand_in_stopped": true
+  },
+  "unverified": [
+    "No picture was produced by a real model; generation was checked as requests, states and cancellation, not as output.",
+    "A task that the worker itself marks FAILED while the page polls was not seen live; that path is covered by unit tests of the run state. The failure shown live was a refusal by the server.",
+    "The scene filter was exercised with data only in unit tests: the showcase has no shot placed in a scene.",
+    "The 'n missing images' menu shortcut was not seen live for lack of such a state.",
+    "Below 1100px the studio stacks its panels and the editor opens under the wall without being scrolled into view.",
+    "The wheel was built and inspected, not installed and run.",
+    "The whole backend suite ran on the working tree; the exact tree of the commit ran its 160 story-related tests, not the whole suite.",
+    "Design boards were redrawn and republished without being rendered."
+  ],
+  "limits": "A generation line on shot detail, character three-views, voice audio and a new-project entry are not built. Appearance tags are composed into text and not stored. No live provider, GPU or billing acceptance is claimed."
+}
