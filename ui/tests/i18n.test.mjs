@@ -40,15 +40,18 @@ test('missing Traditional Chinese messages fall back to English and interpolatio
 });
 
 test('both dictionaries cover the same messages and interpolation parameters', () => {
-  assert.deepEqual(Object.keys(en).sort(), Object.keys(zh).sort());
-  for (const [group, messages] of Object.entries(en)) {
-    assert.deepEqual(Object.keys(messages).sort(), Object.keys(zh[group]).sort(), group);
-    for (const [key, value] of Object.entries(messages)) {
+  const visit = (left, right, path = '') => {
+    assert.deepEqual(Object.keys(left).sort(), Object.keys(right).sort(), path);
+    for (const [key, value] of Object.entries(left)) {
+      const name = path ? `${path}.${key}` : key;
+      if (typeof value === 'object' && value !== null) { assert.equal(typeof right[key], 'object', name); visit(value, right[key], name); continue; }
+      assert.equal(typeof value, 'string', name); assert.equal(typeof right[key], 'string', name);
       const params = text => [...new Set([...text.matchAll(/\{\{(\w+)\}\}/g)].map(m=>m[1]))].sort();
-      assert.ok(zh[group][key].trim(), `${group}.${key}`);
-      assert.deepEqual(params(value), params(zh[group][key]), `${group}.${key}`);
+      assert.ok(right[key].trim(), name);
+      assert.deepEqual(params(value), params(right[key]), name);
     }
-  }
+  };
+  visit(en, zh);
 });
 
 test('legacy status moves preserve wire values and custom names remain unchanged in Chinese', async () => {

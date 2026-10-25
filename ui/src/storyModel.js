@@ -1,18 +1,35 @@
-import { api } from './api.js';
+import { ApiError } from './api.js';
 import { t } from './i18n/index.js';
 
 export const STORY_BASE = '/aivideo/open/v1';
 export const episodeId = (slug, index = 1) => `ep_${slug}_${String(index).padStart(2, '0')}`;
 export const shotId = (slug, rid) => `sh_${slug}_${rid}`;
 
-export async function storyRequest(path, method = 'GET', body) {
-  if (method === 'GET') return (await api.get(STORY_BASE + path)).data;
-  const response = await fetch(STORY_BASE + path, {method, credentials:'same-origin',
-    headers:{'Content-Type':'application/json', 'X-Requested-With':'projects',
-      ...(method === 'POST' ? {'Idempotency-Key':crypto.randomUUID()} : {})},
-    body:JSON.stringify(body || {})});
+export async function storyRequest(path, method = 'GET', body, options = {}) {
+  const headers = new Headers(options.headers || {});
+  // Fixed by the mounted authoring session, not inferred from ambient cookies.
+  if (options.expectedActorId != null) headers.set('X-Writing-Expected-Actor', options.expectedActorId);
+  headers.set('Accept', options.responseType === 'json' || !options.responseType ? 'application/json' : '*/*');
+  if (method !== 'GET') headers.set('X-Requested-With', 'projects');
+  if (!options.raw && method !== 'GET') headers.set('Content-Type', 'application/json');
+  if (method === 'POST') headers.set('Idempotency-Key', options.idempotencyKey || headers.get('Idempotency-Key') || crypto.randomUUID());
+  let response;
+  try {
+    response = await fetch(STORY_BASE + path, {method, credentials:'same-origin', headers, signal:options.signal,
+      ...(method === 'GET' ? {} : {body:options.raw ? body : JSON.stringify(body ?? {})})});
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw new ApiError(0, t('api.connectionLostOrSessionExpiredRefreshThePage'));
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const error = new ApiError(response.status, payload?.message || payload?.error || response.statusText, payload);
+    error.code = payload?.code; error.details = payload?.details;
+    throw error;
+  }
+  if (options.responseType === 'blob') return response.blob();
+  if (options.responseType === 'text') return response.text();
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.message || payload.error || response.statusText);
   return payload.data;
 }
 

@@ -219,7 +219,7 @@ test('the composition panel stays folded to one lens choice until a lens is pick
   html=render('CompositionPanel',{value:{...value,medium:'storybook',collisions:{candidates:cards}},onChange:()=>{}});
   for(const text of ['表現形式透鏡','繪本／視覺故事書','條件碰撞類型','補一句限制條件','正面相撞']) assert.ok(html.includes(text),text);
   await components.setLocale('en');
-  assert.doesNotMatch(render('StoryWorld',{epId:'ep_demo_02',writable:true}),/Medium Lens/,'Screenplay mode shows no composition controls');
+  assert.doesNotMatch(render('StoryWorld',{slug:'demo',me:{actor_id:'actor'},epId:'ep_demo_02',writable:true}),/Medium Lens/,'Screenplay mode shows no composition controls');
 });
 
 test('one-click novel creation adapts, saves, extracts and builds the selected episode before onDone',async()=>{

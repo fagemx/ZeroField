@@ -1,0 +1,729 @@
+{
+  "schemaVersion": 2,
+  "spec": "SPEC_16",
+  "reviewRound": 1,
+  "status": "repair_integration_ready_for_independent_review",
+  "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+  "baseCommit": "3d303a24daf2c1af6304aac35d2f1cd353afabdf",
+  "originalSeed": "591c3e602f5f35aabd681dbdfedda93dedd0e2f9",
+  "recordedAtUtc": "2026-10-23T21:42:04.472208+00:00",
+  "documentationCloseout": "Later commit changes documentation only; exact closeout SHA is recorded by Git and review1-integration.md. Product tests belong to the frozen candidate above.",
+  "acceptance": "Engineering repair readiness only. Initial independent BLOCK remains historical; new independent review and user acceptance pending.",
+  "historicalReceipt": {
+    "path": "docs/verification/spec16/initial-integration.json",
+    "sourceCommit": "3d303a24daf2c1af6304aac35d2f1cd353afabdf",
+    "sha256": "9a0cb3f633f7ad62b730cb7c27976e83b093bb20b9bcf0bfc23bd35fbb4bf777",
+    "byteIdentical": true,
+    "passingCountsDoNotCoverInitialFindings": true
+  },
+  "initialReview": {
+    "candidate": "3d303a24daf2c1af6304aac35d2f1cd353afabdf",
+    "safetyVerdict": "BLOCK",
+    "journeyVerdict": "BLOCK",
+    "confirmedFindings": [
+      "S1 P1 cross-identity private activity",
+      "S2 P2 private metadata recovery rebase",
+      "J1 P1 scene insert loss/duplicate bids",
+      "J2 P1 removed-scene positional alias",
+      "J3 P1 untracked outline drafts",
+      "J4 P2 missing authorized outline projection",
+      "J5 P2 clean print whitespace collapse"
+    ],
+    "reviewRecord": "docs/SPEC16_REVIEW.md",
+    "workflowBookkeeping": "Earlier workflow serialization failed after children completed; reviews remain valid and old jobs were not rerun for that bookkeeping."
+  },
+  "repairs": {
+    "authS1S2": "530c17dfe9540b6eae78d8218ab7735d9f6f45d0",
+    "authoringJ1J3": "165633d502cafa8281cb709484c171481b3953b0",
+    "structureJ2J4": "891e654507c013702fcae9d461d44bfc24e5217f",
+    "printJ5": "dc836a0f4942119a4e066717e7b3d10cda064b02",
+    "integrationLocalesStaticRootTests": "809000135e12608da310de5e55be0d9ee8510ee9",
+    "authLegacyS1Completion": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+    "attribution": "Exact native commits merged; exclusive owned fixes preserved. Two HTTP paths are explicitly superseded by the original auth owner legacy correction, not overwritten with old component snapshots."
+  },
+  "intermediateS1Block": {
+    "candidate": "809000135e12608da310de5e55be0d9ee8510ee9",
+    "fullTests": 677,
+    "failures": 0,
+    "skips": 0,
+    "sourceAndStaticFrozenThroughout": true,
+    "stillBlocking": true,
+    "reason": "Private source collision legacy caller supplied A expectation, but old legacy handler executed and cached private derived data as B. Passing677 did not cover that caller.",
+    "realProbeBefore": {
+      "candidate": "809000135e12608da310de5e55be0d9ee8510ee9",
+      "probeDatabase": "spec16_review1_probe_20261023",
+      "realRoot": true,
+      "realSharedCookieSwitch": true,
+      "currentCookieActorB": true,
+      "requestHeaderMatchesA": true,
+      "privateSyntheticMarkerSent": true,
+      "responseStatus": 200,
+      "responseContainsPrivateMarker": true,
+      "idempotencyRowsOwnedByB": 1,
+      "BIdempotencyContainsPrivateMarker": true,
+      "providerCalls": 0,
+      "probeOnlyNoProductEdits": true
+    },
+    "realProbeAfter": {
+      "oldWorkspaceUnmounted": true,
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "probeDatabase": "spec16_review1_probe_fixed_20261023",
+      "realRoot": true,
+      "realSharedCookieSwitch": true,
+      "currentCookieActorB": true,
+      "requestHeaderMatchesA": true,
+      "privateSyntheticMarkerSent": true,
+      "responseStatus": 401,
+      "responseContainsPrivateMarker": false,
+      "idempotencyRowsOwnedByB": 0,
+      "BIdempotencyContainsPrivateMarker": false,
+      "providerCalls": 0,
+      "probeOnlyNoProductEdits": true
+    },
+    "newFixtureDatabaseForFix": true,
+    "failedProbeNotOverwritten": true,
+    "noProviderCalls": true
+  },
+  "expectedActorContract": {
+    "option": "options.expectedActorId",
+    "header": "X-Writing-Expected-Actor",
+    "writing": "Non-Bearer POST/PUT/PATCH require binding; any supplied binding including GET must match actual authorized actor before dispatch/replay.",
+    "legacy": "Any supplied binding matches actual authenticated actor after unchanged auth/write/CSRF gates and before body parsing/actions, early responses and cache replay. Header-less legacy cookie/Bearer clients remain compatible.",
+    "noPrivilegeGrant": true,
+    "client": "Mounted actor immutable; old private workspace unmounts/disposes and cancels activity; late ACK/errors cannot advance base or clear newer actor-scoped recovery."
+  },
+  "commands": [
+    {
+      "command": "C:/Python313/python.exe ../integration-validation/review1/run.py (unittest discover tests/test_*.py, dedicated assigned DB)",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "testsRun": 680,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 934.2677879999974,
+      "unittestSeconds": 933.12,
+      "ranAtFinalCandidate": true,
+      "oldBackendEquivalenceNotUsed": true,
+      "notes": "Actual new changed-backend full gate; real root/PG/token journeys included. Existing providers/media are distinguishable synthetic fixtures, not real inference."
+    },
+    {
+      "command": "npm test --prefix ui",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "testsRun": 270,
+      "failures": 0,
+      "skips": 0,
+      "notes": "Full final frontend; component injected transports remain component evidence, not substitutes for root tests."
+    },
+    {
+      "command": "npm run build --prefix ui",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "notes": "Rebuilt final production assets; identical frontend to8090001 verified, generated index line endings normalized only. Existing1.846MB chunk warning retained."
+    },
+    {
+      "command": "run.py test_writing_review_identity test_writing_review_structure test_writing_review_product before freeze",
+      "result": "passed",
+      "candidate": "809000135e12608da310de5e55be0d9ee8510ee9",
+      "testsRun": 19,
+      "failures": 0,
+      "skips": 0,
+      "notes": "Affected checks before first freeze; not misattributed to final candidate."
+    },
+    {
+      "command": "run.py test_writing_review_identity_legacy test_writing_review_identity test_writing_core.WritingHTTPTests.test_browser_cookie_csrf_is_checked_before_replay",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "testsRun": 9,
+      "failures": 0,
+      "skips": 0
+    },
+    {
+      "command": "probe-legacy-collision-fixed.py",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "notes": "Original real root shared-cookie scenario repeated in new positively owned fixture DB;401/no marker/zero B cache/unmounted workspace. Original failed probe retained."
+    },
+    {
+      "command": "narrow-logout.py",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "testsRun": 1,
+      "failures": 0,
+      "skips": 0,
+      "seconds": 7.314,
+      "notes": "Actual768px identity/logout preservation and next-actor isolation on final server/build; desktop journeys included in full gate."
+    },
+    {
+      "command": "isolated build-env python -m build --wheel --no-isolation (exact de16d59 git archive)",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "notes": "Existing isolated build tooling reused; no new download or global/shared dependency writes."
+    },
+    {
+      "command": "review1/installed-env python installed-check.py wheel-source-de16d59 de16d59...",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "testsRun": 113,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 288.2543633999885,
+      "outsideCheckout": true,
+      "notes": "Real installed modules/static; includes new root/security/structure/print regressions and original parser/interface unit cases. Unit fixture substitutions are not presented as real DB evidence."
+    },
+    {
+      "command": "wheel-identities.py against exact candidate archive",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "pythonModules": 96,
+      "dataResources": 67,
+      "prompts": 7,
+      "totalByteIdentities": 170,
+      "notes": "Every declared installed file exact;12 migrations,17 cards,7 native schemas. No packaging rule changes."
+    },
+    {
+      "command": "performance-extra.py",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "notes": "Actual root50k/500k search/compare; full-gate long-manuscript typing/switch measurements separately recorded."
+    },
+    {
+      "command": "preservation.py and stop-owned-pg.py",
+      "result": "passed",
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "notes": "Original810 source/index/status and exact repair ownership verified; positively owned PID3244 stopped0/status3/PID absent/port refused after zero other clients."
+    }
+  ],
+  "regressionCoverage": {
+    "S1": "Real same-context two-tab pending-write switch, reconnect before/after root poll disposal, disposed late ACK retaining newer A journal; wrong/missing binding before writing execution/replay; actual legacy collision failed/fixed probes plus matching/no-header/Bearer/CSRF/viewer/cache/body/get regressions.",
+    "S2": "Real root stale metadata-only source journal restoration requires conflict and explicit metadata choice; source and branch stale private CAS rejected. Frontend tests also exercise branch metadata choice, legacy journals and coalesced-mainline hash handling.",
+    "J1": "Real root middle-scene Enter, paste, delete, heading split and delayed actual server ACK preserve inserted text, unique bids, marks and unselected surrounding blocks.",
+    "J2": "Real root remove/merge preserves selected videos/origin and detaches removed B instead of aliasing active C. Nine PG/HTTP cases additionally cover legacy rebuild, stale positional aliases, locks/rollback, split uncertainty, chained merge and Undo.",
+    "J3": "Real root network+IDB failure blocks leaving and supports download. Once durable, safe navigation preserves metadata; remote metadata divergence restores old base into conflict without PATCH or forced rebase.",
+    "J4": "Actual authorized workspace/structure projection produces current cast codes and linked-shot navigation in root UI. Foreign/private/removed/ambiguous links excluded; read projection not persisted or hashed into source identity.",
+    "J5": "Actual root authenticated print export→sanitizer→Chromium iframe screen/print metrics preserve hard breaks, blank lines, empty paragraphs and CJK, without author active HTML/CSS. OS PDF saving not claimed."
+  },
+  "browserEvidence": {
+    "actualRootProduct": true,
+    "productionStatic": true,
+    "realTokenCookieAuthAndPG": true,
+    "externalNetwork": "Browser contexts allow loopback fixture host only. No real provider inference.",
+    "viewports": [
+      "1920x1080",
+      "1280x720",
+      "768x720"
+    ],
+    "normalPageErrors": "Fail tests; deliberate quota test accepts only exact injected storage exception. Existing abandoned-response server10053 diagnostics retained.",
+    "rootCasesInFinalFullGate": "Six original W1–W8 root cases, auth root identity/recovery cases, legacy collision root case, and five new integrated review cases; not a separately fabricated count."
+  },
+  "performance": {
+    "inputAndSwitch": [
+      {
+        "codePoints": 50000,
+        "scenes": 100,
+        "inputToAnimationFrameP95ms": 22.799999997019768,
+        "switchMs": 71.50410000758711,
+        "samplesMs": [
+          19.100000008940697,
+          21.69999998807907,
+          12.099999994039536,
+          23.700000002980232,
+          12.200000002980232,
+          10.5,
+          10.099999994039536,
+          10,
+          10.100000008940697,
+          10.899999991059303,
+          9.700000002980232,
+          20.299999997019768,
+          10.799999997019768,
+          22.799999997019768,
+          21.200000002980232,
+          22.200000002980232,
+          20.100000008940697,
+          19.5,
+          20.099999994039536,
+          9.700000002980232
+        ]
+      },
+      {
+        "codePoints": 500000,
+        "scenes": 100,
+        "inputToAnimationFrameP95ms": 32.29999999701977,
+        "switchMs": 121.93970000953414,
+        "samplesMs": [
+          29.799999997019768,
+          21.799999997019768,
+          23.30000001192093,
+          34.1000000089407,
+          20.100000008940697,
+          28.399999991059303,
+          20.599999994039536,
+          20.900000005960464,
+          23.899999991059303,
+          19.400000005960464,
+          18.30000001192093,
+          18.900000005960464,
+          20.200000002980232,
+          19.400000005960464,
+          32.29999999701977,
+          18.5,
+          19,
+          19.799999997019768,
+          19.299999997019768,
+          20.19999998807907
+        ]
+      }
+    ],
+    "searchAndCompare": {
+      "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+      "actualRootPgTokenProductionBuild": true,
+      "rows": [
+        {
+          "fixtureCodePoints": 50000,
+          "scenes": 100,
+          "searchClickToHttpResponseMs": 402.016400010325,
+          "compareClickToHttpResponseMs": 760.7362999988254
+        },
+        {
+          "fixtureCodePoints": 500000,
+          "scenes": 100,
+          "searchClickToHttpResponseMs": 878.8447999977507,
+          "compareClickToHttpResponseMs": 1333.7662000121782
+        }
+      ]
+    },
+    "method": "100 scenes;20 editor insertText→animation-frame samples, p95 index18;500k scene-loaded. HTTP timing includes preflight/network/server. Local engineering fixture timings, not all-hardware certification."
+  },
+  "printMetrics": [
+    {
+      "media": "screen",
+      "whiteSpace": "pre-wrap",
+      "hard": 25.59375,
+      "blank": 51.1875,
+      "empty": 25.59375,
+      "cjk": 25.59375,
+      "active": 0
+    },
+    {
+      "media": "print",
+      "whiteSpace": "pre-wrap",
+      "hard": 25.59375,
+      "blank": 51.1875,
+      "empty": 25.59375,
+      "cjk": 25.59375,
+      "active": 0
+    }
+  ],
+  "wheel": {
+    "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+    "sha256": "8ef394a2db31071823cfca92a0c8b3b7345a117a66725936dd8b69507c4836de",
+    "exactGitArchive": true,
+    "outsideCheckout": true,
+    "totalDeclaredFilesVerified": 170,
+    "limit": "Inherited undeclared interim workflows are not claimed installed; no package rules weakened."
+  },
+  "ownedServices": {
+    "state": "STOPPED",
+    "verifiedAtUtc": "2026-10-23T21:35:55.966256+00:00",
+    "pid": 3244,
+    "dataDirectory": "C:\\ai_project\\ZeroField-spec16-20261023-b1\\impact-test-pg",
+    "host": "127.0.0.1",
+    "port": 50367,
+    "systemIdentifier": "7699909009345016076",
+    "postmasterStartEpoch": 1792785574,
+    "sqlPostmasterStartEpoch": 1792785575.000235,
+    "database": "spec16_review1_integration_20261023",
+    "otherClients": 0,
+    "identityVerified": true,
+    "stopReturnCode": 0,
+    "statusReturnCode": 3,
+    "pidfileAbsent": true,
+    "portRefused": true
+  },
+  "ownedDatabases": [
+    "spec16_review1_integration_20261023",
+    "spec16_review1_probe_20261023",
+    "spec16_review1_probe_fixed_20261023"
+  ],
+  "sourcePreservation": {
+    "candidate": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+    "sourcePathsByteIdentical": 810,
+    "sourceHead": "e7b2ce734494b58915a711f99a78980989439e3b",
+    "sourceIndexSha256": "f7dea951f24d2d5d84509e7250b973989f68b6fec03b97a629ddae25ea8f5fb6",
+    "sourceStatusUnchanged": true,
+    "repairsExact": {
+      "auth": {
+        "commit": "530c17dfe9540b6eae78d8218ab7735d9f6f45d0",
+        "paths": [
+          "project_docs/writing_http.py",
+          "tests/test_writing_core.py",
+          "tests/test_writing_review_identity.py",
+          "ui/src/App.jsx",
+          "ui/src/StoryWorld.jsx",
+          "ui/src/storyModel.js",
+          "ui/src/writing/WritingConflict.jsx",
+          "ui/src/writing/WritingRecovery.jsx",
+          "ui/src/writing/locales/review1-auth.en.json",
+          "ui/src/writing/locales/review1-auth.zh-TW.json",
+          "ui/src/writing/writingPersistence.js",
+          "ui/src/writing/writingTransport.js",
+          "ui/tests/writingReviewIdentity.test.mjs"
+        ],
+        "exactExceptApprovedLegacyGuard": [
+          "project_docs/writing_http.py"
+        ]
+      },
+      "authoring": {
+        "commit": "165633d502cafa8281cb709484c171481b3953b0",
+        "paths": [
+          "ui/src/writing/AuthoringWorkspace.jsx",
+          "ui/src/writing/WritingEditor.jsx",
+          "ui/src/writing/WritingOutline.jsx",
+          "ui/src/writing/locales/review1-authoring.en.json",
+          "ui/src/writing/locales/review1-authoring.zh-TW.json",
+          "ui/src/writing/writingModel.js",
+          "ui/src/writing/writingOutlineRecovery.js",
+          "ui/tests/writingReviewAuthoringBrowser.test.mjs",
+          "ui/tests/writingReviewAuthoringRecovery.test.mjs"
+        ],
+        "exactExceptApprovedLegacyGuard": []
+      },
+      "structure": {
+        "commit": "891e654507c013702fcae9d461d44bfc24e5217f",
+        "paths": [
+          "project_docs/story_openapi.py",
+          "project_docs/writing_impact.py",
+          "project_docs/writing_service.py",
+          "project_docs/writing_structure.py",
+          "tests/test_writing_review_structure.py"
+        ],
+        "exactExceptApprovedLegacyGuard": [
+          "project_docs/story_openapi.py"
+        ]
+      },
+      "print": {
+        "commit": "dc836a0f4942119a4e066717e7b3d10cda064b02",
+        "paths": [
+          "ui/src/writing/writingToolsModel.js",
+          "ui/tests/writingReviewPrint.test.mjs"
+        ],
+        "exactExceptApprovedLegacyGuard": []
+      },
+      "auth-legacy": {
+        "commit": "de16d5933420fff5988184f4ba71e20dbf5f875e",
+        "paths": [
+          "project_docs/story_openapi.py",
+          "project_docs/writing_http.py",
+          "tests/test_writing_review_identity_legacy.py"
+        ],
+        "exact": true
+      }
+    },
+    "historicalReceiptByteIdentical": true,
+    "verifiedAtUtc": "2026-10-23T21:35:59.427016+00:00"
+  },
+  "historicalFailures": [
+    "Initial independent BLOCK findings remain historical and were not erased by component test counts.",
+    "First integration affected batch:25 tests included six duplicate imported fixture-class cases; one route-unregistration ordering error and one incorrect label expectation failed. Fixed harness only; original six cases remain independently discovered. Corrected affected19 and final full680 pass.",
+    "Single failed legacy probe first had duplicate connect_timeout setup error before opening a DB connection. After correction exactly one product probe executed in its new guarded database:200/private marker/B cache. It is retained, not overwritten by the fixed probe.",
+    "Frozen8090001 full677 passed but the independently reproduced legacy S1 blocker remained. Original auth owner returned exactde16d59; source was not changed during809 gate and a new final full680 ran instead of backend equivalence reuse.",
+    "Initial installed113 command was interrupted by an overly tight280s wrapper timebox in its final deliberately delayed-ACK case; it is NOT counted as a full pass. Exact private harness marker found zero remaining owned browser/driver processes; no foreign process signaled. Unchanged final source reran with sufficient bounded time and explicit PID tracking:113 passed in287.413s. No assertion or product timeout was weakened.",
+    "Existing Windows server senders can log ConnectionAbortedError/10053 when disposal/navigation abandons responses. These diagnostics are preserved and are not reported as clean runtime stderr."
+  ],
+  "readEvidence": [
+    "Original safety/journey review reports and all five owner repair reports; their baseline reproductions and component gates are attributed READ, not claimed rerun here.",
+    "Original SPEC16 receipts remain at the preserved historical path. New final commands above are RAN, not inherited counts."
+  ],
+  "notRun": [
+    "New independent readonly security/journey review and user acceptance: pending.",
+    "Paid/credentialed product-provider/GPU inference, real model quality/billing/remote cancellation, model downloads, push/deployment/promotion: not authorized or run.",
+    "Native OS IME/assistive-technology certification, other browser engines and interactive OS Print/Save-as-PDF completion: not run."
+  ],
+  "residualRisks": [
+    "Independent reviewers may still identify issues; integration readiness is not independent acceptance.",
+    "Recovery remains bounded actor-scoped same-origin device storage, not an OS privacy sandbox or cross-device/full offline guarantee; abrupt closure before checkpoint can lose latest keystrokes.",
+    "DOCX is text conversion and browser print is not server-generated PDF; ambiguous historical sources remain uncertain without blanket migration.",
+    "Large main bundle (~1.846MB) and existing aborted-response logging remain; local timings are not universal performance guarantees."
+  ],
+  "artifacts": [
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/backend-8090001.log",
+      "sha256": "95214037fca451d0f6c47e6a76000d1ec8f4875f83f6732e4b9126f54234a882",
+      "bytes": 135929
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/backend-de16d59.log",
+      "sha256": "a1ab6cc38c872e1d2e5d9ca2f293d039da860bc15e88ae7b972b22364298bd65",
+      "bytes": 142252
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/frontend-8090001.log",
+      "sha256": "e42bf0a15782d0034a7e6b6382fc0c6f6cddaab56a30f9b66f2379478c50a47e",
+      "bytes": 28333
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/frontend-de16d59.log",
+      "sha256": "29addea4663d1e4a7e5ece8f3ad81f98d43c787b543bb7b87f30ca837c1b97ad",
+      "bytes": 28345
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/build-de16d59.log",
+      "sha256": "b2f2ed4b3a4931a386b5e1e5b642718efced514678b172d959978700daef9b75",
+      "bytes": 1103
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/frontend-affected.log",
+      "sha256": "86e933af08b4564b25865c83dafd9669bd8029c6e7d64082819f6edf80b07674",
+      "bytes": 4919
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/backend-affected-first.log",
+      "sha256": "bf480280dae915c5e85a5fc00641a215761fef45e2b25040e77d4a7d38fd559c",
+      "bytes": 38769
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/root-affected-second.log",
+      "sha256": "83d78bfc074c158c9803e7606ce85ca7041a9053a3b980df2e7f3e93132e8444",
+      "bytes": 568
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/backend-affected-final.log",
+      "sha256": "65a171a029dd7902f545103cc584dffc5c3bd21c22b0f86a7152ab767d1fc06e",
+      "bytes": 14061
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/legacy-affected-de16d59.log",
+      "sha256": "61f808cc0e603e93116475dea4e29d3b3828ac0d56da758fe944dddc90f6d923",
+      "bytes": 7007
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/legacy-collision-probe.log",
+      "sha256": "f60da59477e8d111ce4e8565bf01766620bd168234673a32bf3de982078e6250",
+      "bytes": 433
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/legacy-collision-probe-result.log",
+      "sha256": "467c713fe64b756c1d440fe087bfeb4463e59c836ce74f6e02c8055df20565ad",
+      "bytes": 485
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/legacy-collision-probe.json",
+      "sha256": "cf8c6f9c7069428e4db108114541a617cf1f07f968b3826af255651845ace1d8",
+      "bytes": 483
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/legacy-collision-probe-fixed.log",
+      "sha256": "1b6ab4d03aff143797791e0a59cbc5b0bb37e91c8f1c92d9ef7462b93ede5984",
+      "bytes": 634
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/legacy-collision-probe-fixed.json",
+      "sha256": "38ae6bc0ba7479474a011895917a71fd58054f389275f438d72ebaf7dd4f3983",
+      "bytes": 525
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/narrow-de16d59.log",
+      "sha256": "cfdfd87a560f6796c2b177f18924b41879599368257ab792c213ed2682b326e5",
+      "bytes": 282
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/wheel-build-de16d59.log",
+      "sha256": "6e6a8e8d005294cb3787d42bf78e03d1582078ae684892d8adb44dd87acebfe2",
+      "bytes": 38652
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/wheel-install-de16d59.log",
+      "sha256": "bdb5e4333bba67237e5b632cf200edfe0347e1fb2a73e98a459fb4d6ed4f69d5",
+      "bytes": 608
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/wheel-identities-de16d59.json",
+      "sha256": "bc6d9db32ee02733731ce46febd76cce85181daaa7112e33aa5d20314a0e64a1",
+      "bytes": 20134
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-de16d59.log",
+      "sha256": "35f8cf9f9842858589f812529f170ff271edb06a8d71836830f4b69b7d4c3f6a",
+      "bytes": 31467
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-timeout-cleanup.json",
+      "sha256": "da3d4517f1db966cbd75d08bea1ddc79840a0e275a846ad4a57fed36c4cf4deb",
+      "bytes": 326
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-de16d59-final.log",
+      "sha256": "41f737e51cb79ed993f94380d5a74865d957c0aa25c75124d266c8bde01e9f07",
+      "bytes": 25988
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-result.json",
+      "sha256": "9101f3d4d38af776160a55a760343c5441812c75ef64a65ade3ed433c454afd3",
+      "bytes": 20402
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/performance-extra.json",
+      "sha256": "cfca4e6005d7c5fceaf91f2405ad240d712b25002328fda88aad3c81bf2d34d6",
+      "bytes": 499
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/performance-extra.log",
+      "sha256": "4d00eea0b478f6257bd2e232e73036fb2356bbefd584a0eeff8123cffe3d44b4",
+      "bytes": 501
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/timings-final.json",
+      "sha256": "f526dfe2281569956263dfb9a38e3a4a715cd4143b2e1df458f773b8fa01ef2b",
+      "bytes": 1349
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/pg-initial.json",
+      "sha256": "2d16f411ccbf1014596d1d324b528abeedc3396fb315890a8bc16204268f7ed8",
+      "bytes": 354
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/pg-final.json",
+      "sha256": "bdd937f30e1b1a11c0d50af03ebf3e6d8ad775d0a8bd70a87d379241214abbd4",
+      "bytes": 563
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/pg-stop-result.log",
+      "sha256": "fc73219e4aaf5bed449750d3ec7f8d4b14657c865c9a200b1f68d958cc919650",
+      "bytes": 565
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/preservation.json",
+      "sha256": "23c07dacb7013bff09ab3066d8328333a1f549a67d718e37c632f185748052b5",
+      "bytes": 2805
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/review-print-layout.json",
+      "sha256": "10ffeeb9d995d291a7606bc22cba75ed915fc1b8feea04c069f67e3b2ddf3061",
+      "bytes": 352
+    },
+    {
+      "path": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/8c7534f1-33f4-4e77-8a67-634dd0010586/spec16/review-safety.md",
+      "sha256": "7123b557f9f15a81b595c40cb8c28025ffc17baa6d1e3aba25570db81a5bb85c",
+      "bytes": 5307
+    },
+    {
+      "path": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/8c7534f1-33f4-4e77-8a67-634dd0010586/spec16/review-journey.md",
+      "sha256": "7a0d278cd2d177c29c4e1bfbe57a51d8ab20296b517b5c9385b0decbcdf0adaf",
+      "bytes": 8508
+    },
+    {
+      "path": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/34e6c269-450b-4448-afc4-79004addafbe/spec16/review1-auth.md",
+      "sha256": "8cf69b9ff9c98a8969023d02a7bae57e527151588cf5fb9f4fe6daa4c7dc89ef",
+      "bytes": 9370
+    },
+    {
+      "path": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/34e6c269-450b-4448-afc4-79004addafbe/spec16/review1-authoring.md",
+      "sha256": "2ba0ec728100ff72a5da99d406d234a3164957d915b3c29c936fd7a4e51e243a",
+      "bytes": 6276
+    },
+    {
+      "path": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/34e6c269-450b-4448-afc4-79004addafbe/spec16/review1-structure.md",
+      "sha256": "4f2c6ea0ded9a405a1ebdba52a99d34907cafbde0fe1c4acca5a4603cab1405c",
+      "bytes": 7000
+    },
+    {
+      "path": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/34e6c269-450b-4448-afc4-79004addafbe/spec16/review1-print.md",
+      "sha256": "3ddb03bc93a3dc59ff0e6eeeb96642750fd72222c360e011178e5d672671b545",
+      "bytes": 4129
+    },
+    {
+      "path": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/c690e8e3-00a9-43a6-9447-c7af2e1d792f/spec16/review1-auth-legacy.md",
+      "sha256": "78935e9bc5fe7e859cf3e3568f89e68eee8ad9f51b6785fc9ec4c71b667d1e5f",
+      "bytes": 7678
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_J1_real_scene_insert_paste_delete_and_delayed_ack.png",
+      "sha256": "b72f930d0dfa7fab843a1591c5104223557992dd28708c2e3f2711886765441b",
+      "bytes": 124561
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_J2_J4_real_remove_merge_retains_media_and_populates_outline_navigation.png",
+      "sha256": "6b735e64f8af2f77d20ce2266f144c160ff1d6b50e4bfdec5540c53dcf95ef29",
+      "bytes": 95065
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_J3_real_failed_outline_checkpoint_navigation_and_stale_recovery.png",
+      "sha256": "1010cd92bad8f6a19ecf2c51e317f5088f95f813a460d5b5633ddca1133ff1ef",
+      "bytes": 120996
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_J5_real_root_sanitized_print_preserves_hard_breaks.png",
+      "sha256": "79c6568fccdafe76ac7f32af8e944f1aefa4c3d82161cb0d7f1181bd294fbe96",
+      "bytes": 99572
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_outline_notes_replace_office_and_print.png",
+      "sha256": "e5e8db27ddcd2e03791bf4956a49f94a94644a82244648825dbca58c33baa00d",
+      "bytes": 123205
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_real_long_script_timings_and_text_only_build.png",
+      "sha256": "fb5c7094577b39a0dc4ef91c51bd9b3a15724336d7d4dfa6b56132924b8e47cb",
+      "bytes": 208982
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_root_logout_requires_exact_private_preservation_and_isolates_next_actor.png",
+      "sha256": "8c865fde31f10beb319e901463db0d8f7268ecbe8bb2331fdbebd862bf346d95",
+      "bytes": 128930
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_root_save_private_novel_compare_and_adopt.png",
+      "sha256": "23265cfe89bbaf6852361431ac3c15c648e23b12d27f8d9b9e54303cbd5a520b",
+      "bytes": 78945
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_S1_real_late_ack_after_external_identity_disposal_keeps_newer_A_journal.png",
+      "sha256": "f70c8582f1a14d4203a5d88b9caa983bffee1d39c9c01e0e27305c96cfb3a3f6",
+      "bytes": 96118
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_scoped_impact_live_alignment_and_text_only_build.png",
+      "sha256": "34ca01b16c6f44cb50ce2348b9d3ff9a03f0729194c97e8691ed5ad10fa64372",
+      "bytes": 335902
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/test_two_context_conflict_offline_and_actor_privacy.png",
+      "sha256": "1fc5419b7f75c17dd5c26c4064a38eade5e89e037e698e333af2c834f6e2556c",
+      "bytes": 68456
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/browser/narrow-final/test_root_logout_requires_exact_private_preservation_and_isolates_next_actor.png",
+      "sha256": "cbee43be9ace11bd4364628e04a50cd2bca038ac8fad0acd445951b32b97101b",
+      "bytes": 81742
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-browser/test_J1_real_scene_insert_paste_delete_and_delayed_ack.png",
+      "sha256": "9085a54d9ba970356dfe639c1802e10da85d0a5ba90c45ae5980107f1414554e",
+      "bytes": 124546
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-browser/test_J2_J4_real_remove_merge_retains_media_and_populates_outline_navigation.png",
+      "sha256": "47bd317a66bdc304a26d5b62167523bd5c760c15b98dd339795748604ed85129",
+      "bytes": 94834
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-browser/test_J3_real_failed_outline_checkpoint_navigation_and_stale_recovery.png",
+      "sha256": "c7cf66374b740ff2f084b63e12a0964990a5a602d978b18fdfd2cbee2b2a3c67",
+      "bytes": 121014
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-browser/test_J5_real_root_sanitized_print_preserves_hard_breaks.png",
+      "sha256": "7d555fa6db47504696ff2539747e263d7d4402138d73a832d5b3badc8f736953",
+      "bytes": 99251
+    },
+    {
+      "path": "C:/ai_project/ZeroField-spec16-20261023-b1/integration-validation/review1/installed-browser/test_S1_real_late_ack_after_external_identity_disposal_keeps_newer_A_journal.png",
+      "sha256": "6be633ee2275b3283c53d60cb396dba78eb16b65ba0f8f1b1117b678ca5f9d86",
+      "bytes": 96201
+    }
+  ],
+  "manualNotes": "Read actual repaired root/seams and inspected desktop/768px scene editing, controlled metadata conflict, and visible compact Sign out screenshots. Exact four repair commits plus original-owner legacy correction are preserved; only narrow root locale registration/static/test harness and docs were integrated. No skills, nested agents, coding CLI fallback, global defaults, original checkout/index writes, foreign process stops, push or source promotion. Credentials/build environments/raw logs stay outside product commits."
+}

@@ -56,9 +56,9 @@ _PROCESS = uuid.uuid4().hex
 
 
 class StoryError(ValueError):
-    def __init__(self, status, code, message):
+    def __init__(self, status, code, message, details=None):
         super().__init__(message)
-        self.status, self.code = status, code
+        self.status, self.code, self.details = status, code, details
 
 
 def invalid(message):
@@ -158,9 +158,11 @@ def project(conn, identifier):
 
 def episodes(conn, slug):
     found = records(conn, "episode", slug)
-    if not found and repo.get_tab(conn, slug, "director-brief"):
+    if not any(e.get('episodeId') == f'ep_{slug}_01' for e in found) and repo.get_tab(conn, slug, "director-brief"):
+        # The legacy first episode is implicit until an old mutation persists it.
+        # Creating episode 2 must not make already-saved episode-1 writing resources unreachable.
         found = [{"episodeId": f"ep_{slug}_01", "projectId": "pj_" + slug, "slug": slug,
-                  "episodeIndex": 1, "title": "Episode 1", "tabKey": "director-brief", "settings": {}}]
+                  "episodeIndex": 1, "title": "Episode 1", "tabKey": "director-brief", "settings": {}}] + found
     return sorted(found, key=lambda e: e["episodeIndex"])
 
 
@@ -242,7 +244,7 @@ def save_doc(conn, me, slug, key, doc):
             raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "This content belongs to another crew member.")
     doc, _ = validate_doc(doc, slug=slug)
     repo.save_tab_doc(conn, slug, key, doc=doc, title=tab["title"], actor_id=me.actor_id,
-                      session_id="story-" + uuid.uuid4().hex, base_revision=tab["revision"], force_revision=True)
+                      session_id="story-" + uuid.uuid4().hex, base_revision=tab["revision"], force_revision=True, trusted_writer=me)
     repo.add_audit(conn, slug, action="edit", actor_id=me.actor_id, tab_key=key,
                    detail={"source": "rh_story", "changes": service.doc_changes(tab["doc"], doc)})
     service.reanchor_tab(conn, slug, key, doc, actor_id=me.actor_id)
@@ -446,6 +448,18 @@ def locate_scene(conn, identifier):
 
 
 def write_scenes(conn, me, ep, items, redirects=None):
+    from project_docs import writing_structure
+    with writing_structure.deferred_reconciliation(conn,ep['slug'],ep['tabKey']):
+        return _write_scenes(conn,me,ep,items,redirects)
+
+
+def _write_scenes(conn, me, ep, items, redirects=None):
+    from project_docs import writing_store, writing_structure
+    writing_scope = writing_store.scope_for(conn, me, ep['episodeId'], write=True)
+    writing_store.lock_project(conn, writing_scope)
+    # This legacy operation supplies explicit old scene IDs, unlike blind whole-script writes.
+    before_structure = writing_structure.read_structure(conn, writing_scope)
+    old_stable = {s['legacySceneId']: s['sceneKey'] for s in before_structure['scenes']} if before_structure['initialized'] else {}
     mapping = {s['sceneId']: (f"sc_{ep['slug']}_{ep['episodeIndex']:02d}_S{i:02d}", i)
                for i, s in enumerate(items, 1) if s.get('sceneId')}
     content = []
@@ -453,10 +467,29 @@ def write_scenes(conn, me, ep, items, redirects=None):
         title = re.sub(r"^Scene\s*\d+\s*[:：.-]?\s*", "", item['title'], flags=re.I) or "Scene"
         content.append(f"## Scene {i:02d}: {title}\n\n{item['content'].strip()}")
     result = set_script(conn, me, ep, "\n\n".join(content))
+    if old_stable:
+        current_doc = repo.get_tab(conn, ep['slug'], ep['tabKey'])['doc']
+        current_sections = writing_structure.sections(current_doc)
+        lineage = {writing_structure.bid(section['heading']): old_stable[item['sceneId']]
+                   for section, item in zip(current_sections, items)
+                   if section['heading'] and item.get('sceneId') in old_stable}
+        lineage.update({old_stable[old]: old_stable[new] for old, new in (redirects or {}).items()
+                        if old in old_stable and new in old_stable})
+        reconciled = writing_structure.reconcile_structure(current_doc, before_structure, lineage=lineage)
+        writing_structure.finalize_structure_change(conn, writing_scope, before_structure, reconciled)
+        return result
     for shot in shots(conn, ep):
         old = shot.get('sceneId')
         new = mapping.get((redirects or {}).get(old, old))
-        if not new or new[0] == old:
+        if not new:
+            if old:
+                from project_docs import writing_impact
+                writing_impact._check_row(conn, writing_scope, shot)
+                meta = shot_meta(conn, shot['shotId']) | {'sceneId': None,
+                    'detachedScene': {'legacySceneId': old, 'sceneKeys': [], 'state': 'source_removed'}}
+                store(conn, 'meta_' + shot['shotId'], 'shot_meta', meta, ep['slug'])
+            continue
+        if new[0] == old:
             continue
         meta = shot_meta(conn, shot['shotId']) | {'sceneId': new[0]}
         store(conn, 'meta_' + shot['shotId'], 'shot_meta', meta, ep['slug'])
@@ -474,7 +507,10 @@ def completed_task(conn, me, slug, kind, result):
 
 
 def extract(conn, me, ep):
-    repo.get_tab_for_update(conn, ep["slug"], ep["tabKey"])
+    from project_assistant.orchestrator import lock_project
+    lock_project(conn, ep['slug'])
+    for key in sorted({ep['tabKey'], 'soul-cast'}):
+        repo.get_tab_for_update(conn, ep['slug'], key)
     content = script(conn, ep)
     if not content.strip():
         raise StoryError(422, "DRAMA_STAGE_INPUT_EMPTY", "Write a script before extracting assets.")
@@ -502,7 +538,30 @@ def extract(conn, me, ep):
     ep["extractedAssetCodes"] = list(details)
     ep["confirmedHash"] = digest(content)
     store(conn, ep["episodeId"], "episode", ep, ep["slug"])
+    from project_docs import writing_store, writing_versions
+    writing_scope = writing_store.scope_for(conn, me, ep['episodeId'], write=True)
+    writing_versions.confirm_baseline(conn, writing_scope, expected_doc_hash=writing_store.doc_hash(repo.get_tab(conn, ep['slug'], ep['tabKey'])['doc']), extracted=True)
+    ep.update(episode(conn, ep['episodeId']))
     return completed_task(conn, me, ep["slug"], "ASSET_EXTRACT", {"assetsCount": len(existing.keys() | details.keys()), "scenesCount": len(scenes(conn, ep))})
+
+
+def scene_matcher(conn, me, ep, *, write=False):
+    """(shot, scene) -> does this slate shot belong to this scene.
+
+    Once the writing structure exists the answer rests on the stable scene relationship, not on a positional scene id that a reorder can
+    reuse; before that it is the old positional check. The build and its estimate both ask this, so the numbers shown before a build stay
+    the numbers the build produces.
+    """
+    from project_docs import writing_store, writing_structure
+    structure = writing_structure.read_structure(conn, writing_store.scope_for(conn, me, ep['episodeId'], write=write))
+    stable = {s['legacySceneId']: s['sceneKey'] for s in structure['scenes']}
+
+    def belongs(shot, scene):
+        if not structure['initialized']:
+            return shot.get('sceneId') == scene['sceneId']
+        keys, _, missing = writing_structure.compatibility_relationship(structure, shot)
+        return not missing and keys == [stable.get(scene['sceneId'])]
+    return belongs
 
 
 def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
@@ -510,18 +569,23 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     mode = ep.get("breakdownMode", ep.get("settings", {}).get("breakdownMode", "auto")) if breakdown_mode is None else breakdown_mode
     if not isinstance(mode, str) or mode not in BREAKDOWN_MODES:
         invalid("Unknown breakdownMode.")
-    repo.get_tab_for_update(conn, ep["slug"], ep["tabKey"])
+    from project_assistant.orchestrator import lock_project
+    lock_project(conn, ep['slug'])
+    for key in sorted({ep['tabKey'], 'cinema-studio'}):
+        repo.get_tab_for_update(conn, ep['slug'], key)
     scene_list = scenes(conn, ep)
     if ep.get("confirmedHash") != digest(script(conn, ep)) or not scene_list:
         raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before building storyboards.")
     previous = shots(conn, ep)
+    belongs = scene_matcher(conn, me, ep, write=True)
     medium = script_medium_lens(script(conn, ep))  # a composed script carries its Lens line
     plans = planner.beat_plans(scene_list, mode, only_scene)
     if sum(len(beats) for _, beats in plans) > planner.MAX_BUILD_SHOTS:
         invalid("A storyboard build supports at most 200 shots; split the script into episodes.")
     created = []
+    origin_updated = []
     for scene, beats in plans:
-        steps, surplus = planner.scene_steps(scene, beats, previous, rebuild=bool(only_scene))
+        steps, surplus = planner.scene_steps(scene, beats, previous, rebuild=bool(only_scene), belongs=belongs)
         scene_refs = [asset_code(m[1]) for m in ASSET_RE.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-"))]
         scene_refs = list(dict.fromkeys(scene_refs)) or [f"SET-{scene['sceneIndex']:02d}"]
         cast = {a["name"].casefold(): a["assetCode"] for a in assets(conn, ep) if a["type"] == "CHARACTER" and a["isDefault"]}
@@ -543,9 +607,17 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
                 rid = mutate_row(conn, me, ep["slug"], "cinema-studio", cells=cells | {6: "Queued"})
             identifier = f"sh_{ep['slug']}_{rid}"
             meta = shot_meta(conn, identifier) | {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"], "dialogue": grammar["dialogue"], "previsPlan": grammar["previsPlan"]}
+            meta.pop('detachedScene', None)  # Only an actual current derivation clears the detach marker.
             store(conn, "meta_" + identifier, "shot_meta", meta, ep["slug"])
             created.append({"shotId": identifier})
+            origin_updated.append(identifier)
         created.extend(surplus)  # Never delete existing takes when a scene becomes shorter.
+    if origin_updated and ep.get('productionScriptVersionId'):
+        from project_docs import writing_store
+        from importlib.util import find_spec
+        if find_spec('project_docs.writing_impact') is not None:
+            from project_docs import writing_impact
+            writing_impact.bind_generated_shots(conn, writing_store.scope_for(conn, me, ep['episodeId'], write=True), origin_updated, version_id=ep['productionScriptVersionId'])
     return completed_task(conn, me, ep["slug"], "STORYBOARD_GENERATE", {"shotsCount": len(created)})
 
 
@@ -568,8 +640,14 @@ def candidate_list(conn, identifier, kind):
         urls.append(current)
     urls.extend(c["url"] for c in records(conn, "candidate", slug) if c["entityId"] == identifier and c["kind"] == kind)
     prefix, key = ("im_", "imageId") if kind == "image" else ("vd_", "videoId")
-    return [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current}
-            for url in dict.fromkeys(urls)]
+    result = [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current}
+              for url in dict.fromkeys(urls)]
+    if entity == 'shot':
+        from project_docs import writing_impact
+        evidence = [c for c in records(conn, 'candidate', slug) + records(conn, 'story_media_receipt', slug)
+                    if c['entityId'] == identifier and c['kind'] == kind]
+        result = [writing_impact.candidate_view(c, writing_impact.candidate_evidence(evidence, c['url'])) for c in result]
+    return result
 
 
 def select_candidate(conn, me, identifier, kind, body):
@@ -723,6 +801,10 @@ def generation_job(conn, me, identifier, kind, body):
     episode_id = shot_view(conn, slug, row).get('episodeId', 'ep_' + slug + '_01') if identifier.startswith('sh_') else None
     job = {"episodeId": episode_id, "entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
            "card": card, "workflow": workflow, "values": values, "column": column, "production_policy": policy}
+    if identifier.startswith('sh_'):
+        from project_docs import writing_impact
+        job['storyProvenance'] = writing_impact.freeze_for_shot(conn, me, identifier)
+        writing_impact.validate_frozen_row(job['storyProvenance'], job['row']['cells'])
     if body.get("_allocation"):
         job["allocation"] = copy.deepcopy(body["_allocation"])
         job['_accounting_prefix'] = body.get('_accountingPrefix') or 'generation:' + uuid.uuid4().hex
@@ -958,11 +1040,16 @@ def execute_task(identifier):
                 if not output["content_type"].startswith(job["kind"] + "/"):
                     raise worker.WorkerError("The card produced the wrong media type.")
                 result = {job["kind"] + "Url": output["asset_url"]}
-                store(conn, "ca_" + identifier, "candidate", {"entityId": job["entityId"], "kind": job["kind"], "url": output["asset_url"]}, slug)
+                from project_docs import writing_impact
+                evidence = job.get('storyProvenance')
+                if job['entityId'].startswith('sh_'):
+                    result = writing_impact.candidate_view(result, evidence)
+                store(conn, "ca_" + identifier, "candidate", {"entityId": job["entityId"], "kind": job["kind"], "url": output["asset_url"],
+                      **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
                 repo.get_tab_for_update(conn, slug, job["row"]["tabKey"])
                 _, row = find_row(conn, job["entityId"], "shot" if job["entityId"].startswith("sh_") else "asset")
                 # A delayed render is kept as a candidate, not allowed to overwrite a newer selection.
-                if row["cells"] == job["row"]["cells"]:
+                if row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
                     mutate_row(conn, me, slug, row["tabKey"], row["rid"], {job["column"]: f"[{job['kind']}]({output['asset_url']})"})
                     if job["kind"] == "video" and job["entityId"].startswith("sh_"):
                         from project_docs import story_trim
@@ -1120,6 +1207,12 @@ def dispatch(conn, me, method, path, body, query, actions):
         previewed = story_estimates.dispatch(conn, me, method, path, body)
     if previewed is not None:
         return previewed
+    from project_docs import writing_http, writing_store
+    writing_match = writing_http.ROUTE.fullmatch(path)
+    if writing_match:
+        tail = writing_match[2] or 'workspace'
+        scope = writing_store.scope_for(conn, me, writing_match[1], write=not (method == 'GET' or (method == 'POST' and tail in ('search','compare','exports'))))
+        return writing_http.dispatch(conn, scope, method, tail, body, query)
     if method != "GET" and not me.can_write:
         raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
     parts = path.strip("/").split("/")
@@ -1133,6 +1226,8 @@ def dispatch(conn, me, method, path, body, query, actions):
         target = parts[1] if len(parts) > 1 else str(body.get("slug", "new-production"))
         match = re.match(r"(?:pj_|ep_|as_|sh_|sc_)([a-z0-9-]+)(?:_|$)", target)
         scope = match[1] if match else target
+        from project_assistant.orchestrator import lock_project
+        lock_project(conn, scope)
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("story-write:" + scope,))
     if path == "/capabilities" and method == "GET":
@@ -1530,6 +1625,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             other = f"sh_{slug}_{rid}"
             from project_docs import story_trim
             store(conn, "meta_" + other, "shot_meta", story_trim.strip(shot_meta(conn, identifier)), slug)  # the new half has no take yet
+            from project_docs import writing_impact
+            writing_impact.split_lineage(conn, slug, identifier, other)
             return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1])]}
     if parts[0] == "scenes" and len(parts) >= 2:
         ep, scene = locate_scene(conn, parts[1]); tail = "/".join(parts[2:])
@@ -1559,6 +1656,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             slug, row = found[0]
             column = next((i for i, h in enumerate(row["headers"]) if re.search("prompt", h, re.I)), 3)
             mutate_row(conn, me, slug, row["tabKey"], row["rid"], {column: "\n".join(r["cells"][column] for _, r in found)})
+            from project_docs import writing_impact
+            writing_impact.merge_lineage(conn, slug, ids)
             for lost_id, (_, other) in zip(ids[1:], found[1:]):
                 for kind in ('image', 'video'):
                     try:
@@ -1567,7 +1666,8 @@ def dispatch(conn, me, method, path, body, query, actions):
                         candidates = []
                     for candidate in candidates:
                         store(conn, 'ca_merge_' + digest([ids[0], kind, candidate['url']]), 'candidate',
-                              {'entityId': ids[0], 'kind': kind, 'url': candidate['url']}, slug)
+                              {'entityId': ids[0], 'kind': kind, 'url': candidate['url'],
+                               'storyProvenance': candidate.get('storyProvenance')}, slug)
                 mutate_row(conn, me, slug, row["tabKey"], other["rid"], delete=True)
             return shot_view(conn, slug, find_row(conn, ids[0], "shot")[1])
         found = [locate_scene(conn, i) for i in ids]
@@ -1697,6 +1797,9 @@ def handle(handler, parsed, method):
             raise StoryError(401, "DRAMA_AUTH_MISSING" if not auth else "DRAMA_AUTH_INVALID", "Sign in or supply a valid Bearer token.")
         if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
             raise StoryError(400, "DRAMA_REQUEST_FAILED", "Unsupported method.")
+        from project_docs import writing_http
+        if writing_http.handle(handler, parsed, method, me):
+            return True
         if method != "GET":
             if not me.can_write and not re.fullmatch(BASE + r"/episodes/[^/]+/(?:script-impact|storyboard-estimates)/?", parsed.path):  # read-only previews
                 raise StoryError(409, "DRAMA_OPERATION_NOT_ALLOWED", "Read-only crew members cannot modify productions.")
@@ -1705,6 +1808,10 @@ def handle(handler, parsed, method):
                 refused = http._write_allowed(handler)
                 if refused:
                     raise StoryError(400, "DRAMA_REQUEST_FAILED", refused)
+        # Bound authoring callers also use legacy tools. Check their expectation before
+        # body-driven work, early responses or idempotency replay; header-less clients
+        # keep the existing legacy contract. Authentication and CSRF remain independent.
+        writing_http.validate_expected_actor(handler, me.actor_id)
         path = parsed.path[len(BASE):] or "/"
         body, raw = {}, b""
         is_file = path == "/files" and method == "POST"
@@ -1772,7 +1879,10 @@ def handle(handler, parsed, method):
             status, code, message = 422, "DRAMA_VALIDATION_FAILED", "Invalid request or incompatible production sheet."
         else:
             status, code, message = 500, "DRAMA_REQUEST_FAILED", "Story service unavailable; check server deployment."
-        handler.send_json(status, {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]})
+        payload = {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]}
+        if isinstance(exc, StoryError) and exc.details is not None:
+            payload['details'] = exc.details
+        handler.send_json(status, payload)
     finally:
         if conn:
             conn.close()

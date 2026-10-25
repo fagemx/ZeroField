@@ -267,6 +267,27 @@ def preview_import_file(conn, me: Identity, slug: str, filename: str, data: byte
         return _error(400, str(exc))
 
 
+def _writing_save_boundary(fn):
+    """Translate bounded structural conflicts after rolling back the whole call."""
+    from functools import wraps
+    @wraps(fn)
+    def invoke(conn,*args,**kwargs):
+        from project_docs import story_openapi, writing_structure
+        from psycopg.errors import LockNotAvailable
+        from contextlib import nullcontext
+        try:
+            # Pure import validation callers may supply no connection while all
+            # persistence is substituted; HTTP/runtime callers always have one.
+            with writing_structure.savepoint(conn) if conn is not None else nullcontext():
+                return fn(conn,*args,**kwargs)
+        except LockNotAvailable:
+            return 409,{'error':'An affected production page is busy; nothing was saved.','code':'DRAMA_WRITING_LOCKED'}
+        except story_openapi.StoryError as exc:
+            return exc.status,{'error':str(exc),'code':exc.code}
+    return invoke
+
+
+@_writing_save_boundary
 def import_tab_file(conn, me: Identity, slug: str, filename: str, data: bytes, *,
                     tab_key=None, base_revision=None, header_row=1, worksheet=None, delivery_mode="original_patch", confirm_replace=False):
     """Import and replace inside the caller's transaction with a locked revision check."""
@@ -314,7 +335,7 @@ def import_tab_file(conn, me: Identity, slug: str, filename: str, data: bytes, *
         changes = doc_changes(tab["doc"], doc)
         repo.save_tab_doc(conn, slug, tab_key, doc=doc, title=tab["title"], actor_id=me.actor_id,
                           session_id="import-" + secrets.token_hex(8), base_revision=tab["revision"],
-                          force_revision=True)
+                          force_revision=True, trusted_writer=me)
     else:
         doc = imported.doc
         tab_key = "t-" + secrets.token_hex(8)
@@ -416,7 +437,7 @@ def _run_ops(conn, me: Identity, slug: str, key: str, tab: dict, ops, session_id
     revision, saved_at = tab["revision"], tab["updated_at"]
     if result.applied and doc != tab["doc"]:
         saved = repo.save_tab_doc(conn, slug, key, doc=doc, title=tab["title"], actor_id=me.actor_id,
-                                  session_id=session_id, base_revision=None)
+                                  session_id=session_id, base_revision=None, trusted_writer=me)
         revision, saved_at = saved["revision"], saved["saved_at"]
         repo.add_audit(conn, slug, action="edit", actor_id=me.actor_id, tab_key=key,
                        detail={"revision": revision, "session": session_id,
@@ -430,6 +451,7 @@ def _run_ops(conn, me: Identity, slug: str, key: str, tab: dict, ops, session_id
     return result, doc, revision, saved_at
 
 
+@_writing_save_boundary
 def apply_tab_ops(conn, me: Identity, slug: str, key: str, body: dict):
     tab = repo.get_tab_for_update(conn, slug, key)
     if not tab:
@@ -529,6 +551,7 @@ def _later_people(conn, edits) -> list[dict]:
     return list(out.values())
 
 
+@_writing_save_boundary
 def revert_change(conn, me: Identity, slug: str, key: str, body: dict):
     """改回修改紀錄裡的一處：一段、表格的一列，或一格狀態／可填格／勾選。名單上的人都可以（跟改字同一種權限）。
 
@@ -691,6 +714,7 @@ def create_tab(conn, me: Identity, slug: str, body: dict):
     return 200, {"tab": repo.get_tab(conn, slug, key), "tabs": repo.list_tabs(conn, slug)}
 
 
+@_writing_save_boundary
 def update_tab(conn, me: Identity, slug: str, key: str, body: dict):
     tabs = repo.list_tabs(conn, slug)
     tab = next((t for t in tabs if t["key"] == key), None)
@@ -756,7 +780,7 @@ def _rename_heading(conn, me: Identity, slug: str, key: str, old: str, new: str)
     doc = dict(tab["doc"], content=[dict(first, content=[{"type": "text", "text": new}]), *tab["doc"]["content"][1:]])
     doc, _ = validate_doc(doc, slug=slug)
     saved = repo.save_tab_doc(conn, slug, key, doc=doc, title=new, actor_id=me.actor_id,
-                              session_id="rename-" + secrets.token_hex(6), base_revision=None)
+                              session_id="rename-" + secrets.token_hex(6), base_revision=None, trusted_writer=me)
     repo.add_audit(conn, slug, action="edit", actor_id=me.actor_id, tab_key=key,
                    detail={"revision": saved["revision"], "session": "rename", "changes": doc_changes(tab["doc"], doc)})
     reanchor_tab(conn, slug, key, doc, actor_id=me.actor_id)
@@ -802,6 +826,7 @@ def restore_tab(conn, me: Identity, slug: str, key: str):
     return 200, {"tabs": repo.list_tabs(conn, slug)}
 
 
+@_writing_save_boundary
 def restore_revision(conn, me: Identity, slug: str, key: str, revision: int):
     problem = _need_editor(me)
     if problem:
@@ -814,7 +839,7 @@ def restore_revision(conn, me: Identity, slug: str, key: str, revision: int):
         return _error(404, "Page not found.")
     doc, _ = validate_doc(old["doc"], slug=slug)
     result = repo.save_tab_doc(conn, slug, key, doc=doc, title=old["title"], actor_id=me.actor_id,
-                               session_id="restore-" + secrets.token_hex(6), base_revision=tab["revision"])
+                               session_id="restore-" + secrets.token_hex(6), base_revision=tab["revision"], trusted_writer=me)
     if not result.get("unchanged"):
         repo.add_audit(conn, slug, action="revision_restore", actor_id=me.actor_id, tab_key=key,
                        detail={"from_revision": revision, "replaced_revision": tab["revision"],

@@ -1,0 +1,11 @@
+{
+  "outlineDraft": "Outline metadata draft",
+  "restoreOutline": "Restore outline draft for review",
+  "discardOutlineRecovery": "Discard this outline recovery",
+  "keepOutlineRecovery": "Keep this exact outline recovery privately for my account",
+  "saveOutline": "Save outline metadata",
+  "discardOutline": "Discard outline draft and read current structure",
+  "keepOutline": "Keep this exact outline draft privately for my account",
+  "downloadOutline": "Download outline draft",
+  "outlineNoRebase": "The shared structure changed. This draft keeps base version {{version}} and will not overwrite the current metadata. Download it before discarding, then review and re-enter your changes against the current structure."
+}

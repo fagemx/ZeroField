@@ -35,6 +35,20 @@ export function MediaLadder({steps, onOpen, onPlan}) {
   </div>;
 }
 
+import { semanticEnumKey } from './writing/writingModel.js';
+
+// Only the live writing/alignment projection is freshness authority (never cached shot_meta).
+export function ShotSourceBadge({alignment, shotId, onSource}) {
+  useLocale();
+  const item = alignment?.items.find(item => item.shotId === shotId);
+  if (!item) return <p role="status">{t('writing.integration.alignmentUnavailable')}</p>;
+  return <section className="shot-source" aria-label={t('writing.integration.storySource')}>
+    <b>{t('writing.authoring.' + semanticEnumKey('alignment', item.storyAlignment.state))}</b>
+    {item.storyAlignment.mediaOutdated && <p>{t('writing.integration.oldMedia')}</p>}
+    {item.sourceRef && <button type="button" onClick={() => onSource?.(item.sourceRef)}>{t('writing.authoring.backToSource')}</button>}
+  </section>;
+}
+
 // SPEC_15 Shot Stage: the storyboard, the 3D stage and review are views of one shot list, not three stations.
 const cover = (parsed, row) => mediaStages(parsed, row).filter(stage => stage.media).find(stage => stage.type === 'image') || null;
 

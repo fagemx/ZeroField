@@ -22,17 +22,18 @@ export const PROJECT_STATUS = {
   archived: { get label() { return uiText("surfaces.archived"); }, color: "var(--faint)", bg: "#161616" },
 };
 
-export function IdentityBadge({ me, members }) {
+export function IdentityBadge({ me, members, beforeIdentity, onSignOut }) {
   const locale = useLocale();
   const list = members || [];
   if (list.length <= 1 || me.auth_mode !== "dev") {
-    return (
+    return <>
       <span className="me" title={uiText("surfaces.asSignedIn", {v0: (me.name), v1: (roleLabel(me.role, me.role_label))})}>
         <Avatar id={me.actor_id} name={me.name} size={26} />
         <span className="name">{me.name}</span>
         <small>{roleLabel(me.role, me.role_label)}</small>
       </span>
-    );
+      {me.auth_mode === 'token' && onSignOut && <button type="button" onClick={onSignOut}>{uiText('writing.integration.signOut')}</button>}
+    </>;
   }
   return (
     <span className="me" title={uiText("surfaces.switchCrewIdentityDevelopmentDemoMode")}>
@@ -40,9 +41,11 @@ export function IdentityBadge({ me, members }) {
       <select
         aria-label={uiText("surfaces.switchIdentity")}
         value={me.actor_id}
-        onChange={(e) => {
+        onChange={async (e) => {
+          const actor = e.target.value;
+          if (beforeIdentity && !await beforeIdentity()) return;
           const next = encodeURIComponent(window.location.pathname + window.location.hash);
-          window.location.href = `/__who?actor=${encodeURIComponent(e.target.value)}&next=${next}`;
+          window.location.href = `/__who?actor=${encodeURIComponent(actor)}&next=${next}`;
         }}
         style={{ border: "none", background: "transparent", font: "inherit", fontWeight: 600, cursor: "pointer" }}
       >

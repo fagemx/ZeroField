@@ -83,6 +83,8 @@ function ProjectPage({ slug }) {
   const locale = useLocale();
   const [data, setData] = useState(null);
   const [fatal, setFatal] = useState(null);
+  const expectedActor = useRef(null), [identityLost, setIdentityLost] = useState(false);
+  const loseWritingIdentity = useCallback(() => setIdentityLost(true), []);
   const rememberedHash = () => {try {return sessionStorage.getItem('zf.production:'+slug) || '';} catch {return '';}};
   const [consoleView, setConsoleView] = useState(() => consoleRoute(window.location.hash));
   const [tabKey, setTabKey] = useState(() => parseLocation(window.location.pathname, consoleRoute(window.location.hash) ? rememberedHash() : window.location.hash).tab);
@@ -107,6 +109,7 @@ function ProjectPage({ slug }) {
   const [versionsFor, setVersionsFor] = useState(null); // 左邊「⋯ → 找回以前的內容…」：換到那一頁後打開版本紀錄
   const [docModeTabs, setDocModeTabs] = useState({});
   const [storyEpisode, setStoryEpisode] = useState(`ep_${slug}_01`);
+  const [writingStatus, setWritingStatus] = useState(null), [writingFocus, setWritingFocus] = useState(null);
   const [paMode, setPaMode] = useState('off');
   const [paDraft, setPaDraft] = useState('');
   const [palette, setPalette] = useState(false), [filmOpen, setFilmOpen] = useState(false), [studioRail, setStudioRail] = useState(false), [studioModal, setStudioModal] = useState(null);
@@ -134,6 +137,11 @@ function ProjectPage({ slug }) {
     const seq = annSeq.current;
     try {
       const payload = await api.get(`/projects/api/${slug}`);
+      if (expectedActor.current && payload.me.actor_id !== expectedActor.current) {
+        // Do not upload, flush under the new cookie, or hand old private React state to a new actor.
+        setIdentityLost(true); return null;
+      }
+      expectedActor.current = payload.me.actor_id;
       setData((current) => {
         // 送出請求後自己又改了標註：這次的清單比較舊，留著自己的
         if (current && seq !== annSeq.current) return { ...payload, annotations: current.annotations };
@@ -142,6 +150,7 @@ function ProjectPage({ slug }) {
       document.title = payload.project.title;
       return payload;
     } catch (error) {
+      if (expectedActor.current && [401,403].includes(error.status)) setIdentityLost(true);
       setData((current) => {
         if (!current) setFatal(error);
         else onError(error.message);
@@ -531,6 +540,28 @@ function ProjectPage({ slug }) {
     loadProject();
   }, [loadTab, loadProject]);
   const flushSurface = useCallback(async () => (surfaceControl.current ? surfaceControl.current.flush() : true), []);
+  const flushIdentity = useCallback(async () => {
+    try {
+      if (!surfaceControl.current || await surfaceControl.current.flush({reason:'identity'})) return true;
+    } catch (error) { onError(error.message); return false; }
+    onError(uiText('writing.integration.identityBlocked'));
+    return false;
+  }, [onError]);
+  // Leaving the production (including sign-out links) honors the same save boundary.
+  useEffect(() => {
+    const leave = async event => {
+      const link = event.target.closest?.('a[href]');
+      if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || link.download || link.target === '_blank') return;
+      const url = new URL(link.href, location.href);
+      if (url.origin === location.origin && url.pathname === location.pathname) return;
+      if (identityLost && url.pathname === '/login') return;
+      event.preventDefault();
+      const safe = /logout|signout/i.test(url.pathname) ? await flushIdentity() : await flushSurface();
+      if (safe) location.assign(url.href);
+    };
+    document.addEventListener('click', leave);
+    return () => document.removeEventListener('click', leave);
+  }, [flushIdentity, flushSurface, identityLost]);
   const isStudio = Boolean(data?.tabs.some((t) => t.key === STAGE_TAB));
   const episode = useEpisode(slug, storyEpisode, (data?.tabs || []).map((t) => t.updated_at).join("|"), isStudio);
   // The shot a visit lands on when it carries a scene: the first waiting for review, else one missing an image, else the scene's first.
@@ -552,6 +583,14 @@ function ProjectPage({ slug }) {
     const shot = episode.shots.find((item) => item.rowId === rid);
     setFocus({ shotRid: rid, sceneId: shot?.sceneId ?? null });
   }, [episode.shots, setFocus]);
+  // From a shot back to the sentence it came from (SPEC_16A 3.2): the writing focus carries the scene key; the workspace scrolls there.
+  const openSource = useCallback(async (ref) => { if (await navigate(STORY_VIEW) && ref?.sceneKey) setWritingFocus({ ...ref, nonce: Date.now() }); }, [navigate]);
+  // The workspace asks for the stage with the shots of a scene; the build asks for it with nothing (SPEC_16A 3.2).
+  const stageOf = useCallback(async ({ shotIds = [] } = {}) => {
+    const shot = shotIds.length ? episode.shots.find((item) => item.shotId === shotIds[0]) : null;
+    return shot ? openShot(shot.rowId, shot.sceneId) : goStage();
+  }, [episode.shots, openShot, goStage]);
+  useEffect(() => {if (writingStatus?.docHash) episode.reload();}, [writingStatus?.docHash]); // live alignment after manuscript ACK, not cached shot_meta
   // Ctrl K opens the command palette; G opens or closes the Assistant when focus is not in a field.
   useEffect(() => {
     if (!isStudio || consoleView) return undefined;
@@ -588,6 +627,16 @@ function ProjectPage({ slug }) {
   if (!data) return <div className="center-note">{uiText("app.loading")}</div>;
 
   const me = data.me;
+  const signOut = async () => {
+    if (!await flushIdentity()) return;
+    try {
+      // Existing token endpoint: same-origin + projects CSRF header, 303 clears the HttpOnly session.
+      const response = await fetch('/logout', {method:'POST', credentials:'same-origin',
+        headers:{'X-Requested-With':'projects','Content-Type':'application/x-www-form-urlencoded'}, body:''});
+      if (!response.ok) {const payload = await response.json().catch(() => null); throw new Error(payload?.error || response.statusText);}
+      window.location.assign('/login');
+    } catch (error) {onError(error.message);}
+  };
   const tabs = data.tabs;
   const tab = tabKey ? docs[tabKey] : null;
   const todo = todoCount(data.annotations, me);
@@ -634,13 +683,14 @@ function ProjectPage({ slug }) {
   ] : [];
   return (
     <>
-    {consoleView && <AgentConsoleApp key={slug+':'+me.actor_id} slug={slug} me={me} project={data.project} route={consoleView} episodeId={storyEpisode} onReturn={returnProduction}/>}
-    <div data-console-hidden={Boolean(consoleView)} inert={consoleView ? true : undefined} aria-hidden={consoleView ? true : undefined} className={"app workbench-app surface-" + (storyView ? "story" : timelineView ? "timeline" : tab?.surface_type || "doc") + (isStudio ? " studio-shell" : "") + ((isStudio ? !studioRail : railHidden) ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
+    {identityLost && <section className="center-note" role="alert"><p>{uiText('writing.integration.identityChanged')}</p><a href="/login">{uiText('writing.integration.signIn')}</a></section>}
+    {consoleView && !identityLost && <AgentConsoleApp key={slug+':'+me.actor_id} slug={slug} me={me} project={data.project} route={consoleView} episodeId={storyEpisode} onReturn={returnProduction}/>}
+    <div data-console-hidden={Boolean(consoleView || identityLost)} inert={consoleView || identityLost ? true : undefined} aria-hidden={consoleView || identityLost ? true : undefined} className={"app workbench-app surface-" + (storyView ? "story" : timelineView ? "timeline" : tab?.surface_type || "doc") + (isStudio ? " studio-shell" : "") + ((isStudio ? !studioRail : railHidden) ? " rail-off" : "") + (railOpen ? " rail-open" : "") + (me.can_edit ? " can-edit" : "")
       + (isStudio && layout.left === false ? " hide-left" : "") + (isStudio && layout.right === false ? " hide-right" : "") + (isStudio && layout.bottom === false ? " hide-bottom" : "")
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
       {isStudio ? <StudioTopBar project={data.project} episodes={episode.episodes} epId={storyEpisode}
         onEpisode={async (next) => { if (await flushSurface()) setStoryEpisode(next); }}
-        space={space} pageTitle={!storyView && !timelineView && tab && tabKey !== STAGE_TAB ? tab.title : ""} crumbs={crumbs} counts={counts}
+        space={space} pageTitle={!storyView && !timelineView && tab && tabKey !== STAGE_TAB ? tab.title : ""} crumbs={crumbs} counts={counts} writingStatus={storyView ? writingStatus : null}
         panels={panels} layout={layout} onLayout={toggleLayout}
         onSpace={(next, target) => { setIntent(target ? { ...target, space: next, nonce: Date.now() } : null); navigate(tabOfSpace(next)); }} onCommand={() => setPalette(true)}
         assistant={<>{todo > 0 && <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={uiText("app.annotationsNeedsYouAndAll")}
@@ -650,7 +700,7 @@ function ProjectPage({ slug }) {
           {assistantButton}</>}
         film={{ open: filmOpen, onToggle: () => setFilmOpen((open) => !open) }}
         settings={<WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />}
-        identity={<IdentityBadge me={me} members={data.members} />} /> :
+        identity={<IdentityBadge me={me} members={data.members} beforeIdentity={flushIdentity} onSignOut={signOut} />} /> :
       <header className="top">
         <button type="button" className="icon-btn" onClick={() => (window.innerWidth <= 860 ? setRailOpen(!railOpen) : setRailHidden(!railHidden))}
           aria-label={uiText("app.togglePages")}><Icon name="menu" /> <span className="label">{uiText("app.pages")}</span></button>
@@ -680,7 +730,7 @@ function ProjectPage({ slug }) {
         </button>
         <button type="button" className="icon-btn" onClick={openConsole} aria-label={uiText('console.entry')}><Icon name="terminal" /><span className="label">{uiText('console.entry')}</span></button>
         <LanguageSwitch /><WorkspaceSettings me={me} project={data.project} onReload={loadProject} onError={onError} />
-        <IdentityBadge me={me} members={data.members} />
+        <IdentityBadge me={me} members={data.members} beforeIdentity={flushIdentity} onSignOut={signOut} />
       </header>}
       <ViewMenu open={Boolean(viewMenu)} rect={viewMenu} view={view} showResolved={showResolved}
         onView={setView} onResolved={setShowResolved} onClose={() => setViewMenu(null)} />
@@ -699,8 +749,9 @@ function ProjectPage({ slug }) {
           onError={onError} onToast={showToast} />
         <main className="main">
           <div className="doc-host">
-          {storyView && <StoryWorld epId={storyEpisode} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
-            focus={focus} onFocus={setFocus} onChanged={reloadAll} onStage={() => goStage()} onOpenShot={openShot} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")}
+          {storyView && !identityLost && <StoryWorld slug={slug} epId={storyEpisode} me={me} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
+                controlRef={surfaceControl} onStatus={setWritingStatus} focusSource={writingFocus} onIdentityLost={loseWritingIdentity}
+            focus={focus} onFocus={setFocus} onChanged={reloadAll} onStage={stageOf} onOpenShot={openShot} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")}
             intent={intent} onIntentDone={clearIntent} onImportTable={() => railControl.current?.updatePage(tabs.find((item) => item.key === STAGE_TAB))} />}
           {timelineView && <Timeline epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} focusRid={focus.shotRid}
             onFocus={focusShot} onChanged={episode.reload} />}
@@ -721,6 +772,7 @@ function ProjectPage({ slug }) {
               intent={isStudio ? intent : undefined} onIntentDone={clearIntent}
               shotFocus={isStudio ? focus.shotRid : undefined} onShotFocus={isStudio ? focusShot : undefined}
               proposals={isStudio ? assistant.state?.proposals || [] : undefined} onApplyProposal={assistant.apply} onDismissProposal={assistant.dismiss} onReloadProposals={assistant.reload}
+                  writingAlignment={episode.alignment} onOpenSource={isStudio ? openSource : undefined}
               onFilm={isStudio ? () => setFilmOpen(true) : undefined}
               onField={setField}
               onReloadTab={async () => { await loadTab(tab.key, true); await loadProject(); }}
