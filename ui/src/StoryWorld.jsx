@@ -1,51 +1,72 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
+import { api, ApiError } from './api.js';
 import { storyList, storyRequest, storyUpload, waitStoryTask, IMAGE_TYPES, MAX_IMAGE_BYTES } from './storyModel.js';
-import { sourceDraft, editStoryScreenplay, needsStoryAdaptation, adaptStoryDraft, buildStoryFromDraft, storyComposition, choiceContrast,
-  missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
-import { CompositionPanel, CompositionReport, AssetGenerationState } from './StoryWorkbenchModals.jsx';
-import { ScriptOutline } from './ScriptOutline.jsx';
+import { missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
+import { AssetGenerationState } from './StoryWorkbenchModals.jsx';
 import { WorldWall, WorldFacets, WorldList, WorldSummary } from './WorldWall.jsx';
 import { AssetEditor } from './AssetEditor.jsx';
 import { UNSCENED, activeItem, rememberGenerations, rememberWorld, restoredGenerations, restoredWorld, sceneFilter, worldCounts, worldFacets, worldGroups, worldItems } from './worldModel.js';
 import { FALLBACK_APP, activeTasks, isActiveRun, restoredRuns, runRefused, runStarted, settleRun, startRun } from './generation/generationModel.js';
 import { BreakdownDialog } from './BreakdownDialog.jsx';
 import { BREAKDOWN_MODES, estimatesByMode } from './breakdownModel.js';
-import { assetLookupFrom, codeBase, normalizeCode } from './bindingModel.js';
+import { buildStoryFromWorkspace, primaryStoryAction } from './storyHostModel.js';
 import { takeStart } from './startModel.js';
+import { AuthoringWorkspace } from './writing/AuthoringWorkspace.jsx';
+import { WritingToolsPanel } from './writing/WritingToolsPanel.jsx';
+import { createActorBoundRequest } from './writing/writingTransport.js';
 import { Icon } from './Icon.jsx';
 
-const MODES = ['idea', 'novel', 'script'];
 const focusedSceneOf = (shots, rid) => (rid && shots.find(shot => shot.rowId === rid)?.sceneId) || null;
+const renderTools = props => <WritingToolsPanel {...props}/>;
 
-// SPEC_15 Story & World: two views of one space. The script view holds the scenes, the source the agent grows into a script (SPEC_14
-// lenses and collision cards on the page, not behind Ctrl K) and the script's outline; the Cast & sets view holds the people, places and
-// props that script names, as a wall. Nothing opens by itself: the card you pick opens in a large editor pane (SPEC_18 R12) and x gives the
-// wall the whole view back. One primary action: update the storyboard (R7: it asks its few questions in a dialog first). Pictures generate
-// in the background (R1), several at once, while you carry on.
+// SPEC_15 Story & World: two views of one space. The script view is the writing workspace (SPEC_16, hosted here by SPEC_16A): the stable
+// outline of the screenplay in the left rail, the manuscript in the middle, and its panels (versions, story impact, preview, world and
+// search and files) in the right column; the Cast & sets view holds the people, places and props that script names, as a wall. Nothing
+// opens by itself: the card you pick opens in a large editor pane (SPEC_18 R12) and x gives the wall the whole view back. One primary
+// action, which follows what you are looking at: update the storyboard (R7: it asks its few questions in a dialog first), or preview an
+// adaptation. Pictures generate in the background (R1), several at once, while you carry on.
 // intent: where the shell's space menu sent you ({view, facet}), taken once; onImportTable opens the sheet import for the shot table.
-export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focus = {}, intent = null, onFocus, onChanged, onStage, onOpenShot, onAssets, onVault, onIntentDone, onImportTable}) {
+// controlRef/onStatus/focusSource/onIdentityLost are the writing workspace's contract with the shell (save boundary, status chip, jump from
+// a shot back to its source, sign-in lost); me is whoever is signed in, fixed for the life of the workspace.
+export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '', writable, focus = {}, intent = null, controlRef, focusSource = null, onFocus, onStatus, onIdentityLost,
+  onChanged, onStage, onOpenShot, onAssets, onVault, onIntentDone, onImportTable}) {
   useLocale();
-  const [drafts, setDrafts] = useState(() => ({script:sourceDraft(), idea:sourceDraft(), novel:sourceDraft()}));
-  const [sourceMode, setSourceMode] = useState('script'), [targetScenes, setTargetScenes] = useState(3), [breakdownMode, setBreakdownMode] = useState('auto');
+  const [breakdownMode, setBreakdownMode] = useState('auto');
   const [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123'), [styles, setStyles] = useState([]);
-  const [comp, setComp] = useState({medium:'', genre:'general', collisions:null, unchecked:[], focus:'overall', extra:''});
   const [assets, setAssets] = useState([]), [assetsReady, setAssetsReady] = useState(false), [kind, setKind] = useState('all'), [detail, setDetail] = useState(null);
   const [remembered] = useState(() => restoredWorld(epId));
   const [view, setView] = useState(remembered.view), [pick, setPick] = useState(remembered.pick), [facet, setFacet] = useState('all'), [sceneSel, setSceneSel] = useState(remembered.scene);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [loading, setLoading] = useState(true), [group, setGroup] = useState(null), [task, setTask] = useState(null);
   const [runs, setRuns] = useState(() => restoredRuns(restoredGenerations(epId))), [building, setBuilding] = useState(false), [target, setTarget] = useState(null), [estimate, setEstimate] = useState(null);
-  const script = useRef(null), mounted = useRef(true), loadedFor = useRef(null), picked = useRef(false), openedFor = useRef(null), sentTo = useRef(epId);
-  const inflight = useRef(new Set()), activeRef = useRef(''), intentSeen = useRef(null), changedRef = useRef(onChanged);
-  changedRef.current = onChanged;
-  const draft = drafts[sourceMode], isSource = sourceMode !== 'script';
+  // The writing workspace: what it reports (which manuscript, its text, whether a panel is open), a jump asked from this page's rail, and the two
+  // columns of the shell it renders into.
+  const [scriptStatus, setScriptStatus] = useState(null), [railFocus, setRailFocus] = useState(null), [leftSlot, setLeftSlot] = useState(null), [rightSlot, setRightSlot] = useState(null);
+  const localControl = useRef(null), control = controlRef || localControl;
+  const mounted = useRef(true), loadedFor = useRef(null), openedFor = useRef(null), sentTo = useRef(epId);
+  const inflight = useRef(new Set()), activeRef = useRef(''), intentSeen = useRef(null), changedRef = useRef(onChanged), focusRef = useRef(focus);
+  changedRef.current = onChanged; focusRef.current = focus;
   const disabled = busy || loading || !writable;
-  const composition = storyComposition(comp);
-  const needsAdaptation = needsStoryAdaptation(sourceMode, draft, targetScenes, isSource ? composition : null);
-  const updateDraft = update => setDrafts(current => ({...current, [sourceMode]:{...current[sourceMode], ...update}}));
+  const slots = useMemo(() => ({left:leftSlot, right:rightSlot}), [leftSlot, rightSlot]);
+  // Cookies can change in another tab: every request of the writing session carries who this workspace was opened for.
+  const actorId = me?.actor_id || '';
+  const request = useMemo(() => actorId ? createActorBoundRequest(actorId, async (path, method, body, options) => {
+    const current = await api.get(`/projects/api/${slug}`);
+    if (current.me.actor_id !== actorId) throw new ApiError(401, t('writing.integration.identityChanged'));
+    // The preflight is only an early warning; the server binding closes its race.
+    if (options.signal.aborted) throw new DOMException('Writing session disposed', 'AbortError');
+    return storyRequest(path, method, body, options);
+  }, onIdentityLost) : storyRequest, [slug, actorId, onIdentityLost]);
+  useLayoutEffect(() => () => request.dispose?.(), [request]);
+  const reportStatus = useCallback(status => {setScriptStatus(status); onStatus?.(status);}, [onStatus]);
+  const pickedScene = useCallback(scene => {
+    if (scene?.sceneId && scene.sceneId !== focusRef.current.sceneId) onFocus?.({sceneId:scene.sceneId, shotRid:null});  // the scene in the editor is the focus
+  }, [onFocus]);
   useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
   useEffect(() => rememberWorld(epId, {view, pick, scene:sceneSel}), [epId, view, pick, sceneSel]);
+  // Leaving the script view unmounts the workspace; the shell's status chip must not keep what it last said.
+  useEffect(() => {if (view !== 'script') {setScriptStatus(null); onStatus?.(null);}}, [view]);  // eslint-disable-line react-hooks/exhaustive-deps
   // Another episode starts from what this tab remembers of it: its own pictures in flight, its own scene filter.
   useEffect(() => {
     if (sentTo.current === epId) return;
@@ -64,15 +85,12 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     if (intent.view === 'world') setSceneSel(null);  // "everything that is missing", not just this scene's
     onIntentDone?.();
   }, [intent]);  // eslint-disable-line react-hooks/exhaustive-deps
-  // The screenplay, settings and styles load once per episode; later saves refresh the episode without wiping drafts.
+  // The settings and styles load once per episode.
   useEffect(() => {
     if (!ep || loadedFor.current === epId) return;
     loadedFor.current = epId; setLoading(true); setError('');
-    // A production started from a story (SPEC_18 R16) opens with what was typed in the hub, in the mode it was typed for.
-    const start = takeStart(epId), seeded = mode => start?.mode === mode ? start.text : '';
-    setDrafts({script:sourceDraft(seeded('script') || ep.scriptContent || ''), idea:{...sourceDraft(), sourceText:seeded('idea')}, novel:{...sourceDraft(), sourceText:seeded('novel')}});
-    if (start) {picked.current = true; setSourceMode(start.mode);}
-    else if (!picked.current) setSourceMode(ep.scriptContent?.trim() ? 'script' : 'idea');  // a choice made while loading stands
+    // A production started from a story (SPEC_18 R16) opens with the ratio and style chosen in the hub.
+    const start = takeStart(epId);
     setRatio(start?.ratio || ep.settings?.aspectRatio || '16:9'); setStyle(start?.style || ep.settings?.stylePresetId || '88123');
     setBreakdownMode(['auto','scene','cinematic'].includes(ep.settings?.breakdownMode) ? ep.settings.breakdownMode : 'auto');
     setGroup(restoredAssetGroup(epId));
@@ -134,19 +152,20 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     return () => {alive = false; clearTimeout(timer);};
   }, [group?.taskGroupId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // SPEC_18 R13: while the build dialog is open, the server counts the shots each way of splitting would give for the script as it is on
-  // screen (saved or not). It only counts: nothing is written. A failed count never blocks the build; the dialog just says it could not.
+  // SPEC_18 R13: while the build dialog is open, the server counts the shots each way of splitting would give for the script it holds. The
+  // dialog only opens once the workspace has saved to the server, so that is the script on screen. It only counts: nothing is written. A
+  // failed count never blocks the build; the dialog just says it could not.
   useEffect(() => {
-    if (!building || !draft.script.trim()) {setEstimate(null); return undefined;}
+    if (!building) {setEstimate(null); return undefined;}
     let alive = true;
     setEstimate({status:'loading'});
     const timer = setTimeout(() => {
-      storyRequest(`/episodes/${epId}/storyboard-estimates`, 'POST', {breakdownModes:BREAKDOWN_MODES, scriptContent:draft.script})
+      storyRequest(`/episodes/${epId}/storyboard-estimates`, 'POST', {breakdownModes:BREAKDOWN_MODES})
         .then(result => {if (alive) setEstimate({status:'ready', modes:estimatesByMode(result)});})
         .catch(() => {if (alive) setEstimate({status:'error'});});
     }, 150);
     return () => {alive = false; clearTimeout(timer);};
-  }, [building, epId, draft.script]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [building, epId]);
 
   // After a card's picture finishes, only that card (and the editor, if it is open on it) is read again; the shell's episode
   // follows so the shots that use it stop saying "missing". Nothing else on the page reloads or loses its place.
@@ -194,28 +213,17 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     setBusy(true); setError('');
     try {await action(); return true;} catch (err) {if (mounted.current) setError(err.message); return false;} finally {if (mounted.current) setBusy(false);}
   };
-  const changeComposition = patch => {
-    if (patch.medium === 'manju') setRatio('9:16');  // micro-drama is vertical by convention
-    setComp(current => ({...current, ...patch}));
-  };
-  const collide = () => run(async () => {
-    const result = await storyRequest(`/episodes/${epId}/story-collisions`, 'POST', {sourceText:draft.sourceText, mediumLens:comp.medium, genreLens:comp.genre});
-    setComp(current => ({...current, collisions:result, unchecked:[]}));
-  });
-  const settings = {aspectRatio:ratio, stylePresetId:style};
-  const adapt = () => run(async () => {
-    await storyRequest(`/episodes/${epId}/settings`, 'PUT', {...settings, breakdownMode});
-    updateDraft(await adaptStoryDraft({epId, sourceMode, draft, targetScenes, breakdownMode, composition, request:storyRequest}));
-    onChanged?.();
-  });
   // Extraction and storyboard tasks show their id and can be canceled, as the old script bar allowed.
   const follow = async pending => {setTask(pending); try {return await waitStoryTask(pending, {onProgress:setTask});} finally {if (mounted.current) setTask(null);}};
-  // The build asks its few questions in a dialog (SPEC_18 R7); confirming runs exactly the requests the old button ran, in the same order,
-  // with the dialog's choices. Cancelling the dialog sends nothing.
+  // The build asks its few questions in a dialog (SPEC_18 R7), but only once the server holds what you wrote: the workspace saves first, and
+  // if it cannot (a conflict, a lost sign-in) it says so itself and the dialog stays shut. Cancelling the dialog sends nothing.
+  const holdsScript = async () => control.current ? control.current.flush({requireServer:true}) : true;
+  const openBuild = async () => {if (await holdsScript()) setBuilding(true);};
+  // Confirming runs the requests the old button ran, in the same order, with the dialog's choices, minus the script itself: the workspace owns it.
   const build = (choice = {}) => run(async () => {
-    await buildStoryFromDraft({epId, sourceMode, draft, targetScenes, breakdownMode:choice.breakdownMode ?? breakdownMode, composition:isSource ? composition : null,
+    await buildStoryFromWorkspace({epId, breakdownMode:choice.breakdownMode ?? breakdownMode,
       settings:{aspectRatio:choice.ratio ?? ratio, stylePresetId:choice.style ?? style},
-      request:storyRequest, wait:follow, onPrepared:updateDraft, onDone:async () => {await onChanged?.(); onStage?.();}});
+      request:storyRequest, wait:follow, flush:holdsScript, onDone:async () => {await onChanged?.(); onStage?.();}});
   });
   const confirmBuild = choice => {setBuilding(false); setBreakdownMode(choice.breakdownMode); setRatio(choice.ratio); setStyle(choice.style); return build(choice);};
   const importTable = () => {setBuilding(false); onImportTable?.();};
@@ -272,46 +280,37 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
   const openAsset = asset => {openedFor.current = asset.assetCode; setFacet('all'); setPick(asset.assetId); setView('world'); onFocus?.({assetCode:asset.assetCode});};
   // x on the editor: the wall has the whole view back, and the crew no longer thinks you are holding a card.
   const closeEditor = () => {openedFor.current = null; setPick(''); onFocus?.({assetCode:null, assetName:null});};
-  // An @code tag in the script outline opens its card; the code may name a look, then the asset it belongs to is the card.
-  const assetLookup = useMemo(() => assetLookupFrom(assets), [assets]);
-  const openCode = code => {
-    const asset = assets.find(item => normalizeCode(item.assetCode) === code) || assets.find(item => codeBase(item.assetCode) === codeBase(code));
-    if (asset) openAsset(asset);
+  // Leaving the writing workspace for the wall is leaving a space for a moment: what you wrote is saved first, or you stay and the workspace says why.
+  const switchView = async next => {
+    if (next === view) return;
+    if (view === 'script' && !(await holdsScript())) return;
+    setView(next);
   };
-  // A scene in the list selects its heading in the screenplay.
-  const jump = scene => {
-    onFocus?.({sceneId:scene.sceneId, shotRid:null});  // a scene is the focus now; the Shot Stage picks the shot that needs you
-    if (sourceMode !== 'script') setSourceMode('script');
-    requestAnimationFrame(() => {
-      const box = script.current, at = box ? box.value.indexOf(scene.title) : -1;
-      if (!box) return;
-      box.focus();
-      if (at >= 0) {box.setSelectionRange(at, at + scene.title.length); box.scrollTop = Math.max(0, box.value.slice(0, at).split('\n').length - 2) * 22;}
-    });
+  // A scene is the focus now; the Shot Stage picks the shot that needs you. The workspace scrolls its manuscript to the scene.
+  const focusScene = scene => {
+    onFocus?.({sceneId:scene.sceneId, shotRid:null});
+    setRailFocus({sceneId:scene.sceneId, nonce:Date.now()});
   };
-  const openScene = scene => {setView('script'); jump(scene);};
-  // A beat's line number selects that line in the screenplay.
-  const jumpLine = line => requestAnimationFrame(() => {
-    const box = script.current;
-    if (!box || !line) return;
-    const lines = box.value.split('\n'), start = lines.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
-    box.focus(); box.setSelectionRange(start, start + (lines[line - 1]?.length || 0)); box.scrollTop = Math.max(0, line - 3) * 22;
-  });
+  const openScene = async scene => {if (view !== 'script') await switchView('script'); focusScene(scene);};
+  const jumpTo = railFocus && railFocus.nonce > (focusSource?.nonce || 0) ? railFocus : focusSource;
   const scenes = ep?.scenes || [];
   const shotsByScene = useMemo(() => shots.reduce((map, shot) => map.set(shot.sceneId, (map.get(shot.sceneId) || 0) + 1), new Map()), [shots]);
   const missing = missingAssetSheets(ep);
-  const recent = comp.collisions?.recentTraces || [];
-  const contrast = comp.collisions ? choiceContrast(recent, comp.focus) : null;
-  const struck = comp.collisions ? comp.unchecked.length : 0, kept = comp.collisions ? comp.collisions.candidates.length - struck : 0;
   const styleName = styles.find(item => item.stylePresetId === style)?.name, styleSample = styles.find(item => item.stylePresetId === style)?.sampleImage;
   const canGenerate = writable && !busy && !assetGroupActive(group) && !ep?.scriptDirty;
   const generateHint = ep?.scriptDirty ? t('world.confirmFirst') : undefined;
-  const canBuild = !disabled && Boolean(draft.script.trim() || (isSource && draft.sourceText.trim()));
+  // What the one primary button does depends on what the workspace is showing (a working script, a private source, a saved version).
+  const manuscript = view === 'script' ? scriptStatus?.manuscript || 'working' : 'working';
+  const hasScript = Boolean((view === 'script' && scriptStatus?.characters > 0) || ep?.scriptContent?.trim());
+  const primary = primaryStoryAction({manuscript, writable, hasScript, hasShots:shots.length > 0, busy, loading, canAdapt:Boolean(scriptStatus?.canAdapt)});
+  const canBuild = primary.action === 'build' && !primary.disabled;
+  const onPrimary = () => {if (primary.action === 'adapt') control.current?.previewAdaptation?.(); else if (primary.action === 'build') openBuild();};
+  const showOutline = view === 'script' && scriptStatus?.manuscript === 'working', panelOpen = Boolean(scriptStatus?.panelOpen);
   // The scene filter's choices: everything, the scene picked, the scene in focus (the breadcrumb's) and what no shot places in a scene.
-  const focusScene = scenes.find(scene => scene.sceneId === (focus.sceneId || focusedSceneOf(shots, focus.shotRid))) || null;
+  const focusScene_ = scenes.find(scene => scene.sceneId === (focus.sceneId || focusedSceneOf(shots, focus.shotRid))) || null;
   const sceneChoices = [{key:null}];
   if (scenes.length) {
-    for (const scene of [scenes.find(item => item.sceneId === sceneNow), focusScene]) {
+    for (const scene of [scenes.find(item => item.sceneId === sceneNow), focusScene_]) {
       if (scene && !sceneChoices.some(choice => choice.key === scene.sceneId)) sceneChoices.push({key:scene.sceneId, label:t('shell.sceneCrumb', {index:String(scene.sceneIndex).padStart(2, '0'), title:scene.title})});
     }
     if (sceneNow === UNSCENED || items.some(item => !item.sceneIds.length)) sceneChoices.push({key:UNSCENED});
@@ -328,23 +327,27 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
         ? <><b>{t('world.worldTitle')}</b><span className="num">{scoped.length}</span></>
         : <><b>{t('world.scenes')}</b><span className="num">{scenes.length}</span></>}</div>
       <div className="studio-segmented" role="group" aria-label={t('world.listView')}>
-        <button type="button" aria-pressed={view === 'script'} onClick={() => setView('script')}>{t('world.byScene')}</button>
-        <button type="button" aria-pressed={view === 'world'} onClick={() => setView('world')}>{t('world.assetWall')}</button>
+        <button type="button" aria-pressed={view === 'script'} onClick={() => switchView('script')}>{t('world.byScene')}</button>
+        <button type="button" aria-pressed={view === 'world'} onClick={() => switchView('world')}>{t('world.assetWall')}</button>
       </div>
       {view === 'world' ? <WorldFacets facets={worldFacets(scoped)} facet={facetNow} onFacet={setFacet}/>
-        : <ol className="space-items">{scenes.map(scene => <li key={scene.sceneId}><button type="button" aria-current={(focus.sceneId || focusedSceneOf(shots, focus.shotRid)) === scene.sceneId ? 'true' : undefined} onClick={() => jump(scene)}>
-          <b className="num">{String(scene.sceneIndex).padStart(2, '0')}</b><span>{scene.title}</span>
-          <small>{t('shell.shotCount', {count:shotsByScene.get(scene.sceneId) || 0})}</small></button></li>)}
-          {!scenes.length && <li className="space-empty">{t('world.noScenes')}</li>}
-        </ol>}
+        : <>
+          {/* The workspace puts its stable outline here while it shows the working script; otherwise the scenes the shots came from. */}
+          <div className="story-outline-slot" ref={setLeftSlot} hidden={!showOutline}/>
+          {!showOutline && <ol className="space-items">{scenes.map(scene => <li key={scene.sceneId}><button type="button" aria-current={(focus.sceneId || focusedSceneOf(shots, focus.shotRid)) === scene.sceneId ? 'true' : undefined} onClick={() => focusScene(scene)}>
+            <b className="num">{String(scene.sceneIndex).padStart(2, '0')}</b><span>{scene.title}</span>
+            <small>{t('shell.shotCount', {count:shotsByScene.get(scene.sceneId) || 0})}</small></button></li>)}
+            {!scenes.length && <li className="space-empty">{t('world.noScenes')}</li>}
+          </ol>}
+        </>}
       {writable
-        ? <button type="button" className="space-foot world-format-btn" title={t('world.format')} aria-label={t('world.format') + ': ' + [ratio, styleName].filter(Boolean).join(' · ')} onClick={() => setBuilding(true)}>
+        ? <button type="button" className="space-foot world-format-btn" title={t('world.format')} aria-label={t('world.format') + ': ' + [ratio, styleName].filter(Boolean).join(' · ')} onClick={openBuild}>
           {styleSample && <img className="world-format-thumb" src={styleSample} alt="" loading="lazy"/>}
           <span>{[ratio, styleName].filter(Boolean).join(' · ')}</span><Icon name="arrowRight" size={13}/></button>
         : <p className="space-foot">{[ratio, styleName].filter(Boolean).join(' · ')}</p>}
     </nav>
 
-    <main className="space-main">
+    <main className={'space-main' + (view === 'script' ? ' is-writing' : '')}>
       {view === 'world' ? <>
         <WorldWall groups={groups} counts={worldCounts(scoped)} total={scoped.length} filtered={sceneNow !== null} activeId={activeId} ready={assetsReady} writable={writable} disabled={busy}
           missingCount={missing.length} canGenerate={canGenerate} generateHint={generateHint} generation={<AssetGenerationState group={group}/>}
@@ -352,48 +355,9 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
           onPick={setPick} onCreate={createAsset} onGenerateMissing={generateMissing} onTable={onAssets}/>
         {notices}
       </> : <>
-      <header className="space-head">
-        <h1>{t('world.story')}</h1>
-        <span className="space-sub">{t('story.sourceMode')}</span>
-        <span className="spacer"/>
-        <div className="studio-segmented" role="group" aria-label={t('story.sourceMode')}>
-          {MODES.map(mode => <button key={mode} type="button" aria-pressed={sourceMode === mode} disabled={busy} onClick={() => {picked.current = true; setSourceMode(mode); setError('');}}>{t('story.sourceMode_' + mode)}</button>)}
-        </div>
-      </header>
-      {isSource ? <>
-        <section className="space-block" aria-labelledby="world-source">
-          <h2 id="world-source"><span className="num">1</span>{t('world.ideaAndLens')}</h2>
-          <label className="modal-field">{t('story.sourceText')}<textarea rows={4} value={draft.sourceText} maxLength={500000} disabled={disabled} placeholder={t('world.sourceHint')} onChange={e => updateDraft({sourceText:e.target.value})}/></label>
-          <CompositionPanel value={comp} disabled={disabled} onChange={changeComposition} onCollide={draft.sourceText.trim() ? collide : null}/>
-          <label className="modal-field space-inline">{t('story.targetScenes')}<input type="number" min={1} max={12} step={1} value={targetScenes} disabled={disabled} onChange={e => setTargetScenes(Math.max(1, Math.min(12, Math.trunc(Number(e.target.value)) || 1)))}/></label>
-          {contrast?.contrastDetected && <p className="story-contrast" role="status">{t('world.contrastAhead', {from:t('story.focus_' + contrast.dominantFocus), to:t('story.focus_' + comp.focus)})}</p>}
-          {!!comp.collisions?.candidates?.[0]?.propSlice?.length && <p className="story-slices">{t('world.propSlices')}<span>{comp.collisions.candidates[0].propSlice.join(' → ')}</span></p>}
-        </section>
-        <section className="space-block" aria-labelledby="world-beats">
-          <h2 id="world-beats"><span className="num">2</span>{t('world.beats')}<span className="spacer"/>
-            <button type="button" disabled={disabled || !draft.sourceText.trim() || !needsAdaptation} onClick={adapt}>{t('story.adaptScript')}</button></h2>
-          <CompositionReport report={draft.report}/>
-          <label className="modal-field">{t('story.script')}<textarea rows={12} value={draft.script} maxLength={500000} disabled={disabled} onChange={e => updateDraft(editStoryScreenplay(sourceMode, draft, e.target.value, targetScenes, composition))}/></label>
-          <p className="space-sub">{t(needsAdaptation && draft.adaptationKey ? 'story.sourceChangedHelp' : 'story.screenplayEditHelp')}</p>
-        </section>
-      </> : <>
-        {comp.medium && <button type="button" className="story-summary" onClick={() => setSourceMode(drafts.novel.sourceText.trim() ? 'novel' : 'idea')}>
-          {[t('story.mediumLens_' + comp.medium), t('story.genreLens_' + comp.genre), comp.collisions && t('world.keptStruck', {kept, struck})].filter(Boolean).join(' · ')}
-          <span>{t('world.adjust')}</span></button>}
-        {ep?.scriptDirty && <p className="story-dirty" role="status">{t('story.scriptDirty')}</p>}
-        <label className="modal-field space-script">{t('story.script')}<textarea ref={script} rows={22} value={draft.script} maxLength={500000} disabled={disabled} onChange={e => updateDraft(editStoryScreenplay(sourceMode, draft, e.target.value, targetScenes))}/></label>
-        {shots.length > 0 && ep && <ScriptOutline epId={epId} script={draft.script} saved={ep.scriptContent || ''} version={(ep.confirmedHash || '') + ':' + shots.length}
-          focusRid={focus.shotRid} lookup={assetLookup} onFocus={onFocus} onOpen={onOpenShot} onLine={jumpLine} onOpenAsset={openCode}/>}
-      </>}
-      <label className="space-upload"><Icon name="arrowUp"/>{t('story.uploadScript')}<input type="file" accept=".txt,.md,text/plain,text/markdown" disabled={disabled} onChange={async e => {
-        const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
-        if (!/\.(txt|md)$/i.test(file.name)) {setError(t('story.scriptFileType')); return;}
-        if (file.size > 2000000) {setError(t('story.scriptTooLarge')); return;}
-        const text = await file.text();
-        if (text.length > 500000) {setError(t('story.scriptTextTooLong')); return;}
-        updateDraft(isSource ? {sourceText:text} : {script:text}); setError('');
-      }}/></label>
-      {notices}
+        <AuthoringWorkspace slug={slug} epId={epId} me={me} ep={ep} shots={shots} writable={writable} request={request} controlRef={control}
+          onChanged={onChanged} onStage={onStage} onStatus={reportStatus} onScene={pickedScene} focusSource={jumpTo} renderTools={renderTools} slots={slots}/>
+        {notices}
       </>}
     </main>
 
@@ -404,13 +368,16 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
             onSave={saveAsset} onSelectImage={selectImage} onClose={closeEditor} onUpload={uploadAsset} onGenerate={generate} onCancel={cancelGeneration} onLookCreate={createLook} onLookRename={renameLook} onLookDelete={deleteLook} onOpenShot={onOpenShot} onOpenScene={openScene} onTable={onAssets} onVault={onVault}/>
         : <WorldSummary withImages={items.filter(item => !item.needsImage).length} total={items.length}/>)
       : <>
-        <WorldList items={items} kind={kind} onKind={setKind} focusCode={focus.assetCode} onOpen={openAsset}/>
-        {missing.length > 0 && <button type="button" disabled={!writable || busy || assetGroupActive(group) || ep?.scriptDirty} onClick={generateMissing}
-          title={ep?.scriptDirty ? t('world.confirmFirst') : undefined}>{t('story.generateMissingAssets')} ({missing.length})</button>}
-        <AssetGenerationState group={group}/></>}
+        {/* The workspace's panels (versions, story impact, preview, world and search and files) take this column while one is open. */}
+        <div className="story-panel-slot" ref={setRightSlot} hidden={!panelOpen}/>
+        {!panelOpen && <>
+          <WorldList items={items} kind={kind} onKind={setKind} focusCode={focus.assetCode} onOpen={openAsset}/>
+          {missing.length > 0 && <button type="button" disabled={!writable || busy || assetGroupActive(group) || ep?.scriptDirty} onClick={generateMissing}
+            title={ep?.scriptDirty ? t('world.confirmFirst') : undefined}>{t('story.generateMissingAssets')} ({missing.length})</button>}
+          <AssetGenerationState group={group}/></>}</>}
       </div>
-      <button type="button" className="primary studio-primary" disabled={!canBuild} onClick={() => setBuilding(true)}>
-        {shots.length ? t('world.updateStoryboard') : t('story.confirmAndBuild')}</button>
+      <button type="button" className="primary studio-primary" disabled={primary.disabled} title={primary.hintKey ? t(primary.hintKey) : undefined} onClick={onPrimary}>
+        {t(primary.labelKey)}</button>
     </aside>
     {building && <BreakdownDialog value={{breakdownMode, ratio, style}} styles={styles} rebuild={shots.length > 0} shots={shots.length} confirmDisabled={!canBuild}
       estimate={estimate} target={target} onTarget={setTarget}

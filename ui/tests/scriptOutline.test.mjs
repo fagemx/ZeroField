@@ -59,10 +59,13 @@ test('the outline sits under the script and reads in Traditional Chinese', () =>
   } finally {components.setLocale('en');}
 });
 
-test('Story & World shows the outline in the script view once the episode has shots', () => {
+test('Story & World no longer draws the positional script outline: the writing workspace\'s stable outline takes its place (SPEC_16A 3.6)', () => {
   const ep = {scriptContent: 'INT. DOME\nKael enters.', confirmedHash: 'h', scenes: [{sceneId: 'sc_1', sceneIndex: 1, title: 'DOME'}], settings: {}};
   const shots = [{rowId: 'b1', shotId: 'sh_demo_b1', sceneId: 'sc_1', shotIndex: 'S01', tabKey: 'cinema-studio'}];
-  const props = {epId: 'ep_demo_01', ep, writable: true, focus: {}, onFocus() {}, onChanged() {}, onStage() {}, onOpenShot() {}, onAssets() {}, onVault() {}};
-  assert.match(render('StoryWorld', {...props, shots}), /id="world-outline"/);
-  assert.doesNotMatch(render('StoryWorld', {...props, shots: []}), /world-outline/, 'no shots, nothing to map the script to');
+  const props = {slug: 'demo', me: {actor_id: 'actor'}, epId: 'ep_demo_01', ep, writable: true, focus: {}, onFocus() {}, onChanged() {}, onStage() {}, onOpenShot() {}, onAssets() {}, onVault() {}};
+  for (const withShots of [shots, []]) {
+    const html = render('StoryWorld', {...props, shots: withShots});
+    assert.doesNotMatch(html, /id="world-outline"/, 'the old outline is not part of the script view any more');
+    assert.match(html, /class="story-outline-slot"/, 'the workspace renders its outline into the left rail');
+  }
 });

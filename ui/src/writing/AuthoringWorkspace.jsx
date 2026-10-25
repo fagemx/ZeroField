@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '../i18n/react.jsx';
 import { storyRequest } from '../storyModel.js';
 import { createWritingTransport, writingAction, mutationId } from './writingTransport.js';
@@ -26,11 +27,14 @@ export function AuthoringWorkspace(props) {
   // Identity changes unmount every private state/cache/editor, including unresolved previews.
   return <WorkspaceSession key={JSON.stringify([props.slug,props.epId,props.me?.actor_id])} {...props}/>;
 }
-function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyRequest,controlRef,onChanged,onStage,onStatus,focusSource,renderTools}) {
+function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyRequest,controlRef,onChanged,onStage,onStatus,onScene,focusSource,renderTools,slots}) {
   const {t}=useTranslation();
   const transport=useMemo(()=>createWritingTransport(epId,request),[epId,request]);
   const journal=useMemo(()=>createWritingJournal(),[]),tabId=useRef(mutationId());
   const [workspace,setWorkspace]=useState(null),[resourceRef,setResourceRef]=useState({kind:'working'}),[resource,setResource]=useState(null),[snapshot,setSnapshot]=useState(null),[error,setError]=useState(null),[panel,setPanel]=useState(null),[preview,setPreview]=useState(null),[selectedScene,setSelectedScene]=useState(null),[focusBid,setFocusBid]=useState(null),[focus,setFocus]=useState(false),[outlineOpen,setOutlineOpen]=useState(true),[fontSize,setFontSize]=useState(18),[lineHeight,setLineHeight]=useState(1.8),[pageWidth,setPageWidth]=useState(720),[duplicate,setDuplicate]=useState(false),[busy,setBusy]=useState(false),[switching,setSwitching]=useState(false);
+  // SPEC_16A: with `slots` ({left,right} DOM nodes) the studio shell owns the side columns, so the outline and the panels render there; the editor stays here.
+  const slotted=Boolean(slots),actions=useRef({});
+  const into=(node,slot)=>slotted?(slot&&node?createPortal(node,slot):null):node;
   const taskAbort=useRef(new AbortController());
   const persistence=useRef(null),latest=useRef({}),mounted=useRef(true),loadSequence=useRef(0),editor=useRef(null),actionRetry=useRef(null),structureUndo=useRef(null);
   const activeSlice=useRef(null),[sliceGeneration,setSliceGeneration]=useState(0),ownDocumentAcks=useRef(new Set());
@@ -100,7 +104,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     let data=latest.current.workspace;
     if(!await flush())return false;
     if(latest.current.resourceRef.kind!=='working'){try{setSwitching(true);data=await load({kind:'working'});}catch(error){report(error);return;}finally{setSwitching(false);}}
-    const scene=(data?.structure?.scenes || []).find(scene=>scene.sceneKey===ref.sceneKey);
+    const scene=(data?.structure?.scenes || []).find(scene=>ref.sceneKey?scene.sceneKey===ref.sceneKey:ref.sceneId&&scene.legacySceneId===ref.sceneId);
     if(!scene){report(new Error(latest.current.translate(p+'sourceNotInWorking')));return false;}activeSlice.current=null;setSliceGeneration(value=>value+1);setSelectedScene(scene.sceneKey);setFocusBid((scene.beats || []).find(beat=>beat.beatKey===ref.beatKey)?.blockBids?.[0] || scene.headingBid);
   },[flush,load,report]);
   const workspaceReady=!!workspace;
@@ -108,10 +112,12 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   useEffect(()=>{
     if(!controlRef)return;
     const summary=()=>toolControls.summary(persistence.current?.snapshot() || {state:'readonly',dirty:false,recoverable:false});
-    const instance={flush,isDirty:()=>summary().dirty,recoveryState:()=>summary(),consoleContext:()=>({episodeId:epId,sourceRef:latest.current.resourceRef,sceneKeys:latest.current.selectedScene?[latest.current.selectedScene]:[],docHash:persistence.current?.base.docHash || latest.current.resource?.docHash}),focusSource:navigateSource};
+    const instance={flush,isDirty:()=>summary().dirty,recoveryState:()=>summary(),consoleContext:()=>({episodeId:epId,sourceRef:latest.current.resourceRef,sceneKeys:latest.current.selectedScene?[latest.current.selectedScene]:[],docHash:persistence.current?.base.docHash || latest.current.resource?.docHash}),focusSource:navigateSource,previewAdaptation:()=>actions.current.adaptation?.()};
     controlRef.current=instance;return()=>{if(controlRef.current===instance)controlRef.current=null;};
   },[controlRef,epId,flush,navigateSource,toolControls]);
-  useEffect(()=>{if(snapshot)onStatus?.({...toolControls.summary(snapshot),docHash:snapshot.docHash});},[snapshot,onStatus,toolControls,toolRevision]);
+  useEffect(()=>{if(snapshot)onStatus?.({...toolControls.summary(snapshot),docHash:snapshot.docHash,manuscript:resourceRef.kind,panelOpen:Boolean(panel),characters:textCounts(snapshot.doc).characters,canAdapt:Boolean(writable&&resourceRef.kind==='source'&&!busy&&!switching&&!snapshot.recoveries?.length&&!['conflict','auth_lost'].includes(snapshot.state))});},[snapshot,onStatus,toolControls,toolRevision,resourceRef,panel,busy,switching,writable]);
+  // The scene picked here is the focus the shell shows; legacySceneId is the positional id the other spaces use.
+  useEffect(()=>{const scene=selectedScene&&workspace?.structure?.scenes?.find(item=>item.sceneKey===selectedScene);onScene?.(scene?{sceneKey:scene.sceneKey,sceneId:scene.legacySceneId||null}:null);},[selectedScene,workspace?.structure,onScene]);
   useEffect(()=>{
     const unload=event=>{const state=toolControls.summary(persistence.current?.snapshot());if(state.dirty&&!state.recoverable){event.preventDefault();event.returnValue='';}};
     const reconnect=()=>{if(persistence.current?.state==='local_only')persistence.current.save();if(outlineRecovery.state==='local_only')outlineRecovery.save();};
@@ -151,7 +157,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     const body=impactRequest({...options,expectedSourceHash:target.docHash || target.snapshot?.docHash});
     const result=await post('previews',body);setPreview(result);setPanel('preview');
   };
-  const adaptation=()=>run(async()=>{await requireServer();const current=persistence.current.base;const result=await post('previews',{kind:'adaptation',sourceRef:resourceRef,expectedSourceHash:current.docHash,targetDocHash:workspace.docHash,targetScenes:4,breakdownMode:'auto',...(current.composition || {})});setPreview(result);setPanel('preview');await reload();});
+  const adaptation=()=>run(async()=>{await requireServer();const current=persistence.current.base;const result=await post('previews',{kind:'adaptation',sourceRef:resourceRef,expectedSourceHash:current.docHash,targetDocHash:workspace.docHash,targetScenes:4,breakdownMode:'auto',...(current.composition || {})});setPreview(result);setPanel('preview');await reload();});actions.current.adaptation=adaptation;
   const buildText=()=>run(async()=>{await requireServer();const action=createTextStoryboardAction(request,epId,{breakdownMode:ep?.settings?.breakdownMode || 'auto',signal:taskAbort.current.signal});actionRetry.current=async()=>{const result=await action();if(!mounted.current)return result;await onChanged?.(result);await reload();if(mounted.current)onStage?.({shotIds:[]});return result;};await actionRetry.current();actionRetry.current=null;});
   const download=()=>{
     const url=URL.createObjectURL(new Blob([documentText(persistence.current?.doc || resource.doc)],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='writing-recovery.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);
@@ -180,7 +186,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   const editable=!!writable&&(!slice||!!partial)&&!switching&&resourceRef.kind!=='version'&&!resource.locked&&!snapshot.recoveries?.length&&!['conflict','auth_lost'].includes(snapshot.state);
   const aggregate=toolControls.summary(snapshot),toolSummary=toolControls.summary();
   const toolProps={slug,epId,me,writable,workspace,resourceRef,selectedSceneKeys:selectedScene?[selectedScene]:[],selectedSubjectId:null,transport,flush:flushDocument,registerToolControl,reload,onNavigateSource:navigateSource,onNavigateShots:navigateShots,onError:report,onChanged};
-  return <section className={`authoring-workspace${focus?' writing-focus':''}`} onKeyDown={keyboard} style={{'--writing-font':fontSize+'px','--writing-line-height':lineHeight,'--writing-width':pageWidth+'px'}}>
+  return <section className={`authoring-workspace${focus?' writing-focus':''}${slotted?' is-slotted':''}`} onKeyDown={keyboard} style={{'--writing-font':fontSize+'px','--writing-line-height':lineHeight,'--writing-width':pageWidth+'px'}}>
     <header className="writing-toolbar">
       <label>{t(p+'manuscript')}<select aria-label={t(p+'manuscript')} value={refKey(resourceRef)} onChange={event=>{const [kind,value]=event.target.value.split(':');selectResource(kind==='working'?{kind}:kind==='source'?{kind,mode:value}:{kind,id:value});}}>
         <option value="working:main">{t(p+'workingScript')}</option><option value="source:idea">{t(p+'privateIdea')}</option><option value="source:novel">{t(p+'privateNovel')}</option>
@@ -188,16 +194,16 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
         {(workspace.branches?.items || workspace.branches || []).map(branch=><option key={branch.branchId} value={'branch:'+branch.branchId}>{branch.name}</option>)}
         {(workspace.versions?.items || workspace.versions || []).map(version=><option key={version.versionId} value={'version:'+version.versionId}>{version.name}</option>)}
       </select></label>
-      <button type="button" aria-pressed={outlineOpen} onClick={()=>setOutlineOpen(!outlineOpen)}>{t(p+'outline')}</button>
+      {!slotted&&<button type="button" aria-pressed={outlineOpen} onClick={()=>setOutlineOpen(!outlineOpen)}>{t(p+'outline')}</button>}
       <button type="button" aria-pressed={panel==='versions'} onClick={()=>openPanel('versions')}>{t(p+'versions')}</button>
       {renderTools&&<button type="button" aria-pressed={panel==='tools'} onClick={()=>openPanel('tools')}>{t(p+'tools')}</button>}
-      <button type="button" aria-pressed={focus} onClick={()=>setFocus(!focus)}>{t(p+'focus')}</button>
+      {!slotted&&<button type="button" aria-pressed={focus} onClick={()=>setFocus(!focus)}>{t(p+'focus')}</button>}
       <details><summary>{t(p+'typography')}</summary><label>{t(p+'fontSize')}<input type="range" min="14" max="24" value={fontSize} onChange={e=>setFontSize(+e.target.value)}/></label><label>{t(p+'lineHeight')}<input type="range" min="1.4" max="2.2" step="0.1" value={lineHeight} onChange={e=>setLineHeight(+e.target.value)}/></label><label>{t(p+'pageWidth')}<input type="range" min="560" max="960" step="20" value={pageWidth} onChange={e=>setPageWidth(+e.target.value)}/></label></details>
     </header>
     {error&&<div role="alert">{error.message}{actionRetry.current&&![401,403,409].includes(error.status)&&<button type="button" onClick={()=>run(async()=>{await actionRetry.current();actionRetry.current=null;await reload();})}>{t(p+'retryAction')}</button>}</div>}
     {duplicate&&<p role="status">{t(p+'duplicateTab')}</p>}
     <div className="writing-layout">
-      {outlineOpen&&resourceRef.kind==='working'&&<aside className="writing-left"><WritingOutline structure={structure} metadataDraft={outlineSnapshot?.draft} onComposition={value=>outlineRecovery.setComposing(value)} doc={doc} writable={editable&&!busy&&!outlineSnapshot?.recoveries?.length&&outlineSnapshot?.state!=='auth_lost'} selected={selectedScene} onSelect={async key=>{if(await flush()){activeSlice.current=null;setSliceGeneration(value=>value+1);setSelectedScene(key);setFocusBid(structure.scenes.find(scene=>scene.sceneKey===key)?.headingBid);}}} onMetadata={metadata} onStructure={previewStructure} onShots={navigateShots} onUndo={structureUndo.current?()=>run(async()=>{await requireServer();const current=await transport('workspace'),undo=structureUndo.current;if(current.docHash!==undo.docHash || undo.structureHash&&current.structure.structureHash!==undo.structureHash)throw new Error(t(p+'undoStale'));const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation:{type:'restore',snapshotId:undo.snapshotId}});setPreview(result);setPanel('preview');}):null}/></aside>}
+      {into(outlineOpen&&resourceRef.kind==='working'&&<aside className="writing-left"><WritingOutline structure={structure} metadataDraft={outlineSnapshot?.draft} onComposition={value=>outlineRecovery.setComposing(value)} doc={doc} writable={editable&&!busy&&!outlineSnapshot?.recoveries?.length&&outlineSnapshot?.state!=='auth_lost'} selected={selectedScene} onSelect={async key=>{if(await flush()){activeSlice.current=null;setSliceGeneration(value=>value+1);setSelectedScene(key);setFocusBid(structure.scenes.find(scene=>scene.sceneKey===key)?.headingBid);}}} onMetadata={metadata} onStructure={previewStructure} onShots={navigateShots} onUndo={structureUndo.current?()=>run(async()=>{await requireServer();const current=await transport('workspace'),undo=structureUndo.current;if(current.docHash!==undo.docHash || undo.structureHash&&current.structure.structureHash!==undo.structureHash)throw new Error(t(p+'undoStale'));const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation:{type:'restore',snapshotId:undo.snapshotId}});setPreview(result);setPanel('preview');}):null}/></aside>,slots?.left)}
       <main className="writing-manuscript">
         {slice&&!partial&&<p role="alert">{t(p+'sceneBoundaryChanged')}</p>}
         {(outlineSnapshot?.dirty||outlineSnapshot?.localError)&&<section className="writing-outline-recovery" aria-label={t(p+'outlineDraft')}>
@@ -227,20 +233,22 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
         <WritingEditor key={refKey(resourceRef)} sliceKey={sliceKey} doc={shown} writable={editable} me={me} privateResource={['source','branch'].includes(resourceRef.kind)} locks={resourceRef.kind==='working'?(workspace.locks || []):[]} label={t(p+'editorLabel')} focusBid={focusBid} onReady={value=>{editor.current=value;}} onComposition={value=>persistence.current?.setComposing(value)} onChange={next=>{if(editable){if(slice){if(activeSlice.current!==slice)return;persistence.current?.change(replaceSceneSlice(persistence.current.doc,slice.boundary,next));}else persistence.current?.change(next);if(resourceRef.kind==='source')persistence.current?.changeMetadata({structure:sourceStructureForDoc(persistence.current.draftStructure,next)});}}}/>
         {['local_only','save_failed','auth_lost'].includes(snapshot.state)&&<div><button type="button" onClick={download}>{t(p+'downloadDraft')}</button>{snapshot.state!=='auth_lost'&&<button type="button" onClick={()=>persistence.current.save()}>{t(p+'retrySave')}</button>}</div>}
       </main>
-      <aside className="writing-right" hidden={!panel}>
+      {into(<aside className="writing-right" hidden={!panel}>
         {panel&&<button type="button" onClick={()=>setPanel(null)}>{t(p+'closePanel')}</button>}
         {panel==='versions'&&<WritingVersions workspace={workspace} resourceRef={resourceRef} resource={()=>persistence.current?.base || resource} writable={writable} transport={transport} flush={flushDocument} reload={reload} onSelect={selectResource} onPreview={result=>{setPreview(result);setPanel('preview');}} onError={report}/>}
         {panel==='impact'&&<WritingImpactSetup key={refKey(resourceRef)} targetRef={resourceRef.kind==='version'?{kind:'version',id:resourceRef.id}:{kind:'working'}} structure={resourceRef.kind==='version'?resource.structure:structure} shots={shots} confirmBaseline={!!workspace.baseline?.scriptDirty || !workspace.baseline?.versionId} writable={writable} onPreview={previewImpact}/>}
         {panel==='preview'&&preview&&<WritingPreview key={preview.previewId} preview={preview} shots={shots} writable={writable} onApply={apply} onClose={()=>setPanel(null)} onShots={navigateShots} onSource={navigateSource} onRevise={preview.kind==='impact'?()=>setPanel('impact'):undefined} onRefresh={preview.kind==='impact'?async()=>{const fresh=await transport(`previews/${encodeURIComponent(preview.previewId)}`);setPreview(fresh);}:undefined}/>}
         {/* Keep tool/editor instances alive through panel toggles. */}
         {renderTools&&<div hidden={panel!=='tools'}>{renderTools(toolProps)}</div>}
-      </aside>
+      </aside>,slots?.right)}
     </div>
     <footer className="writing-status"><span role="status" aria-live="polite">{t(p+semanticEnumKey('state',snapshot.state))}{snapshot.savedAt&&snapshot.state==='saved'?' · '+new Date(snapshot.savedAt).toLocaleTimeString():''}</span>
       {aggregate.tools.some(item=>item.dirty||item.recoverable)&&<span data-writing-tool-status="true">{t(p+'toolDraftStatus',{state:t(p+semanticEnumKey('state',toolSummary.state))})}</span>}
       <span title={t(p+'wordCountRule')}>{t(p+'counts',counts)}</span><span>{t(p+semanticEnumKey('baseline',baseline.kind),{name:baseline.name})}{baseline.dirty?' · '+t(p+'scriptChanged'):''}</span>
+      {slotted?(['working','version'].includes(resourceRef.kind)&&<button type="button" disabled={busy||!writable} onClick={()=>setPanel('impact')}>{t(p+'reviewImpact')}</button>):<>
       {writable&&resourceRef.kind==='source'?<button type="button" className={panel?undefined:'writing-primary'} disabled={busy || !editable} onClick={adaptation}>{t(p+'previewAdaptation')}</button>:['working','version'].includes(resourceRef.kind)&&<button type="button" className={panel?undefined:'writing-primary'} disabled={busy||!writable} onClick={shots.length||resourceRef.kind==='version'?()=>setPanel('impact'):buildText}>{t(p+(shots.length||resourceRef.kind==='version'?'reviewImpact':'confirmAndBuild'))}</button>}
       <button type="button" onClick={()=>navigateShots({shotIds:[]})}>{t(p+'goToStage')}</button>
+      </>}
     </footer>
   </section>;
 }

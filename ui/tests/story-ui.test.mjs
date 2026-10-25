@@ -86,17 +86,20 @@ test('new count and usage labels interpolate in both interface languages',async(
   await setLocale('en');
 });
 
-test('Story & World keeps the script, the source modes and one primary action on the page; the build questions wait in a dialog',()=>{
-  const html=render('StoryWorld',{epId:'ep_demo_02',writable:true});
-  for(const name of ['Scenes','Story','Script','Idea / Logline','Novel / Story Chapter','Screenplay','World','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
-  assert.match(html,/aria-pressed="true"[^>]*>Screenplay/);
-  assert.match(html,/accept="\.txt,\.md,text\/plain,text\/markdown"/);
-  for(const asked of ['Aspect Ratio','Style Preset','Storyboard Density','name="breakdown"','world-format"']) assert.ok(!html.includes(asked),asked+' is asked in the dialog, it no longer stands in the column');
+test('Story & World hosts the writing workspace and keeps one primary action and the format foot; the build questions wait in a dialog',()=>{
+  const page=extra=>render('StoryWorld',{slug:'demo',me:{actor_id:'actor'},epId:'ep_demo_02',writable:true,...extra});
+  const html=page();
+  assert.match(html,/class="authoring-workspace" aria-busy="true"/,'the workspace loads before it shows an editable manuscript');
+  assert.doesNotMatch(html,/<textarea/,'no second, unpersisted copy of the script on the page');
+  for(const name of ['Scenes','By scene','Cast &amp; sets','Confirm Script &amp; Build Storyboard']) assert.ok(html.includes(name),name);
+  assert.match(html,/class="story-outline-slot"/,'the outline has its place in the left rail');
+  assert.match(html,/class="story-panel-slot"/,'the panels have their place in the right column');
+  for(const asked of ['Aspect Ratio','Style Preset','Storyboard Density','name="breakdown"','world-format"']) assert.ok(!html.includes(asked),asked+' is asked in the dialog, it no longer stands on the page');
   assert.equal((html.match(/class="primary/g)||[]).length,1,'one primary action');
   assert.doesNotMatch(html,/role="dialog"/,'the dialog is closed until the action is pressed');
   assert.match(html,/<button type="button" class="space-foot world-format-btn"[^>]*aria-label="Format and style: 16:9"/,'the foot of the left rail opens the same dialog');
-  assert.match(render('StoryWorld',{epId:'ep_demo_02',writable:true,shots:[{shotId:'s1',sceneId:'sc1'}]}),/Update Storyboard &amp; Open Shot Stage/);
-  assert.doesNotMatch(render('StoryWorld',{epId:'ep_demo_02',writable:false}),/world-format-btn/,'a reader sees the format, not a way to change it');
+  assert.match(page({shots:[{shotId:'s1',sceneId:'sc1'}]}),/Update Storyboard &amp; Open Shot Stage/);
+  assert.doesNotMatch(page({writable:false}),/world-format-btn/,'a reader sees the format, not a way to change it');
 });
 
 const dialogProps=(extra={})=>({value:{breakdownMode:'auto',ratio:'16:9',style:'88123'},styles:[{stylePresetId:'88123',name:'Sci-Fi Noir',sampleImage:'/projects/assets/style-samples/sci-fi-noir.svg'},{stylePresetId:'88124',name:'Cel-Shaded'}],rebuild:true,shots:8,onConfirm(){},onCancel(){},onImport(){},...extra});

@@ -2924,7 +2924,9 @@
     "saveAndGenerate": "Save & generate",
     "revert": "Revert",
     "unsaved": "Unsaved changes",
-    "moreTitle": "More"
+    "moreTitle": "More",
+    "primaryHint_version": "This is a saved version. Adopt it as the working script to update the storyboard.",
+    "primaryHint_branch": "This is a private draft. Adopt it as the working script to update the storyboard."
   },
   "stage": {
     "shotList": "Shot list",

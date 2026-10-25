@@ -178,7 +178,7 @@ test('the quick list beside the script shows the same assets and opens the wall 
 });
 
 test('Story & World opens on the script, with Cast & sets one click away in the left rail', () => {
-  const html = render('StoryWorld', {epId:'ep_demo_01', writable:true});
+  const html = render('StoryWorld', {slug:'demo', me:{actor_id:'actor'}, epId:'ep_demo_01', writable:true});
   assert.match(html, /<button type="button" aria-pressed="true">By scene<\/button><button type="button" aria-pressed="false">Cast &amp; sets<\/button>/);
   assert.doesNotMatch(html, /Open sheet|world-facets/, 'the wall is a view of this space, not a page elsewhere');
 });

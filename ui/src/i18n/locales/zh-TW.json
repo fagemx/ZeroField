@@ -2924,7 +2924,9 @@
     "saveAndGenerate": "儲存並生成",
     "revert": "還原",
     "unsaved": "尚未儲存",
-    "moreTitle": "更多資料"
+    "moreTitle": "更多資料",
+    "primaryHint_version": "這是已存的版本。先採用成工作中劇本，才能更新分鏡。",
+    "primaryHint_branch": "這是私人另稿。先採用成工作中劇本，才能更新分鏡。"
   },
   "stage": {
     "shotList": "鏡頭清單",
