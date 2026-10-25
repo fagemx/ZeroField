@@ -45,6 +45,9 @@
 .studio-menu-foot { margin: 6px 8px 4px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11.5px; line-height: 1.55; }
 .studio-focus { min-width: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .studio-focus.is-now { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-weight: 600; }
+.workbench-app.studio-shell .studio-back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 8px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: transparent; color: var(--text); font-size: 12.5px; white-space: nowrap; cursor: pointer; }
+.workbench-app.studio-shell .studio-back:hover { border-color: var(--control); background: var(--active); }
 .studio-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .studio-layout { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--surface); }
 .workbench-app.studio-shell .studio-layout button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer; }
@@ -162,22 +165,6 @@
 .studio-shell .story-collisions li label { display: flex; gap: 10px; height: 100%; padding: 10px 12px; border: 1px solid var(--control); border-radius: 8px; background: var(--ground); font-size: 13px; line-height: 1.45; cursor: pointer; }
 .studio-shell .story-collisions li label:has(:checked) { border-color: var(--accent); background: var(--accent-bg); }
 .studio-shell .story-collisions li.is-struck label { opacity: .55; text-decoration: line-through; }
-.world-assets { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.world-assets > li { border: 1px solid var(--line); border-radius: 10px; background: var(--active); overflow: hidden; }
-.world-assets > li.is-missing { border-color: #5a3a3e; }
-.world-assets > li.is-focus { box-shadow: 0 0 0 1.5px var(--accent); }
-.studio-shell .world-asset { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
-.world-asset img, .world-blank { flex: none; width: 48px; height: 48px; border-radius: 6px; object-fit: cover; background: var(--ground); }
-.world-blank { display: block; border: 1px dashed #5a3a3e; box-sizing: border-box; }
-.world-asset > span { display: grid; min-width: 0; font-size: 13px; }
-.world-asset small { color: var(--faint); font: 500 11.5px ui-monospace, Consolas, monospace; }
-.world-asset em { font-style: normal; color: #f0728a; font-size: 11.5px; }
-.world-asset-detail { display: grid; gap: 8px; padding: 0 10px 10px; font-size: 12.5px; color: var(--muted); }
-.world-asset-detail p { margin: 0; }
-.world-variants { display: flex; gap: 6px; flex-wrap: wrap; }
-.world-variants figure { margin: 0; display: grid; gap: 3px; font-size: 11px; color: var(--faint); }
-.world-variants img, .world-variants .world-blank { width: 56px; height: 56px; }
-.world-asset-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .world-breakdown { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; color: var(--muted); }
 .world-breakdown legend { padding: 0 4px; color: var(--faint); font-size: 12px; }
 .world-breakdown label { display: flex; gap: 8px; align-items: center; }

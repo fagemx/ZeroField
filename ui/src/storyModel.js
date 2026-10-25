@@ -16,6 +16,18 @@ export async function storyRequest(path, method = 'GET', body) {
   return payload.data;
 }
 
+// A file the story API can attach to an asset or shot: the raw bytes, with its purpose and name in headers (images up to 8 MB).
+export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+export async function storyUpload(file, purpose = 'IMAGE') {
+  const response = await fetch(STORY_BASE + '/files', {method:'POST', credentials:'same-origin', body:file,
+    headers:{'Content-Type':file.type || 'application/octet-stream', 'X-File-Purpose':purpose, 'X-File-Name':encodeURIComponent(file.name),
+      'X-Requested-With':'projects', 'Idempotency-Key':crypto.randomUUID()}});
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.message || payload.error || response.statusText);
+  return payload.data;
+}
+
 export async function storyList(path) {
   const items = [];
   let cursor;

@@ -63,6 +63,8 @@ export function episodeCounts(ep, shots) {
 export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTitle, crumbs = {}, counts, onSpace, onCommand, assistant, film, identity, settings, panels = ['left', 'right'], layout = {}, onLayout}) {
   useLocale();
   const slash = <span className="studio-slash" aria-hidden="true">/</span>;
+  // A page opened from a space (the cast sheet, the brief, a lab page) has no tabs to leave by: Back returns to that space (the Shot Stage when it has none).
+  const home = SPACES.find(item => item.key === space) || SPACES[1];
   return <header className="top studio-top">
     <div className="studio-crumb">
       <a href="/projects/" className="brand-mark" aria-label={t('app.backToProductions')} title={t('app.backToProductions')}>ZF</a>
@@ -71,7 +73,9 @@ export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTit
         <select className="studio-episode" aria-label={t('story.episode')} value={epId} onChange={event => onEpisode(event.target.value)}>
           {episodes.map(item => <option key={item.episodeId} value={item.episodeId}>{item.title}</option>)}</select></>}
       {slash}<SpaceMenu space={space} counts={counts} onSpace={onSpace}/>
-      {pageTitle && <>{slash}<span className="studio-focus" title={pageTitle}>{pageTitle}</span></>}
+      {pageTitle && <>{slash}<button type="button" className="studio-back" title={t('shell.backTo', {space:t(home.label)})} aria-label={t('shell.backTo', {space:t(home.label)})}
+        onClick={() => onSpace?.(home.key)}><Icon name="arrowLeft" size={14}/><span>{t('shell.back')}</span></button>
+        <span className="studio-focus" title={pageTitle}>{pageTitle}</span></>}
       {crumbs.scene && <>{slash}<span className="studio-focus" title={crumbs.scene}>{crumbs.scene}</span></>}
       {crumbs.shot && <>{slash}<b className="studio-focus is-now" title={crumbs.shot}><i className="studio-dot" aria-hidden="true"/>{crumbs.shot}</b></>}
     </div>

@@ -1,26 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
-import { storyList, storyRequest, waitStoryTask } from './storyModel.js';
+import { storyList, storyRequest, storyUpload, waitStoryTask, IMAGE_TYPES, MAX_IMAGE_BYTES } from './storyModel.js';
 import { sourceDraft, editStoryScreenplay, needsStoryAdaptation, adaptStoryDraft, buildStoryFromDraft, storyComposition, choiceContrast,
   missingAssetSheets, assetGroupActive, rememberAssetGroup, restoredAssetGroup } from './storyImport.js';
 import { CompositionPanel, CompositionReport, AssetGenerationState } from './StoryWorkbenchModals.jsx';
 import { ScriptOutline } from './ScriptOutline.jsx';
+import { WorldWall, WorldFacets, WorldList, AssetInspector, WorldSummary } from './WorldWall.jsx';
+import { activeItem, rememberWorld, restoredWorld, worldCounts, worldFacets, worldGroups, worldItems } from './worldModel.js';
 import { Icon } from './Icon.jsx';
 
 const MODES = ['idea', 'novel', 'script'];
-const KINDS = {all:() => true, cast:asset => asset.type === 'CHARACTER', world:asset => asset.type !== 'CHARACTER'};
 const focusedSceneOf = (shots, rid) => (rid && shots.find(shot => shot.rowId === rid)?.sceneId) || null;
 
-// SPEC_15 Story & World: the scenes, the source the agent grows into a script (SPEC_14 lenses and collision cards on the
-// page, not behind Ctrl K), and the cast, sets and props that script names. One amber action: update the storyboard.
+// SPEC_15 Story & World: two views of one space. The script view holds the scenes, the source the agent grows into a script (SPEC_14
+// lenses and collision cards on the page, not behind Ctrl K) and the script's outline; the Cast & sets view holds the people, places and
+// props that script names, as a wall with an inspector. One amber action: update the storyboard.
 export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focus = {}, onFocus, onChanged, onStage, onOpenShot, onAssets, onVault}) {
   useLocale();
   const [drafts, setDrafts] = useState(() => ({script:sourceDraft(), idea:sourceDraft(), novel:sourceDraft()}));
   const [sourceMode, setSourceMode] = useState('script'), [targetScenes, setTargetScenes] = useState(3), [breakdownMode, setBreakdownMode] = useState('auto');
   const [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123'), [styles, setStyles] = useState([]);
   const [comp, setComp] = useState({medium:'', genre:'general', collisions:null, unchecked:[], focus:'overall', extra:''});
-  const [assets, setAssets] = useState([]), [kind, setKind] = useState('all'), [open, setOpen] = useState(''), [detail, setDetail] = useState(null);
+  const [assets, setAssets] = useState([]), [assetsReady, setAssetsReady] = useState(false), [kind, setKind] = useState('all'), [detail, setDetail] = useState(null);
+  const [remembered] = useState(() => restoredWorld(epId));
+  const [view, setView] = useState(remembered.view), [pick, setPick] = useState(remembered.pick), [facet, setFacet] = useState('all');
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [loading, setLoading] = useState(true), [group, setGroup] = useState(null), [task, setTask] = useState(null);
   const script = useRef(null), mounted = useRef(true), loadedFor = useRef(null), picked = useRef(false), openedFor = useRef(null);
   const draft = drafts[sourceMode], isSource = sourceMode !== 'script';
@@ -29,6 +33,7 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
   const needsAdaptation = needsStoryAdaptation(sourceMode, draft, targetScenes, isSource ? composition : null);
   const updateDraft = update => setDrafts(current => ({...current, [sourceMode]:{...current[sourceMode], ...update}}));
   useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
+  useEffect(() => rememberWorld(epId, {view, pick}), [epId, view, pick]);
   // The screenplay, settings and styles load once per episode; later saves refresh the episode without wiping drafts.
   useEffect(() => {
     if (!ep || loadedFor.current === epId) return;
@@ -41,26 +46,30 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     storyList('/catalog/styles').then(items => {if (mounted.current) setStyles(items);}).catch(err => {if (mounted.current) setError(err.message);})
       .finally(() => {if (mounted.current) setLoading(false);});
   }, [ep, epId]);
-  const loadAssets = () => storyList(`/episodes/${epId}/assets`).then(items => {if (mounted.current) setAssets(items);});
+  const loadAssets = () => storyList(`/episodes/${epId}/assets`).then(items => {if (mounted.current) {setAssets(items); setAssetsReady(true);}});
   useEffect(() => {loadAssets().catch(err => setError(err.message));}, [epId, ep]);  // eslint-disable-line react-hooks/exhaustive-deps
-  // The shell's focus lands here: "Add references" on the Shot Stage arrives with an asset code and opens that card once; with
+  // The shell's focus lands here: "Add references" on the Shot Stage arrives with an asset code and opens that card on the wall once; with
   // no focus yet, the first scene is the focus so every space's breadcrumb has a place to start.
   useEffect(() => {
     const code = focus.assetCode?.split(':')[0];
     if (!code || openedFor.current === focus.assetCode) return;
     const asset = assets.find(item => item.assetCode.split(':')[0] === code);
     if (!asset) return;
-    openedFor.current = focus.assetCode; setKind('all'); setOpen(asset.assetId);
-    requestAnimationFrame(() => document.getElementById('world-asset-' + asset.assetId)?.scrollIntoView({block:'nearest'}));
+    openedFor.current = focus.assetCode; setView('world'); setFacet('all'); setPick(asset.assetId);
+    requestAnimationFrame(() => document.getElementById('world-card-' + asset.assetId)?.scrollIntoView({block:'nearest'}));
   }, [focus.assetCode, assets]);
   useEffect(() => {
     if (!focus.sceneId && !focus.shotRid && ep?.scenes?.[0]) onFocus?.({sceneId:ep.scenes[0].sceneId});
   }, [ep?.scenes, focus.sceneId, focus.shotRid]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const items = useMemo(() => worldItems(assets, shots), [assets, shots]);
+  const facetNow = facet === 'missing' && !items.some(item => item.needsImage) ? 'all' : facet;  // nothing left to fix: back to everything
+  const groups = worldGroups(items, facetNow);
+  const active = view === 'world' ? activeItem(groups, pick) : null, activeId = active?.assetId || '';
   useEffect(() => {
     let alive = true; setDetail(null);
-    if (open) storyRequest('/assets/' + open).then(item => {if (alive) setDetail(item);}).catch(err => {if (alive) setError(err.message);});
+    if (activeId) storyRequest('/assets/' + activeId).then(item => {if (alive) setDetail(item);}).catch(err => {if (alive) setError(err.message);});
     return () => {alive = false;};
-  }, [open]);
+  }, [activeId]);
   // Missing reference sheets generate as one task group; polling survives a reload through sessionStorage.
   useEffect(() => {
     if (!group?.taskGroupId || !assetGroupActive(group)) return undefined;
@@ -77,10 +86,11 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     return () => {alive = false; clearTimeout(timer);};
   }, [group?.taskGroupId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Resolves true when the action went through, so a form can close itself only then.
   const run = async action => {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true); setError('');
-    try {await action();} catch (err) {if (mounted.current) setError(err.message);} finally {if (mounted.current) setBusy(false);}
+    try {await action(); return true;} catch (err) {if (mounted.current) setError(err.message); return false;} finally {if (mounted.current) setBusy(false);}
   };
   const changeComposition = patch => {
     if (patch.medium === 'manju') setRatio('9:16');  // micro-drama is vertical by convention
@@ -106,10 +116,27 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     const pending = await storyRequest(`/episodes/${epId}/asset-image-generations`, 'POST', {appCode:'flux-soul-cast'});
     rememberAssetGroup(epId, pending); setGroup(pending);
   });
+  // After any change to one asset: the list, its detail and the shell's episode (readiness of the shots that use it) catch up.
+  const refreshAsset = async assetId => {await loadAssets(); setDetail(await storyRequest('/assets/' + assetId)); onChanged?.();};
   const generateOne = assetId => run(async () => {
     await waitStoryTask(await storyRequest(`/assets/${assetId}/image-generations`, 'POST', {appCode:'flux-soul-cast'}));
-    await loadAssets(); setDetail(await storyRequest('/assets/' + assetId)); onChanged?.();
+    await refreshAsset(assetId);
   });
+  const saveAsset = (assetId, fields) => run(async () => {await storyRequest('/assets/' + assetId, 'PATCH', fields); await refreshAsset(assetId);});
+  // An uploaded picture becomes a candidate of the asset and the selected reference in one go.
+  const uploadAsset = (assetId, file) => run(async () => {
+    if (!IMAGE_TYPES.includes(file.type)) throw new Error(t('world.imageType'));
+    if (file.size > MAX_IMAGE_BYTES) throw new Error(t('world.imageSize'));
+    const stored = await storyUpload(file, 'IMAGE');
+    const candidate = await storyRequest(`/assets/${assetId}/images`, 'POST', {fileId:stored.fileId});
+    await storyRequest(`/assets/${assetId}/selected-image`, 'PUT', {imageId:candidate.imageId});
+    await refreshAsset(assetId);
+  });
+  const createAsset = (type, name, prompt) => run(async () => {
+    const created = await storyRequest(`/episodes/${epId}/assets`, 'POST', {type, name, prompt});
+    await loadAssets(); setFacet('all'); setPick(created.assetId); onChanged?.();
+  });
+  const openAsset = asset => {openedFor.current = asset.assetCode; setFacet('all'); setPick(asset.assetId); setView('world'); onFocus?.({assetCode:asset.assetCode});};
   // A scene in the list selects its heading in the screenplay.
   const jump = scene => {
     onFocus?.({sceneId:scene.sceneId, shotRid:null});  // a scene is the focus now; the Shot Stage picks the shot that needs you
@@ -121,6 +148,7 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
       if (at >= 0) {box.setSelectionRange(at, at + scene.title.length); box.scrollTop = Math.max(0, box.value.slice(0, at).split('\n').length - 2) * 22;}
     });
   };
+  const openScene = scene => {setView('script'); jump(scene);};
   // A beat's line number selects that line in the screenplay.
   const jumpLine = line => requestAnimationFrame(() => {
     const box = script.current;
@@ -131,28 +159,43 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
   const scenes = ep?.scenes || [];
   const shotsByScene = useMemo(() => shots.reduce((map, shot) => map.set(shot.sceneId, (map.get(shot.sceneId) || 0) + 1), new Map()), [shots]);
   const missing = missingAssetSheets(ep);
-  const shown = assets.filter(KINDS[kind]);
   const recent = comp.collisions?.recentTraces || [];
   const contrast = comp.collisions ? choiceContrast(recent, comp.focus) : null;
   const struck = comp.collisions ? comp.unchecked.length : 0, kept = comp.collisions ? comp.collisions.candidates.length - struck : 0;
   const styleName = styles.find(item => item.stylePresetId === style)?.name;
+  const canGenerate = writable && !busy && !assetGroupActive(group) && !ep?.scriptDirty;
+  const generateHint = ep?.scriptDirty ? t('world.confirmFirst') : undefined;
+  const notices = <>
+    {loading && (!ep && loadError ? <p role="alert" className="canvas-error">{loadError}</p> : <p role="status">{t('story.importLoading')}</p>)}
+    {busy && <p role="status">{t('story.working')}{task && <> · {task.taskId} <button type="button" className="quiet" onClick={() => storyRequest('/tasks/' + task.taskId + '/cancellations', 'POST').catch(err => setError(err.message))}>{t('story.cancelTask')}</button></>}</p>}
+    {error && <p role="alert" className="canvas-error">{error}</p>}
+  </>;
 
   return <div className="studio-space story-world">
-    <nav className="space-list" aria-label={t('world.scenes')}>
-      <div className="space-list-head"><b>{t('world.scenes')}</b><span className="num">{scenes.length}</span></div>
+    <nav className="space-list" aria-label={t(view === 'world' ? 'world.facets' : 'world.scenes')}>
+      <div className="space-list-head">{view === 'world'
+        ? <><b>{t('world.worldTitle')}</b><span className="num">{items.length}</span></>
+        : <><b>{t('world.scenes')}</b><span className="num">{scenes.length}</span></>}</div>
       <div className="studio-segmented" role="group" aria-label={t('world.listView')}>
-        <button type="button" aria-pressed="true">{t('world.byScene')}</button>
-        <button type="button" aria-pressed="false" onClick={onAssets}>{t('world.assetWall')}</button>
+        <button type="button" aria-pressed={view === 'script'} onClick={() => setView('script')}>{t('world.byScene')}</button>
+        <button type="button" aria-pressed={view === 'world'} onClick={() => setView('world')}>{t('world.assetWall')}</button>
       </div>
-      <ol className="space-items">{scenes.map(scene => <li key={scene.sceneId}><button type="button" aria-current={(focus.sceneId || focusedSceneOf(shots, focus.shotRid)) === scene.sceneId ? 'true' : undefined} onClick={() => jump(scene)}>
-        <b className="num">{String(scene.sceneIndex).padStart(2, '0')}</b><span>{scene.title}</span>
-        <small>{t('shell.shotCount', {count:shotsByScene.get(scene.sceneId) || 0})}</small></button></li>)}
-        {!scenes.length && <li className="space-empty">{t('world.noScenes')}</li>}
-      </ol>
+      {view === 'world' ? <WorldFacets facets={worldFacets(items)} facet={facetNow} onFacet={setFacet}/>
+        : <ol className="space-items">{scenes.map(scene => <li key={scene.sceneId}><button type="button" aria-current={(focus.sceneId || focusedSceneOf(shots, focus.shotRid)) === scene.sceneId ? 'true' : undefined} onClick={() => jump(scene)}>
+          <b className="num">{String(scene.sceneIndex).padStart(2, '0')}</b><span>{scene.title}</span>
+          <small>{t('shell.shotCount', {count:shotsByScene.get(scene.sceneId) || 0})}</small></button></li>)}
+          {!scenes.length && <li className="space-empty">{t('world.noScenes')}</li>}
+        </ol>}
       <p className="space-foot">{[ratio, styleName].filter(Boolean).join(' · ')}</p>
     </nav>
 
     <main className="space-main">
+      {view === 'world' ? <>
+        <WorldWall groups={groups} counts={worldCounts(items)} total={items.length} activeId={activeId} ready={assetsReady} writable={writable} disabled={busy}
+          missingCount={missing.length} canGenerate={canGenerate} generateHint={generateHint} generation={<AssetGenerationState group={group}/>}
+          onPick={setPick} onCreate={createAsset} onGenerateMissing={generateMissing} onTable={onAssets}/>
+        {notices}
+      </> : <>
       <header className="space-head">
         <h1>{t('world.story')}</h1>
         <span className="space-sub">{t('story.sourceMode')}</span>
@@ -194,49 +237,29 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
         if (text.length > 500000) {setError(t('story.scriptTextTooLong')); return;}
         updateDraft(isSource ? {sourceText:text} : {script:text}); setError('');
       }}/></label>
-      {loading && (!ep && loadError ? <p role="alert" className="canvas-error">{loadError}</p> : <p role="status">{t('story.importLoading')}</p>)}
-      {busy && <p role="status">{t('story.working')}{task && <> · {task.taskId} <button type="button" className="quiet" onClick={() => storyRequest('/tasks/' + task.taskId + '/cancellations', 'POST').catch(err => setError(err.message))}>{t('story.cancelTask')}</button></>}</p>}
-      {error && <p role="alert" className="canvas-error">{error}</p>}
+      {notices}
+      </>}
     </main>
 
     <aside className="space-detail" aria-label={t('world.world')}>
-      <div className="space-detail-head"><b>{t('world.world')}</b>
-        <div className="studio-segmented small" role="group" aria-label={t('world.assetKind')}>
-          {Object.keys(KINDS).map(key => <button key={key} type="button" aria-pressed={kind === key} onClick={() => setKind(key)}>{t('world.kind_' + key)}</button>)}
-        </div></div>
-      <ul className="world-assets">{shown.map(asset => {
-        const lacks = missing.includes(asset.assetCode), expanded = open === asset.assetId;
-        const focused = focus.assetCode && asset.assetCode.split(':')[0] === focus.assetCode.split(':')[0];
-        return <li key={asset.assetId} id={'world-asset-' + asset.assetId} className={(lacks ? 'is-missing ' : '') + (expanded ? 'is-open ' : '') + (focused ? 'is-focus' : '')}>
-          <button type="button" className="world-asset" aria-expanded={expanded} onClick={() => {openedFor.current = asset.assetCode; setOpen(expanded ? '' : asset.assetId); onFocus?.({assetCode:expanded ? null : asset.assetCode});}}>
-            {asset.selectedImageUrl ? <img src={asset.selectedImageUrl} alt="" loading="lazy"/> : <span className="world-blank"/>}
-            <span><b>{asset.name || asset.assetCode}</b><small>@{asset.assetCode}</small>{lacks && <em>{t('world.needsImage')}</em>}</span></button>
-          {expanded && <div className="world-asset-detail">
-            {detail ? <>
-              <p>{detail.prompt}</p>
-              {!!detail.variants?.length && <div className="world-variants">{detail.variants.map(variant => <figure key={variant.assetId}>
-                {variant.selectedImageUrl ? <img src={variant.selectedImageUrl} alt="" loading="lazy"/> : <span className="world-blank"/>}
-                <figcaption>{variant.assetCode.split(':')[1]}</figcaption></figure>)}</div>}
-              <p className="space-sub">{t('story.assetUses', {shots:detail.shotIds?.length || 0, scenes:detail.sceneIds?.length || 0})}</p>
-              <div className="world-asset-actions">
-                <button type="button" disabled={!writable || busy} onClick={() => generateOne(asset.assetId)}>{asset.selectedImageUrl ? t('world.regenerate') : t('world.generateHere')}</button>
-                <button type="button" className="quiet" onClick={onVault}>{t('world.variants')}</button>
-              </div>
-            </> : <p role="status">{t('app.loading')}</p>}
-          </div>}
-        </li>;
-      })}{!shown.length && <li className="space-empty">{t('world.noAssets')}</li>}</ul>
-      {missing.length > 0 && <button type="button" disabled={!writable || busy || assetGroupActive(group) || ep?.scriptDirty} onClick={generateMissing}
-        title={ep?.scriptDirty ? t('world.confirmFirst') : undefined}>{t('story.generateMissingAssets')} ({missing.length})</button>}
-      <AssetGenerationState group={group}/>
-      <fieldset className="world-breakdown"><legend>{t('story.breakdownMode')}</legend>
-        {['auto','scene','cinematic'].map(mode => <label key={mode}><input type="radio" name="breakdown" value={mode} checked={breakdownMode === mode} disabled={disabled} onChange={() => setBreakdownMode(mode)}/>{t('story.breakdownMode_' + mode)}</label>)}
-      </fieldset>
-      <details className="world-format"><summary>{t('world.format')}</summary>
-        <label className="modal-field">{t('story.aspectRatio')}<select value={ratio} disabled={disabled} onChange={e => setRatio(e.target.value)}>{['16:9','9:16','1:1','21:9'].map(r => <option key={r}>{r}</option>)}</select></label>
-        <label className="modal-field">{t('story.style')}<select value={style} disabled={disabled} onChange={e => setStyle(e.target.value)}>{styles.map(s => <option key={s.stylePresetId} value={s.stylePresetId}>{s.name}</option>)}</select></label>
-      </details>
-      <span className="spacer"/>
+      <div className="space-detail-body">
+      {view === 'world' ? (active
+        ? <AssetInspector key={active.assetId} item={active} detail={detail?.assetId === active.assetId ? detail : null} scenes={scenes} writable={writable} busy={busy}
+            onSave={saveAsset} onUpload={uploadAsset} onGenerate={generateOne} onOpenShot={onOpenShot} onOpenScene={openScene} onTable={onAssets} onVault={onVault}/>
+        : <WorldSummary withImages={items.filter(item => !item.needsImage).length} total={items.length}/>)
+      : <>
+        <WorldList items={items} kind={kind} onKind={setKind} focusCode={focus.assetCode} onOpen={openAsset}/>
+        {missing.length > 0 && <button type="button" disabled={!writable || busy || assetGroupActive(group) || ep?.scriptDirty} onClick={generateMissing}
+          title={ep?.scriptDirty ? t('world.confirmFirst') : undefined}>{t('story.generateMissingAssets')} ({missing.length})</button>}
+        <AssetGenerationState group={group}/>
+        <fieldset className="world-breakdown"><legend>{t('story.breakdownMode')}</legend>
+          {['auto','scene','cinematic'].map(mode => <label key={mode}><input type="radio" name="breakdown" value={mode} checked={breakdownMode === mode} disabled={disabled} onChange={() => setBreakdownMode(mode)}/>{t('story.breakdownMode_' + mode)}</label>)}
+        </fieldset>
+        <details className="world-format"><summary>{t('world.format')}</summary>
+          <label className="modal-field">{t('story.aspectRatio')}<select value={ratio} disabled={disabled} onChange={e => setRatio(e.target.value)}>{['16:9','9:16','1:1','21:9'].map(r => <option key={r}>{r}</option>)}</select></label>
+          <label className="modal-field">{t('story.style')}<select value={style} disabled={disabled} onChange={e => setStyle(e.target.value)}>{styles.map(s => <option key={s.stylePresetId} value={s.stylePresetId}>{s.name}</option>)}</select></label>
+        </details></>}
+      </div>
       <button type="button" className="primary studio-primary" disabled={disabled || !(draft.script.trim() || (isSource && draft.sourceText.trim()))} onClick={build}>
         {shots.length ? t('world.updateStoryboard') : t('story.confirmAndBuild')}</button>
     </aside>

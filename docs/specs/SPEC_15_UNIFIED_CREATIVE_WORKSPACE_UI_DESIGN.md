@@ -157,6 +157,8 @@
 | 劇本每一段對應到哪一鏡，改稿前先列出會動到的鏡頭（唯讀） | `ScriptOutline.jsx`、`project_docs/story_alignment.py`（`GET /episodes/{id}/script-alignment`、`POST /episodes/{id}/script-impact`） |
 | 劇組提案就地審：鏡頭詳情裡原文劃掉、新文並列，套用或拒絕；鏡頭類提案在 3D 片場以虛線虛影機位出現，可「透過提案機位看」 | `ShotProposals.jsx`、`proposalModel.js`、`previs/scene.js`（`shotGuides` 的 `ghost`） |
 | 3D 片場的「拖」：俯視圖拖演員站位（走位跟著搬）與機位關鍵幀 K1–Kn，吸附 0.1 m；底部節拍軌（機位關鍵幀與動作節拍，拖方塊移動、拖右緣改長度，節拍不互推）；「運鏡」摺疊區用範圍滑桿、時間碼與曲線調起訖與緩動 | `previs/blocking.js`、`PlanHandles.jsx`、`BeatTrack.jsx`、`CameraMove.jsx`、`previs/plan.js`（`motionBeats`、`plan.easing`） |
+| 角色與場景是故事與世界的第二個檢視，不再跳去 Soul Cast 表：左欄切換「按場次｜角色與場景」；角色與場景檢視左邊依類型篩選（全部、角色、場景、道具、缺參考圖），中間是大卡牆（參考圖、狀態、出現幾鏡、外觀設定），右邊檢視當前卡片（大圖可放大、造型縮圖列、外觀／聲音／備註、出現的鏡頭縮圖可直接開那一鏡、生成、上傳、編輯、新增）；看劇本時右欄是同一批設定的快速清單，點一張就開到牆上。檢視與選到的卡片在這個分頁記住，從表格回來仍在原處 | `WorldWall.jsx`、`worldModel.js`、`world.css`、`StoryWorld.jsx`；後端 `asset_view` 多回 `voice`、`status`、`notes`；上傳走 `POST /files` → `POST /assets/{id}/images` → `PUT /assets/{id}/selected-image`（`storyModel.js` 的 `storyUpload`，圖片 8 MB 內） |
+| 從空間開出去的頁面（角色表、導演簡報、實驗室頁）沒有分頁可離開，麵包屑出現「← 返回」回到所屬空間；不屬於任何空間的頁面回分鏡片場 | `StudioShell.jsx`（`StudioTopBar` 的 `studio-back`） |
 
 **仍未實作**：
 1. 在片場或節奏台改台詞後寫回劇本那一行：對應目前靠「第 i 段 ↔ 該場第 i 個鏡頭」與提示詞比對重建，唯讀；要寫回需要 SPEC_16 的 `beatKey`。
@@ -164,3 +166,4 @@
 3. 時間軸的「剪斷」（razor）：把一鏡切開會產生新鏡頭與新素材，不是剪輯動作。
 4. 節奏提案不是 AI 提案：節奏台的「偏長」提示是本機規則（比全集平均長 20% 以上且多出至少 0.5 秒）。
 5. 節拍軌只能編輯「走入」與帶 `plan.use` 動作技能的鏡頭；內建的轉身伸手（`turnreach`）、站立固定時間，只顯示機位關鍵幀。多點樣條與新增節拍類型未做。
+6. 角色與場景檢視只顯示造型縮圖；造型（服裝、姿勢）的新增、改名與刪除仍在素材庫對話框，聲音與備註要到表格編輯（`PATCH /assets/{id}` 只收名稱與外觀）。
