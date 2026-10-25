@@ -6,6 +6,7 @@ import unittest
 import uuid
 from pathlib import Path
 import test_writing_core as core
+from writing_browser_nav import open_space
 import test_writing_product_browser as product_fixture
 
 @unittest.skipUnless(os.environ.get('OPENBENCH_TEST_DB_URI'),'dedicated review2 PG required')
@@ -176,7 +177,7 @@ class WritingReview2ProductTests(unittest.TestCase):
             page.get_by_role('button',name='Plot overview',exact=True).click()
             if mode!='adaptation':
                 row=page.locator('.writing-scene-metadata').last;expect(row).to_contain_text('CAST-03');expect(row.get_by_role('button',name='1 linked shots',exact=True)).to_be_visible();row.get_by_role('button',name='1 linked shots',exact=True).click()
-            else:page.get_by_role('button',name='Shot Stage',exact=False).first.click()
+            else:open_space(page,'Shot Stage')
             expect(page.locator('.shot-list')).to_be_visible()
             # User-visible grouping: the removed scene's shot sits in the headingless group, never under a surviving scene.
             headings=page.locator('.shot-list section h3');sections=page.locator('.shot-list section')

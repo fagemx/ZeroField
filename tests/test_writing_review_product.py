@@ -6,6 +6,7 @@ import unittest
 import uuid
 from pathlib import Path
 import test_writing_core as core
+from writing_browser_nav import open_space
 import test_writing_product_browser as product_fixture
 
 
@@ -71,22 +72,22 @@ class WritingReviewProductTests(unittest.TestCase):
             summary=page.get_by_role('textbox',name='Summary',exact=True);summary.fill('Never lose this outline draft.')
             page.keyboard.press('Control+s')
             expect(page.get_by_text('Device recovery is unavailable.',exact=False)).to_be_visible()
-            page.get_by_role('button',name='Shot Stage',exact=False).first.click();expect(page.get_by_role('textbox',name='Manuscript editor')).to_be_visible()
+            open_space(page,'Shot Stage');expect(page.get_by_role('textbox',name='Manuscript editor')).to_be_visible()
             self.assertTrue(page.url.endswith('#story-world'))
             with page.expect_download() as download:page.get_by_role('button',name='Download outline draft',exact=True).click()
             self.assertIn('Never lose',Path(download.value.path()).read_text(encoding='utf8'))
             page.evaluate('() => {IDBDatabase.prototype.transaction=window.originalTransaction;}')
-            page.get_by_role('button',name='Shot Stage',exact=False).first.click()
+            open_space(page,'Shot Stage')
             expect(page.get_by_role('textbox',name='Manuscript editor')).not_to_be_visible()
             self.assertEqual(self.f.writing('workspace')['structure']['version'],before['structure']['version'])
             remote=self.f.writing('structure/metadata','PATCH',{'baseVersion':before['structure']['version'],'clientMutationId':uuid.uuid4().hex,'scenePatches':[{'sceneKey':scene['sceneKey'],'summary':'Remote summary'}],'lanePatches':[]})
-            page.get_by_role('button',name='Story & World',exact=False).first.click()
+            open_space(page,'Story & World')
             page.get_by_role('button',name='Restore outline draft for review',exact=True).click()
             expect(page.get_by_text('This draft keeps base version',exact=False)).to_be_visible()
             page.get_by_role('button',name='Plot overview',exact=True).click();expect(page.get_by_role('textbox',name='Summary',exact=True)).to_have_value('Never lose this outline draft.')
             sent=len(attempted);page.keyboard.press('Control+s');page.wait_for_timeout(700)
             self.assertEqual(len(attempted),sent)
-            page.get_by_role('button',name='Shot Stage',exact=False).first.click();expect(page.get_by_role('textbox',name='Manuscript editor')).to_be_visible()
+            open_space(page,'Shot Stage');expect(page.get_by_role('textbox',name='Manuscript editor')).to_be_visible()
             self.assertEqual(self.f.writing('workspace')['structure']['scenes'][0]['summary'],'Remote summary')
             self.assertEqual(self.f.writing('workspace')['docHash'],before['docHash'])
 
@@ -110,7 +111,7 @@ class WritingReviewProductTests(unittest.TestCase):
             self.assertEqual(removed['selectedVideoUrl'],upload['src']);self.assertNotEqual(removed['sceneId'],current[shots[2]['shotId']]['sceneId'])
             # Authorized projection navigates the surviving stable C shot, never removed B.
             row=page.locator('.writing-scene-metadata').last;expect(row).to_contain_text('CAST-03');row.get_by_role('button',name='1 linked shots',exact=True).click()
-            expect(page.locator('.shot-detail')).to_be_visible();page.get_by_role('button',name='Story & World',exact=False).first.click()
+            expect(page.locator('.shot-detail')).to_be_visible();open_space(page,'Story & World')
             page.get_by_role('button',name='Merge with next',exact=True).first.click();page.locator('.writing-preview-action input[type=checkbox]').first.check();page.get_by_role('button',name='Apply selected content',exact=True).click();expect(page.locator('.writing-preview')).not_to_be_visible()
             current={s['shotId']:s for s in self.f.ok('/episodes/'+self.f.ep+'/shots')['items']};self.assertIsNone(current[shots[1]['shotId']]['sceneId'])
             self.assertEqual(current[shots[1]['shotId']]['storyOrigin'],origin)

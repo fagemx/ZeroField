@@ -11,6 +11,7 @@ import time
 import unittest
 from contextlib import contextmanager
 import test_writing_core as core
+from writing_browser_nav import open_space
 
 
 @unittest.skipUnless(os.environ.get('OPENBENCH_TEST_DB_URI'), 'isolated PG required')
@@ -62,9 +63,9 @@ class WritingProductBrowserTests(unittest.TestCase):
             editor.fill('Scene 01: Arrival\nThe keeper opens the brass door.')
             page.keyboard.press('Control+s')
             expect(page.locator('.writing-status')).to_contain_text('Saved')
-            page.get_by_role('button',name='Shot Stage',exact=False).first.click()
+            open_space(page,'Shot Stage')
             expect(editor).not_to_be_visible()
-            page.get_by_role('button',name='Story & World',exact=False).first.click()
+            open_space(page,'Story & World')
             expect(editor).to_contain_text('The keeper opens the brass door.')
             page.reload(); expect(editor).to_contain_text('The keeper opens the brass door.')
             manuscript=page.get_by_role('combobox',name='Manuscript',exact=True)
@@ -73,8 +74,8 @@ class WritingProductBrowserTests(unittest.TestCase):
             editor.fill('她心裡仍然想著故鄉。\n  Original novel prose stays.')
             page.keyboard.press('Control+s')
             expect(page.locator('.writing-status')).to_contain_text('Saved')
-            page.get_by_role('button',name='Shot Stage',exact=False).first.click()
-            page.get_by_role('button',name='Story & World',exact=False).first.click()
+            open_space(page,'Shot Stage')
+            open_space(page,'Story & World')
             manuscript.select_option('source:novel'); expect(editor).to_contain_text('她心裡仍然想著故鄉。')
             manuscript.select_option('working:main')
             page.get_by_role('button',name='Versions',exact=True).click()
@@ -112,8 +113,8 @@ class WritingProductBrowserTests(unittest.TestCase):
             page.get_by_label('Title',exact=True).fill('Private form, explicit shared note')
             page.get_by_label('Notes',exact=True).fill('Local note survives a space switch.')
             page.wait_for_timeout(700)
-            page.get_by_role('button',name='Shot Stage',exact=False).first.click()
-            page.get_by_role('button',name='Story & World',exact=False).first.click()
+            open_space(page,'Shot Stage')
+            open_space(page,'Story & World')
             self.tools(page,'World & notes')
             page.get_by_role('button',name='Restore private draft for review',exact=True).click()
             expect(page.locator('#writing-tools-bible').get_by_role('textbox',name='Notes',exact=True)).to_have_value('Local note survives a space switch.')
@@ -167,7 +168,7 @@ class WritingProductBrowserTests(unittest.TestCase):
             story.mutate_row(self.f.conn,self.f.me,self.f.slug,row['tabKey'],row['rid'],{5:'[video]('+upload['src']+')',6:'Approved'})
             self.f.conn.commit()
             doc=copy.deepcopy(self.f.writing('workspace')['doc']);doc['content'][1]['content']=[{'type':'text','text':'@CAST-01 closes the door.'}];doc['content'][3]['content']=[{'type':'text','text':'@CAST-01 leaves.'}];self.f.save_doc(doc)
-            page.get_by_role('button',name='Story & World',exact=False).first.click()
+            open_space(page,'Story & World')
             page.get_by_role('button',name='Review story impact',exact=True).click()
             page.get_by_role('button',name='Preview selected story impact',exact=True).click()
             expect(page.locator('.writing-preview-action')).not_to_have_count(0)
@@ -183,7 +184,7 @@ class WritingProductBrowserTests(unittest.TestCase):
             current={shot['shotId']:shot for shot in self.f.ok('/episodes/'+self.f.ep+'/shots')['items']}
             self.assertEqual(current[first['shotId']]['selectedVideoUrl'],upload['src'])
             self.assertEqual(current[second['shotId']]['description'],'Director preserves this unselected row')
-            page.get_by_role('button',name='Shot Stage',exact=False).first.click()
+            open_space(page,'Shot Stage')
             page.get_by_role('button',name='Film',exact=False).first.click()
             expect(page.get_by_text('Story source differences or unknown provenance:',exact=False)).to_be_visible()
             self.assertTrue(self.f.writing('alignment')['items'])
