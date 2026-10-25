@@ -90,6 +90,8 @@ export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTit
         <span className="studio-focus" title={pageTitle}>{pageTitle}</span></>}
       {crumbs.scene && <>{slash}<span className="studio-focus" title={crumbs.scene}>{crumbs.scene}</span></>}
       {crumbs.shot && <>{slash}<b className="studio-focus is-now" title={crumbs.shot}><i className="studio-dot" aria-hidden="true"/>{crumbs.shot}</b></>}
+      {/* The writing workspace's save state, only while it has something to say: saved and read-only are the quiet cases (SPEC_16A 3.8). */}
+      {space === 'story' && writingStatus?.state && !['saved', 'readonly'].includes(writingStatus.state) && <span className="studio-note studio-writing" role="status">{t('writing.authoring.' + semanticEnumKey('state', writingStatus.state))}</span>}
     </div>
     <div className="studio-actions">
       <LocaleToggle />
