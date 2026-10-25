@@ -545,23 +545,26 @@ def extract(conn, me, ep):
     return completed_task(conn, me, ep["slug"], "ASSET_EXTRACT", {"assetsCount": len(existing.keys() | details.keys()), "scenesCount": len(scenes(conn, ep))})
 
 
-def scene_matcher(conn, me, ep, *, write=False):
-    """(shot, scene) -> does this slate shot belong to this scene.
+def scene_claim(conn, me, ep, *, write=False):
+    """(shot, scene) -> 'own', 'extra' or None: what a build of this scene does with a slate shot.
 
-    Once the writing structure exists the answer rests on the stable scene relationship, not on a positional scene id that a reorder can
-    reuse; before that it is the old positional check. The build and its estimate both ask this, so the numbers shown before a build stay
-    the numbers the build produces.
+    'own': the shot answers one of the scene's beats. Once the writing structure exists that rests on the stable scene relationship, never on a
+    positional scene id (a reorder can reuse one); before it exists it is the old positional check. 'extra': no scene can claim the shot (a
+    hand-made insert, an old shot without a proven origin), but its positional id says this scene, so it is counted here and kept as it is: it
+    never answers a beat and is never rewritten. The build and its estimate both ask this, so the numbers shown before a build are the slate after it.
     """
     from project_docs import writing_store, writing_structure
     structure = writing_structure.read_structure(conn, writing_store.scope_for(conn, me, ep['episodeId'], write=write))
     stable = {s['legacySceneId']: s['sceneKey'] for s in structure['scenes']}
 
-    def belongs(shot, scene):
+    def claim(shot, scene):
         if not structure['initialized']:
-            return shot.get('sceneId') == scene['sceneId']
+            return 'own' if shot.get('sceneId') == scene['sceneId'] else None
         keys, _, missing = writing_structure.compatibility_relationship(structure, shot)
-        return not missing and keys == [stable.get(scene['sceneId'])]
-    return belongs
+        if not missing:
+            return 'own' if keys == [stable.get(scene['sceneId'])] else None
+        return 'extra' if missing == 'unbound' and shot.get('sceneId') == scene['sceneId'] else None
+    return claim
 
 
 def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
@@ -577,7 +580,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     if ep.get("confirmedHash") != digest(script(conn, ep)) or not scene_list:
         raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Confirm Script & Extract Assets before building storyboards.")
     previous = shots(conn, ep)
-    belongs = scene_matcher(conn, me, ep, write=True)
+    claim = scene_claim(conn, me, ep, write=True)
     medium = script_medium_lens(script(conn, ep))  # a composed script carries its Lens line
     plans = planner.beat_plans(scene_list, mode, only_scene)
     if sum(len(beats) for _, beats in plans) > planner.MAX_BUILD_SHOTS:
@@ -585,7 +588,7 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
     created = []
     origin_updated = []
     for scene, beats in plans:
-        steps, surplus = planner.scene_steps(scene, beats, previous, rebuild=bool(only_scene), belongs=belongs)
+        steps, surplus = planner.scene_steps(scene, beats, previous, rebuild=bool(only_scene), claim=claim)
         scene_refs = [asset_code(m[1]) for m in ASSET_RE.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-"))]
         scene_refs = list(dict.fromkeys(scene_refs)) or [f"SET-{scene['sceneIndex']:02d}"]
         cast = {a["name"].casefold(): a["assetCode"] for a in assets(conn, ep) if a["type"] == "CHARACTER" and a["isDefault"]}

@@ -27,18 +27,23 @@ def beat_plans(scene_list, mode, only_scene=None):
             if not only_scene or scene["sceneId"] == only_scene]
 
 
-def scene_steps(scene, beats, previous, rebuild=False, belongs=None):
+def scene_steps(scene, beats, previous, rebuild=False, claim=None):
     """(steps, surplus) for one scene; steps are (action, index, beat, shot).
 
     The scene's existing slate shots (previous: shot views) answer its first beats in sheet order: a normal build keeps them
     as they are, a one-scene rebuild rewrites them. Every later beat adds a shot. Slate shots beyond the last beat are the
     surplus: a build never deletes takes.
     """
-    # belongs(shot, scene) is the stable scene relationship once the writing structure exists (story_openapi.scene_matcher).
-    slate = [s for s in previous if s["tabKey"] == "cinema-studio" and (belongs(s, scene) if belongs else s.get("sceneId") == scene["sceneId"])]
+    slate = [s for s in previous if s["tabKey"] == "cinema-studio"]
+    if claim is None:
+        own, extra = [s for s in slate if s.get("sceneId") == scene["sceneId"]], []
+    else:  # story_openapi.scene_claim: the stable scene relationship once the writing structure exists, plus the shots no scene can claim
+        verdicts = [(s, claim(s, scene)) for s in slate]
+        own, extra = [s for s, kind in verdicts if kind == "own"], [s for s, kind in verdicts if kind == "extra"]
+    slate = own
     steps = [(("rewrite" if rebuild else "keep"), index, beat, slate[index]) if index < len(slate) else ("add", index, beat, None)
              for index, beat in enumerate(beats)]
-    return steps, slate[len(beats):]
+    return steps, slate[len(beats):] + extra
 
 
 @functools.lru_cache(maxsize=1)
@@ -59,13 +64,13 @@ def whole(number):
     return int(number) if number == int(number) else number
 
 
-def mode_estimate(scene_list, previous, medium, mode, belongs=None):
+def mode_estimate(scene_list, previous, medium, mode, claim=None):
     """One breakdown mode against the current slate, as a whole-episode build would act."""
     plans = beat_plans(scene_list, mode)
     kept = new = 0
     seconds = 0
     for scene, beats in plans:
-        steps, surplus = scene_steps(scene, beats, previous, belongs=belongs)
+        steps, surplus = scene_steps(scene, beats, previous, claim=claim)
         for action, index, beat, shot in steps:
             if action == "add":
                 new += 1
@@ -99,7 +104,7 @@ def parse_target(body):
     return value
 
 
-def estimate(conn, ep, body, belongs=None):
+def estimate(conn, ep, body, claim=None):
     modes, target = parse_modes(body), parse_target(body)
     if body.get("scriptContent") is not None:
         draft = story.text(body, "scriptContent", maximum=500000)  # an unsaved draft, converted as saving it would
@@ -107,7 +112,7 @@ def estimate(conn, ep, body, belongs=None):
     else:
         doc = repo.get_tab(conn, ep["slug"], ep["tabKey"])["doc"]
     scene_list, medium, previous = story.scenes_of_doc(ep, doc), script_medium_lens(doc_text(doc)), story.shots(conn, ep)
-    return {"modes": [mode_estimate(scene_list, previous, medium, mode, belongs) for mode in modes], "targetSeconds": target}
+    return {"modes": [mode_estimate(scene_list, previous, medium, mode, claim) for mode in modes], "targetSeconds": target}
 
 
 def dispatch(conn, me, method, path, body):
@@ -117,4 +122,4 @@ def dispatch(conn, me, method, path, body):
         return None
     ep = story.episode(conn, match[1])
     story.authorize(conn, me, ep["slug"])
-    return estimate(conn, ep, body, story.scene_matcher(conn, me, ep))
+    return estimate(conn, ep, body, story.scene_claim(conn, me, ep))

@@ -44,6 +44,20 @@ class PlannerPureTests(unittest.TestCase):
         self.assertEqual([a for a, *_ in steps], ["rewrite", "rewrite", "add"])
         self.assertEqual([a for a, *_ in planner.scene_steps(self.scene, ["x"], [])[0]], ["add"])
 
+    def test_a_claim_decides_which_shots_answer_beats_and_which_are_only_counted(self):
+        # Once scenes have stable keys a shot answers a scene's beats only when that scene is proven to own it (SPEC_16). A shot no scene can
+        # claim, like a hand-made insert, is counted where its positional id says and kept as it is: it answers no beat and is never rewritten.
+        slate = [self.shot("own1"), self.shot("insert"), self.shot("own2"), self.shot("moved", "sc_x_01_S02"), self.shot("gone")]
+        verdict = {"own1": "own", "own2": "own", "insert": "extra", "moved": None, "gone": None}
+        claim = lambda shot, scene: verdict[shot["shotId"]]
+        steps, surplus = planner.scene_steps(self.scene, ["x", "y", "z"], slate, claim=claim)
+        self.assertEqual([(a, s and s["shotId"]) for a, _, _, s in steps], [("keep", "own1"), ("keep", "own2"), ("add", None)])
+        self.assertEqual([s["shotId"] for s in surplus], ["insert"])  # counted, and kept
+        steps, surplus = planner.scene_steps(self.scene, ["x"], slate, claim=claim, rebuild=True)
+        self.assertEqual([(a, s["shotId"]) for a, _, _, s in steps], [("rewrite", "own1")])  # only a claimed shot is ever rewritten
+        self.assertEqual([s["shotId"] for s in surplus], ["own2", "insert"])
+        self.assertEqual([s["shotId"] for s in planner.scene_steps(self.scene, ["x"], slate)[1]], ["insert", "own2", "gone"], "no claim: the positional rule, as before")
+
     def test_beats_come_from_the_shared_cutter_and_only_scene_narrows_them(self):
         second = {"sceneId": "sc_x_01_S02", "title": "Scene 02: Bare", "content": ""}
         plans = planner.beat_plans([self.scene, second], "auto")
@@ -126,7 +140,9 @@ class StoryboardEstimateHTTPTests(PackBFixture, unittest.TestCase):
         self.check("cinematic")
 
     def test_a_draft_is_estimated_as_saving_it_would_store_it(self):
-        self.prepare(SCRIPT)
+        # Asked on a slate with no shots yet: with shots on it, saving a rewritten script can also detach shots from scenes they no longer prove to
+        # belong to (SPEC_16), which an unsaved draft cannot know. The draft is counted against the saved script's structure.
+        self.confirm(SCRIPT)
         saved = self.ok(f"/episodes/{self.ep}")["scriptContent"]
         drafted = self.estimate(breakdownModes=list(MODES), scriptContent=DRAFT)
         self.assertEqual(self.ok(f"/episodes/{self.ep}")["scriptContent"], saved)  # a draft is never saved by asking
