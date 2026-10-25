@@ -40,6 +40,10 @@
 
 /* The manuscript */
 .writing-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+/* On its own (no shell around it) the workspace lays its outline and panels beside the manuscript; inside Story & World they are drawn into the shell's columns instead (below). */
+.writing-left { width: 240px; flex-shrink: 0; border-right: 1px solid var(--w-line); overflow: auto; }
+.writing-right { width: 390px; flex-shrink: 0; overflow: auto; border-left: 1px solid var(--w-line); padding: 10px 12px; }
+.writing-right[hidden] { display: none; }
 .writing-manuscript { flex: 1; min-width: 0; overflow: auto; padding: 14px clamp(16px, 3vw, 40px) 28px; }
 .writing-scope { margin: 0 0 6px; font-size: 12px; color: var(--w-faint); }
 .writing-editor { max-width: var(--writing-width); margin: 0 auto; min-height: 200px; }
@@ -115,5 +119,16 @@
 @media (max-width: 1100px) {
   .writing-toolbar, .writing-status { padding: 8px 12px; }
   .writing-compare-columns { flex-direction: column; }
+  .writing-left { width: 190px; }
+  .writing-right { width: 320px; }
+}
+@media (max-width: 800px) {
+  .writing-layout { position: relative; }
+  .writing-left { width: 160px; }
+  .writing-right { position: absolute; right: 0; top: 0; bottom: 0; width: min(90%, 390px); background: var(--w-surface); z-index: 2; box-shadow: -8px 0 24px #0009; }
+  .story-panel-slot .writing-right { position: static; width: auto; box-shadow: none; }
+  .writing-toolbar { gap: 6px; }
+  .writing-manuscript { padding: 10px; }
+  .writing-status { gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .authoring-workspace * { scroll-behavior: auto !important; } }
