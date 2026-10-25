@@ -318,9 +318,12 @@ def media_column(row, kind):
 def asset_view(slug, row):
     cells = row["cells"]
     code = cells[0].lstrip("@").upper().replace("#", ":")
+    note = cells[6] if len(cells) > 6 else ""
+    kind = note if ":" in code and note in ("OUTFIT", "POSE", "LOOK") else None  # a look keeps its kind in the notes cell
     return {"assetId": asset_id(slug, row), "assetCode": code, "name": cells[1], "prompt": cells[2],
             "type": "CHARACTER" if code.startswith("CAST") else "PROP" if code.startswith("PROP") else "SCENE",
-            "isDefault": ":" not in code, "kind": cells[6] if ":" in code and len(cells)>6 and cells[6] in ("OUTFIT", "POSE", "LOOK") else None,
+            "isDefault": ":" not in code, "kind": kind,
+            "voice": cells[4] if len(cells) > 4 else "", "status": cells[5] if len(cells) > 5 else "", "notes": "" if kind else note,
             "selectedImageUrl": media_url(cells[3]), "rowId": row["rid"], "tabKey": "soul-cast"}
 
 
