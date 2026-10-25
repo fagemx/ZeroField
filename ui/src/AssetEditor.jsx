@@ -3,15 +3,20 @@ import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
 import { statusLabel } from './format.js';
 import { isWide } from './worldModel.js';
+import { storyList } from './storyModel.js';
 import { isActiveRun } from './generation/generationModel.js';
 import { GenerationBar } from './generation/GenerationBar.jsx';
 import { AppearanceForm } from './AppearanceForm.jsx';
+import { describing, generateKey, newLookText, orderedImages, subjectOf } from './editorModel.js';
 import { Icon } from './Icon.jsx';
-import { RunState, Status } from './WorldWall.jsx';
+import { RunState, Spinner, Status } from './WorldWall.jsx';
 
-// SPEC_18 R12, as revised: the card in front of you is worked on in the large pane, not squeezed into a side column. The picture is the
-// biggest thing on it; beside it (under it, in a narrower pane) sit how to make it again and what it is. × closes the pane and the wall
-// has the whole view back. Keyed by asset in the parent, so editing state never leaks from one card to the next.
+// SPEC_18 R12, as revised twice: the card in front of you is worked on in the large pane, laid out like the studio it was studied from.
+// The picture on top with every picture of this look beside it; the looks under it, each with its own pictures and a + for another;
+// then the description, the most important thing about a character, as one big box with the generation choices on a single row under
+// it. Everything the editor acts on (the description, the pictures, the generate button, the upload) belongs to the look you picked, or
+// to the card itself when none is picked. What is left (voice, status, notes, where it appears) folds away under it.
+// Keyed by asset in the parent, so editing state never leaks from one card to the next.
 const pad = index => String(index).padStart(2, '0');
 
 function Lightbox({src, alt, onClose}) {
@@ -52,22 +57,51 @@ function StatusField({value, writable, busy, onSave}) {
     {!value && <option value="">{t('world.unset')}</option>}{choices.map(choice => <option key={choice} value={choice}>{statusLabel(choice)}</option>)}</select></dd></div>;
 }
 
-// A look is made, renamed and deleted here, beside its picture. Deleting says first which shots use it, and what happens to them.
+// Every picture of one look (or of the card itself), the main one first. Picking one shows it in the picture above; making it the main one
+// is a separate, deliberate step, because the main picture is what the shots use. Read again whenever the main picture or a run changes.
+function Pictures({id, selectedUrl, shownUrl, revision, preloaded = null, onPick}) {
+  useLocale();
+  const [images, setImages] = useState(preloaded);
+  useEffect(() => {
+    if (preloaded) return undefined;
+    let alive = true;
+    storyList(`/assets/${id}/images`).then(items => {if (alive) setImages(items);}).catch(() => {if (alive) setImages([]);});
+    return () => {alive = false;};
+  }, [id, selectedUrl, revision, preloaded]);
+  const list = orderedImages(images || []);
+  return <aside className="world-pictures" aria-label={t('world.imagesTitle')}>
+    <h3>{t('world.imagesTitle')}<span className="num">{list.length}</span></h3>
+    <ul>{list.map(image => <li key={image.imageId}><button type="button" aria-pressed={(shownUrl || selectedUrl) === image.url} title={image.selected ? t('world.mainImage') : undefined} onClick={() => onPick(image)}>
+      <img src={image.url} alt="" loading="lazy"/>{image.selected && <span className="world-main-mark"><Icon name="check" size={11}/></span>}</button></li>)}</ul>
+    {images && !list.length && <p className="space-sub">{t('world.noImages')}</p>}
+  </aside>;
+}
+
+// The looks of a card, as a strip of pictures with a + at the end for another one; the picked look can be renamed or deleted. A look is made
+// from the card's own description (the same person in other clothes) and deleting says first which shots use it, and what happens to them.
 const LOOK_KINDS = ['OUTFIT', 'POSE', 'LOOK'];
-function LookTools({item, shown, busy, onCreate, onRename, onDelete}) {
+function LookStrip({item, looks, look, onLook, writable, busy, runs, onCreate, onRename, onDelete}) {
   const [mode, setMode] = useState(null), [name, setName] = useState(''), [kind, setKind] = useState('OUTFIT'), [text, setText] = useState('');
+  const shown = looks.find(variant => variant.assetId === look) || null;
   const used = shown ? item.uses.filter(shot => (shot.assets || []).some(code => String(code).toUpperCase() === shown.assetCode.toUpperCase())) : [];
   const close = () => {setMode(null); setName(''); setText(''); setKind('OUTFIT');};
-  return <div className="world-look-tools">
-    <div className="world-actions">
-      <button type="button" className="world-tool" aria-expanded={mode === 'new'} disabled={busy} onClick={() => {close(); setMode(mode === 'new' ? null : 'new');}}><Icon name="plus" size={13}/>{t('world.lookNew')}</button>
-      {shown && <button type="button" className="world-tool" disabled={busy} onClick={() => {setMode(mode === 'rename' ? null : 'rename'); setName(shown.name);}}><Icon name="pencil" size={13}/>{t('world.lookRename')}</button>}
-      {shown && <button type="button" className="world-tool" disabled={busy} onClick={() => setMode(mode === 'delete' ? null : 'delete')}><Icon name="trash" size={13}/>{t('world.lookDelete')}</button>}
+  const choices = [{assetId:null, name:t('world.lookDefault'), selectedImageUrl:item.selectedImageUrl}, ...looks];
+  return <div className="world-look-wrap">
+    <div className="world-looks" role="group" aria-label={t('world.looks')}>
+      {choices.map(variant => <button key={variant.assetId || 'base'} type="button" aria-pressed={look === variant.assetId} title={variant.name} onClick={() => onLook(variant.assetId)}>
+        <span className="world-look-thumb">{variant.selectedImageUrl ? <img src={variant.selectedImageUrl} alt=""/> : <span className="world-blank"/>}
+          {isActiveRun(runs[variant.assetId || item.assetId]) && <span className="world-look-busy" aria-hidden="true"><Spinner/></span>}</span>
+        <span>{variant.name}</span></button>)}
+      {writable && onCreate && <button type="button" className="world-look-add" aria-expanded={mode === 'new'} disabled={busy} onClick={() => {const opening = mode !== 'new'; close(); if (opening) {setMode('new'); setText(newLookText(item));}}}>
+        <span className="world-look-thumb"><Icon name="plus" size={20}/></span><span>{t('world.lookNew')}</span></button>}
+      {writable && shown && <span className="world-look-tools">
+        <button type="button" className="icon-btn" aria-label={t('world.lookRename')} title={t('world.lookRename')} aria-expanded={mode === 'rename'} disabled={busy} onClick={() => {setMode(mode === 'rename' ? null : 'rename'); setName(shown.name);}}><Icon name="pencil" size={14}/></button>
+        <button type="button" className="icon-btn" aria-label={t('world.lookDelete')} title={t('world.lookDelete')} aria-expanded={mode === 'delete'} disabled={busy} onClick={() => setMode(mode === 'delete' ? null : 'delete')}><Icon name="trash" size={14}/></button></span>}
     </div>
     {mode === 'new' && <form className="world-edit" onSubmit={async event => {event.preventDefault(); if (await onCreate(item.assetId, {name:name.trim(), kind, prompt:text.trim()})) close();}}>
       <label className="modal-field">{t('world.lookName')}<input value={name} required maxLength={120} autoFocus disabled={busy} onChange={event => setName(event.target.value)}/></label>
       <label className="modal-field">{t('world.lookKindLabel')}<select value={kind} disabled={busy} onChange={event => setKind(event.target.value)}>{LOOK_KINDS.map(key => <option key={key} value={key}>{t('world.lookKind_' + key)}</option>)}</select></label>
-      <label className="modal-field">{t('world.lookPrompt')}<textarea rows={3} value={text} maxLength={4000} disabled={busy} onChange={event => setText(event.target.value)}/></label>
+      <label className="modal-field">{t('world.lookPrompt')}<textarea rows={5} value={text} maxLength={4000} disabled={busy} onChange={event => setText(event.target.value)}/></label>
       <div className="world-actions"><button type="submit" className="world-act" disabled={busy || !name.trim()}>{t('world.lookCreate')}</button><button type="button" className="world-tool" onClick={close}>{t('common.cancel')}</button></div>
     </form>}
     {mode === 'rename' && shown && <form className="world-edit" onSubmit={async event => {event.preventDefault(); if (await onRename(item.assetId, shown.variantId, name.trim())) close();}}>
@@ -84,28 +118,48 @@ function LookTools({item, shown, busy, onCreate, onRename, onDelete}) {
   </div>;
 }
 
-// The card in front of you, in full. Left (above, in a narrower pane): the picture, its looks and what makes it again. Right (below): what the
-// card is: the appearance as text or as tags, voice, notes and status, the shots that use it, and the ways out to the sheet and the vault.
-export function AssetEditor({item, detail, scenes = [], writable, busy, run = null, ratio = '', styleName = '', onSave, onUpload, onGenerate, onCancel, onClose, onLookCreate, onLookRename, onLookDelete, onOpenShot, onOpenScene, onTable, onVault}) {
+export function AssetEditor({item, detail, scenes = [], writable, busy, runs = {}, ratio = '', styleName = '', preloadedImages = null, onSave, onUpload, onGenerate, onCancel, onSelectImage, onClose,
+  onLookCreate, onLookRename, onLookDelete, onOpenShot, onOpenScene, onTable, onVault}) {
   useLocale();
-  const generating = isActiveRun(run);
-  const [editing, setEditing] = useState(false), [name, setName] = useState(item.name), [prompt, setPrompt] = useState(item.prompt), [tab, setTab] = useState('text');
-  const [look, setLook] = useState(null), [zoom, setZoom] = useState(false);
+  const looks = detail?.variants || [];
+  const [look, setLook] = useState(null), [drafts, setDrafts] = useState({}), [attrs, setAttrs] = useState(false), [zoom, setZoom] = useState(false), [preview, setPreview] = useState(null);
+  const [naming, setNaming] = useState(false), [nameDraft, setNameDraft] = useState('');
   const file = useRef(null);
-  const looks = detail?.variants || [], shown = looks.find(variant => variant.assetId === look) || null;
-  const image = shown ? shown.selectedImageUrl : item.selectedImageUrl;
+  const subject = subjectOf(item, looks, look), shown = subject === item ? null : subject;
+  const run = runs[subject.assetId] || null, generating = isActiveRun(run);
+  const {text, dirty} = describing(subject, drafts);
+  const image = preview?.url || subject.selectedImageUrl, previewing = Boolean(preview && !preview.selected);
   const used = item.sceneIds.map(id => scenes.find(scene => scene.sceneId === id)).filter(Boolean);
   const wide = isWide(item.type);
-  const save = fields => onSave(item.assetId, fields);
-  const label = generating ? t('world.generating') : run?.status === 'FAILED' ? t('world.retry') : item.selectedImageUrl ? t('world.regenerate') : t('world.generateHere');
+  const setText = value => setDrafts(current => ({...current, [subject.assetId]: value}));
+  const revert = () => setDrafts(current => {const {[subject.assetId]: dropped, ...rest} = current; return rest;});
+  const pickLook = id => {setLook(id); setPreview(null); setAttrs(false);};
+  // Saving the description is the same write as ever (PATCH /assets/{id}); the box then shows what the server kept.
+  const saveText = async () => {const done = await onSave(subject.assetId, {prompt:text.trim()}); if (done) revert(); return done;};
+  const generate = async body => {if (dirty && !(await saveText())) return; onGenerate(subject.assetId, body);};
+  const useImage = async () => {if (await onSelectImage(subject.assetId, preview.imageId)) setPreview(null);};
+  const saveName = async () => {
+    const next = nameDraft.trim();
+    if (!next) return;
+    if (await (shown ? onLookRename(item.assetId, shown.variantId, next) : onSave(item.assetId, {name:next}))) setNaming(false);
+  };
+  const label = t(generateKey({generating, failed:run?.status === 'FAILED', dirty, hasImage:Boolean(subject.selectedImageUrl)}));
+  const kinds = item.type;
+  const summary = [t('world.voice_' + kinds) + ': ' + (item.voice || t('world.unset')), item.status ? statusLabel(item.status) : '', t('shell.shotCount', {count:item.uses.length})].filter(Boolean).join(' · ');
   return <section className="world-inspector world-editor" aria-label={item.name || item.assetCode}>
-    <header className="world-title"><div><h2>{item.name || item.assetCode}</h2><small>@{item.assetCode}</small></div>
+    <header className="world-title">
+      {naming
+        ? <form className="world-name-edit" onSubmit={event => {event.preventDefault(); saveName();}}>
+          <input value={nameDraft} maxLength={120} autoFocus disabled={busy} aria-label={t('world.newName')} onChange={event => setNameDraft(event.target.value)} onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); setNaming(false);}}}/>
+          <button type="submit" className="world-act" disabled={busy || !nameDraft.trim()}>{t('common.save')}</button><button type="button" className="world-tool" onClick={() => setNaming(false)}>{t('common.cancel')}</button></form>
+        : <div><h2>{item.name || item.assetCode}{shown && <span className="world-name-look">{shown.name}</span>}</h2><small>@{subject.assetCode}</small></div>}
+      {writable && !naming && <button type="button" className="icon-btn world-field-edit" aria-label={t('world.editField', {field:t('world.newName')})} onClick={() => {setNameDraft(shown ? shown.name : item.name); setNaming(true);}}><Icon name="pencil" size={13}/></button>}
       <span className="world-type">{t('world.type_' + item.type)}</span><Status value={item.status}/>
       <span className="spacer"/>
       {writable && <>
         <button type="button" className="world-act" disabled={busy} onClick={() => file.current?.click()}><Icon name="arrowUp" size={14}/>{t('world.upload')}</button>
         <input ref={file} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={t('world.upload')}
-          onChange={event => {const chosen = event.target.files?.[0]; event.target.value = ''; if (chosen) onUpload(item.assetId, chosen);}}/></>}
+          onChange={event => {const chosen = event.target.files?.[0]; event.target.value = ''; if (chosen) onUpload(subject.assetId, chosen);}}/></>}
       {onClose && <button type="button" className="icon-btn world-close" aria-label={t('world.closeEditor')} title={t('world.closeEditor')} onClick={onClose}><Icon name="close"/></button>}
     </header>
     <div className="world-editor-box"><div className="world-editor-body">
@@ -113,36 +167,37 @@ export function AssetEditor({item, detail, scenes = [], writable, busy, run = nu
         <figure className={'world-hero' + (wide ? ' is-wide' : '') + (generating ? ' is-busy' : '')}>
           {image ? <button type="button" className="world-zoom" aria-label={t('world.enlarge')} onClick={() => setZoom(true)}><img src={image} alt={item.name}/></button>
             : <span className="world-art-empty"><Icon name="image" size={22}/>{shown ? t('world.lookNoImage') : t('world.needsImage')}</span>}
-          {shown && <figcaption>{t('world.lookCaption', {name:shown.name, kind:shown.kind ? t('world.lookKind_' + shown.kind) : t('world.looks')})}</figcaption>}
+          {previewing && <figcaption>{t('world.previewing')}</figcaption>}
+          {previewing && writable && <button type="button" className="world-act world-usepic" disabled={busy} onClick={useImage}>{t('world.useImage')}</button>}
           {run && <RunState run={run}/>}
         </figure>
-        {looks.length > 0 && <div className="world-looks" role="group" aria-label={t('world.looks')}>
-          {[{assetId:null, name:t('world.lookDefault'), selectedImageUrl:item.selectedImageUrl}, ...looks].map(variant =>
-            <button key={variant.assetId || 'base'} type="button" aria-pressed={look === variant.assetId} title={variant.name} onClick={() => setLook(variant.assetId)}>
-              {variant.selectedImageUrl ? <img src={variant.selectedImageUrl} alt=""/> : <span className="world-blank"/>}<span>{variant.name}</span></button>)}
-        </div>}
-        {writable && onLookCreate && <LookTools key={shown?.assetId || 'base'} item={item} shown={shown} busy={busy} onCreate={onLookCreate}
-          onRename={(assetId, variantId, next) => onLookRename(assetId, variantId, next)} onDelete={async (assetId, variantId) => {const done = await onLookDelete(assetId, variantId); if (done) setLook(null); return done;}}/>}
-        {writable && <GenerationBar id={item.assetId} ratio={ratio} styleName={styleName} label={label} generating={generating} canCancel={Boolean(run?.taskId)} disabled={busy}
-          onGenerate={body => onGenerate(item.assetId, body)} onCancel={() => onCancel(item.assetId)}/>}
+        <Pictures key={subject.assetId} id={subject.assetId} selectedUrl={subject.selectedImageUrl} shownUrl={preview?.url || ''} revision={run?.status || ''} preloaded={preloadedImages} onPick={setPreview}/>
       </div>
-      <div className="world-info">
-        {writable && <div className="studio-segmented small" role="group" aria-label={t('world.appearance')}>
-          <button type="button" aria-pressed={tab === 'text'} onClick={() => setTab('text')}>{t('world.tabText')}</button>
-          <button type="button" aria-pressed={tab === 'attributes'} onClick={() => {setTab('attributes'); setEditing(false);}}>{t('world.tabAttributes')}</button></div>}
-        {writable && tab === 'attributes' ? <AppearanceForm key={item.prompt} current={item.prompt} disabled={busy} onApply={async text => {if (await save({prompt:text})) setTab('text');}}/>
-          : editing ? <form className="world-edit" onSubmit={async event => {event.preventDefault(); if (await save({name:name.trim(), prompt:prompt.trim()})) setEditing(false);}}>
-            <label className="modal-field">{t('world.newName')}<input value={name} required maxLength={120} disabled={busy} onChange={event => setName(event.target.value)}/></label>
-            <label className="modal-field">{t('world.appearance')}<textarea rows={10} value={prompt} maxLength={4000} disabled={busy} onChange={event => setPrompt(event.target.value)}/></label>
-            <div className="world-actions"><button type="submit" className="world-act" disabled={busy || !name.trim()}>{t('common.save')}</button>
-              <button type="button" className="world-tool" onClick={() => {setEditing(false); setName(item.name); setPrompt(item.prompt);}}>{t('common.cancel')}</button></div>
-          </form> : <dl className="world-fields">
-            <div className="is-appearance"><dt>{t('world.appearance')}</dt><dd className={item.prompt ? '' : 'is-unset'}>{item.prompt || t('world.unset')}</dd></div>
-            <InlineField key={'voice' + item.voice} label={t('world.voice_' + item.type)} value={item.voice} writable={writable} busy={busy} onSave={value => save({voice:value})}/>
-            <StatusField value={item.status} writable={writable} busy={busy} onSave={value => save({status:value})}/>
-            <InlineField key={'notes' + item.notes} label={t('world.notes')} value={item.notes} kind="textarea" writable={writable} busy={busy} onSave={value => save({notes:value})}/>
-            {writable && <button type="button" className="world-tool world-edit-btn" onClick={() => {setName(item.name); setPrompt(item.prompt); setEditing(true);}}><Icon name="pencil" size={13}/>{t('world.edit')}</button>}
-          </dl>}
+      <LookStrip item={item} looks={looks} look={look} onLook={pickLook} writable={writable} busy={busy} runs={runs} onCreate={onLookCreate} onRename={onLookRename}
+        onDelete={async (assetId, variantId) => {const done = await onLookDelete(assetId, variantId); if (done) pickLook(null); return done;}}/>
+      <section className="world-describe" aria-label={t('world.description_' + item.type)}>
+        <header>
+          <h3>{t('world.description_' + item.type)}{shown && <small>{shown.name}</small>}</h3>
+          {dirty && writable && <span className="world-unsaved">{t('world.unsaved')}</span>}
+          <span className="spacer"/>
+          {writable && <button type="button" className="world-tool" aria-expanded={attrs} onClick={() => setAttrs(value => !value)}><Icon name="plus" size={13}/>{t('world.tabAttributes')}</button>}
+        </header>
+        {attrs && writable && <div className="world-attrs-pop"><AppearanceForm key={subject.assetId} current={text} disabled={busy} onApply={applied => {setText(applied); setAttrs(false);}}/></div>}
+        {writable
+          ? <textarea className="world-describe-text" value={text} maxLength={4000} aria-label={t('world.description_' + item.type)} placeholder={t('world.describe_' + item.type)} onChange={event => setText(event.target.value)}/>
+          : <div className={'world-describe-text is-read' + (text ? '' : ' is-unset')}>{text || t('world.unset')}</div>}
+        {dirty && writable && <div className="world-describe-actions"><button type="button" className="world-act" disabled={busy} onClick={saveText}>{t('common.save')}</button>
+          <button type="button" className="world-tool" onClick={revert}>{t('world.revert')}</button></div>}
+        {writable && <GenerationBar key={subject.assetId} id={subject.assetId} ratio={ratio} styleName={styleName} label={label} generating={generating} canCancel={Boolean(run?.taskId)} disabled={busy}
+          onGenerate={generate} onCancel={() => onCancel(subject.assetId)}/>}
+      </section>
+      <details className="world-more">
+        <summary><span>{t('world.moreTitle')}</span><small>{summary}</small></summary>
+        <dl className="world-fields">
+          <InlineField key={'voice' + item.voice} label={t('world.voice_' + kinds)} value={item.voice} writable={writable} busy={busy} onSave={value => onSave(item.assetId, {voice:value})}/>
+          <StatusField value={item.status} writable={writable} busy={busy} onSave={value => onSave(item.assetId, {status:value})}/>
+          <InlineField key={'notes' + item.notes} label={t('world.notes')} value={item.notes} kind="textarea" writable={writable} busy={busy} onSave={value => onSave(item.assetId, {notes:value})}/>
+        </dl>
         <section className="world-used" aria-label={t('world.uses')}>
           <h3>{t('world.uses')}</h3>
           {item.uses.length ? <>
@@ -157,7 +212,7 @@ export function AssetEditor({item, detail, scenes = [], writable, busy, run = nu
           <button type="button" className="world-tool" onClick={onVault}>{t('world.variants')}</button>
           <button type="button" className="world-tool" onClick={onTable}>{t('world.editInSheet')}</button>
         </div>
-      </div>
+      </details>
     </div></div>
     {zoom && image && <Lightbox src={image} alt={item.name} onClose={() => setZoom(false)}/>}
   </section>;

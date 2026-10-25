@@ -13,7 +13,7 @@ const pad = index => String(index).padStart(2, '0');
 export const Status = ({value}) => value ? <span className={'world-status ' + statusClass(value)}><i aria-hidden="true"/>{statusLabel(value)}</span> : null;
 
 // SPEC_18 R1: a picture is being made, failed, or was canceled. Said on the card and in the editor, in words, never only by colour.
-const Spinner = () => <svg className="ico world-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" opacity=".25"/><path d="M21 12a9 9 0 0 0-9-9"/></svg>;
+export const Spinner = () => <svg className="ico world-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" opacity=".25"/><path d="M21 12a9 9 0 0 0-9-9"/></svg>;
 export function RunState({run}) {
   useLocale();
   if (!run) return null;

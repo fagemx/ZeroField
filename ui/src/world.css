@@ -72,11 +72,6 @@
 .workbench-app.studio-shell .world-zoom { display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: zoom-in; }
 .world-zoom img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
 .world-hero figcaption { position: absolute; left: 8px; bottom: 8px; padding: 2px 9px; border-radius: 999px; background: rgba(14, 18, 23, .86); color: var(--text); font-size: 11.5px; }
-.world-looks { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; }
-.workbench-app.studio-shell .world-looks button { flex: none; display: grid; gap: 4px; width: 60px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 11px; text-align: center; cursor: pointer; }
-.world-looks img, .world-looks .world-blank { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; }
-.world-looks button[aria-pressed="true"] img, .world-looks button[aria-pressed="true"] .world-blank { outline: 2px solid var(--accent); outline-offset: 1px; }
-.world-looks button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .world-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .world-title > div { flex: 0 1 auto; min-width: 0; display: grid; }
 .world-title h2 { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
@@ -233,34 +228,105 @@
 .story-world.is-editing .space-detail-body { margin: 0; padding: 0; overflow: hidden; }
 .studio-shell .story-world.is-editing .space-detail > .studio-primary { align-self: flex-end; width: auto; min-width: 280px; padding: 0 24px; }
 
-/* The editor: a title row, then the picture side (picture, looks, what makes it again) and the information side. The box is the size container
-   the layout asks about; the lightbox sits outside it, because a container would become the box a fixed overlay is measured against. */
-.world-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+/* The editor: a title row; the picture with every picture of this look beside it; the looks, each with its own pictures and a + for another;
+   the description, the most important thing about a character, as one big box with the generation choices on a single row under it; and the
+   rest folded away. The box is the size container the layout asks about; the lightbox sits outside it, because a container would become the
+   box a fixed overlay is measured against. */
+.world-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 .world-editor > .world-title { flex: none; }
 .world-title .spacer { flex: 1 1 0; }
+.world-name-look { font-weight: 500; color: var(--muted); }
+.world-name-look::before { content: "|"; margin: 0 .5em; color: var(--faint); font-weight: 400; }
+.world-name-edit { display: flex; flex: 1 1 260px; align-items: center; gap: 6px; max-width: 460px; }
+.world-name-edit input { flex: 1; min-width: 0; height: 32px; }
+.workbench-app.studio-shell .world-title .world-field-edit { position: static; width: 24px; height: 24px; }
 .world-editor-box { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; container-type: inline-size; }
-.world-editor-body { flex: 1 1 auto; min-height: 0; display: grid; gap: 18px; align-content: start; overflow: auto; }
-.world-stage, .world-info { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.world-info > .studio-segmented { align-self: flex-start; }
-.world-editor .world-hero { flex: none; height: clamp(240px, 36dvh, 420px); box-shadow: inset 0 0 0 1px var(--line); }
-.world-editor .world-hero.is-wide { height: auto; aspect-ratio: 16 / 9; max-height: 50dvh; }
+.world-editor-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: auto; padding-right: 2px; }
+
+/* The picture, and every picture of this look beside it (the main one marked). */
+.world-stage { flex: 1 1 300px; min-height: clamp(180px, 28dvh, 260px); display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 12px; }
+.world-editor .world-hero, .world-editor .world-hero.is-wide { height: auto; min-height: 0; aspect-ratio: auto; box-shadow: inset 0 0 0 1px var(--line); }
 .world-editor .world-zoom img { object-fit: contain; object-position: 50% 50%; }
-.world-editor .world-fields dd { font-size: 14px; line-height: 1.7; }
+.world-hero.is-busy .world-art-empty { color: transparent; }  /* "no picture yet" must not talk over "generating" */
+.world-hero.is-busy .world-art-empty .ico { opacity: 0; }
+.workbench-app.studio-shell .world-usepic { position: absolute; right: 10px; bottom: 10px; z-index: 2; background: rgba(14, 18, 23, .9); }
+.world-pictures { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: auto; }
+.world-pictures h3 { display: flex; align-items: baseline; gap: 6px; margin: 0; color: var(--faint); font-size: 11.5px; font-weight: 500; }
+.world-pictures h3 .num { font: 500 11px ui-monospace, Consolas, monospace; }
+.world-pictures ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.workbench-app.studio-shell .world-pictures button { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); overflow: hidden; cursor: pointer; }
+.workbench-app.studio-shell .world-pictures button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.world-pictures img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+.world-main-mark { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #14100a); }
+
+/* The looks: a strip of pictures with a + at the end for another. */
+.world-look-wrap { flex: none; display: grid; gap: 10px; }
+.world-looks { display: flex; align-items: flex-start; gap: 10px; overflow-x: auto; padding: 2px 2px 4px; }
+.workbench-app.studio-shell .world-looks > button { flex: none; display: grid; justify-items: center; gap: 4px; width: 68px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 11px; text-align: center; cursor: pointer; }
+.world-look-thumb { position: relative; display: grid; place-items: center; width: 64px; height: 64px; overflow: hidden; border-radius: 10px; background: var(--ground); }
+.world-look-thumb img, .world-look-thumb .world-blank { display: block; width: 100%; height: 100%; border-radius: 0; object-fit: cover; object-position: 50% 20%; }
+.world-looks > button[aria-pressed="true"] .world-look-thumb { outline: 2px solid var(--accent); outline-offset: 1px; }
+.world-looks > button > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.world-look-busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(14, 18, 23, .62); color: var(--text); }
+.world-look-add .world-look-thumb { border: 1px dashed var(--control); background: transparent; color: var(--muted); }
+.world-look-add:hover .world-look-thumb, .world-look-add[aria-expanded="true"] .world-look-thumb { border-color: var(--accent); color: var(--text); }
+.world-look-tools { display: flex; align-self: center; gap: 2px; margin-left: 6px; }
+/* the form for a new look or a new name sits under the strip as a card of its own: name and kind side by side, the description under them */
+.world-look-wrap .world-edit { grid-template-columns: minmax(0, 1fr) 190px; align-items: end; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-2); }
+.world-look-wrap .world-edit .modal-field:nth-child(3), .world-look-wrap .world-edit .world-actions { grid-column: 1 / -1; }
+
+/* The description: one big box, with the generation choices on a single row under it. */
+.world-describe { position: relative; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-2); }
+.world-describe > header { display: flex; align-items: center; gap: 10px; }
+.world-describe h3 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.world-describe h3 small { margin-left: 8px; color: var(--faint); font-size: 12px; font-weight: 400; }
+.world-unsaved { color: #f5b656; font-size: 12px; }
+/* the studio's field rule counts as (0,5,1) whichever alternative matched, so a restyled control repeats its class to outrank it */
+.workbench-app.studio-shell .world-describe .world-describe-text.world-describe-text.world-describe-text { width: 100%; min-height: clamp(84px, 14dvh, 130px); max-height: 34dvh; resize: vertical; padding: 4px 2px; border: 0; border-radius: 0; background: transparent; color: var(--text); font: 400 14.5px/1.75 var(--font); }
+.workbench-app.studio-shell .world-describe .world-describe-text.world-describe-text.world-describe-text:focus { outline: none; }
+.world-describe:has(.world-describe-text:focus-visible) { border-color: var(--control); }
+.world-describe-text.is-read { overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
+.world-describe-text.is-unset { color: var(--faint); }
+.world-describe-actions { display: flex; gap: 6px; }
+.world-attrs-pop { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 6; max-height: min(62dvh, 560px); overflow: auto; padding: 14px 16px; border: 1px solid var(--control); border-radius: 12px; background: var(--surface); box-shadow: 0 16px 40px rgba(0, 0, 0, .55); }
+.world-describe .gen-bar { display: grid; gap: 6px; padding: 10px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.gen-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.workbench-app.studio-shell .gen-row.gen-row.gen-row.gen-row select { height: 30px; min-height: 30px; max-width: 200px; padding: 0 8px; font-size: 12.5px; }
+.workbench-app.studio-shell .gen-row.gen-row.gen-row.gen-row select.gen-workflow { flex: 1 1 130px; min-width: 100px; max-width: 230px; }
+.gen-end { margin-left: auto; display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 10px; }  /* the cost and the button stay together, at the right, on whichever line they land */
+.gen-style { flex: 1 1 70px; min-width: 0; max-width: 170px; overflow: hidden; color: var(--faint); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.gen-row .gen-cost { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.workbench-app.studio-shell .gen-go { min-width: 88px; justify-content: center; }
+
+/* What is left folds away: voice, status, notes, and where the card appears. */
+.world-more { flex: none; border: 1px solid var(--line); border-radius: 12px; }
+.world-more > summary { display: flex; align-items: baseline; gap: 12px; padding: 10px 14px; list-style: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+.world-more > summary::-webkit-details-marker { display: none; }
+.world-more > summary::before { content: ""; flex: none; width: 6px; height: 6px; border-right: 1.5px solid var(--faint); border-bottom: 1.5px solid var(--faint); transform: rotate(-45deg) translateY(-2px); transition: transform .15s; }
+.world-more[open] > summary::before { transform: rotate(45deg) translateY(-2px); }
+.world-more > summary small { min-width: 0; overflow: hidden; color: var(--faint); font-size: 12px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.world-more > :not(summary) { margin: 0 14px 14px; }
+.world-more .world-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 22px; }
+.world-more .world-fields > .is-long { grid-column: 1 / -1; }
+.world-more .world-fields dd { font-size: 14px; line-height: 1.7; }
 /* a field's pencil sits beside its label, not at the far edge of a shared row */
-.world-editor .world-fields > div { grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; }
-.world-editor .world-fields > div > dt { grid-column: 1; grid-row: 1; }
-.world-editor .world-fields > div > dd { grid-column: 1 / -1; grid-row: 2; }
-.workbench-app.studio-shell .world-editor .world-field-edit { position: static; grid-column: 2; grid-row: 1; justify-self: start; width: 22px; height: 22px; }
-.world-editor .gen-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-.world-editor .gen-bar > .gen-fields, .world-editor .gen-bar > .gen-error { flex: 1 1 100%; }
-.world-editor .gen-bar > .world-actions { margin-left: auto; }
-@container (min-width: 520px) {
-  .world-editor .world-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; }
-  .world-editor .world-fields > .is-appearance, .world-editor .world-fields > .is-long, .world-editor .world-fields > .world-edit-btn { grid-column: 1 / -1; }
+.world-more .world-fields > div { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; row-gap: 4px; }
+.world-more .world-fields > div > dt { grid-column: 1; grid-row: 1; }
+.world-more .world-fields > div > dd { grid-column: 1 / -1; grid-row: 2; }
+.workbench-app.studio-shell .world-more .world-field-edit { position: static; grid-column: 2; grid-row: 1; justify-self: start; width: 22px; height: 22px; }
+
+/* A 720px-high window: a smaller picture and strip, a shorter description box, so the generation row is on screen without scrolling. */
+@media (max-height: 780px) {
+  .world-stage { min-height: 150px; }
+  .world-look-thumb { width: 46px; height: 46px; }
+  .workbench-app.studio-shell .world-looks > button { width: 54px; }
+  .workbench-app.studio-shell .world-describe .world-describe-text.world-describe-text.world-describe-text { min-height: 96px; }  /* the description outranks the picture when the pane is short: it keeps four lines and the picture gives way */
+  .world-describe { gap: 6px; padding: 10px 12px; }
 }
-@container (min-width: 760px) {
-  .world-editor-body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-content: stretch; overflow: hidden; }
-  .world-stage, .world-info { min-height: 0; overflow: auto; }
-  .world-editor .world-hero, .world-editor .world-hero.is-wide { flex: 1 1 auto; height: auto; min-height: 240px; aspect-ratio: auto; max-height: none; }
-  .world-stage > :not(.world-hero) { flex: none; }
+@container (max-width: 440px) {
+  .world-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .world-pictures h3 { display: none; }
+  .world-pictures ul { display: flex; overflow-x: auto; }
+  .world-pictures li { flex: none; width: 64px; }
 }
+@container (max-width: 480px) { .world-more .world-fields { grid-template-columns: minmax(0, 1fr); } }

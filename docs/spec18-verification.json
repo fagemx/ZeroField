@@ -78,7 +78,7 @@
     "checks": [
       "Wall with nothing open: full width, summary and primary button on the right",
       "Pick a card: grid 240 / 653 / 980 at 1920, 240 / 397 / 596 at 1280; x closes; reload keeps it open or closed as left; hidden rails keep working",
-      "Editor in two columns at 1920 and stacked at 1280; picture, looks and generation bar on one side, appearance, voice, status, notes and usage on the other",
+      "First layout, replaced by the one in editor_revision: the editor in two columns at 1920 and stacked at 1280; picture, looks and generation bar on one side, appearance, voice, status, notes and usage on the other",
       "Inline edit of voice, status and notes (writes through PATCH /assets/{id}); attribute tags with the replace-or-append question; look create, rename and delete with the used-by question",
       "Three pictures generating at once, independent cancel, the editor and the card agreeing, no duplicate POST, state kept across a view switch and a reload",
       "A server refusal shows the reason on the card and in the editor and turns the button into Retry",
@@ -136,16 +136,60 @@
       ]
     }
   },
+  "editor_revision": {
+    "state": "The commit after the follow-up one (66c92f4): the Cast & sets editor laid out again after the user compared it with RunningHub's character editor. No backend file changed.",
+    "request": "The description matters most for a character, so it should be big; the optional generation parameters should sit on one row; every character can take several looks, with a + for another; a character is more than one picture.",
+    "scope": [
+      "The editor reads top to bottom: the picture with every picture of that look beside it; the looks as a strip with a + tile at the end; the description as the biggest box; one row of generation choices with the time (or quote) and the button at the right end; and a folded More (voice, status, notes, where the card is used)",
+      "It works on the look you picked, or on the card itself: that subject's description, pictures, upload and generation. A look has its own pictures in the pictures column and its own generation run; the strip shows a spinner on a look that is generating",
+      "Pictures: picking one only previews it; 'Make it the main picture' sends PUT /assets/{id}/selected-image",
+      "The description keeps a draft per subject and shows 'Unsaved' with Save and Revert; 'Save & generate' saves first, so a picture is always made from the text on screen",
+      "Rename is the pencil in the title row (the card's name, or the look's name when a look is picked); delete stays on the strip and still asks first, listing the shots that use the look",
+      "On a short screen (under 780px high) the description keeps four lines and the picture gives way; the generation row asks for little room per item, so it stays on one line down to a pane of about 500px",
+      "No new API: a look is already an asset row with its own images and generation options"
+    ],
+    "frontend": {
+      "command": "npm test --prefix ui",
+      "environment": "a clean export of HEAD with only this commit's files laid over it",
+      "passed": 388,
+      "failed": 0,
+      "skipped": 0,
+      "working_tree_passed": 405,
+      "note": "The working tree also runs the 17 tests of the story-planning prototype, which this commit leaves out.",
+      "new_or_rewritten": "ui/tests/editorModel.test.mjs (new, 5 tests); the editor tests in worldWall.test.mjs and the bar tests in generationBar.test.mjs, rewritten for the new markup"
+    },
+    "build": "passed; rebuilt in the clean copy, the JS and CSS bundle files are byte-identical to the ones in the working tree (index.html and the four style sample SVGs differ only in carriage returns)",
+    "screenshots": [
+      "docs/research/screenshots/spec18-editor-stack-zh-1920.png",
+      "docs/research/screenshots/spec18-editor-stack-look-zh-1920.png",
+      "docs/research/screenshots/spec18-editor-stack-en-1280.png"
+    ],
+    "ui_verification": {
+      "tool": "Headless Edge driven over the DevTools protocol, screenshots read back from disk",
+      "environment": "The same copy of the showcase database behind the real server; image inference was a stand-in that accepts connections and never answers, so no model ran",
+      "viewports": ["1920x900", "1280x720"],
+      "locales": ["zh-TW", "en"],
+      "checks": [
+        "Opening a card: title, three pictures beside the large picture, the looks strip with its + tile, the description box and the one-row generation bar; nothing needs scrolling at 1920x900 or at 1280x720 (zh and en, the row on a single line)",
+        "Typing in the description shows 'Unsaved' with Save and Revert and turns the button into 'Save & generate'; Revert and Save work (PATCH of the prompt)",
+        "The attribute popover (four groups) puts its text in the box as an unsaved draft and asks replace or append when text is already there",
+        "Picking another picture previews it ('not the main picture yet') and 'Make it the main picture' sends PUT selected-image",
+        "A look: its own description and picture set; 'Save & generate' patches the look, then POST /assets/{lookId}/image-generations; the strip shows a spinner on that look; cancel works",
+        "The + tile opens a form prefilled with the card's description; create, upload into a look, rename from the title pencil and delete (asks first) all work; renaming the card from the title still renames the card"
+      ]
+    }
+  },
   "unverified": [
     "No picture was produced by a real model; generation was checked as requests, states and cancellation, not as output.",
     "A task that the worker itself marks FAILED while the page polls was not seen live; that path is covered by unit tests of the run state. The failure shown live was a refusal by the server.",
     "The scene filter was exercised with data only in unit tests: the showcase has no shot placed in a scene.",
     "The 'n missing images' menu shortcut was not seen live for lack of such a state.",
-    "Below 1100px the studio stacks its panels and the editor opens under the wall without being scrolled into view.",
-    "The wheel was built and inspected, not installed and run.",
+    "Below 1100px the studio stacks its panels; opening a card scrolls the editor into view, which was seen at 1000x800 only.",
+    "A card with dozens of pictures was not tried: the pictures column scrolls, but a long list was not exercised.",
+    "The wheel was built and inspected, not installed and run. No wheel was built for the editor revision: only sources and the browser bundle changed, and tests/test_wheel_resources.py passes on the working tree.",
     "The new-project hand-off needs sessionStorage; without it the production opens with nothing filled in (unit-tested, not seen in a browser).",
     "The whole backend suite ran on the working tree; the exact tree of the commit ran its 160 story-related tests, not the whole suite.",
-    "Design boards were redrawn and republished without being rendered."
+    "Design boards were redrawn and republished without being rendered in the canvas; board 9A's second revision was rendered once as a standalone page in headless Edge to check that nothing overflows."
   ],
-  "limits": "A generation line on shot detail, character three-views, voice audio and a new-project entry are not built. Appearance tags are composed into text and not stored. No live provider, GPU or billing acceptance is claimed."
+  "limits": "A generation line on shot detail, character three-views and voice audio are not built (the new-project entry came with the follow-up commit). Appearance tags are composed into text and not stored. No live provider, GPU or billing acceptance is claimed."
 }

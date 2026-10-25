@@ -78,17 +78,19 @@ test('a card that cannot run says why, in a message key the page translates', ()
   assert.equal(reasonKey(null), 'reason_unavailable');
 });
 
-test('the bar shows the workflow, the controls, the style and the measured time, and the button is outlined', () => {
+test('the bar is one row: the workflow and the controls, the style, then the measured time and the outlined button', () => {
   const html = render({...ready(flux, router, cloud), ratio:'9:16', styleName:'Fallback'});
-  assert.match(html, /<section class="gen-bar" aria-label="Generate">/);
-  assert.match(html, /<label>Workflow<select>?[^>]*value="FLUX3_SOUL_CAST"|<label>Workflow<select/);
+  assert.match(html, /<section class="gen-bar" aria-label="Generate"><div class="gen-row">/);
+  assert.match(html, /<select class="gen-workflow" aria-label="Workflow" title="Workflow">/);
   assert.match(html, /<option value="FLUX3_SOUL_CAST" selected="">FLUX 3 Klein<\/option>/);
   assert.match(html, /<option value="CLOUD_IMG" disabled="">Cloud Image — blocked by this production&#x27;s policy<\/option>/, 'a card that cannot run stays listed, greyed out, with its reason');
-  assert.match(html, /<label>Aspect ratio<select><option>16:9<\/option><option selected="">9:16<\/option><option>1:1<\/option>/, 'the episode\'s ratio is the one shown');
-  assert.match(html, /<label>Resolution<select><option selected="">1k<\/option><option>2k<\/option>/);
-  assert.match(html, /<p class="gen-style">Style: Sci-Fi Noir Anamorphic \(follows the episode\)<\/p>/, 'the server\'s style name wins over the page\'s');
-  assert.match(html, /<div class="gen-cost" role="status"><span>About 41 s \(5 runs\)<\/span><\/div>/);
-  assert.match(html, /<button type="button" class="world-act">Regenerate<\/button>/);
+  assert.match(html, /<select aria-label="Aspect ratio" title="Aspect ratio"><option>16:9<\/option><option selected="">9:16<\/option><option>1:1<\/option>/, 'the episode\'s ratio is the one shown');
+  assert.match(html, /<select aria-label="Resolution" title="Resolution"><option selected="">1k<\/option><option>2k<\/option>/);
+  assert.match(html, /<span class="gen-style" title="Style: Sci-Fi Noir Anamorphic \(follows the episode\)">Sci-Fi Noir Anamorphic<\/span>/, 'the server\'s style name wins over the page\'s');
+  assert.match(html, /<span class="gen-cost" role="status"><span>About 41 s \(5 runs\)<\/span><\/span>/);
+  assert.match(html, /<button type="button" class="world-act gen-go">Regenerate<\/button>/);
+  const row = html.match(/<div class="gen-row">[\s\S]*<\/div>/)[0];
+  assert.ok(row.indexOf('<select') < row.indexOf('gen-style') && row.indexOf('gen-style') < row.indexOf('gen-cost') && row.indexOf('gen-cost') < row.indexOf('gen-go'), 'choices, style, cost, button: left to right on one row');
   assert.doesNotMatch(html, /class="primary/, 'the screen\'s one primary action is elsewhere');
 });
 
@@ -106,22 +108,22 @@ test('no measured time says so, a Router card offers a quote labelled as no pric
 test('options that could not be read leave the default workflow, say so, and never stop the button', () => {
   const failed = render({preloaded:{status:'failed', options:fallbackOptions()}});
   assert.match(failed, /<p class="gen-error" role="status">Couldn&#x27;t load the options\. The default workflow is used\.<\/p>/);
-  assert.match(failed, /<button type="button" class="world-act">Regenerate<\/button>/);
+  assert.match(failed, /<button type="button" class="world-act gen-go">Regenerate<\/button>/);
   const loading = render({});
-  assert.doesNotMatch(loading, /gen-fields|gen-error/);
-  assert.match(loading, /<button type="button" class="world-act">Regenerate<\/button>/, 'while the list loads the button is the one the page always had');
+  assert.doesNotMatch(loading, /<select|gen-error/);
+  assert.match(loading, /<button type="button" class="world-act gen-go">Regenerate<\/button>/, 'while the list loads the button is the one the page always had');
 });
 
 test('with nothing able to run the button is off and the list says why; a card in flight cannot be sent again but can be canceled', () => {
   const none = render(ready(cloud));
   assert.match(none, /<p class="gen-error" role="status">No workflow is ready to use\. The reasons are in the list\.<\/p>/);
-  assert.match(none, /<button type="button" class="world-act" disabled="">Regenerate<\/button>/);
+  assert.match(none, /<button type="button" class="world-act gen-go" disabled="">Regenerate<\/button>/);
   const running = render({...ready(flux), generating:true, canCancel:true, label:'Generating'});
-  assert.match(running, /<button type="button" class="world-act" disabled="">Generating<\/button>/);
+  assert.match(running, /<button type="button" class="world-act gen-go" disabled="">Generating<\/button>/);
   assert.match(running, /<button type="button" class="world-tool">Cancel generation<\/button>/);
   assert.match(running, /<select[^>]*disabled=""/, 'the workflow cannot change under a picture being made');
   assert.doesNotMatch(render({...ready(flux), generating:true, canCancel:false}), /Cancel generation/, 'no task yet, nothing to cancel');
-  assert.match(render({...ready(flux), disabled:true}), /<button type="button" class="world-act" disabled="">Regenerate<\/button>/);
+  assert.match(render({...ready(flux), disabled:true}), /<button type="button" class="world-act gen-go" disabled="">Regenerate<\/button>/);
 });
 
 test('the bar reads in Traditional Chinese', async () => {

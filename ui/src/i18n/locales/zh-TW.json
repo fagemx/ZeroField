@@ -2909,7 +2909,22 @@
     "lookBadge": "{{count}} 套造型沒圖",
     "editField": "編輯{{field}}",
     "status": "狀態",
-    "closeEditor": "關閉編輯區"
+    "closeEditor": "關閉編輯區",
+    "imagesTitle": "圖片",
+    "mainImage": "主圖",
+    "useImage": "設為主圖",
+    "noImages": "還沒有圖片。",
+    "previewing": "預覽中，還不是主圖",
+    "description_CHARACTER": "角色描述",
+    "description_SCENE": "場景描述",
+    "description_PROP": "道具描述",
+    "describe_CHARACTER": "這是誰？年齡、臉、髮型、體型、穿著…",
+    "describe_SCENE": "這是什麼地方？空間、光線、天氣、氣氛…",
+    "describe_PROP": "這是什麼東西？形狀、材質、磨損、大小…",
+    "saveAndGenerate": "儲存並生成",
+    "revert": "還原",
+    "unsaved": "尚未儲存",
+    "moreTitle": "更多資料"
   },
   "stage": {
     "shotList": "鏡頭清單",

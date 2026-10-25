@@ -2909,7 +2909,22 @@
     "lookBadge": "{{count}} looks without an image",
     "editField": "Edit {{field}}",
     "status": "Status",
-    "closeEditor": "Close editor"
+    "closeEditor": "Close editor",
+    "imagesTitle": "Pictures",
+    "mainImage": "Main picture",
+    "useImage": "Make it the main picture",
+    "noImages": "No pictures yet.",
+    "previewing": "Previewing: not the main picture",
+    "description_CHARACTER": "Character description",
+    "description_SCENE": "Set description",
+    "description_PROP": "Prop description",
+    "describe_CHARACTER": "Who is this? Age, face, hair, build, clothes…",
+    "describe_SCENE": "What is this place? Space, light, weather, mood…",
+    "describe_PROP": "What is this object? Shape, material, wear, size…",
+    "saveAndGenerate": "Save & generate",
+    "revert": "Revert",
+    "unsaved": "Unsaved changes",
+    "moreTitle": "More"
   },
   "stage": {
     "shotList": "Shot list",

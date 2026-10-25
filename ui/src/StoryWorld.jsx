@@ -156,6 +156,10 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     setAssets(list => list.map(item => fresh.find(next => next.assetId === item.assetId) || item));
     const shown = fresh.find(next => next.assetId === activeRef.current);
     if (shown) setDetail(shown);
+    else if (fresh.some(next => next.isDefault === false) && activeRef.current) {  // a look finished: its card lists it, and counts its missing pictures
+      await loadAssets(); const card = await storyRequest('/assets/' + activeRef.current).catch(() => null);
+      if (mounted.current && card) setDetail(card);
+    }
     changedRef.current?.();  // the poll below outlives the render that started it, so it reaches the shell through a ref
   };
   // Running pictures are polled together, once a second, until each is done. A reload brings them back from sessionStorage and the first
@@ -220,7 +224,8 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     rememberAssetGroup(epId, pending); setGroup(pending);
   });
   // After any change to one asset: the list, its detail and the shell's episode (readiness of the shots that use it) catch up.
-  const refreshAsset = async assetId => {await loadAssets(); setDetail(await storyRequest('/assets/' + assetId)); onChanged?.();};
+  // Whatever was just written (the card, one of its looks, a picture), the card that is open is read again with its looks.
+  const refreshAsset = async () => {await loadAssets(); setDetail(await storyRequest('/assets/' + activeRef.current)); onChanged?.();};
   // One picture, in the background (SPEC_18 R1): the click is accepted at once, the card says "generating", and nothing else waits.
   // One task per card: a card in flight cannot be sent again, any other card can.
   // body is what the generation bar shows ({appCode, modelParams}); a retry from a card sends the default workflow, as before.
@@ -249,6 +254,8 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
   const createLook = (assetId, fields) => run(async () => {await storyRequest(`/assets/${assetId}/variants`, 'POST', fields); await refreshAsset(assetId);});
   const renameLook = (assetId, variantId, name) => run(async () => {await storyRequest(`/assets/${assetId}/variants/${variantId}`, 'PATCH', {name}); await refreshAsset(assetId);});
   const deleteLook = (assetId, variantId) => run(async () => {await storyRequest(`/assets/${assetId}/variants/${variantId}`, 'DELETE'); await refreshAsset(assetId);});
+  // Making another picture of a card or a look its main one.
+  const selectImage = (assetId, imageId) => run(async () => {await storyRequest(`/assets/${assetId}/selected-image`, 'PUT', {imageId}); await refreshAsset();});
   // An uploaded picture becomes a candidate of the asset and the selected reference in one go.
   const uploadAsset = (assetId, file) => run(async () => {
     if (!IMAGE_TYPES.includes(file.type)) throw new Error(t('world.imageType'));
@@ -393,8 +400,8 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     <aside className="space-detail" aria-label={t('world.world')}>
       <div className="space-detail-body">
       {view === 'world' ? (active
-        ? <AssetEditor key={active.assetId} item={active} detail={detail?.assetId === active.assetId ? detail : null} scenes={scenes} writable={writable} busy={busy} run={runs[active.assetId] || null} ratio={ratio} styleName={styleName}
-            onSave={saveAsset} onClose={closeEditor} onUpload={uploadAsset} onGenerate={generate} onCancel={cancelGeneration} onLookCreate={createLook} onLookRename={renameLook} onLookDelete={deleteLook} onOpenShot={onOpenShot} onOpenScene={openScene} onTable={onAssets} onVault={onVault}/>
+        ? <AssetEditor key={active.assetId} item={active} detail={detail?.assetId === active.assetId ? detail : null} scenes={scenes} writable={writable} busy={busy} runs={runs} ratio={ratio} styleName={styleName}
+            onSave={saveAsset} onSelectImage={selectImage} onClose={closeEditor} onUpload={uploadAsset} onGenerate={generate} onCancel={cancelGeneration} onLookCreate={createLook} onLookRename={renameLook} onLookDelete={deleteLook} onOpenShot={onOpenShot} onOpenScene={openScene} onTable={onAssets} onVault={onVault}/>
         : <WorldSummary withImages={items.filter(item => !item.needsImage).length} total={items.length}/>)
       : <>
         <WorldList items={items} kind={kind} onKind={setKind} focusCode={focus.assetCode} onOpen={openAsset}/>

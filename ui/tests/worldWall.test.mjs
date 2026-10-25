@@ -36,7 +36,7 @@ const scenes = [{sceneId:'sc1', sceneIndex:1, title:'ARRIVAL'}];
 const items = worldItems(assets, shots);
 const wall = (extra = {}) => ({groups:worldGroups(items), counts:worldCounts(items), total:items.length, activeId:'as_CAST-01', ready:true, writable:true, disabled:false,
   missingCount:0, canGenerate:true, onPick() {}, onCreate() {}, onGenerateMissing() {}, onTable() {}, ...extra});
-const editor = (item, extra = {}) => ({item, detail:null, scenes, writable:true, busy:false, onSave() {}, onUpload() {}, onGenerate() {}, onOpenShot() {}, onOpenScene() {}, onTable() {}, onVault() {}, ...extra});
+const editor = (item, extra = {}) => ({item, detail:null, scenes, writable:true, busy:false, runs:{}, onSave() {}, onUpload() {}, onGenerate() {}, onSelectImage() {}, onOpenShot() {}, onOpenScene() {}, onTable() {}, onVault() {}, ...extra});
 const card = (html, id) => html.match(new RegExp(`<li id="world-card-${id}">[\\s\\S]*?</li>`))[0];
 
 test('the wall groups cast, sets and props, each card showing its image, status, use, name, code and look', () => {
@@ -92,35 +92,45 @@ test('the left rail filters by type with counts, and offers "needs an image" onl
   assert.doesNotMatch(done, /Needs an image/);
 });
 
-test('the editor shows the image, looks, what the script says, where the card appears and what you can do', () => {
-  const kael = items[0];
-  const detail = {assetId:'as_CAST-01', variants:[{assetId:'as_CAST-01:NIGHT', assetCode:'CAST-01:NIGHT', name:'Night jacket', kind:'OUTFIT', selectedImageUrl:'/night.png'}]};
-  const html = render('AssetEditor', editor(kael, {detail}));
+const pictures = [{imageId:'im_1', url:'/kael-old.png', selected:false}, {imageId:'im_2', url:'/kael.png', selected:true}, {imageId:'im_3', url:'/kael-new.png', selected:false}];
+const kaelLooks = {assetId:'as_CAST-01', variants:[
+  {assetId:'as_CAST-01:NIGHT', assetCode:'CAST-01:NIGHT', variantId:'vr_1', name:'Night jacket', kind:'OUTFIT', prompt:'same courier in a rain cape', selectedImageUrl:'/night.png'},
+  {assetId:'as_CAST-01:LISTEN', assetCode:'CAST-01:LISTEN', variantId:'vr_2', name:'Listening', kind:'POSE', prompt:'head tilted', selectedImageUrl:null}]};
+
+test('the editor shows the picture and every picture of it, the looks with a + for another, the description, and what is left folded away', () => {
+  const html = render('AssetEditor', editor(items[0], {detail:kaelLooks, preloadedImages:pictures, onLookCreate() {}}));
   assert.match(html, /<figure class="world-hero"><button type="button" class="world-zoom" aria-label="Enlarge the image"><img src="\/kael\.png" alt="Kael"\/>/);
-  assert.match(html, /<div class="world-looks" role="group" aria-label="Looks"><button type="button" aria-pressed="true" title="Default">.*?<span>Default<\/span><\/button><button type="button" aria-pressed="false" title="Night jacket"><img src="\/night\.png" alt=""\/><span>Night jacket<\/span>/);
+  const column = html.match(/<aside class="world-pictures" aria-label="Pictures">[\s\S]*?<\/aside>/)[0];
+  assert.match(column, /<h3>Pictures<span class="num">3<\/span><\/h3>/);
+  assert.deepEqual([...column.matchAll(/<img src="([^"]+)"/g)].map(match => match[1]), ['/kael.png', '/kael-new.png', '/kael-old.png'], 'the main picture first, then the newest');
+  assert.match(column, /<li><button type="button" aria-pressed="true" title="Main picture"><img src="\/kael\.png" alt="" loading="lazy"\/><span class="world-main-mark">/);
+  assert.equal((column.match(/aria-pressed="true"/g) || []).length, 1, 'one picture is the one in front of you');
+  const strip = html.match(/<div class="world-looks" role="group" aria-label="Looks">[\s\S]*?<\/div>/)[0];
+  assert.deepEqual([...strip.matchAll(/<button type="button" aria-pressed="[a-z]+" title="([^"]+)"/g)].map(match => match[1]), ['Default', 'Night jacket', 'Listening']);
+  assert.match(strip, /aria-pressed="true" title="Default"/, 'the card itself is the look in front of you');
+  assert.match(strip, /<button type="button" class="world-look-add" aria-expanded="false"><span class="world-look-thumb">.*?<\/span><span>New look<\/span><\/button>/, 'a + at the end of the looks');
   assert.match(html, /<h2>Kael<\/h2><small>@CAST-01<\/small>/);
   assert.match(html, /<span class="world-type">Character<\/span><span class="world-status done">/);
-  assert.match(html, /<dt>Appearance<\/dt><dd class="">A look for CAST-01<\/dd>/);
-  assert.match(html, /<dt>Voice<\/dt><dd class="">Calm, measured delivery<\/dd>/);
-  assert.match(html, /<dt>Notes<\/dt><dd class="">Keep the coat<\/dd>/);
-  assert.match(html, /Used in 2 shots across 1 scenes\./);
-  assert.match(html, /title="Open shot S01"[^>]*>(<span class="world-blank"><\/span>)<span>S01<\/span>/, 'a shot without a keyframe shows a blank, in slate order');
-  assert.ok(html.indexOf('>S01<') < html.indexOf('>S02<'));
-  assert.match(html, /<button type="button" class="world-tool">Scene 01 · ARRIVAL<\/button>/);
-  for (const label of ['Regenerate', 'Upload image', 'Edit', 'Variants…', 'Edit voice and notes in the sheet']) assert.ok(html.includes('>' + label + '<') || html.includes(label + '</button>'), label);
+  const describe = html.match(/<section class="world-describe"[\s\S]*?<\/section>/)[0];
+  assert.match(describe, /<h3>Character description<\/h3>/);
+  assert.match(describe, /<textarea[^>]*class="world-describe-text"[^>]*placeholder="Who is this\?[^"]*"[^>]*>A look for CAST-01<\/textarea>/);
+  assert.match(describe, /<section class="gen-bar" aria-label="Generate"><div class="gen-row">/, 'the generation choices sit under the description, on one row');
+  assert.match(describe, /<button type="button" class="world-act gen-go">Regenerate<\/button>/);
+  const more = html.match(/<details class="world-more">[\s\S]*?<\/details>/)[0];
+  assert.match(more, /<summary><span>More<\/span><small>Voice: Calm, measured delivery · Approved · 2 shots<\/small><\/summary>/);
+  assert.match(more, /<dt>Voice<\/dt><dd class="">Calm, measured delivery<\/dd>/);
+  assert.match(more, /<dt>Notes<\/dt><dd class="">Keep the coat<\/dd>/);
+  assert.match(more, /Used in 2 shots across 1 scenes\./);
+  assert.match(more, /title="Open shot S01"[^>]*>(<span class="world-blank"><\/span>)<span>S01<\/span>/, 'a shot without a keyframe shows a blank, in slate order');
+  assert.ok(more.indexOf('>S01<') < more.indexOf('>S02<'));
+  assert.match(more, /<button type="button" class="world-tool">Scene 01 · ARRIVAL<\/button>/);
+  for (const label of ['Upload image', 'Variants…', 'Edit voice and notes in the sheet']) assert.ok(html.includes('>' + label + '<') || html.includes(label + '</button>'), label);
   assert.match(html, /<input hidden="" type="file" accept="image\/png,image\/jpeg,image\/webp,image\/gif" aria-label="Upload image"\/>/);
+  assert.doesNotMatch(html.slice(0, html.indexOf('<details')), /<dt>/, 'nothing but the description is spread out; voice, notes and status are folded away');
 });
 
-test('the editor keeps the picture, its looks and what makes it together, what the card is beside them, and a way to close it', () => {
-  const detail = {assetId:'as_CAST-01', variants:[{assetId:'as_CAST-01:NIGHT', assetCode:'CAST-01:NIGHT', name:'Night jacket', kind:'OUTFIT', selectedImageUrl:'/night.png'}]};
-  const html = render('AssetEditor', editor(items[0], {detail, onClose() {}, onLookCreate() {}}));
-  const stage = html.slice(html.indexOf('<div class="world-stage">'), html.indexOf('<div class="world-info">'));
-  const info = html.slice(html.indexOf('<div class="world-info">'));
-  for (const part of ['class="world-hero', 'class="world-looks"', 'New look', 'class="gen-bar"']) assert.ok(stage.includes(part), part + ' is on the picture side');
-  for (const part of ['<dt>Appearance</dt>', '<dt>Voice</dt>', '<dt>Status</dt>', '<dt>Notes</dt>', 'class="world-used"', 'Variants…']) assert.ok(info.includes(part), part + ' is on the information side');
-  assert.doesNotMatch(stage, /world-fields|world-used|<dt>/, 'nothing about what the card is sits under the picture');
-  assert.doesNotMatch(info, /world-hero|gen-bar|world-looks/, 'and nothing about the picture sits among its facts');
-  assert.ok(html.indexOf('<dt>Voice</dt>') < html.indexOf('<dt>Status</dt>') && html.indexOf('<dt>Status</dt>') < html.indexOf('<dt>Notes</dt>'), 'two short fields share a row before the long one');
+test('the editor has a way to close it in its title row, and the lightbox is never inside the size container', () => {
+  const html = render('AssetEditor', editor(items[0], {onClose() {}, preloadedImages:pictures}));
   assert.match(html, /<button type="button" class="icon-btn world-close" aria-label="Close editor" title="Close editor">/);
   const head = html.slice(html.indexOf('<header class="world-title">'), html.indexOf('</header>'));
   assert.match(head, /<h2>Kael<\/h2>.*Upload image.*world-close/, 'name, upload and close share the title row');
@@ -128,11 +138,13 @@ test('the editor keeps the picture, its looks and what makes it together, what t
   assert.doesNotMatch(html.slice(html.indexOf('<div class="world-editor-box">'), html.lastIndexOf('</div></div>')), /world-lightbox/, 'the lightbox is never inside the size container');
   assert.doesNotMatch(render('AssetEditor', editor(items[0])), /world-close/, 'without a handler there is no button that does nothing');
   assert.match(render('AssetEditor', editor(items[0], {writable:false, onClose() {}})), /aria-label="Close editor"/, 'a reader can close it too');
+  assert.match(html, /<button type="button" class="icon-btn world-field-edit" aria-label="Edit Name">/, 'the name is renamed from a pencil beside it');
 });
 
-test('a card without an image, a set and a viewer each show what fits them', () => {
-  const mara = render('AssetEditor', editor(items[1]));
+test('a card without a picture, a set and a viewer each show what fits them', () => {
+  const mara = render('AssetEditor', editor(items[1], {preloadedImages:[]}));
   assert.match(mara, /world-art-empty[^>]*>.*Needs an image/);
+  assert.match(mara, /<aside class="world-pictures"[\s\S]*No pictures yet\./);
   assert.match(mara, />Generate here<\/button>/);
   assert.match(mara, /<dd class="is-unset">Not set<\/dd>/);
   assert.match(mara, /No shot uses it yet\./);
@@ -141,12 +153,16 @@ test('a card without an image, a set and a viewer each show what fits them', () 
   assert.doesNotMatch(render('AssetEditor', editor(loose)), /across 0 scenes/);
   const set = render('AssetEditor', editor(items[2]));
   assert.match(set, /<figure class="world-hero is-wide">/);
+  assert.match(set, /<h3>Set description<\/h3>/);
+  assert.match(set, /placeholder="What is this place\?/);
   assert.match(set, /<dt>Ambience<\/dt><dd class="">Wind and a soft radio pulse<\/dd>/, 'a set has ambience, not a voice');
   assert.match(set, /<span class="world-type">Set<\/span>/);
   const viewer = render('AssetEditor', editor(items[0], {writable:false}));
-  for (const label of ['Regenerate', 'Upload image', '>Edit<']) assert.ok(!viewer.includes(label), label + ' is for writers');
+  for (const gone of ['Regenerate', 'Upload image', '<textarea', 'gen-bar', 'world-look-add', 'aria-label="Status"', 'world-field-edit', 'Attributes']) assert.ok(!viewer.includes(gone), gone + ' is for writers');
+  assert.match(viewer, /<div class="world-describe-text is-read">A look for CAST-01<\/div>/, 'a reader reads the description');
   assert.match(viewer, /Variants…/, 'a viewer can still look around');
   assert.match(viewer, /Edit voice and notes in the sheet/);
+  assert.match(viewer, /<dt>Voice<\/dt><dd class="">Calm, measured delivery<\/dd>/, 'a reader still reads every field');
 });
 
 test('the quick list beside the script shows the same assets and opens the wall on one', () => {
@@ -196,40 +212,44 @@ test('a canceled card says canceled, not failed, and an idle wall has no run mar
   assert.match(card(render('WorldWall', wall()), 'as_CAST-01'), /class="world-card" aria-pressed="true"/, 'an idle card is exactly what it was');
 });
 
-test('the editor shows the same run, cannot send a card that is in flight again, and offers cancel and retry', () => {
+test('the editor shows the run of the look in front of you, cannot send it again, and offers cancel and retry', () => {
   const kael = items[0];
-  const busy = render('AssetEditor', editor(kael, {run:{taskId:'t1', status:'RUNNING'}, onCancel() {}}));
+  const running = (state, id = 'as_CAST-01') => ({runs:{[id]:state}});
+  const busy = render('AssetEditor', editor(kael, {...running({taskId:'t1', status:'RUNNING'}), onCancel() {}}));
   assert.match(busy, /<figure class="world-hero is-busy">/);
   assert.match(busy, /<span class="world-run is-active" role="status">/);
-  assert.match(busy, /<button type="button" class="world-act" disabled="">Generating<\/button>/);
+  assert.match(busy, /<button type="button" class="world-act gen-go" disabled="">Generating<\/button>/);
   assert.match(busy, /<button type="button" class="world-tool">Cancel generation<\/button>/);
-  assert.doesNotMatch(render('AssetEditor', editor(kael, {run:{taskId:'', status:'QUEUED'}})), /Cancel generation/, 'no task yet, nothing to cancel');
-  const failed = render('AssetEditor', editor(kael, {run:{taskId:'t1', status:'FAILED', error:'Worker unavailable'}}));
-  assert.match(failed, /<button type="button" class="world-act">Retry<\/button>/);
+  assert.doesNotMatch(render('AssetEditor', editor(kael, running({taskId:'', status:'QUEUED'}))), /Cancel generation/, 'no task yet, nothing to cancel');
+  const failed = render('AssetEditor', editor(kael, running({taskId:'t1', status:'FAILED', error:'Worker unavailable'})));
+  assert.match(failed, /<button type="button" class="world-act gen-go">Retry<\/button>/);
   assert.match(failed, /Worker unavailable/);
   assert.doesNotMatch(failed, /is-busy|Cancel generation/);
   const idle = render('AssetEditor', editor(kael));
   assert.doesNotMatch(idle, /world-run|is-busy/);
-  assert.match(idle, /<button type="button" class="world-act">Regenerate<\/button>/);
-  assert.match(render('AssetEditor', editor(kael, {busy:true})), /<button type="button" class="world-act" disabled="">Regenerate<\/button>/, 'a save in flight still holds the button, as before');
-  assert.doesNotMatch(render('AssetEditor', editor(kael, {writable:false, run:{taskId:'t1', status:'RUNNING'}})), /class="world-act"|Cancel generation/, 'a reader can see it is generating and can do nothing about it');
+  assert.match(idle, /<button type="button" class="world-act gen-go">Regenerate<\/button>/);
+  assert.match(render('AssetEditor', editor(kael, {busy:true})), /<button type="button" class="world-act gen-go" disabled="">Regenerate<\/button>/, 'a save in flight still holds the button, as before');
+  const reader = render('AssetEditor', editor(kael, {writable:false, ...running({taskId:'t1', status:'RUNNING'})}));
+  assert.doesNotMatch(reader, /gen-go|Cancel generation/, 'a reader can see it is generating and can do nothing about it');
+  assert.match(reader, /Generating/);
+  assert.doesNotMatch(render('AssetEditor', editor(kael, running({taskId:'t9', status:'RUNNING'}, 'as_CAST-02'))), /is-busy|world-run/, 'another card being made does not touch this one');
+  const lookBusy = render('AssetEditor', editor(kael, {detail:kaelLooks, ...running({taskId:'t2', status:'RUNNING'}, 'as_CAST-01:NIGHT')}));
+  assert.match(lookBusy, /<span class="world-look-busy" aria-hidden="true">/, 'a look being made shows it on its own picture in the strip');
+  assert.doesNotMatch(lookBusy, /<figure class="world-hero[^"]*is-busy/, 'not on the picture in front of you');
 });
 
-test('a writer can edit voice, notes and status where they stand, switch to attribute tags, and make looks; a reader has none of it', () => {
+test('a writer edits the description in its box, adds attribute tags and looks, and edits voice, notes and status where they stand', () => {
   const kael = items[0];
-  const writer = render('AssetEditor', editor(kael, {onLookCreate() {}, onLookRename() {}, onLookDelete() {}, ratio:'16:9', styleName:'Sci-Fi Noir'}));
-  assert.match(writer, /<div class="studio-segmented small" role="group" aria-label="Appearance"><button type="button" aria-pressed="true">Text<\/button><button type="button" aria-pressed="false">Attributes<\/button><\/div>/);
+  const writer = render('AssetEditor', editor(kael, {detail:kaelLooks, onLookCreate() {}, onLookRename() {}, onLookDelete() {}, ratio:'16:9', styleName:'Sci-Fi Noir'}));
+  assert.match(writer, /<button type="button" class="world-tool" aria-expanded="false"><svg[^>]*>.*?<\/svg>Attributes<\/button>/, 'attribute tags are added from the description box');
+  assert.doesNotMatch(writer, /world-attrs-pop/, 'closed until asked for');
+  assert.doesNotMatch(writer, /world-describe-actions|Unsaved changes/, 'nothing is waiting to be saved');
   assert.match(writer, /<dt>Voice<\/dt><dd class="">Calm, measured delivery<\/dd><button type="button" class="icon-btn world-field-edit" aria-label="Edit Voice">/);
   assert.match(writer, /<dt>Notes<\/dt><dd class="">Keep the coat<\/dd><button type="button" class="icon-btn world-field-edit" aria-label="Edit Notes">/);
   assert.match(writer, /<dt>Status<\/dt><dd><select aria-label="Status"[^>]*>.*?<option value="Approved" selected="">Approved<\/option>/);
-  assert.match(writer, /<button type="button" class="world-tool" aria-expanded="false"[^>]*>.*?New look<\/button>/);
   assert.match(writer, /<section class="gen-bar" aria-label="Generate">/);
-  assert.match(writer, /<button type="button" class="world-act">Regenerate<\/button>/);
-  const reader = render('AssetEditor', editor(kael, {writable:false, onLookCreate() {}}));
-  for (const gone of ['world-field-edit', 'aria-label="Status"', 'New look', 'gen-bar', 'Attributes', 'world-edit-btn']) assert.ok(!reader.includes(gone), gone + ' is for writers');
-  assert.match(reader, /<dt>Voice<\/dt><dd class="">Calm, measured delivery<\/dd>/, 'a reader still reads every field');
-  const plain = render('AssetEditor', editor(kael));
-  assert.doesNotMatch(plain, /New look/, 'looks are made only where the page can make them');
+  assert.doesNotMatch(writer, /world-look-tools/, 'a look has its rename and delete once it is picked, not before');
+  assert.doesNotMatch(render('AssetEditor', editor(kael)), /world-look-add/, 'looks are made only where the page can make them');
 });
 
 test('a card says how many of its looks still lack a picture, unless it is busy generating', () => {
@@ -287,8 +307,9 @@ test('Cast & sets reads in Traditional Chinese', async () => {
     const html = render('WorldWall', wall({missingCount:1}));
     for (const text of ['角色與場景', '2 個角色 · 1 個場景 · 0 個道具', '新增角色', '新增道具', '開啟表格', '已核准', '還沒有圖']) assert.ok(html.includes(text), text);
     assert.ok(render('WorldWall', wall({writable:false})).includes('這一類還沒有設定。'));
-    const detail = render('AssetEditor', editor(items[0]));
-    for (const text of ['外觀設定', '聲音', '備註', '出現在', '重新生成', '上傳圖片', '到表格編輯聲音與備註', '開啟鏡頭 S01']) assert.ok(detail.includes(text), text);
+    const detail = render('AssetEditor', editor(items[0], {onLookCreate() {}}));
+    for (const text of ['角色描述', '聲音', '備註', '出現在', '更多資料', '重新生成', '上傳圖片', '新增造型', '到表格編輯聲音與備註', '開啟鏡頭 S01']) assert.ok(detail.includes(text), text);
+    assert.ok(render('AssetEditor', editor(items[0], {preloadedImages:pictures})).includes('圖片'), 'the pictures column');
     assert.ok(render('AssetEditor', editor(items[2])).includes('環境音'));
     assert.match(render('StudioTopBar', {project:{title:'x'}, episodes:[], epId:'e', space:'story', counts:{}, onSpace() {}, onCommand() {}, film:{open:false, onToggle() {}}, pageTitle:'Soul Cast'}), /aria-label="回到故事與世界".*<span>返回<\/span>/);
   } finally {await components.setLocale('en');}
