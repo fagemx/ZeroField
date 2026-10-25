@@ -157,7 +157,8 @@ class WritingProductBrowserTests(unittest.TestCase):
         for shot in self.f.ok('/episodes/'+self.f.ep+'/shots')['items']:
             self.f.ok('/shots/'+shot['shotId'],'DELETE')
         with self.browser() as (page,context,base):
-            page.get_by_role('button',name='Confirm screenplay & build text storyboard',exact=True).click()
+            page.locator('.space-detail .studio-primary').click()  # the one primary button; the dialog asks its few questions first (SPEC_16A 3.1)
+            page.locator('.breakdown-dialog button.primary').click()
             expect(page.get_by_role('textbox',name='Manuscript editor')).not_to_be_visible(timeout=20000)
             shots=[shot for shot in self.f.ok('/episodes/'+self.f.ep+'/shots')['items'] if shot.get('storyOrigin')]
             self.assertEqual(len(shots),2);first,second=shots
