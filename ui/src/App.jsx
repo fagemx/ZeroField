@@ -595,7 +595,7 @@ function ProjectPage({ slug }) {
   const storyView = isStudio && tabKey === STORY_VIEW;
   const timelineView = isStudio && tabKey === TIMELINE_VIEW;
   const space = isStudio ? spaceOf(tabKey) : null;
-  const counts = episodeCounts(episode.ep, episode.shots);
+  const counts = episodeCounts(episode.ep, episode.shots, episode.assets);
   // The breadcrumb's last two crumbs are the shell's focus. Each space shows the panel toggles it has.
   const focusedShot = episode.shots.find((shot) => shot.rowId === focus.shotRid) || null;
   const focusedScene = (episode.ep?.scenes || []).find((scene) => scene.sceneId === (focusedShot?.sceneId || focus.sceneId)) || null;

@@ -38,15 +38,16 @@ export const spaceShortcuts = (key, counts = {}) => key === 'story'
 
 // One episode's state for the top bar, both spaces and the film: refreshed when a page saves (version) or on demand.
 export function useEpisode(slug, epId, version, enabled = true) {
-  const [state, setState] = useState({episodes:[], ep:null, shots:[], error:''});
+  const [state, setState] = useState({episodes:[], ep:null, shots:[], assets:null, error:''});
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
     if (!enabled) return undefined;
     let alive = true, error = '';
     // Each part loads on its own: a missing episode list must not keep the episode itself from loading.
     const settle = request => request.catch(failure => {error = error || failure.message; return null;});
-    Promise.all([settle(storyList('/projects/pj_' + slug + '/episodes')), settle(storyRequest('/episodes/' + epId)), settle(storyList('/episodes/' + epId + '/shots'))])
-      .then(([episodes, ep, shots]) => {if (alive) setState(current => ({episodes:episodes || current.episodes, ep, shots:shots || [], error}));});
+    Promise.all([settle(storyList('/projects/pj_' + slug + '/episodes')), settle(storyRequest('/episodes/' + epId)), settle(storyList('/episodes/' + epId + '/shots')),
+      settle(storyList('/episodes/' + epId + '/assets'))])
+      .then(([episodes, ep, shots, assets]) => {if (alive) setState(current => ({episodes:episodes || current.episodes, ep, shots:shots || [], assets, error}));});
     return () => {alive = false;};
   }, [slug, epId, version, nonce, enabled]);
   return {...state, reload:() => setNonce(n => n + 1)};
@@ -55,12 +56,12 @@ export function useEpisode(slug, epId, version, enabled = true) {
 // Cinema slate order, the same order the exported film uses.
 const shotOrder = shot => String(shot.shotIndex).split(/(\d+)/).map(part => /^\d+$/.test(part) ? part.padStart(6, '0') : part.toLowerCase()).join('');
 export const orderedShots = shots => shots.filter(shot => shot.tabKey === STAGE_TAB).sort((a, b) => shotOrder(a).localeCompare(shotOrder(b)));
-export function episodeCounts(ep, shots) {
+export function episodeCounts(ep, shots, assets = null) {
   const cut = orderedShots(shots);
   return {
     shots:cut.length,
     review:cut.filter(shot => SHOT_FILTERS.review({status:shot.reviewStatus})).length,
-    missing:ep?.missingAssetCodes?.length || 0,
+    missing:assets ? assets.filter(asset => !asset.selectedImageUrl).length : ep?.missingAssetCodes?.length || 0,
     missingShots:cut.filter(shot => SHOT_FILTERS.missing({info:shot})).length,
     filmed:cut.filter(shot => shot.selectedVideoUrl).length,
     scriptDirty:Boolean(ep?.scriptDirty),

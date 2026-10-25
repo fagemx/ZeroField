@@ -3006,5 +3006,25 @@
     "cameraText": "Make the camera description of shot {{shot}} more specific: lens, movement, framing and what the camera sees, as a proposal for that shot's row.",
     "continuity": "Check {{shot}} against its neighbours",
     "continuityText": "Check shot {{shot}} for continuity with the shots before and after it: costume, props, position and light, and propose fixes."
+  },
+  "start": {
+    "kind": "How to start",
+    "fromStory": "From a story",
+    "fromTemplate": "From a template",
+    "mode": "What you are starting from",
+    "placeholder_idea": "One or two sentences is enough: who, what they want, and what stands in the way.",
+    "placeholder_novel": "Paste a chapter or a few pages. The storyboard is built from the story beats.",
+    "placeholder_script": "Paste a screenplay with scene headings (INT./EXT. or Scene 1), or load a .txt or .md file.",
+    "upload": "Load a .txt or .md file",
+    "needText": "Write or paste something to start from.",
+    "fileType": "Choose a .txt or .md file.",
+    "fileTooLarge": "That file is over 2 MB.",
+    "textTooLong": "That text is over 500,000 characters.",
+    "ratio": "Aspect ratio",
+    "style": "Style",
+    "titleLabel": "Title",
+    "untitled": "Untitled story",
+    "create": "Create and start",
+    "creating": "Creating…"
   }
 }

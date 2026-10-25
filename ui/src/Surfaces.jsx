@@ -10,6 +10,8 @@ import { Avatar } from "./Talk.jsx";
 import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { SheetDialog } from "./SheetDialog.jsx";
 import { Icon } from "./Icon.jsx";
+import { StartFromStory } from "./StartFromStory.jsx";
+import { rememberStart } from "./startModel.js";
 
 
 export const PROJECT_STATUS = {
@@ -59,6 +61,7 @@ export function ProjectHub({ data, onReload }) {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [startKind, setStartKind] = useState("story");
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
   const [template, setTemplate] = useState("zerofield_studio");
@@ -74,6 +77,16 @@ export function ProjectHub({ data, onReload }) {
     {key: "blank", icon: "▤", title: uiText("surfaces.blankProduction"), detail: uiText("surfaces.startWithABriefAndAddProductionPagesAs")},
   ];
   const closeCreate = () => { if (!busy) setCreating(false); };
+  // SPEC_18 R16: a production started from a story is an ordinary studio production; what was typed goes with the person to Story & World.
+  const createFromStory = async ({ title: name, start }) => {
+    if (busy) return;
+    setError(""); setBusy(true);
+    try {
+      const res = await api.post("/projects/api/projects", { slug: `project-${crypto.randomUUID().slice(0, 8)}`, title: name, template: "zerofield_studio", status: "planning", summary: "" });
+      if (res?.project) { rememberStart(res.project.slug, start); window.location.href = `/projects/${res.project.slug}/#story-world`; }
+      else { setCreating(false); onReload(); }
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
   const create = async (event) => {
     event.preventDefault();
     if (!title.trim() || busy) return;
@@ -87,7 +100,7 @@ export function ProjectHub({ data, onReload }) {
   return <div className="app hub-app">
     <header className="top"><span className="doc-name"><span className="brand-mark">ZF</span> ZeroField Studio</span><span className="spacer" /><LanguageSwitch />{me && <WorkspaceSettings me={me} onReload={onReload} />}{me && <IdentityBadge me={me} members={data.members} />}</header>
     <main className="hub-page">
-      <header className="hub-heading"><div><h1>{uiText("surfaces.fromScriptToSlate")}</h1><p>{uiText("surfaces.planYourFilmDirectTheCrewAndReviewEvery")}</p></div>{writable && <button className="primary hub-create" onClick={() => { setTitle(""); setSummary(""); setSlug(""); setTemplate("zerofield_studio"); setError(""); setCreating(true); }}>{uiText("surfaces.newProduction")}</button>}</header>
+      <header className="hub-heading"><div><h1>{uiText("surfaces.fromScriptToSlate")}</h1><p>{uiText("surfaces.planYourFilmDirectTheCrewAndReviewEvery")}</p></div>{writable && <button className="primary hub-create" onClick={() => { setTitle(""); setSummary(""); setSlug(""); setTemplate("zerofield_studio"); setStartKind("story"); setError(""); setCreating(true); }}>{uiText("surfaces.newProduction")}</button>}</header>
       <ol className="hub-guide"><li>{uiText("surfaces.addABriefOrSlate")}</li><li>{uiText("surfaces.describeTheTask")}</li><li>{uiText("surfaces.reviewAndApplyChanges")}</li></ol>
       <div className="hub-filter"><h2>{uiText("surfaces.allProductions")}<small>{projects.length}</small></h2><input aria-label={uiText("surfaces.searchProductions")} placeholder={uiText("surfaces.searchProductions2")} value={query} onChange={(e) => setQuery(e.target.value)} /><select aria-label={uiText("surfaces.filterProductionsByStatus")} value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">{uiText("surfaces.allStatuses")}</option>{Object.entries(PROJECT_STATUS).map(([key, cfg]) => <option key={key} value={key}>{cfg.label}</option>)}</select></div>
       {error && !creating && <p className="canvas-error" role="alert">{error}</p>}
@@ -97,7 +110,12 @@ export function ProjectHub({ data, onReload }) {
         return <article className="hub-card" key={p.slug}><div className="hub-card-top"><span className="hub-project-icon"><Icon name="clapper" /></span><select disabled={!writable} aria-label={uiText("surfaces.status", {v0: (p.title)})} value={p.status || "active"} style={{color: st.color, background: st.bg}} onChange={async (e) => { try { await api.post(`/projects/api/${p.slug}/meta`, {status: e.target.value}); onReload(); } catch (err) { setError(err.message); } }}>{Object.entries(PROJECT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></div><a className="hub-project-title" href={`/projects/${p.slug}/`}>{p.title}</a><p>{p.summary || uiText("surfaces.planDiscussAndDirectYourProduction")}</p><footer><span>{p.tab_count != null ? uiText("surfaces.pageCount", {count: p.tab_count}) : uiText("surfaces.openProduction")}</span><span>{uiText("surfaces.updated", {v0: (shortTime(p.updated_at))})}</span></footer></article>;
       })}</div>
     </main>
-    {creating && <SheetDialog title={uiText("surfaces.newProduction2")} wide onClose={closeCreate}><form onSubmit={create}>
+    {creating && <SheetDialog title={uiText("surfaces.newProduction2")} wide onClose={closeCreate}>
+      <div className="start-kind" role="group" aria-label={uiText("start.kind")}>
+        <button type="button" aria-pressed={startKind === "story"} onClick={() => setStartKind("story")}>{uiText("start.fromStory")}</button>
+        <button type="button" aria-pressed={startKind === "template"} onClick={() => setStartKind("template")}>{uiText("start.fromTemplate")}</button></div>
+      <div hidden={startKind !== "story"}><StartFromStory busy={busy} error={error} onCancel={closeCreate} onCreate={createFromStory} /></div>
+      <form hidden={startKind !== "template"} onSubmit={create}>
       <label className="modal-field"><span>{uiText("surfaces.productionTitle")}</span><input data-autofocus required maxLength={200} value={title} placeholder={uiText("surfaces.forExampleTheLastSignal")} onChange={(e) => setTitle(e.target.value)} /></label>
       <label className="modal-field"><span>{uiText("surfaces.productionGoal")}<small>{uiText("surfaces.optional")}</small></span><input maxLength={400} value={summary} placeholder={uiText("surfaces.describeTheFilmOrProductionGoalInOneSentence")} onChange={(e) => setSummary(e.target.value)} /></label>
       <fieldset className="template-options"><legend>{uiText("surfaces.startingPoint")}</legend>{templates.map((item) => <label className={template === item.key ? "chosen" : ""} key={item.key}><input type="radio" name="template" value={item.key} checked={template === item.key} onChange={() => setTemplate(item.key)} /><span className="template-icon">{item.icon}</span><span><b>{item.title}</b><small>{item.detail}</small></span></label>)}</fieldset>

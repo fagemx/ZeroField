@@ -15,8 +15,9 @@
     "R12 layout revision: nothing opens by itself, a picked card opens in a pane about three fifths wide, x gives the wall the whole view back"
   ],
   "not_done": [
-    "R14 character three-views, R15 voice audio, R16 new-project entry (each needs its own spec)",
-    "R8 on shot detail: a read-only generation line. The shot's Generate runs the whole studio pipeline, so there is no single card to show (SPEC_18 open decision 3)",
+    "R14 character three-views: no GPU-validated workflow exists, and a prompt-only wrapper cannot be checked without a model",
+    "R15 voice audio: the catalog has only IMAGE and VIDEO capabilities and no TTS card; a provider has to be chosen and a spec written first",
+    "R8 on shot detail: a read-only generation line. The shot's Shoot is a studio pipeline step: the node names only a capability and the worker picks the card at run time, so no single card can be shown honestly (SPEC_18 open decision 3)",
     "Design board 9E was not redrawn; it is retitled to say its content now lives in the large editor drawn in 9A"
   ],
   "backend": {
@@ -101,6 +102,40 @@
     ],
     "stand_in_stopped": true
   },
+  "follow_up": {
+    "state": "The commit after the packs A and B one (968557d).",
+    "scope": [
+      "R16 new-project entry: the hub's New Production dialog opens on 'From a story' (an idea, a novel chapter or a screenplay in one box, a ratio and a style) next to the unchanged template form, and Story & World opens with the text in the draft",
+      "Opening a card below 1100px scrolls the editor into view",
+      "The menu's missing-pictures number counts what the wall shows, props included, instead of the episode's batch list",
+      "The new-production dialog keeps its buttons on screen at 1280x720 (the build dialog's own fix is already in the first commit)"
+    ],
+    "frontend": {
+      "command": "npm test --prefix ui",
+      "environment": "a clean export of HEAD with only this commit's files laid over it",
+      "passed": 383,
+      "failed": 0,
+      "skipped": 0,
+      "working_tree_passed": 400,
+      "note": "The working tree also runs the 17 tests of the story-planning prototype, which this commit leaves out."
+    },
+    "build": "passed; rebuilt in the clean copy it gives the same hash-named bundle files as the working tree",
+    "packaging": {
+      "command": "pip wheel --no-deps --no-build-isolation . and python scripts/verify_wheel.py <wheel> --source <the clean copy>",
+      "result": "verified: SQL, prompts, workflows, samples, frontend and CLI entry points"
+    },
+    "screenshots": ["docs/research/screenshots/spec18-start-from-story-zh-1920.png", "docs/research/screenshots/spec18-start-landed-zh-1920.png"],
+    "ui_verification": {
+      "tool": "Headless Edge over the DevTools protocol against the real server and a copy of the showcase database",
+      "checks": [
+        "New Production opens on the story start; typing, 9:16 and the second style, then Create lands on /projects/{slug}/#story-world in idea mode with the text in the box and '9:16 · Cel-Shaded Anime Drama' in the format tile",
+        "A picture is refused with a message; a .md script loads and lands in Screenplay mode with the script in the script box; switching to the template tab and back keeps what was typed; the template form is unchanged",
+        "From the new entry: idea, build dialog, confirm, and the stage with 12 shots in 3 scenes",
+        "The space menu reads 'missing 6 pictures | 12 shots missing references | 0 of 12 shots filmed'; the first opens the wall on 'needs an image 6' with 6 cards; the scene filter with real scenes narrows to scene 01's four assets",
+        "At 1000x800 opening a card puts the editor at the top of the view; at 1280x720 the new-production dialog keeps its buttons on screen"
+      ]
+    }
+  },
   "unverified": [
     "No picture was produced by a real model; generation was checked as requests, states and cancellation, not as output.",
     "A task that the worker itself marks FAILED while the page polls was not seen live; that path is covered by unit tests of the run state. The failure shown live was a refusal by the server.",
@@ -108,6 +143,7 @@
     "The 'n missing images' menu shortcut was not seen live for lack of such a state.",
     "Below 1100px the studio stacks its panels and the editor opens under the wall without being scrolled into view.",
     "The wheel was built and inspected, not installed and run.",
+    "The new-project hand-off needs sessionStorage; without it the production opens with nothing filled in (unit-tested, not seen in a browser).",
     "The whole backend suite ran on the working tree; the exact tree of the commit ran its 160 story-related tests, not the whole suite.",
     "Design boards were redrawn and republished without being rendered."
   ],

@@ -3006,5 +3006,25 @@
     "cameraText": "讓鏡頭 {{shot}} 的運鏡描述更具體：鏡頭、運動、構圖和鏡頭看到什麼，以那一鏡這一列的提案給我。",
     "continuity": "檢查 {{shot}} 與前後鏡的連戲",
     "continuityText": "檢查鏡頭 {{shot}} 與前後鏡的連戲：服裝、道具、位置和光線，並提出修正。"
+  },
+  "start": {
+    "kind": "開始的方式",
+    "fromStory": "從故事開始",
+    "fromTemplate": "從範本開始",
+    "mode": "你要從什麼開始",
+    "placeholder_idea": "一兩句就夠：誰、想要什麼、什麼擋在前面。",
+    "placeholder_novel": "貼上一章或幾頁，分鏡會依故事節拍拆。",
+    "placeholder_script": "貼上有場次標題的劇本（INT./EXT. 或「場景 1」），或載入 .txt／.md 檔。",
+    "upload": "載入 .txt 或 .md 檔",
+    "needText": "先寫點或貼上內容才能開始。",
+    "fileType": "請選 .txt 或 .md 檔。",
+    "fileTooLarge": "檔案超過 2 MB。",
+    "textTooLong": "文字超過 50 萬字。",
+    "ratio": "畫幅比例",
+    "style": "畫風",
+    "titleLabel": "名稱",
+    "untitled": "未命名故事",
+    "create": "建立並開始",
+    "creating": "建立中…"
   }
 }

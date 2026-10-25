@@ -13,6 +13,7 @@ import { FALLBACK_APP, activeTasks, isActiveRun, restoredRuns, runRefused, runSt
 import { BreakdownDialog } from './BreakdownDialog.jsx';
 import { BREAKDOWN_MODES, estimatesByMode } from './breakdownModel.js';
 import { assetLookupFrom, codeBase, normalizeCode } from './bindingModel.js';
+import { takeStart } from './startModel.js';
 import { Icon } from './Icon.jsx';
 
 const MODES = ['idea', 'novel', 'script'];
@@ -67,9 +68,12 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
   useEffect(() => {
     if (!ep || loadedFor.current === epId) return;
     loadedFor.current = epId; setLoading(true); setError('');
-    setDrafts({script:sourceDraft(ep.scriptContent || ''), idea:sourceDraft(), novel:sourceDraft()});
-    if (!picked.current) setSourceMode(ep.scriptContent?.trim() ? 'script' : 'idea');  // a choice made while loading stands
-    setRatio(ep.settings?.aspectRatio || '16:9'); setStyle(ep.settings?.stylePresetId || '88123');
+    // A production started from a story (SPEC_18 R16) opens with what was typed in the hub, in the mode it was typed for.
+    const start = takeStart(epId), seeded = mode => start?.mode === mode ? start.text : '';
+    setDrafts({script:sourceDraft(seeded('script') || ep.scriptContent || ''), idea:{...sourceDraft(), sourceText:seeded('idea')}, novel:{...sourceDraft(), sourceText:seeded('novel')}});
+    if (start) {picked.current = true; setSourceMode(start.mode);}
+    else if (!picked.current) setSourceMode(ep.scriptContent?.trim() ? 'script' : 'idea');  // a choice made while loading stands
+    setRatio(start?.ratio || ep.settings?.aspectRatio || '16:9'); setStyle(start?.style || ep.settings?.stylePresetId || '88123');
     setBreakdownMode(['auto','scene','cinematic'].includes(ep.settings?.breakdownMode) ? ep.settings.breakdownMode : 'auto');
     setGroup(restoredAssetGroup(epId));
     storyList('/catalog/styles').then(items => {if (mounted.current) setStyles(items);}).catch(err => {if (mounted.current) setError(err.message);})
@@ -105,6 +109,10 @@ export function StoryWorld({epId, ep, shots = [], loadError = '', writable, focu
     openedFor.current = active.assetCode;  // already here: the shell's "land on this card" must not take it as news
     onFocus?.({assetCode:active.assetCode, assetName:active.name || active.assetCode});
   }, [view, activeId]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!activeId || !window.matchMedia?.('(max-width: 1100px)').matches) return;
+    requestAnimationFrame(() => document.querySelector('.world-editor')?.scrollIntoView({block:'start'}));
+  }, [activeId]);
   useEffect(() => {
     let alive = true; setDetail(null);
     if (activeId) storyRequest('/assets/' + activeId).then(item => {if (alive) setDetail(item);}).catch(err => {if (alive) setError(err.message);});

@@ -12,7 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 let temporary, components;
 before(async () => {
   temporary = await mkdtemp(join(root, 'tests/.world-render-'));
-  const result = await build({stdin: {contents: "export {WorldWall, WorldFacets, WorldList, WorldSummary} from './src/WorldWall.jsx'; export {AssetEditor} from './src/AssetEditor.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {StudioTopBar} from './src/StudioShell.jsx'; export {setLocale} from './src/i18n/index.js';",
+  const result = await build({stdin: {contents: "export {WorldWall, WorldFacets, WorldList, WorldSummary} from './src/WorldWall.jsx'; export {AssetEditor} from './src/AssetEditor.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {StudioTopBar, episodeCounts} from './src/StudioShell.jsx'; export {setLocale} from './src/i18n/index.js';",
     resolveDir: root, sourcefile: 'world-render.jsx', loader: 'jsx'}, bundle: true, write: false, platform: 'node', format: 'esm', jsx: 'automatic', packages: 'external', loader: {'.css': 'empty'}});
   const output = join(temporary, 'components.mjs');
   await writeFile(output, result.outputFiles[0].text);
@@ -261,6 +261,15 @@ test('the run states and the scene filter read in Traditional Chinese', async ()
       sceneChoices:[{key:null}, {key:'sc1', label:'場 01 · ARRIVAL'}, {key:'__unscened'}], scene:null}));
     for (const text of ['生成中', '取消生成: Kael', '生成失敗', '重試: Mara', '已取消', '依場次篩選', '全部', '未分場']) assert.ok(html.includes(text), text);
   } finally {await components.setLocale('en');}
+});
+
+test('the menu counts the pictures the wall lacks, props included, and falls back to the episode when the wall is unknown', () => {
+  const ep = {missingAssetCodes:['CAST-02', 'SET-01']};
+  const wallAssets = [{selectedImageUrl:'/a.png'}, {selectedImageUrl:null}, {selectedImageUrl:''}, {selectedImageUrl:null}];
+  assert.equal(components.episodeCounts(ep, [], wallAssets).missing, 3, 'what the wall shows under "needs an image"');
+  assert.equal(components.episodeCounts(ep, [], []).missing, 0, 'a wall where every card has its picture lacks nothing');
+  assert.equal(components.episodeCounts(ep, []).missing, 2, 'no asset list yet: the episode list stands');
+  assert.equal(components.episodeCounts(null, [], null).missing, 0);
 });
 
 test('a page opened from a space has a Back button to it, and the space views have none', () => {
