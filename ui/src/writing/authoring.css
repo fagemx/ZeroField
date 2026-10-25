@@ -1,7 +1,119 @@
-.authoring-workspace{display:flex;flex-direction:column;min-height:0;height:100%;color:var(--text,#e4e5e7);background:#101216;--writing-font:18px;--writing-line-height:1.8;--writing-width:720px}.writing-toolbar,.writing-status{display:flex;gap:.65rem;align-items:center;flex-wrap:wrap;padding:.65rem .9rem;border-bottom:1px solid #34363b}.writing-toolbar label{display:flex;gap:.4rem;align-items:center}.writing-toolbar details{position:relative}.writing-toolbar details[open]{padding:.6rem;background:#202329}.writing-toolbar details label{display:block}.writing-layout{display:flex;flex:1;min-height:0;overflow:hidden}.writing-left{width:240px;flex-shrink:0;border-right:1px solid #34363b;overflow:auto}.writing-right{width:390px;flex-shrink:0;overflow:auto;border-left:1px solid #34363b;padding:.7rem}.writing-right[hidden]{display:none}.writing-manuscript{flex:1;min-width:0;overflow:auto;padding:1rem clamp(.7rem,2vw,2rem)}.writing-editor{max-width:var(--writing-width);margin:auto;min-height:200px}.writing-editor .tiptap{font-size:var(--writing-font);line-height:var(--writing-line-height);min-height:45vh;padding:.6rem;overflow-wrap:anywhere;white-space:pre-wrap}.writing-editor .tiptap p{margin:.6em 0}.writing-editor .tiptap h1,.writing-editor .tiptap h2,.writing-editor .tiptap h3{color:#f1e4ca}.writing-editor .tiptap img{max-width:100%}.writing-editor .tiptap table{border-collapse:collapse;width:100%}.writing-editor .tiptap td,.writing-editor .tiptap th{border:1px solid #555;padding:.3rem}.writing-scope{font-size:.8rem;color:#b9b2a4}.writing-outline{padding:.65rem}.writing-outline header,.writing-preview header{display:flex;gap:.5rem;align-items:center;justify-content:space-between}.writing-outline h2,.writing-versions h2,.writing-preview h2{font-size:1rem}.writing-outline ol,.writing-versions ul{padding-left:1.1rem}.writing-outline li,.writing-versions li{margin:.7rem 0}.writing-structure-actions{display:flex;gap:.25rem;flex-wrap:wrap}.writing-scene-metadata label,.writing-versions label{display:block;margin:.4rem 0}.writing-scene-metadata textarea,.writing-scene-metadata input,.writing-versions input:not([type=checkbox]){display:block;width:100%;box-sizing:border-box}.writing-compare-columns{display:flex;gap:.7rem;overflow:auto}.writing-compare-columns>*{flex:1;min-width:130px}.writing-compare-columns pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:30vh;overflow:auto;font:inherit;font-size:.85rem;background:#171a20;padding:.6rem}.writing-change{padding:.7rem 0;border-bottom:1px solid #454545}.writing-preview fieldset{border:1px solid #454545}.writing-preview-action{margin:.6rem 0}.writing-status{border-top:1px solid #34363b;border-bottom:0;font-size:.8rem}.writing-status span{max-width:100%;overflow-wrap:anywhere}.authoring-workspace button,.authoring-workspace select,.authoring-workspace input,.authoring-workspace textarea{font:inherit;color:inherit;background:#24262c;border:1px solid #55565e;border-radius:4px;padding:.3rem .45rem}.authoring-workspace button:disabled{opacity:.5}.authoring-workspace button[aria-pressed=true]{border-color:#f0ad43}.authoring-workspace .writing-primary{background:#e5a541;color:#121212;border-color:#e5a541}.authoring-workspace :focus-visible{outline:2px solid #ffc46b;outline-offset:3px}.writing-focus .writing-left,.writing-focus .writing-right{display:none}.writing-recovery{border:1px solid #d49a3c;padding:.8rem}.authoring-workspace [role=alert]{color:#ffca91}.writing-versions small{display:block;color:#beb8ac}@media(max-width:1100px){.writing-left{width:190px}.writing-right{width:320px}}@media(max-width:800px){.writing-layout{position:relative}.writing-left{width:160px}.writing-right{position:absolute;right:0;top:0;bottom:0;width:min(90%,390px);background:#16191f;z-index:2;box-shadow:-8px 0 24px #0009}.writing-toolbar{gap:.35rem}.writing-manuscript{padding:.6rem}.writing-status{gap:.4rem}.writing-compare-columns{flex-direction:column}}.writing-source-tools{max-width:var(--writing-width);margin:0 auto 1rem}.writing-source-tools details{border:1px solid #454545;padding:.6rem;margin:.5rem 0}.writing-source-tools label{display:block;margin:.5rem 0}.writing-source-tools small{display:block;color:#bbb}.writing-preview video,.writing-preview img{width:100%;max-height:220px;object-fit:contain}.writing-impact-setup label{display:block;margin:.5rem 0}.writing-impact-setup select{max-width:100%}.writing-impact-changes pre,.writing-materialization pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:30vh;overflow:auto}.writing-conflict article{border-bottom:1px solid #555;padding:.5rem}.writing-conflict h3{font-size:.9rem}@media(prefers-reduced-motion:reduce){.authoring-workspace *{scroll-behavior:auto!important}}
-/* SPEC_16A: hosted in Story & World, the outline and the panels live in the shell's side columns; the editor fills the middle one. */
-.story-world .space-main.is-writing{padding:0;gap:0;overflow:hidden}
-.authoring-workspace.is-slotted{flex:1;min-height:0;height:auto}
-.story-outline-slot,.story-panel-slot{min-height:0;overflow:auto;display:flex;flex-direction:column}
-.story-outline-slot[hidden],.story-panel-slot[hidden]{display:none}
-.story-outline-slot .writing-left,.story-panel-slot .writing-right{width:auto;flex:1 1 auto;border:0}
+/* The SPEC_16 writing workspace in the studio's midnight tokens (SPEC_16A P5).
+   Hosted in Story & World, the editor fills the middle column, the outline renders into the left rail (.story-outline-slot) and the panels
+   (versions, story impact, preview, tools) into the right column (.story-panel-slot). Outside the shell the tokens fall back to the same dark values. */
+:is(.authoring-workspace, .story-outline-slot, .story-panel-slot) {
+  --w-text: var(--text, #e6eaf0); --w-muted: var(--muted, #a2acba); --w-faint: var(--faint, #8792a3);
+  --w-line: var(--line, rgba(220, 235, 255, .08)); --w-line2: var(--line-2, rgba(220, 235, 255, .16)); --w-control: var(--control, rgba(220, 235, 255, .24));
+  --w-ground: var(--ground, #0e1217); --w-bg: var(--bg-2, #121820); --w-surface: var(--surface, #171d26); --w-raised: var(--raised, #262e3a); --w-active: var(--active, #1f2630);
+  --w-accent: var(--accent, #f2b33d); --w-accent-bg: var(--accent-bg, rgba(242, 179, 61, .16)); --w-danger: #f0728a;
+}
+.authoring-workspace { display: flex; flex-direction: column; min-height: 0; height: 100%; color: var(--w-text); --writing-font: 18px; --writing-line-height: 1.8; --writing-width: 720px; }
+.authoring-workspace.is-slotted { flex: 1; min-height: 0; height: auto; }
+.story-world .space-main.is-writing { padding: 0; gap: 0; overflow: hidden; }
+
+/* One button language for everything the workspace draws: the studio's outlined tool button. Selected is the accent outline, never a fill. */
+.workbench-app :is(.authoring-workspace, .story-outline-slot, .story-panel-slot) button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--w-line2); border-radius: 6px;
+  background: transparent; color: var(--w-muted); font: inherit; font-size: 12.5px; line-height: 1.2; cursor: pointer; text-align: center;
+}
+.workbench-app :is(.authoring-workspace, .story-outline-slot, .story-panel-slot) button:hover:not(:disabled) { background: var(--w-active); color: var(--w-text); }
+.workbench-app :is(.authoring-workspace, .story-outline-slot, .story-panel-slot) button:disabled { opacity: .45; cursor: default; }
+.workbench-app :is(.authoring-workspace, .story-outline-slot, .story-panel-slot) button[aria-pressed="true"],
+.workbench-app :is(.authoring-workspace, .story-outline-slot, .story-panel-slot) button[aria-expanded="true"] { border-color: var(--w-accent); color: var(--w-text); }
+.workbench-app :is(.authoring-workspace, .story-outline-slot, .story-panel-slot) :focus-visible { outline: 2px solid var(--w-accent); outline-offset: 2px; }
+/* The screen's one primary action is the pale button in the right column; a decisive action inside a panel is the stronger outline. */
+.workbench-app :is(.authoring-workspace, .story-panel-slot) .writing-primary { border-color: var(--w-control); color: var(--w-text); background: transparent; font-weight: 600; }
+:is(.authoring-workspace, .story-outline-slot, .story-panel-slot) [role="alert"] { color: #ffca91; }
+:is(.authoring-workspace, .story-outline-slot, .story-panel-slot) :is(h2, h3) { margin: 0; font-size: 13px; font-weight: 600; color: var(--w-text); }
+
+/* Toolbar and footer */
+.writing-toolbar, .writing-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 16px; font-size: 12.5px; color: var(--w-muted); }
+.writing-toolbar { border-bottom: 1px solid var(--w-line); }
+.writing-status { border-top: 1px solid var(--w-line); font-size: 12px; gap: 6px 16px; }
+.writing-status span { max-width: 100%; overflow-wrap: anywhere; }
+.writing-toolbar label { display: flex; align-items: center; gap: 8px; }
+.writing-toolbar details { position: relative; }
+.writing-toolbar summary { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px; cursor: pointer; color: var(--w-muted); }
+.writing-toolbar details[open] > :not(summary) { position: absolute; z-index: 5; left: 0; width: 240px; padding: 10px 12px; background: var(--w-raised); border: 1px solid var(--w-line2); border-radius: 8px; box-shadow: var(--shadow-float, 0 12px 32px rgba(0, 0, 0, .5)); }
+.writing-toolbar details[open] > label:nth-of-type(1) { top: 32px; }
+.writing-toolbar details label { display: grid; gap: 4px; }
+
+/* The manuscript */
+.writing-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.writing-manuscript { flex: 1; min-width: 0; overflow: auto; padding: 14px clamp(16px, 3vw, 40px) 28px; }
+.writing-scope { margin: 0 0 6px; font-size: 12px; color: var(--w-faint); }
+.writing-editor { max-width: var(--writing-width); margin: 0 auto; min-height: 200px; }
+.writing-editor .tiptap { min-height: 45vh; padding: 6px 4px; font-size: var(--writing-font); line-height: var(--writing-line-height); overflow-wrap: anywhere; white-space: pre-wrap; color: var(--w-text); outline: none; }
+.writing-editor .tiptap p { margin: .6em 0; }
+.writing-editor .tiptap h1, .writing-editor .tiptap h2, .writing-editor .tiptap h3 { color: var(--w-text); line-height: 1.3; font-weight: 600; margin: 1em 0 .4em; }
+.workbench-app .writing-editor .tiptap h1 { font-size: 1.9em; }
+.workbench-app .writing-editor .tiptap h2 { font-size: 1.45em; }
+.workbench-app .writing-editor .tiptap h3 { font-size: 1.2em; }
+.writing-editor .tiptap img { max-width: 100%; }
+.writing-editor .tiptap table { border-collapse: collapse; width: 100%; }
+.writing-editor .tiptap td, .writing-editor .tiptap th { border: 1px solid var(--w-line2); padding: 4px 6px; }
+.writing-source-tools { max-width: var(--writing-width); margin: 0 auto 10px; display: grid; gap: 8px; }
+.writing-source-tools details { border: 1px solid var(--w-line); border-radius: 8px; padding: 6px 10px; background: var(--w-bg); }
+.writing-source-tools summary { cursor: pointer; color: var(--w-muted); font-size: 13px; }
+.writing-source-tools label { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12.5px; color: var(--w-muted); }
+.writing-source-tools small { display: block; color: var(--w-faint); }
+.writing-target-scenes input { width: 64px; }
+.writing-recovery { border: 1px solid var(--w-accent); border-radius: 8px; padding: 12px; background: var(--w-accent-bg); }
+.writing-conflict article { border-bottom: 1px solid var(--w-line2); padding: 8px 0; }
+.writing-conflict h3 { font-size: 13px; }
+.writing-focus .writing-left, .writing-focus .writing-right { display: none; }
+
+/* The outline, in the 240px left rail: the rail already says "Scenes", so the outline's own heading is dropped and each scene is a quiet row. */
+.story-outline-slot, .story-panel-slot { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.story-outline-slot[hidden], .story-panel-slot[hidden] { display: none; }
+.story-outline-slot .writing-left { width: auto; flex: 1 1 auto; border: 0; overflow-x: hidden; }
+.writing-outline { display: grid; gap: 8px; padding: 2px 0; min-width: 0; font-size: 13px; }
+.writing-outline header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.writing-outline header h2 { display: none; }
+.writing-outline header button { margin-left: auto; }
+.writing-outline ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.writing-outline li { margin: 0; padding: 0; min-width: 0; }
+.workbench-app .writing-outline li > button:first-of-type, .workbench-app .writing-outline > button { justify-content: flex-start; width: 100%; height: auto; min-height: 30px; padding: 5px 8px; text-align: left; white-space: normal; overflow-wrap: anywhere; border-color: var(--w-line); color: var(--w-text); }
+.workbench-app .writing-outline li > button[aria-pressed="true"] { background: var(--w-active); border-color: var(--w-accent); }
+.writing-structure-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 4px 8px; }
+.workbench-app .writing-structure-actions button, .workbench-app .writing-outline li > button + button { height: 26px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
+.writing-outline select, .writing-outline input, .writing-outline textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.writing-outline li > label { display: grid; gap: 4px; margin: 6px 0 2px 8px; font-size: 12px; color: var(--w-muted); }
+.writing-scene-metadata { display: grid; gap: 6px; margin: 6px 0 2px 8px; }
+.writing-scene-metadata label { display: grid; gap: 3px; font-size: 12px; color: var(--w-muted); }
+.writing-scene-metadata textarea { min-height: 52px; resize: vertical; }
+.writing-outline-discard { border: 1px solid var(--w-accent); border-radius: 8px; padding: 10px; background: var(--w-accent-bg); }
+
+/* The right column: versions, story impact, preview. The tools panel brings its own styles (writingTools.css). */
+.story-panel-slot .writing-right { width: auto; flex: 1 1 auto; border: 0; padding: 0; overflow-x: hidden; display: grid; gap: 12px; align-content: start; }
+.story-panel-slot .writing-right[hidden] { display: none; }
+.story-panel-slot .writing-right > button:first-child { justify-self: end; }
+.writing-versions, .writing-preview, .writing-impact-setup, .writing-impact-changes { display: grid; gap: 10px; min-width: 0; font-size: 13px; line-height: 1.5; }
+.writing-versions h2, .writing-preview h2 { font-size: 14px; }
+.writing-preview header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.writing-versions ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.writing-versions li { margin: 0; padding: 10px; border: 1px solid var(--w-line); border-radius: 8px; background: var(--w-bg); display: grid; gap: 6px; }
+.workbench-app .writing-versions li > button, .workbench-app .writing-versions li > div > button { height: auto; min-height: 28px; white-space: normal; text-align: left; }
+.writing-versions label, .writing-preview label, .writing-impact-setup label { display: grid; gap: 4px; margin: 0; font-size: 12.5px; color: var(--w-muted); }
+.writing-versions label:has(input[type="checkbox"]) { display: flex; align-items: flex-start; gap: 8px; }
+.writing-versions input:not([type="checkbox"]), .writing-versions select, .writing-versions textarea, .writing-preview input:not([type="checkbox"]), .writing-preview select,
+.writing-impact-setup select, .writing-impact-setup input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; max-width: 100%; }
+.writing-versions small { display: block; color: var(--w-faint); overflow-wrap: anywhere; }
+.writing-versions fieldset, .writing-preview fieldset, .writing-impact-setup fieldset { margin: 0; padding: 8px 10px; border: 1px solid var(--w-line2); border-radius: 8px; min-width: 0; }
+.writing-compare-columns { display: flex; gap: 10px; overflow: auto; }
+.writing-compare-columns > * { flex: 1; min-width: 130px; }
+.writing-compare-columns pre, .writing-impact-changes pre, .writing-materialization pre { margin: 0; max-height: 30vh; overflow: auto; padding: 8px 10px; border-radius: 6px; background: var(--w-bg); font: inherit; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.writing-change { padding: 10px 0; border-bottom: 1px solid var(--w-line); }
+.writing-preview-action { margin: 8px 0; }
+.writing-preview video, .writing-preview img { width: 100%; max-height: 220px; object-fit: contain; }
+/* A panel is 320px wide: nothing in it may push past that, long names and preformatted manuscript lines wrap. */
+.story-panel-slot { min-width: 0; }
+.story-panel-slot :is(p, h2, h3, h4, li, label, legend, summary, small, strong, span, div, dd, dt) { overflow-wrap: anywhere; min-width: 0; }
+.story-panel-slot pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; margin: 4px 0; font: inherit; font-size: 12.5px; line-height: 1.5; }
+
+
+@media (max-width: 1100px) {
+  .writing-toolbar, .writing-status { padding: 8px 12px; }
+  .writing-compare-columns { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) { .authoring-workspace * { scroll-behavior: auto !important; } }

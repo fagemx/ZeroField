@@ -1,1 +1,28 @@
-.writing-tools{color:var(--text,#e7e9ed);background:var(--panel,#171a20);border:1px solid var(--border,#383d47);border-radius:8px;min-width:0;max-width:100%;font-size:14px}.writing-tools-nav{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border-bottom:1px solid var(--border,#383d47)}.writing-tools button,.writing-tools input,.writing-tools select,.writing-tools textarea{font:inherit}.writing-tools button{cursor:pointer;background:#252a33;color:inherit;border:1px solid #555e6d;border-radius:4px;padding:6px 9px}.writing-tools button[aria-expanded=true]{border-color:#f59e0b}.writing-tools button:disabled{opacity:.5;cursor:default}.writing-tools :focus-visible{outline:2px solid #fbbf24;outline-offset:3px}.writing-tools-body{padding:12px;max-height:75vh;overflow:auto;overscroll-behavior:contain}.writing-tools label{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}.writing-tools input:not([type=checkbox]),.writing-tools select,.writing-tools textarea{box-sizing:border-box;width:100%;background:#101318;color:inherit;border:1px solid #59616e;border-radius:4px;padding:7px}.writing-tools textarea{min-height:72px;resize:vertical}.writing-tools input[type=checkbox]{accent-color:#f59e0b}.writing-tools .writing-check{flex-direction:row;align-items:baseline;gap:7px}.writing-tools fieldset{border:1px solid #454c58;border-radius:4px;margin:10px 0;padding:9px;min-width:0}.writing-tools legend{padding:0 5px}.writing-tools .writing-actions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.writing-tools .writing-primary{background:#f59e0b;border-color:#f59e0b;color:#17120a;font-weight:600}.writing-tools p{line-height:1.5;overflow-wrap:anywhere}.writing-tools .writing-help{color:#bdc4cf;font-size:12px}.writing-tools [role=alert]{border-left:3px solid #f59e0b;padding:8px;background:#302717}.writing-tools pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;margin:5px 0}.writing-tools .writing-change{border:1px solid #444c59;border-radius:5px;padding:9px;margin:8px 0}.writing-tools .writing-before{border-left:2px solid #a5aab3;padding-left:7px}.writing-tools .writing-after{border-left:2px solid #f59e0b;padding-left:7px}.writing-tools .writing-matrix{overflow-x:auto}.writing-tools table{border-collapse:collapse;width:100%;font-size:12px}.writing-tools th,.writing-tools td{padding:6px;border:1px solid #4a515e;text-align:left;vertical-align:top}.writing-tools h3,.writing-tools h4{margin:10px 0}.writing-tools .writing-resource{display:block;font-size:12px;color:#bdc4cf;overflow-wrap:anywhere}.writing-tools [hidden]{display:none!important}@media(max-width:800px){.writing-tools-body{max-height:55vh;padding:8px}.writing-tools{width:100%}}
+/* The writing tools (world and notes, search and replace, import and export) in the studio's midnight tokens (SPEC_16A P5).
+   They sit in the right column of Story & World, inside .story-panel-slot, whose buttons and tokens authoring.css already sets. */
+.writing-tools { color: var(--text, #e6eaf0); min-width: 0; max-width: 100%; font-size: 13px; display: grid; gap: 10px; }
+.writing-tools-nav { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 8px; background: var(--ground, #0e1217); justify-self: start; }
+.workbench-app .writing-tools .writing-tools-nav button { border-color: transparent; height: 26px; padding: 0 7px; font-size: 12px; }
+.workbench-app .writing-tools .writing-tools-nav button[aria-expanded="true"] { background: var(--raised, #262e3a); border-color: transparent; color: var(--text, #e6eaf0); font-weight: 600; }
+.writing-tools-body { display: grid; gap: 4px; min-width: 0; }
+.writing-tools label { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; font-size: 12.5px; color: var(--muted, #a2acba); }
+.writing-tools input:not([type="checkbox"]), .writing-tools select, .writing-tools textarea { box-sizing: border-box; width: 100%; font: inherit; }
+.writing-tools textarea { min-height: 72px; resize: vertical; }
+.writing-tools input[type="checkbox"] { accent-color: var(--accent, #f2b33d); }
+.writing-tools .writing-check { flex-direction: row; align-items: baseline; gap: 8px; }
+.writing-tools fieldset { border: 1px solid var(--line-2, rgba(220, 235, 255, .16)); border-radius: 8px; margin: 8px 0; padding: 8px 10px; min-width: 0; }
+.writing-tools legend { padding: 0 5px; color: var(--muted, #a2acba); font-size: 12.5px; }
+.writing-tools .writing-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.writing-tools p { margin: 4px 0; line-height: 1.5; overflow-wrap: anywhere; }
+.writing-tools .writing-help { color: var(--faint, #8792a3); font-size: 12px; }
+.writing-tools [role="alert"] { border-left: 3px solid var(--accent, #f2b33d); padding: 8px 10px; border-radius: 0 6px 6px 0; background: var(--accent-bg, rgba(242, 179, 61, .16)); color: var(--text, #e6eaf0); }
+.writing-tools pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.5; margin: 4px 0; }
+.writing-tools .writing-change { border: 1px solid var(--line, rgba(220, 235, 255, .08)); border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: var(--bg-2, #121820); }
+.writing-tools .writing-before { border-left: 2px solid var(--faint, #8792a3); padding-left: 8px; }
+.writing-tools .writing-after { border-left: 2px solid var(--accent, #f2b33d); padding-left: 8px; }
+.writing-tools .writing-matrix { overflow-x: auto; }
+.writing-tools table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.writing-tools th, .writing-tools td { padding: 5px 6px; border: 1px solid var(--line-2, rgba(220, 235, 255, .16)); text-align: left; vertical-align: top; }
+.writing-tools h3, .writing-tools h4 { margin: 8px 0 4px; font-size: 13px; }
+.writing-tools .writing-resource { display: block; font-size: 12px; color: var(--faint, #8792a3); overflow-wrap: anywhere; }
+.writing-tools [hidden] { display: none !important; }
