@@ -1,0 +1,62 @@
+✖ R16 定向 ACK／reload／abort／資源載入與 StrictMode 邊界（合成 transport） (6958.1586ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7115.8487
+
+✖ failing tests:
+
+test at ui\tests\storyStartRecovery.browser.test.mjs:210:1
+✖ R16 定向 ACK／reload／abort／資源載入與 StrictMode 邊界（合成 transport） (6958.1586ms)
+  AssertionError [ERR_ASSERTION]: {"events": ["gate:workspace-1", "gate:workspace-2", "released:workspace-2", "released:workspace-1", "checkpoint:source-save", "receipt-replay", "checkpoint:done", "gate:workspace-3"], "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}], "pending": "{\"mode\":\"novel\",\"text\":\"Original pending prose. Never lose this.\",\"ratio\":\"16:9\",\"style\":\"88123\",\"handoffId\":\"r16-directed-start\",\"handoff\":{\"schemaVersion\":1,\"actorId\":\"r16-actor\",\"inputHash\":\"fbb471d93fddf274e127fcf036f7862ff21ebcf3c8ed223e2e874ac4743f6680\",\"createdAt\":1793001845440,\"stage\":\"done\",\"request\":null,\"ref\":{\"kind\":\"source\",\"mode\":\"novel\"}}}"}
+  
+  Traceback (most recent call last):
+    File "<string>", line 54, in <module>
+      page.wait_for_function("gates.resource && events.includes('workspace-aborted')", timeout=5000)
+      ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\sync_api\_generated.py", line 12436, in wait_for_function
+      self._sync(
+      ~~~~~~~~~~^
+          self._impl_obj.wait_for_function(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      ...<4 lines>...
+          )
+          ^
+      )
+      ^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+      return task.result()
+             ~~~~~~~~~~~^^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_page.py", line 1136, in wait_for_function
+      return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_frame.py", line 910, in wait_for_function
+      await self._channel.send("waitForFunction", self._timeout, params)
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 69, in send
+      return await self._connection.wrap_api_call(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      ...<3 lines>...
+      )
+      ^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+      raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+  playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///C:/ai_project/ZeroField-r16-followup/ui/tests/storyStartRecovery.browser.test.mjs:225:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

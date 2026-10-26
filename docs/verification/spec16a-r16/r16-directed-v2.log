@@ -1,0 +1,10 @@
+{"結果": "通過", "邊界": "真 Chromium／development StrictMode；合成 fetch Response，非 HTTP／PG", "案例": [{"scenario": "lost", "writes": 1, "events": ["gate:workspace-1", "gate:workspace-2", "released:workspace-2", "checkpoint:source-save", "receipt-replay", "checkpoint:done", "gate:workspace-3", "released:workspace-3", "gate:resource", "released:resource", "released:workspace-1"]}, {"scenario": "resource-failure", "writes": 1, "events": []}, {"scenario": "replay-failure", "writes": 1, "events": ["checkpoint:source-save", "receipt-replay", "checkpoint:done"]}, {"scenario": "late", "writes": 1, "events": ["checkpoint:source-save", "receipt-replay", "checkpoint:done"]}, {"scenario": "no-idb", "writes": 1, "events": ["checkpoint:undefined", "checkpoint:select", "checkpoint:source-save", "checkpoint:source-save", "committed", "checkpoint:done"]}]}
+✔ R16 定向 ACK／reload／abort／資源載入與 StrictMode 邊界（合成 transport） (5960.9233ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6112.9928

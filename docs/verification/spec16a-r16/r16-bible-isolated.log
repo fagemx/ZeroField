@@ -1,0 +1,13 @@
+✔ form checkpoint/control uses scoped shared journal keys, exact-sequence identity decisions, and preserves newer checkpoints (5.6971ms)
+✔ latest dirty sequence, failed discard and stale cleanup never claim false recovery or clear a newer tab draft (2.1429ms)
+✔ explicit pending-recovery preservation is actor scoped and rechecked against newer edits before identity change (0.9726ms)
+PASS: actual AuthoringWorkspace slot/control + real IndexedDB; private draft reload/episode/identity, quota failure, explicit preservation, stale CAS review and new world draft
+✔ real mounted workspace recovers private Bible forms and guards navigation/identity/CAS (6984.8606ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7150.3675

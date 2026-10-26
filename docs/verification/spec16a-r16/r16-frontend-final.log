@@ -1,0 +1,669 @@
+
+> project-docs-ui@0.1.0 test
+> node --test tests/*.test.mjs
+
+✔ Console owns exactly four groups/twelve lean stable wire IDs and twelve templates/seven tools (2.1274ms)
+✔ hash routing preserves exact resource IDs, deep links, back routes and malformed input safety (0.5733ms)
+✔ write projections do not materialize computed authority, secrets, counters or enterprise settings (0.3768ms)
+✔ unknown/null costs remain unknown; pending-inclusive remaining never invents free money (2.9913ms)
+✔ expiry is strict across every quote; no forged missing expiry or client hard-bound inference (1.4296ms)
+✔ live cursor merge retains all message pages without duplicating IDs or stale task state (0.3224ms)
+✔ all navigation/templates/badges/errors/consent are semantic bilingual; status display never changes wire logic (13.5164ms)
+✔ resource search finds pages and actual catalog resources without mutating custom labels (1.649ms)
+✔ other agent running does not block selected agent (1.1752ms)
+✔ mention routing ignores email quoted text code and member tokens (5.5234ms)
+✔ suggestions exclude disabled and external personas (1.9004ms)
+✔ historical messages retain the executed persona after profile rename (0.2893ms)
+✔ the same picks always compose the same description, in the same order: who, skin, face, hair, body, clothes (59.9314ms)
+✔ partial picks compose what was picked and nothing else; nothing picked composes nothing (0.629ms)
+✔ every option the form offers has words in the description, and every group is accounted for (1.553ms)
+✔ existing appearance text is never overwritten unasked: with text there the choice is the writer's, with none it just applies (0.4217ms)
+✔ the form groups the picks, shows the words as they build up, and nothing is pressed or applied until you choose (28.6252ms)
+✔ the quick actions follow where you are and what you hold, and say so in the request (2.7322ms)
+✔ the attribute form reads in Traditional Chinese (6.9837ms)
+✔ sources are split off and bare cell refs merge into the previous one (3.1048ms)
+✔ inline formatting is parsed, never injected (0.9235ms)
+✔ working line says what it is looking at (3.622ms)
+✔ todo counts, row prompts and the task strip (1.7477ms)
+✔ download link only on a finished answer that offered the document (0.3192ms)
+✔ a private forward is never described as put on the page (0.2643ms)
+✔ the top-bar count is notes plus answers waiting for confirmation (0.2147ms)
+✔ live text: what the assistant has written so far, only while it is writing (0.197ms)
+✔ a picked todo item can be unpicked, and the auto-filled line goes with it (0.515ms)
+✔ how long an answer took: from her question to the finished answer (0.5963ms)
+✔ attachment hint, kinds, side panel width and answers left in older conversations (0.9861ms)
+✔ a private question to the lead never reads like it goes on the page (0.8698ms)
+✔ the lead's count includes private questions waiting for a reply (0.1631ms)
+✔ side panel tabs: 對話、紀錄, and 管理 only for managers, carrying the waiting count (0.6205ms)
+✔ codes are found in reading order, in any case, with : or # for a look, and a bare code counts (2.6584ms)
+✔ the cast of a shot lists each code once, in the order it first appears, remembering every place (0.5824ms)
+✔ a look resolves to its own picture, falls back to the base asset, and an unlisted code is flagged, not dropped (0.2824ms)
+✔ changing a look rewrites that one code and leaves every other character as it was (0.5721ms)
+✔ removing a code takes its own space with it: no double space, no space before a mark, none left at a line start (0.6639ms)
+✔ adding a code joins the end of the sentence after one space, and naming it twice changes nothing (0.3156ms)
+✔ the prompt column is "Action & Audio Prompt", else the first column that looks like a prompt (0.3672ms)
+✔ a code that also sits in other cells is reported with their column names, never silently ignored (0.4198ms)
+✔ the way of splitting whose planned length lands nearest the target is the one to mark (1.4201ms)
+✔ the target field gives the server a whole number of seconds in its range, or nothing (0.1803ms)
+✔ the server's list of modes is read by mode (0.8795ms)
+✔ clamp keeps values inside the bounds and survives missing, reversed and invalid input (47.0439ms)
+✔ roundToStep snaps to the grid that starts at origin and never leaks float noise (0.6289ms)
+✔ valueToFraction and fractionToValue convert both ways on the step grid (0.42ms)
+✔ snapValue pulls to the nearest point inside the threshold (1.2593ms)
+✔ scrubValue turns pointer travel into a clamped, step-rounded value, 10x slower in fine mode (0.5742ms)
+✔ scrubValue snaps to points inside the threshold and reports which (0.3159ms)
+✔ formatValue writes fixed or trimmed decimals, units and sign labels (0.6643ms)
+✔ parseValueInput reads plain numbers and small arithmetic (0.9364ms)
+✔ parseValueInput is relative only on request, clamps, and understands units and sign labels (0.5855ms)
+✔ parseValueInput rejects malformed text and never evaluates code (0.6451ms)
+✔ seconds and frames convert with rounding at 24, 25, 30 and 29.97 fps (0.2389ms)
+✔ framesToParts and formatTimecode split magnitude and sign, whole frames per second (0.4276ms)
+✔ parseTimecode accepts timecode, seconds, frames and relative edits, and refuses the rest (2.1288ms)
+✔ formatTimecode and parseTimecode round-trip every frame count at every rate (0.7935ms)
+✔ stepTimecode steps one segment, carries into the next, and honours shift, min and max (0.3585ms)
+✔ moveRangeHandle keeps the minimum gap, the bounds and the step grid (0.4488ms)
+✔ moveRangeHandle snaps to points and only reports a snap that survived the clamps (0.145ms)
+✔ slideRange moves the whole range, keeps its length and stops at the bounds (0.4794ms)
+✔ rangeLength is end minus start without float noise (0.0961ms)
+✔ the six easing presets are the documented curves (0.1593ms)
+✔ normalizeBezier clamps x to 0..1 and y to 0..1, or -1..2 with overshoot (0.3075ms)
+✔ bezierAt solves the curve: linear is the identity, the ends are fixed, presets match an independent solver (12.362ms)
+✔ samples never run backwards for y inside 0..1, and overshoot presets really overshoot (3.0861ms)
+✔ sampleBezier returns count + 1 progress values at even times (0.3257ms)
+✔ bezierPath draws M..C in a padded box with y pointing up (0.6499ms)
+✔ matchBezierPreset finds the preset whose four numbers are all within epsilon (0.2715ms)
+✔ formatBezier and parseBezier write and read cubic-bezier() text (0.82ms)
+✔ moveBezierHandle moves one control point inside the allowed range (0.5341ms)
+✔ NumberField renders a spinbutton with value, range, unit and state classes (10.2983ms)
+✔ NumberField marks modified, invalid and disabled, and shows its error text only when invalid (2.6021ms)
+✔ NumberField shows sign labels, a linked label, the dragging state and forwards class and style (3.3241ms)
+✔ ScrubLabel renders its text with the scrub class and honours disabled (0.9215ms)
+✔ Slider renders role=slider with value attributes, fill, default notch, ticks and state (2.3506ms)
+✔ Slider text: aria-valuetext from a string or a function, bipolar fill from the centre, disabled state (2.7494ms)
+✔ RangeSlider renders two labelled slider handles, a middle, and the trim hatch on request (1.9777ms)
+✔ TimecodeField renders four labelled spinbuttons that follow the frame rate (3.3839ms)
+✔ TimecodeField shows a negative sign and its modified, invalid and disabled states (2.0337ms)
+✔ KeyframeButton is a toggle: aria-pressed is true only when a key sits at the playhead (1.1386ms)
+✔ ResetButton names itself, lights up only when active and is inert otherwise (0.9515ms)
+✔ ParamRow lays the parts out compact (two lines) or as one five-column row (1.0326ms)
+✔ ParamRow marks modified rows with the dot and keeps its slot when unmodified (1.146ms)
+✔ CurveThumb draws the easing path over a dashed linear reference (0.9788ms)
+✔ CurveEditor renders four number fields, one button per preset and the curve path (6.2984ms)
+✔ CurveEditor highlights the matching preset and shows a dashed custom row otherwise (16.2319ms)
+✔ CurveEditor draws two slider handles, labels only what it is given, and scales with size (17.5421ms)
+✔ CurveEditor draws the motion-preview dots and the time marker (13.7455ms)
+✔ CurveEditor opens the overshoot range for the prop or for a curve that already leaves 0..1 (11.2497ms)
+✔ the kit stays self-contained: no i18n, a DOM-free model, and every CSS rule scoped under .ctl- (36.0734ms)
+✔ the editor acts on the look that is picked, and on the card itself when none is or the picked one is gone (1.1593ms)
+✔ the description box shows the draft of the subject in front of you, per subject, and knows when it differs from what is saved (1.1904ms)
+✔ the generate button says what will happen: it saves a changed description first (0.2703ms)
+✔ a new look starts from the card's own description, and from nothing when it has none (0.2243ms)
+✔ the pictures of a subject list the main one first and the rest newest first (0.3964ms)
+✔ legacy status values stay intact while their labels and colors match the English studio (2.6346ms)
+✔ assistant progress and source links accept both English and legacy conversations (1.1882ms)
+✔ result row context uses the claimed source snapshot and never offers a non-row jump (3.4475ms)
+✔ React Flow adapter preserves execution attributes and original coordinates (0.7417ms)
+✔ moving a profile-bound node preserves its agent routing (0.1313ms)
+✔ definition undo and redo restore complete connection and configuration changes (0.3977ms)
+✔ DAG editor permits branching and joins, rejects back edges and duplicates (0.7347ms)
+✔ legacy table migration infers capabilities without fictional worker bindings (1.1629ms)
+✔ batch selection validates persisted data and deduplicates rows (0.2558ms)
+✔ progress is based on successful persisted tasks and failures remain visible (0.2343ms)
+✔ single image redraw preserves cell selection and chooses matching node (0.4477ms)
+✔ tidy layout reads left to right by dependency depth with one lane per connected group (0.5856ms)
+✔ three cards can generate at once, each with its own run, and a second click on a running card changes nothing (3.2723ms)
+✔ a finished picture removes only its own run; a failure keeps its reason; cancel is canceled, not failed (0.4281ms)
+✔ progress updates change the status; an answer for an older task or an unknown card is ignored (0.2632ms)
+✔ what a reload restores is in flight until the first poll says otherwise, so a finished picture is refreshed, never sent twice (0.2695ms)
+✔ running tasks are remembered per episode in sessionStorage, and without storage in memory (0.7094ms)
+✔ the workflow starts on the one asked for, else the default, else the first that can run, and never on one that cannot (101.8463ms)
+✔ the time the bar may promise is only what the server measured, with its sample count; anything else is unknown, never 0 (0.9881ms)
+✔ a card's slots become the controls shown, and what is sent is exactly what the controls show (0.6157ms)
+✔ a card that cannot run says why, in a message key the page translates (0.1478ms)
+✔ the bar is one row: the workflow and the controls, the style, then the measured time and the outlined button (16.7089ms)
+✔ no measured time says so, a Router card offers a quote labelled as no price lock, and neither shows 0 (3.9721ms)
+✔ options that could not be read leave the default workflow, say so, and never stop the button (1.4088ms)
+✔ with nothing able to run the button is off and the list says why; a card in flight cannot be sent again but can be canceled (5.3317ms)
+✔ the bar reads in Traditional Chinese (3.822ms)
+✔ English is the default; only explicitly supported locale preferences are accepted (1.159ms)
+✔ locale switching translates labels while normalized wire values, colors and progress remain stable (3.7297ms)
+✔ missing Traditional Chinese messages fall back to English and interpolation preserves user text (0.9591ms)
+✔ both dictionaries cover the same messages and interpolation parameters (14.808ms)
+✔ legacy status moves preserve wire values and custom names remain unchanged in Chinese (2.1126ms)
+✔ confirmed import preserves target revision and selected header without mixing previews (2.1532ms)
+✔ import rejects impossible header rows and never adds target parameters for new pages (2.4007ms)
+✔ replacement requires explicit confirmation but read-only preview never does (0.3808ms)
+✔ the ladder runs previs -> first frame -> video, each with its media, and only for columns the sheet has (2.4267ms)
+✔ a sheet with a Previs column but no previs for this shot still has the step, empty; one without the column has none (0.404ms)
+✔ a source video is not a previs; the first frame is a First Frame or Keyframe image; the take is Cinema Shot, Remaster or Output (0.333ms)
+✔ a pending gate cancels its whole run and a working dispatch keeps exact admission (5.6039ms)
+✔ deduplicate gate and proposal (0.4739ms)
+✔ poll retains selected candidate and draft answer (0.3855ms)
+✔ resolved remote gate keeps readable comparison but disables stale action (0.1851ms)
+✔ race payload uses proposal id not visible index (0.5888ms)
+✔ selected hidden rows retain frozen assignment scope (0.3845ms)
+✔ late response from previous project is ignored (0.148ms)
+✔ proposal differences preserve before and after text (0.1955ms)
+✔ previs camera paths start and end on their keys and a push-in closes on the station (3.0479ms)
+✔ framed start/end keys override the preset and lenses map to a 36 mm sensor (0.4907ms)
+✔ turn-and-reach turns to the console first, then reaches and holds; previs is a bench input (4.2369ms)
+✔ the WebM writer keeps every frame with its own timestamp and declares the frame rate (1.7022ms)
+✔ a shot starts from its slate: Camera Motion, the Optical Rig lens and the action (0.9884ms)
+✔ the rendered previs carries its plan, and other files read as no plan (0.8394ms)
+✔ stage shots: rows of a slate with a Previs column, with keyframe, previs and slate text (2.1022ms)
+✔ a longer lens dollies the preset back along its line of sight and never leaves the dome (0.6761ms)
+✔ a longer shot plays the same blocking on more frames (LTX 8n+1: 4, 6 or 8 seconds) (0.4045ms)
+✔ multi-key paths flow through their middle keys; two keys stay a plain ease (0.4009ms)
+✔ performance keys in a plan replace its canned action; each channel eases between the keys that set it (1.1065ms)
+✔ the mannequin stands in the first mannequin's envelope (1.93 m, ±0.34 m) and bends into its poses (1013.026ms)
+✔ the pose skeleton is the mannequin's own joints: OpenPose order, his right on his right, no face from behind (34.3037ms)
+✔ face points: 68 landmarks in iBUG order, hidden from behind, moved by the performance keys' expressions (20.8573ms)
+✔ 2.5D parallax cards: defaults by role, far to near, never in defaultPlan; billboards turn their front to the camera (0.822ms)
+✔ the parallax set builds its cards facing the shot camera, without the sun; the observatory sun can be switched off (23.3994ms)
+✔ a shot's @SET image becomes its stage setAsset (the parallax far card) (0.6078ms)
+✔ direct-motion-space pins land exactly on their frames, keep the limbs' bone lengths, and the mannequin follows (58.6685ms)
+✔ from behind the skeleton keeps a crown point, so looking up and slumping read differently; the body stays 18 points (26.434ms)
+✔ fix.ground lifts an ankle in the floor back onto its sole; the QA names the frame, the cause and the fix (41.8095ms)
+✔ fix.slide locks a planted foot that drifts, and Auto-Fix cleans the canned turn-and-reach pivoting feet (59.2852ms)
+✔ fix.penetration pushes a hand pinned into the console back out over its top; the arm keeps its length (34.4315ms)
+✔ motion QA without fixes reports ground, slide, penetration and reach with the worst frame, cause and hint (46.9581ms)
+✔ skills compile to keys, pins and checks; the search resolves an open walk length to a clean reach for the dial (190.7693ms)
+✔ fix.retime smooths a one-frame jump that the QA flags as a pop (25.739ms)
+✔ a dragged mark snaps to 10 cm and cannot leave the dome (1.7613ms)
+✔ the actor and each cast member are dummies on their own marks (0.4794ms)
+✔ dragging the actor carries his choreography with him; scene anchors and other dummies stay put (0.834ms)
+✔ dragging a camera key moves it across the plan and keeps its height and aim; a preset move becomes a framed path (0.5086ms)
+✔ a camera key retimes between its neighbours and the move range moves its ends (0.5329ms)
+✔ an easing curve reshapes the camera move and leaves its ends where they are (0.729ms)
+✔ beats lay the motion skills out on the shot as the compiler places them (1.5936ms)
+✔ Walk in has a beat of its own, and editing it writes the skill out as the plan's use (1.0302ms)
+✔ dragging a beat edge changes only that beat, stops at the next beat and the end of the shot, and keeps a minimum (0.951ms)
+✔ dragging a whole beat keeps its length and stays between its neighbours (0.8421ms)
+✔ clothing is connected across shoulders, elbows and knees, with finite normalized skin influences (996.544ms)
+✔ an elbow gesture deforms its sleeve while the chest stays put, in render and board looks (52.5408ms)
+✔ the new surface retains the semantic rig, finger landmarks and adult floor/height envelope (16.8363ms)
+✔ each actor owns its surface buffers and figure-owned materials without taking stage materials (12.9757ms)
+✔ the ordinary Walk in action alternates lifted feet while its root travels, then stands still (1046.8064ms)
+✔ a planted stand keeps both contact points for the requested hold (0.4051ms)
+✔ the ten-second demonstration has a settled look and sustained hand contact on the final rig (1463.3357ms)
+✔ retarget carries the solved toe direction onto the final rig, not only its ankle position (1043.4907ms)
+✔ rehearsal contact objects belong to the scene and remain opaque in the actor matte (3.0425ms)
+✔ the demonstration touches the visible pad with a fingertip throughout its hold (1064.2437ms)
+✔ the beat track draws the camera keys and each acting beat on the shot's frames (185.2964ms)
+✔ Walk in shows its derived beat dashed, and a built-in action says its timing is fixed (3.4637ms)
+✔ the camera move section offers a range slider, two timecodes and an easing curve (15.9073ms)
+✔ the plan handles are an amber square for the actor and light handles for the camera keys (3.527ms)
+✔ the 3D Stage carries the beat track and the camera move in every view, and the handles only on the overhead plan (26.5855ms)
+✔ the drag and beat labels read in Traditional Chinese (12.3894ms)
+✔ a shot finds its own pending table proposals, one entry per edited row (2.372ms)
+✔ applying one row sends only its group when the proposal allows it, and the whole proposal otherwise (0.3934ms)
+✔ a proposal reads as the slate it would leave (0.5302ms)
+✔ a camera proposal becomes a ghost plan with the proposed move and lens; others make none (1.3905ms)
+✔ every pending camera proposal on the slate is one ghost, labelled with its shot (0.6103ms)
+✔ location parsing keeps only valid keys (1.7449ms)
+✔ mentions serialize to actor ids and back (0.5451ms)
+✔ mention picker query and filter (0.4215ms)
+✔ row labels, header rows and fill columns (0.6104ms)
+✔ time is shown in Taipei time (26.8526ms)
+✔ activity lines name the person (6.7387ms)
+✔ avatar colors are stable per person (0.3745ms)
+✔ menus open below the button, flip above when the bottom has no room, else stick to the bottom (0.314ms)
+✔ every beat shows its line, its text and the shot built from it (294.6549ms)
+✔ an edit lists the shots it would leave out of step and hatches their beats (9.9203ms)
+✔ the outline sits under the script and reads in Traditional Chinese (5.9912ms)
+✔ Story & World no longer draws the positional script outline: the writing workspace's stable outline takes its place (SPEC_16A 3.6) (13.5486ms)
+✔ Excel TSV preserves quoted newlines and tabs (6.8007ms)
+✔ formula recursion, averages and cycle protection (1.4899ms)
+✔ asset previews reject active URLs and recognize typed assets (0.593ms)
+✔ pasting across plain and field cells retains row identity and pads appended rows (1.6856ms)
+✔ selected-sheet CSV exports current field values and escapes delimiters (0.4234ms)
+✔ imported Excel formula references include its header row (0.263ms)
+✔ native CSV shifts references for its header while imported Excel retains them (1.2054ms)
+✔ keyboard navigation follows visible rows and stops at table boundaries (2.545ms)
+✔ row history retains table-wide changes when schema and cells were edited together (0.3985ms)
+✔ agent draft names selected records in table order without internal tool syntax (4.9964ms)
+✔ filtered cards retain original row identity and formulas use the complete table (6.4855ms)
+✔ kanban preserves unknown and blank statuses and supports field-backed status columns (1.4631ms)
+✔ gallery never renders a video as an image and can omit covers (0.9863ms)
+✔ configured status options replace generic defaults while retaining existing values (0.1705ms)
+✔ card formulas use selected imported header row instead of assuming row one (0.4552ms)
+✔ status changes address one original row and one status column only (0.9346ms)
+✔ view preferences survive reload but stale column bindings and malformed storage are discarded (0.4311ms)
+✔ filtered sorted paste writes only visible row identities with original-value guards (5.6578ms)
+✔ range copies a rectangle in visible order including quoted multiline cells (0.6378ms)
+✔ one undo inverses all cells using new values as CAS and keeps stable columns (0.341ms)
+✔ agent scope freezes selected identities and source revision despite later view changes (0.6313ms)
+✔ typed paste rejects invalid numbers and preserves exact text for valid values (1.1333ms)
+✔ explicit draft rebase keeps frozen rows and maps moved columns by identity (0.642ms)
+✔ Ctrl or Cmd K is the command palette, whatever the case of the letter (1.7198ms)
+✔ Ctrl, Cmd or Alt with 1, 2 or 3 picks the space at that position; Shift or other digits do not (0.4564ms)
+✔ a hosted editor lets the shell shortcuts through and keeps everything else, Ctrl+Alt+digit headings included (0.3249ms)
+✔ the cast lists each code in order with its picture, name, a look menu, and a way to remove it (98.056ms)
+✔ a look in the sentence shows as selected, and a look the sheet does not list is still an option (3.5393ms)
+✔ a code without a picture says so and offers to add one; an unlisted code is flagged and has nothing to open (5.4497ms)
+✔ a code that also sits in another cell says where, and one named only there is listed but cannot be removed here (3.1426ms)
+✔ a reader sees the cast without any control; a busy sheet disables them; an empty shot says so (10.8217ms)
+✔ the prompt reads as text with tags: a picture and a name for each code, a warning for an unknown one (2.8899ms)
+✔ the ladder shows previs, first frame and video with what exists; nothing plays by itself (1.8479ms)
+✔ a shot with no previs yet is told so, with a quiet way to plan one; a sheet without the column has no rung and no note (2.2609ms)
+✔ the script outline draws an @code in a beat as a tag only when it is given the asset sheet (2.3187ms)
+✔ the shot detail reads in Traditional Chinese (4.3714ms)
+✔ shot size sets the camera distance: a push lands on its end framing (3.2523ms)
+✔ a longer lens holds the same shot size from farther away (0.591ms)
+✔ drama idioms wait for tension, and the scene breaks its calm camera at most once (8.9502ms)
+✔ exported keys replay the solved camera through the 3D Stage sampler (4.2664ms)
+✔ the camera must stay inside the dome, and a blocked shot says when and why (0.9489ms)
+✔ a dragged movement window reads as a speed, and the halfway point follows the curve (0.5732ms)
+✔ the overhead drag inverts the solver: ground point back to side and shot size (0.6845ms)
+✔ the actor mark moves the subject, a saved idiom keeps the framing, and pick changes are listed (5.6328ms)
+✔ fine framing stays relative to the subject: a nudge moves the camera with him and reads in the words (0.9715ms)
+✔ an over-the-shoulder frames the subject on a third with the partner's near shoulder in the frame (0.9419ms)
+✔ every shot of the two-hander keeps the camera on one side of the line, orbits included, on either side (14.8876ms)
+✔ the default performance keys replay the 3D Stage turn-and-reach exactly (1.8038ms)
+✔ the beat sheet is cut at the keys that carry text and ends with the line and the sound (1.4604ms)
+✔ playing bigger than the previs relaxes "follow the pose" to "blocking only" unless the director chose (1.0299ms)
+✔ checks catch camera words, the wrong size, the wrong body range and a missing colour (3.8892ms)
+✔ a thinking model's answer is read after its reasoning (0.379ms)
+✔ a beat that fails the checks is rewritten once with its issues; one that fails twice stays on the template (1.2792ms)
+✔ a pose on a key is written into its segment as body mechanics, and a writer who drops it is told (0.3778ms)
+✔ a shot shows its crew proposal with the old text struck through and the new text beside it (195.9888ms)
+✔ a proposal that only applies together says so and applies all of it (3.1094ms)
+✔ a viewer sees the proposal but cannot decide it, and an error stays on the card (1.0558ms)
+✔ the 3D Stage offers the proposed camera next to the shot, only when there is one (82.2169ms)
+✔ the proposal reads in Traditional Chinese (2.693ms)
+✔ the story start offers an idea, a novel chapter or a screenplay in one big box, a ratio and a style, and one primary action (143.7092ms)
+✔ without styles there is no style choice; a busy form holds every control and says it is creating; an error is an alert (13.3383ms)
+✔ the story start reads in Traditional Chinese (4.4104ms)
+✔ an unnamed production is named after the first line written, without its markup, cut at 40 characters (1.5722ms)
+✔ what to hand over needs a known mode and some text, trims it, and falls back to a known ratio (2.4257ms)
+✔ the production an episode belongs to is read from its id (0.4962ms)
+✔ the text a production was started with is handed over once, to that production only (7.1902ms)
+✔ peek is non-destructive; only the matching server-saved and loaded start can be acknowledged (0.6606ms)
+✔ compare-and-delete rejects another production, a replacement with identical text, and changed text under the same identity (0.8317ms)
+✔ read-only storage does not keep minting new retry identities for an old pending start (0.6728ms)
+✔ failed durable deletion leaves the matching pending start available rather than claiming acknowledgement (0.5603ms)
+✔ after a page load the hand-off comes from storage alone (0.6198ms)
+✔ without storage the hand-off survives inside one page load, and broken or unusable saves are ignored (0.936ms)
+✔ the studio top bar is a breadcrumb: one space button that opens a menu, no standing tabs, the focus, Ctrl K and one film entry (379.53ms)
+✔ three spaces map to their pages, and the space menu says what each one needs (4.0905ms)
+✔ Toolbox, Open API and Agent Console are commands in the Ctrl K palette (4.1887ms)
+✔ Micro has real candidate, split, restoration and node-input surfaces (5.127ms)
+✔ continuity grades show score, notes, the GPU hand-off and a one-click retake in both languages (10.3932ms)
+✔ scene headers are collapsible, counted and retain the rebuild action (3.7153ms)
+✔ new count and usage labels interpolate in both interface languages (1.7731ms)
+✔ Story & World hosts the writing workspace and keeps one primary action and the format foot; the build questions wait in a dialog (17.047ms)
+✔ the build dialog asks how to split, the ratio and the style, has one primary action and a way to import a shot table (14.3556ms)
+✔ the dialog shows what each way of splitting would give, marks the one nearest the target, and fails soft (20.9908ms)
+✔ the space menu lists what each space needs as items of their own, never a button inside a button (9.8586ms)
+✔ adapting preserves the original source and screenplay edits while a changed source requires a fresh adaptation (1.9287ms)
+✔ a composition carries lenses and the choice trace; no lens is the classic request (0.475ms)
+✔ a composed adaptation sends lenses and the trace, returns the no-label report, and a changed choice needs a fresh adaptation (1.491ms)
+✔ the composition panel stays folded to one lens choice until a lens is picked, then strikes unchecked cards (12.9065ms)
+✔ one-click novel creation adapts, saves, extracts and builds the selected episode before onDone (0.8381ms)
+✔ retry after extraction failure keeps the prepared screenplay and never adapts the same source twice (1.3453ms)
+✔ structured input skips adaptation and a malformed adaptation cannot trigger extraction or completion (0.6451ms)
+✔ asset readiness uses exact episode references and group progress restores without launching another batch (0.5704ms)
+✔ asset generation displays queued count, outcomes and actionable failures in both languages (5.2249ms)
+✔ the P4 contrast preview matches the server rule: two of the last five held one line and this focus opposes it (0.4294ms)
+✔ the one primary button follows what the workspace shows (3.4105ms)
+✔ confirming the build makes the server hold the text first, then runs the three requests, and never sends the script itself (2.6458ms)
+✔ a build stops before sending anything when the server could not take the text (4.4787ms)
+✔ disposing a build between extraction and storyboard never sends the next mutation or navigates (0.8639ms)
+{"result": "PASS", "browser": "real Chromium", "react": "development", "effectReplay": ["setup", "cleanup", "setup"], "transport": "synthetic fetch Response; not product HTTP evidence"}
+✔ StoryWorld development StrictMode replays effects, keeps actor-bound saves and restores outline drafts (synthetic transport) (4173.9174ms)
+✔ Story shot metadata reaches the stage and supplies its parallax set, lens and acting (3.2404ms)
+✔ Director edits and recorded plans keep priority over a regenerated storyboard (0.2293ms)
+✔ Invalid generated plan fields fall back to supported slate values (0.1766ms)
+✔ a start hands its text to the right place: a screenplay to the working script, an idea or a novel to the private source of that name (3.1952ms)
+✔ plain text becomes paragraphs for the editor, and never becomes markup (0.7796ms)
+{"結果": "通過", "邊界": "真 Chromium／development StrictMode；合成 fetch Response，非 HTTP／PG", "案例": [{"scenario": "lost", "writes": 1, "phases": [{"phase": "ACK 遺失後", "events": ["checkpoint:undefined", "checkpoint:select", "checkpoint:source-save", "checkpoint:source-save", "committed", "lost-ack"], "checkpoint": "source-save", "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}]}, {"phase": "小說已載入且 pending 已刪除", "events": ["gate:workspace-1", "gate:workspace-2", "released:workspace-2", "checkpoint:source-save", "receipt-replay", "checkpoint:done", "gate:workspace-3", "released:workspace-3", "gate:resource", "released:resource", "released:workspace-1"], "checkpoint": null, "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}]}]}, {"scenario": "resource-failure", "writes": 1, "phases": [{"phase": "已 ACK 但資源 GET 503", "events": ["checkpoint:undefined", "checkpoint:select", "checkpoint:source-save", "checkpoint:source-save", "committed", "checkpoint:done", "resource-503"], "checkpoint": "done", "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}]}, {"phase": "小說已載入且 pending 已刪除", "events": ["resource-503"], "checkpoint": null, "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}]}]}, {"scenario": "replay-failure", "writes": 1, "phases": [{"phase": "ACK 遺失後", "events": ["checkpoint:undefined", "checkpoint:select", "checkpoint:source-save", "checkpoint:source-save", "committed", "lost-ack"], "checkpoint": "source-save", "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}]}, {"phase": "replay 503，尚未明確重試", "events": ["checkpoint:source-save", "replay-503"], "checkpoint": "source-save", "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}]}, {"phase": "小說已載入且 pending 已刪除", "events": ["checkpoint:source-save", "replay-503", "checkpoint:source-save", "receipt-replay", "checkpoint:done"], "checkpoint": null, "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}]}]}, {"scenario": "late", "writes": 1, "phases": [{"phase": "換集 abort 後收到晚到 ACK", "events": ["checkpoint:undefined", "checkpoint:select", "checkpoint:source-save", "checkpoint:source-save", "committed", "gate:ack", "released:ack", "late-ack"], "checkpoint": "source-save", "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": true}, {"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_other_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_other_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/other", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/other", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_other_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_other_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/other", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/other", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_other_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}]}, {"phase": "小說已載入且 pending 已刪除", "events": ["checkpoint:source-save", "receipt-replay", "checkpoint:done"], "checkpoint": null, "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}]}]}, {"scenario": "no-idb", "writes": 1, "phases": [{"phase": "小說已載入且 pending 已刪除", "events": ["checkpoint:undefined", "checkpoint:select", "checkpoint:source-save", "checkpoint:source-save", "committed", "checkpoint:done"], "checkpoint": null, "calls": [{"path": "/aivideo/open/v1/catalog/styles", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/assets", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/bible", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "PUT", "body": {"baseVersion": 0, "clientMutationId": "start-bece328dcd9e2ae9304b364c16f95369d4a6081992a4f869-source-save", "doc": {"type": "doc", "content": [{"type": "paragraph", "attrs": {"bid": "b_start_bece328dcd9e2ae9304b364c16f95369", "owner": null, "created": null}, "content": [{"type": "text", "text": "Original pending prose. Never lose this."}]}]}, "structure": {}, "composition": {}}, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/workspace", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}, {"path": "/projects/api/r16", "method": "GET", "body": null, "actor": null, "key": null, "aborted": null}, {"path": "/aivideo/open/v1/episodes/ep_r16_01/writing/sources/novel", "method": "GET", "body": null, "actor": "r16-actor", "key": null, "aborted": false}]}]}]}
+✔ R16 定向 ACK／reload／abort／資源載入與 StrictMode 邊界（合成 transport） (6252.9909ms)
+✔ wardrobe tags recognize colon/hash, resolve exact images and inherit base thumbnails (11.2274ms)
+✔ variant switching changes only complete asset tokens (0.5756ms)
+✔ Meso groups scenes without losing original row indices and supports explicit Scene columns (4.13ms)
+✔ Micro take selection is immutable and leaves exactly one active candidate (0.4565ms)
+✔ a take shows its newest grade and polling stops once grades settle (0.5231ms)
+✔ allocation preflight wire paths and dispatch use the reviewed immutable assignment IDs (0.9135ms)
+✔ approved composition chooses selected image when no video exists and preserves selected-video precedence (0.3319ms)
+✔ allocation blockers use semantic bilingual messages without translating input IDs or leaking unknown codes (2.1101ms)
+✔ full and compact media cells render inline video, and a full take exposes regeneration (169.427ms)
+✔ race candidates render parallel playable video takes (4.8466ms)
+✔ review is a non-modal dialog and leaves keyboard focus available to the Assistant (0.6741ms)
+✔ cards render source and output stages with upload and run actions (3.6199ms)
+✔ opening Assistant preserves review and row panels; annotation clicks open the stable row (4.2891ms)
+✔ camera fidelity shows the score and per-axis travel next to a previs-driven take (3.3625ms)
+✔ Micro review displays bound assets and edits prompts with the guarded cell draft (2.2009ms)
+✔ generated output takes offer a take bundle download; inputs and external media do not (4.385ms)
+✔ sheet workspace wires per-take bundles and the approved-takes export to authenticated endpoints (9.8167ms)
+✔ metadata requests are shared while pending and failed lookups can be retried (2.4553ms)
+✔ video gallery keeps empty stages, distinct asset IDs and resolved cross-page references (2.1324ms)
+✔ asset lookup reads named IDs and media from a source document (2.9666ms)
+✔ single-cell execution uses exactly one saved node and never broadens missing or ambiguous matches (1.6047ms)
+✔ batch execution starts with the matching sheet rather than unrelated upstream work (0.4049ms)
+✔ queue preserves reviewed revisions and never runs a failed or stale preflight (0.5731ms)
+✔ preset selection preserves wire values and appends asset references only once (0.4189ms)
+✔ pipeline nodes show executor and latest successful output only (10.6714ms)
+✔ localized preset labels do not alter parameter values (0.6559ms)
+✔ reference preparation selects exact-column media workers for image and motion stages (0.5185ms)
+✔ appended reference stages display before outputs while preserving action columns and unknown slots (0.6914ms)
+✔ canvas bench links fan footage out to every pass and merge passes into the remaster (0.7315ms)
+✔ a shot offers one primary action by status, legacy statuses included, and the filters agree with it (0.6589ms)
+✔ the Timeline space shows the rhythm list, the cut preview, the clip inspector and the timeline (209.5143ms)
+✔ the timeline row draws every clip in slate order, with previs and unshot shots as dashed ghosts (6.5582ms)
+✔ a take of known length gets in and out handles that work as sliders (8.5252ms)
+✔ a clip that runs well over the average is called out on the rhythm row (5.4771ms)
+✔ an empty episode says so and offers nothing to play or export (8.7239ms)
+✔ the inspector offers say, adjust and drag for a take, with timecode fields and a range slider (6.0587ms)
+✔ the inspector explains why previs, unshot and read-only clips cannot be trimmed (27.7545ms)
+✔ a clip that runs long offers to be taken down, but only where it can be trimmed (26.5335ms)
+✔ other takes of the shot list with a one-tap switch (8.4043ms)
+✔ the Timeline reads in Traditional Chinese too (14.5901ms)
+✔ clips follow slate order and add up: a take counts for its file, previs and plans for their planned seconds (4.2715ms)
+✔ a take whose file is not measured yet is planned length and cannot be trimmed; it becomes exact once measured (0.819ms)
+✔ a saved trim cuts a take and only a take; a draft overrides the saved one (0.8453ms)
+✔ clipAt finds the clip under a time and fileTime maps it into the take (0.5643ms)
+✔ ripple: shortening an out edge keeps the neighbours as they are and the film gets shorter (0.5591ms)
+✔ an in edge dragged later makes the clip shorter and an out edge dragged later makes it longer; both stay inside the file (0.474ms)
+✔ roll (ripple off): the cut moves, the neighbour gives or takes the same time, and the film keeps its length (0.5409ms)
+✔ a roll without a trimmable neighbour behaves as a ripple (0.423ms)
+✔ setPoint and setLength move an edge to an exact place (0.4452ms)
+✔ slip slides both edges together, keeping the length and moving nothing else (0.6451ms)
+✔ only trims that differ from what is already there are worth saving (0.5873ms)
+✔ snapping picks the nearest target inside the tolerance (0.2803ms)
+✔ rhythm flags a clip that runs well over the average and says how far to take it down (2.5762ms)
+✔ the say layer understands short instructions in English and Chinese (4.0499ms)
+✔ times read as clock text and a change reads in frames or seconds (0.3641ms)
+✔ the studio top bar stands at most 9 controls, none twice; engineering tools live in Ctrl K (229.1191ms)
+✔ the 3D stage in the lens view shows no dead framing buttons, one way into the free camera, and stays in budget (34.637ms)
+✔ text matches the server and the shared cases (1.9957ms)
+✔ text index maps both ways and selections become anchors (1.1154ms)
+✔ ops only include changed blocks, rows go row by row (1.5706ms)
+✔ merge keeps what I am editing and takes the rest from the server (0.7097ms)
+✔ everyone edits every block and row unless someone else holds the lock (0.8337ms)
+✔ todo rules (0.6577ms)
+✔ page menu: managers manage every page, members only the pages they added (0.1836ms)
+✔ an asset is used by the shots that name it or one of its looks, in slate order, across their scenes (13.8057ms)
+✔ items know their use and whether they still need an image; counts and facets follow (0.5145ms)
+✔ the wall keeps every type under All, one type under a type filter, and only what needs fixing under Needs an image (0.4241ms)
+✔ the editor opens on the picked card while it is on the wall, and on nothing otherwise (0.2383ms)
+✔ the view, the card in front of you and the scene filter survive a trip to the sheet, per episode, and storage failures start at the script (0.6857ms)
+✔ the scene filter keeps one scene's assets, never loses an asset no shot places, and stacks with the type and needs-image filters (0.3723ms)
+✔ the wall groups cast, sets and props, each card showing its image, status, use, name, code and look (367.0254ms)
+✔ only a writer can add, and a missing reference offers one batch generation (21.7243ms)
+✔ an empty or loading wall says what is going on instead of showing nothing (4.9938ms)
+✔ the left rail filters by type with counts, and offers "needs an image" only while something does (2.8462ms)
+✔ the editor shows the picture and every picture of it, the looks with a + for another, the description, and what is left folded away (15.4548ms)
+✔ the editor has a way to close it in its title row, and the lightbox is never inside the size container (18.8677ms)
+✔ a card without a picture, a set and a viewer each show what fits them (24.8047ms)
+✔ the quick list beside the script shows the same assets and opens the wall on one (5.5233ms)
+✔ Story & World opens on the script, with Cast & sets one click away in the left rail (7.0059ms)
+✔ a card says it is generating and can be canceled, a failed one says why and offers a retry, and the others stay as they were (13.322ms)
+✔ a canceled card says canceled, not failed, and an idle wall has no run markup at all (15.916ms)
+✔ the editor shows the run of the look in front of you, cannot send it again, and offers cancel and retry (45.406ms)
+✔ a writer edits the description in its box, adds attribute tags and looks, and edits voice, notes and status where they stand (12.7886ms)
+✔ a card says how many of its looks still lack a picture, unless it is busy generating (13.9559ms)
+✔ the scene filter row appears only when there is a choice, and says which scene the wall shows (23.0564ms)
+✔ the run states and the scene filter read in Traditional Chinese (7.3765ms)
+✔ the menu counts the pictures the wall lacks, props included, and falls back to the episode when the wall is unknown (0.3465ms)
+✔ a page opened from a space has a Back button to it, and the space views have none (9.6295ms)
+✔ Cast & sets reads in Traditional Chinese (30.3273ms)
+PERFORMANCE [{"characters": 50000, "beforeMount": {"previousEpisodeId": "ep1", "previousHasBenchmarkText": false, "episodeAfterMountRequest": "ep1", "contentOnlyReadyAfterMountRequest": false}, "beforeBarrier": {"episodeId": "ep50000", "sourceRef": {"kind": "working"}, "sceneKeys": [], "docHash": "performance50000"}, "episodeId": "ep50000", "loadedDocHash": "performance50000", "p95": 24.400000005960464, "max": 24.400000005960464, "visibleCharacters": 52108}, {"characters": 500000, "beforeMount": {"previousEpisodeId": "ep50000", "previousHasBenchmarkText": true, "episodeAfterMountRequest": "ep50000", "contentOnlyReadyAfterMountRequest": true}, "beforeBarrier": {"episodeId": "ep500000", "sourceRef": {"kind": "working"}, "sceneKeys": ["scene1"], "docHash": "performance500000"}, "episodeId": "ep500000", "loadedDocHash": "performance500000", "p95": 88.59999999403954, "max": 94.79999999701977, "visibleCharacters": 5038}]
+{"browser": "passed", "errors": [], "viewport": "1280x720 and 768x720"} elapsed 14412ms
+✔ synthetic HTTP contract in real Chromium: authoring, frozen W4 selections, registered tool recovery and IndexedDB (14626.6265ms)
+✔ owned fragments are flat semantic payloads with identical nonempty messages and placeholders (342.216ms)
+✔ core numeric-expiry/object-proposedChanges previews render real text and exact adopt actions (13.4834ms)
+✔ synthetic promotion visibly discloses selected authored-scene materialization without changing source prose (8.5749ms)
+✔ synthetic frozen impact v1 UI shows actual alignment/provenance and defaults to no manual overwrite (4.6532ms)
+✔ synthetic additive row freshness warns without blanket disabling unrelated actions; legacy/shared stale disables (3.7384ms)
+✔ snapshot catalog is read-only to viewers while compare remains visible (1.5949ms)
+✔ editor canonicalization preserves bids, marks and table metadata without unwanted link defaults (0.4525ms)
+✔ synthetic W4 v1 request uses expectedSourceHash, fixed refs and explicitly selected bindings only (3.2638ms)
+✔ synthetic W4 v1 response preserves shots/additions/assets object and compares noncurrent targets read-only (0.586ms)
+✔ synthetic frozen selection is actionId/optional field subset, one action per shot, no injected targets or text (0.6353ms)
+✔ synthetic manual update remains opt-in and UI toggles eliminate contradictory actions for one shot (0.3249ms)
+✔ additive freshness rejects shared/selected stale rows, not unrelated fresh actions; legacy stale stays conservative (0.4027ms)
+✔ registered failed checkpoint blocks unsafe navigation even if a control incorrectly returns true (0.6188ms)
+✔ registered durable local checkpoint is navigable but never relabeled as server saved (0.3024ms)
+✔ requireServer does not flush unrelated tool forms; identity still requires explicit handling (0.2572ms)
+✔ old unregister cannot clear replacement; registry is scoped per identity and replacement during flush blocks (0.2839ms)
+✔ transport injects exact four argument route/options and retry retains action identity (6.1587ms)
+✔ block saves preserve marks/identities and allow deleting final text and empty document (1.3144ms)
+✔ server ACK of older sequence never clears new text or newer journal; next save uses acknowledged base (7.7469ms)
+✔ network ACK loss reuses identical mutation body/key, then saves subsequent edits separately (2.0136ms)
+✔ navigation can be locally safe while actions require a server ACK (1.1848ms)
+✔ IDB denial plus network failure is not safe or saved (0.9809ms)
+✔ 401 and 403 stop upload/reconnect retries even when durably recoverable (1.1108ms)
+✔ HTTP 200 conflicts retain both copies and cannot falsely flush successfully (0.7884ms)
+✔ IME buffers all network work until compositionend, debounce and max interval are bounded (1.9964ms)
+✔ recovery is explicitly compared and actor/episode/tab isolated; divergent base becomes conflict (1.2554ms)
+✔ refresh does not drop pending local edits; late disposed ACK cannot notify the next editor (2.6839ms)
+✔ private source saves empty documents with real version CAS, not script ops (0.6857ms)
+✔ scene and full views share a block model; unselected rich blocks survive scene editing (1.8635ms)
+✔ bounded ops batches save all blocks without losing unsent content (151.8586ms)
+✔ metadata-only source changes are durably recoverable and use CAS composition fields (0.8797ms)
+✔ text-only confirm/build keeps per-step replay keys and never sends a whole-script overwrite or media generation (0.564ms)
+✔ impact actions/fields can only be frozen subset and legacy baseline is honest (0.3373ms)
+✔ Story transport preserves replay keys, binary/raw bodies and structured errors on GET as well as writes (37.6085ms)
+✔ both product dictionaries contain the exact component fragments without flattened or overwritten leaves (4.185ms)
+PASS: mounted authoring regression
+✔ J1 mounted scene Enter, paste, delete, heading split and delayed ACK preserve local blocks and identities (3513.3766ms)
+PASS: mounted authoring regression
+✔ J3 mounted outline Ctrl+S failure is dirty/recoverable and restores after navigation (1860.0214ms)
+PASS: mounted authoring regression
+✔ J3 controlled summary/time/plot/lane edits survive delayed ACK and use successive current CAS (1812.5418ms)
+PASS: mounted authoring regression
+✔ J3 quota + network failure blocks leaving; metadata-only divergent recovery is never rebased/published (2224.2166ms)
+PASS: mounted authoring regression
+✔ N1 scene/full/scene after ACK includes saved insert-before and preserves document order (1811.5178ms)
+PASS: mounted authoring regression
+✔ N3 co-dirty manuscript and summary/time/plot Ctrl+S uses a proven own-document advance (1752.5599ms)
+PASS: mounted authoring regression
+✔ N1 pending slice transitions, repeated before/after insertion and remote refresh preserve all identities/order (2743.8591ms)
+PASS: mounted authoring regression
+✔ N3 true concurrent metadata is preserved and resolved only by a fresh explicit field merge (2486.0385ms)
+✔ J1 repeated scene replacements use draft membership and preserve surrounding identities/marks (3.8899ms)
+✔ outline queue freezes CAS and mutation body across lost ACK, while later edits await the next ACK (16.6115ms)
+✔ outline reload rejects metadata-only version divergence; restore does not rebase or publish (2.239ms)
+✔ same-version restore requires explicit save, and exact identity consent is invalidated by new input (2.6842ms)
+✔ quota failure prevents navigation without ACK; auth stops retry; dirty drafts cannot silently refresh bases (1.785ms)
+✔ actor/episode journal isolation and conditional cleanup preserve a newer checkpoint from another tab (1.7599ms)
+✔ initial journal denial still permits controlled typing and a real server ACK; no device backup is invented (1.403ms)
+✔ a clean outline can leave after discovery failure, and StrictMode setup can reactivate it (0.9895ms)
+✔ N1 outside-anchor projection includes insert-before/after and never moves an unselected block (1.7096ms)
+✔ N3 proof rejects touched metadata, plot-cell and stable identity divergence, not own body changes (1.0294ms)
+✔ N3 ACK cannot rebase a queued field over concurrent metadata; conflict survives same-version recovery (7.613ms)
+✔ N3 same metadata values alone do not authorize an unproven version swap or a frozen retry rewrite (0.8048ms)
+✔ merge review names come from the shared structure, then the base, then the private draft (0.4181ms)
+✔ plot-cell entries keep every cell when lanes share a name or have none (0.2148ms)
+✔ lane-local bilingual additions have matching semantic keys and interpolation variables (3.262ms)
+✔ expected actor option is serialized even for reads, without replacing bearer/CSRF headers (36.0918ms)
+✔ disposed late ACK cannot erase private recovery or advance its base (4.6677ms)
+✔ source metadata-only recovery must not silently borrow the current server CAS version (2.7361ms)
+✔ branch metadata-only recovery must not silently borrow the current server CAS version (0.8168ms)
+✔ session disposal aborts pending work, refuses reconnect and drops a late private read (1.3526ms)
+✔ identity mismatch stops the entire mounted request session before another replay (0.403ms)
+✔ metadata fingerprint changes require a choice even when a version is incorrectly unchanged (1.0151ms)
+✔ source recovery only rebases after explicit choice (keepMetadata=false) (1.2158ms)
+✔ source recovery only rebases after explicit choice (keepMetadata=true) (0.745ms)
+✔ branch recovery only rebases after explicit choice (keepMetadata=false) (0.7706ms)
+✔ branch recovery only rebases after explicit choice (keepMetadata=true) (0.6891ms)
+✔ unchanged hash with a coalesced mainline revision remains restorable (0.6825ms)
+✔ pre-repair journals without metadata fingerprints still conflict on private version divergence (0.6749ms)
+✔ working recovery continues to compare content hashes, not coalesced revision numbers (0.6494ms)
+{"layout": [{"media": "screen", "texts": ["First\nSecond", "Top\n\nBottom", "", "繁體中文\n第二行　保留空白 😀", "<img src=\"https://invalid.test/author\" onerror=\"window.pwned=true\"><script>window.pwned=true</script> & \"quoted\""], "title": "稿件 <script> & \"Title\"", "whiteSpace": "pre-wrap", "lineHeight": 25.6, "hardBreak": 25.59375, "blankLine": 51.1875, "emptyHeight": 25.59375, "cjkBreak": 25.59375, "active": 0, "csp": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"}, {"media": "print", "texts": ["First\nSecond", "Top\n\nBottom", "", "繁體中文\n第二行　保留空白 😀", "<img src=\"https://invalid.test/author\" onerror=\"window.pwned=true\"><script>window.pwned=true</script> & \"quoted\""], "title": "稿件 <script> & \"Title\"", "whiteSpace": "pre-wrap", "lineHeight": 25.6, "hardBreak": 25.59375, "blankLine": 51.1875, "emptyHeight": 25.59375, "cjkBreak": 25.59375, "active": 0, "csp": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"}], "authorMarkup": "stripped", "requests": []}
+✔ render_export → cleanPrintHtml → Chromium preserves manuscript layout without author HTML/CSS (2058.2811ms)
+✔ only plain blank paragraphs count as empty; template text, images and unfamiliar structure never do (1.4143ms)
+✔ idea and novel save missing or empty private sources with authoritative CAS and literal text (24.8965ms)
+✔ occupied sources and every nonempty screenplay (including template-like prose) are preserved in private branches (4.1107ms)
+✔ empty working script is initialized when needed and saved only with a deterministic atomic insertion (2.767ms)
+✔ a script becoming occupied during initialize is preserved and the start goes to a private branch (1.4882ms)
+✔ GET-to-save insertion race cannot overwrite/delete/reorder other working blocks (not whole-document CAS) (1.6653ms)
+✔ empty source losing its version CAS moves to a private branch instead of rebasing over the winner (2.4094ms)
+✔ lost mock ACK at sources/idea replays the exact saved body/key across reload, without extra branch or overwritten source (3.2345ms)
+✔ lost mock ACK at initialize replays the exact saved body/key across reload, without extra branch or overwritten source (2.7187ms)
+✔ lost mock ACK at script/ops replays the exact saved body/key across reload, without extra branch or overwritten source (3.6639ms)
+✔ lost mock ACK at branches replays the exact saved body/key across reload, without extra branch or overwritten source (2.3366ms)
+✔ lost mock ACK at branches/wbr_mock1 replays the exact saved body/key across reload, without extra branch or overwritten source (2.3803ms)
+✔ failure persisting branchId after a mock commit replays create before continuing, not a new POST identity (2.9073ms)
+✔ no server mutation is allowed before a durable checkpoint; read failure still binds pending to actor (3.1817ms)
+✔ changed input/actor, expired mutation, idempotency conflict and script save conflicts never complete or retry with a new key (8.5087ms)
+✔ branch CAS refuses concurrent private edits after creation instead of overwriting or creating a second branch (1.5839ms)
+✔ helper uses the supplied actor-bound writing transport, including disposal and expected-actor propagation (2.2418ms)
+PASS: mounted React Bible/Search/Files interactions, stale/locked/auth boundaries, replay, import cancellation, private download and safe print, identity/viewer/i18n/focus
+✔ WritingToolsPanel mounted component behavior (Chromium, synthetic transport only) (4385.3946ms)
+✔ network retries preserve exact body and idempotency identity; errors never force retry (12.4979ms)
+✔ server flush rejects device-only recovery and preview checks expiry/stale status (1.6825ms)
+✔ an aborted tool instance cannot send a late mutation after identity/navigation changes (0.7475ms)
+✔ download uses a private blob, sanitized filename, and releases its URL (1052.0805ms)
+✔ locale fragments have identical semantic leaves and interpolation parameters (3.1503ms)
+✔ form checkpoint/control uses scoped shared journal keys, exact-sequence identity decisions, and preserves newer checkpoints (7.61ms)
+✔ latest dirty sequence, failed discard and stale cleanup never claim false recovery or clear a newer tab draft (3.5033ms)
+✔ explicit pending-recovery preservation is actor scoped and rechecked against newer edits before identity change (1.6361ms)
+✖ real mounted workspace recovers private Bible forms and guards navigation/identity/CAS (9221.9808ms)
+ℹ tests 504
+ℹ suites 0
+ℹ pass 503
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19195.6469
+
+✖ failing tests:
+
+test at tests\writingToolsRecovery.test.mjs:223:1
+✖ real mounted workspace recovers private Bible forms and guards navigation/identity/CAS (9221.9808ms)
+  AssertionError [ERR_ASSERTION]: 
+  Traceback (most recent call last):
+    File "<string>", line 98, in <module>
+      expect(bible.get_by_role('status').filter(has_text='Private draft saved on this device')).to_be_visible()
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\sync_api\_generated.py", line 22743, in to_be_visible
+      self._sync(
+      ~~~~~~~~~~^
+          self._impl_obj.to_be_visible(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              visible=visible, timeout=to_milliseconds(timeout)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          )
+          ^
+      )
+      ^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+      return task.result()
+             ~~~~~~~~~~~^^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_assertions.py", line 838, in to_be_visible
+      await self._expect_impl(
+      ...<5 lines>...
+      )
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_assertions.py", line 123, in _expect_impl
+      _record_soft_or_raise(
+      ~~~~~~~~~~~~~~~~~~~~~^
+          AssertionError(
+          ^^^^^^^^^^^^^^^
+      ...<2 lines>...
+          self._is_soft,
+          ^^^^^^^^^^^^^^
+      )
+      ^
+    File "C:\Users\fagem\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_assertions.py", line 60, in _record_soft_or_raise
+      raise error
+  AssertionError: Locator expected to be visible
+  Actual value: - text: Manuscript
+  - combobox "Manuscript":
+    - option "Working screenplay" [selected]
+    - option "Idea · private"
+    - option "Novel · private"
+  - button "Scenes" [pressed]
+  - button "Versions"
+  - button "World, search & files" [pressed]
+  - button "Focus mode"
+  - group: Typography
+  - alert: Shared version changed
+  - complementary:
+    - region "Scenes":
+      - button "Plot overview"
+      - button "Full manuscript" [pressed]
+      - list
+      - button "Add scene"
+  - main:
+    - paragraph: Shared working screenplay · saving does not confirm production or generate media.
+    - textbox "Manuscript editor":
+      - paragraph: A shared screenplay.
+  - complementary:
+    - button "Close panel"
+    - complementary "Writing tools":
+      - navigation "Writing tools":
+        - button "World & notes" [expanded]
+        - button "Search & replace"
+        - button "Import & export"
+      - region "World & notes":
+        - paragraph: These settings are shared production notes, not private sources or Console Memory. Notes do not automatically enter generation prompts.
+        - text: Entry type
+        - combobox "Entry type" [disabled]:
+          - option "World & notes" [selected]
+          - option "Existing asset narrative extension"
+          - option "World / concept"
+          - option "Shared note"
+        - button "Refresh" [disabled]
+        - button "New entry" [disabled]
+        - text: Subject
+        - combobox "Subject" [disabled]:
+          - option "New entry"
+          - option "Research" [selected]
+        - paragraph: Shared record — form edits remain private until an explicit server save
+        - paragraph: Name, appearance, images and variants remain owned by the existing production asset. This panel only edits narrative extensions.
+        - group:
+          - text: Title
+          - textbox "Title": Research
+          - text: Aliases (one per line)
+          - textbox "Aliases (one per line)"
+          - text: Narrative role
+          - textbox "Narrative role"
+          - text: Background
+          - textbox "Background"
+          - text: Behavior constraints
+          - textbox "Behavior constraints"
+          - text: Relationships
+          - textbox "Relationships"
+          - text: World rules
+          - textbox "World rules"
+          - text: Research notes
+          - textbox "Research notes"
+          - text: Notes
+          - textbox "Notes": Private awaiting divergent restore
+          - heading "Author-recorded scene events" [level=4]
+          - button "Add event"
+        - status: Private form changes — the latest edit is not yet backed up on this device.
+        - button "Retry local checkpoint"
+        - button "Download private draft"
+        - button "Keep this exact draft privately on this device for my account"
+        - button "Discard private form changes"
+        - button "Save changes"
+        - heading "Explicit-reference matrix" [level=4]
+        - paragraph: Explicit @references and linked shots are not name mentions or screen time. Click a scene or shot count to navigate.
+        - button "Refresh"
+  - status: Saved on server
+  - text: "Tool drafts: Unsaved changes 3 words · 20 characters (including spaces) No production baseline"
+  - button "Confirm screenplay & build text storyboard"
+  - button "Go to Shot Stage"
+  Error: element(s) not found 
+  Call log:
+    - Expect "to_be_visible" with timeout 5000ms
+    - waiting for get_by_role("region", name="World & notes").get_by_role("status").filter(has_text="Private draft saved on this device")
+  
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///C:/ai_project/ZeroField-r16-followup/ui/tests/writingToolsRecovery.test.mjs:253:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

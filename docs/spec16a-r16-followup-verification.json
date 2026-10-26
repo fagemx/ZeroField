@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "spec": "SPEC_16A_R16_FOLLOWUP",
+  "recordedAt": "2026-10-26T08:13:02.653477+00:00",
+  "status": "investigated_historical_root_cause_unproven",
+  "historicalRootCauseProven": false,
+  "productDefectReproduced": false,
+  "productCorrectionApplied": false,
+  "candidate": {
+    "worktree": "C:/ai_project/ZeroField-r16-followup",
+    "branch": "fix/spec16a-r16-followup",
+    "baseCommit": "aae5826f73e224824f5cb488e41e423e2eaaca1d",
+    "candidateCommit": "以本收據所在提交及交付 investigation.json 的實際 HEAD 為準；避免自我雜湊循環。",
+    "productGitDiffFromBaseEmpty": true,
+    "testPath": "ui/tests/storyStartRecovery.browser.test.mjs",
+    "testSha256": "3a3c21cba999211ef33ba363a8dc761f23a4dacfba56973b47f46475bebde4a4",
+    "currentWorktreeRuntimeFingerprint": {
+      "fileCount": 351,
+      "sha256": "252076d39f5ca63aacb75a169c3b72c097e8d51576434fa95e95378a6e491674",
+      "scope": "依歷史收據 prefixes 計算本工作樹原始 bytes；與歷史 raw bytes 指紋不同，不宣稱兩者吻合。Git 相對指定基底的產品差異為空。"
+    }
+  },
+  "historicalEvidence": [
+    {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec16a-host-browser-final.log",
+      "sha256": "15ca025d430df48f8410d88594986a5879efd671f18d5f51b7445c45319e185b",
+      "matchesHistoricalReceipt": true,
+      "action": "僅讀取與核對，未重跑或改寫"
+    },
+    {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec16a-debug-handoff.log",
+      "sha256": "38940f209445783e28439eb7fd041fe21cb7d941a51113911875e71ccf363bea",
+      "matchesHistoricalReceipt": true,
+      "action": "僅讀取與核對，未重跑或改寫"
+    },
+    {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec16a-debug-handoff-repeat.log",
+      "sha256": "96417ab5a48561528ab7d47f69487937384da620d9379d02ec073d047ff2371c",
+      "matchesHistoricalReceipt": true,
+      "action": "僅讀取與核對，未重跑或改寫"
+    },
+    {
+      "path": "C:/Users/fagem/AppData/Local/Temp/spec16a-host-browser-candidate.log",
+      "sha256": "a33b26e92e020aee5aadbcb996dc35f7ae3f9dc101088b2267f2bd7beac5a162",
+      "matchesHistoricalReceipt": true,
+      "action": "僅讀取與核對，未重跑或改寫"
+    }
+  ],
+  "historicalConclusion": "歷史根因未證實。舊失敗只有第二次 reload 後 working:main 的 5 秒斷言逾時，缺 seedError／請求回應／終態 checkpoint 關聯；後續成功不作根因已修證據。",
+  "provenMechanisms": [
+    "重播回應 503 可保持 source-save checkpoint 並呈現 working＋Retry。",
+    "ACK 成功後 source GET 503 可保持 done checkpoint 並呈現相同 working＋Retry；Retry 只讀資源，不再 PUT。",
+    "命名 gate 驗 StrictMode 過時 initial load 不覆蓋成功載入的小說；pending 保留到 source GET 成功。",
+    "換集後 signal aborted，故意忽略 abort 的晚到 ACK 不清原 pending、不誤切回原集。",
+    "無 IndexedDB 但 sessionStorage 可用時交接完成。"
+  ],
+  "regression": {
+    "nodeTestsAdded": 1,
+    "namedScenarios": 5,
+    "scenarios": [
+      "lost",
+      "resource-failure",
+      "replay-failure",
+      "late",
+      "no-idb"
+    ],
+    "readiness": "episodeId＋resourceRef＋docHash；writing 請求 actor 標頭；成功 source:novel＋原文字串＋pending 消失",
+    "timing": "命名 Promise gates／請求事件／語意 readiness，無 arbitrary sleeps；兩次 animation-frame barrier 僅排空已釋放的 React commit。",
+    "transportBoundary": "真 Chromium／React development StrictMode／真掛載 StoryWorld 與 AuthoringWorkspace。產品 fetch 全為合成 Response；fixture sessionStorage 模擬 server／receipt，非產品 HTTP 授權、憑證或 PG 證據。",
+    "trace": "scoped 及完整日誌包含各案例階段的 checkpoint、body、actor、signal、呼叫順序；失敗會附工作台內容。"
+  },
+  "commands": [
+    {
+      "command": "node --test ui/tests/storyStartRecovery.browser.test.mjs",
+      "result": "failed",
+      "log": "docs/verification/spec16a-r16/r16-directed-initial.log",
+      "sha256": "c23085a0ef2923027fe9312588068fc5ae09e1f1c2a122716cf1f777213cc243",
+      "note": "初始 harness gate 及 abort 假設錯誤，非產品修前失敗。",
+      "testsRun": 1,
+      "passed": 0,
+      "failures": 1,
+      "skips": 0,
+      "cancelled": 0
+    },
+    {
+      "command": "node --test ui/tests/storyStartRecovery.browser.test.mjs",
+      "result": "failed",
+      "log": "docs/verification/spec16a-r16/r16-directed-diagnostic.log",
+      "sha256": "86d0d3160991b39cdf70e8eec69062b59bb0207df3020a93e093bef004165c1f",
+      "note": "診斷發現第三個 workspace GET 仍受 fixture gate 阻擋；修的是測試。",
+      "testsRun": 1,
+      "passed": 0,
+      "failures": 1,
+      "skips": 0,
+      "cancelled": 0
+    },
+    {
+      "command": "node --test ui/tests/storyStartRecovery.browser.test.mjs",
+      "result": "passed",
+      "log": "docs/verification/spec16a-r16/r16-directed-v2.log",
+      "sha256": "2ef6474c477852ac6dd1d437555478ffaabfec6d71ddf0e83a255b112c802719",
+      "note": "中間測試版本五案例通過，不作最終檔案驗證。",
+      "testsRun": 1,
+      "passed": 1,
+      "failures": 0,
+      "skips": 0,
+      "cancelled": 0
+    },
+    {
+      "command": "node --test ui/tests/storyStartRecovery.browser.test.mjs ui/tests/writingStartHandoff.test.mjs ui/tests/storyHostStrictMode.test.mjs",
+      "result": "passed",
+      "log": "docs/verification/spec16a-r16/r16-targeted-final.log",
+      "sha256": "7606919030a796c3eadc45320d2d454e0756537ea8b325b6d760929c040846e0",
+      "note": "最終測試來源；19 項包含新五案例與既有 helper／StrictMode 回歸。",
+      "testsRun": 19,
+      "passed": 19,
+      "failures": 0,
+      "skips": 0,
+      "cancelled": 0
+    },
+    {
+      "command": "npm test --prefix ui",
+      "result": "failed",
+      "log": "docs/verification/spec16a-r16/r16-frontend-final.log",
+      "sha256": "888a31c0bd8f9dd39c3d7bb9b55be1277a68d1cb7adfef33046c3f1b16132dc7",
+      "note": "503/504；新 R16 通過，既有 Bible recovery 狀態等待失敗。不得宣稱並行全綠。",
+      "testsRun": 504,
+      "passed": 503,
+      "failures": 1,
+      "skips": 0,
+      "cancelled": 0
+    },
+    {
+      "command": "node --test ui/tests/writingToolsRecovery.test.mjs",
+      "result": "passed",
+      "log": "docs/verification/spec16a-r16/r16-bible-isolated.log",
+      "sha256": "760418ee820e6061a337069ab66dcd6f8744708bf02aa588c25d535233881992",
+      "note": "隔離既有失敗範圍，4/4 通過；不證明根因已修。",
+      "testsRun": 4,
+      "passed": 4,
+      "failures": 0,
+      "skips": 0,
+      "cancelled": 0
+    },
+    {
+      "command": "node --test --test-concurrency=1 ui/tests/*.test.mjs",
+      "result": "passed",
+      "log": "docs/verification/spec16a-r16/r16-frontend-serial.log",
+      "sha256": "305ae00df8c2d92fcc9fd05fc95537f3065b65045d85be592a4f9b6a8069f288",
+      "note": "明確切換序列排程，504/504 通過；保留前輪並行失敗。",
+      "testsRun": 504,
+      "passed": 504,
+      "failures": 0,
+      "skips": 0,
+      "cancelled": 0
+    }
+  ],
+  "notRun": [
+    {
+      "command": "npm run build --prefix ui",
+      "reason": "沒有 ui/src 或產品修改；不重建／提交無關 static/projects 產物。"
+    },
+    {
+      "command": "完整後端／tests/test_spec16a_host_browser.py／其他真 HTTP-PG 旅程",
+      "reason": "本輪只讀 PG fixture；使用者禁止建立／使用測試 DB 與操作 PostgreSQL。"
+    },
+    {
+      "command": "wheel build／安裝後驗證",
+      "reason": "只有測試與文件，無 runtime 修改。"
+    },
+    {
+      "command": "產品模型／GPU／外部供應商驗證",
+      "reason": "使用者禁止；合成 transport 不冒充實證。"
+    }
+  ],
+  "parallelSuiteFinding": {
+    "path": "ui/tests/writingToolsRecovery.test.mjs",
+    "changed": false,
+    "failure": "Private awaiting divergent restore 後等待 Private draft saved on this device 失敗；畫面 Shared version changed。",
+    "isolatedPassed": 4,
+    "serialSuitePassed": 504,
+    "rootCauseProven": false,
+    "disposition": "保留原失敗、不擴大修改 Bible；單檔與序列通過不能宣稱並行失敗已修。"
+  },
+  "toolchain": {
+    "dependencies": "只在本隔離樹建立 ui/node_modules junction，指向 C:/ai_project/ZeroField/ui/node_modules；未安裝或修改原樹依賴。",
+    "browser": "既有 Python Playwright 與本機 Chromium",
+    "downloads": false,
+    "subagents": false,
+    "skills": false
+  },
+  "review": {
+    "postFollowupIndependentReview": "not_run",
+    "originalReviewerAcceptanceClaimed": false,
+    "note": "本 worker 僅調查／測試；上層接續獨立閱讀，不視為原 V12 reviewer 接受。"
+  },
+  "residualRisks": [
+    "歷史 R16 根因未證實，未宣稱 solved。",
+    "預設並行 Bible recovery 的獨立失敗仍未解，沒有以單檔或序列通過取代原結果。",
+    "合成 fetch 不驗證真 HTTP／PG、credential scope、24h receipt 或跨重新登入去重；沒有全面覆蓋所有資源時序。",
+    "原整份文件 CAS、輔助科技／效能、OS 保存與供應商品質邊界不擴大。"
+  ],
+  "preservation": {
+    "oldReceiptsAndLogsUnchanged": true,
+    "mainAndOriginalSpec16Untouched": true,
+    "postgresqlOperations": false,
+    "permissionChanges": false,
+    "pushDeployMerge": false,
+    "selectionHandoffOrNewSpec17Spec18": false
+  },
+  "manualNotes": "只新增測試／文件／原始命令日誌；沒有可證實產品缺陷故不硬改。較早一次並行 504 通過曾在終端觀察，但該日誌路徑後被最終失敗覆寫，不列可雜湊最終通過證據。",
+  "validation": {
+    "scopedSourceAndReportDiffCheck": "passed",
+    "allStagedDiffCheck": "failed",
+    "allStagedDiffCheckNote": "只指出三份原始失敗日誌的工具輸出 trailing whitespace；為保留原始 bytes／SHA256 未裁切。測試來源與 follow-up 文件／JSON 檢查通過。",
+    "gitNewlineNote": "SHA256 為本輪工作樹原始 bytes；其他 checkout 如做 Git CRLF 轉換，須以 Git blob 或還原相同 bytes 比對，不宣稱轉換後 bytes 相同。"
+  }
+}
