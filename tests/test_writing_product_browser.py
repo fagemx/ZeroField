@@ -92,6 +92,26 @@ class WritingProductBrowserTests(unittest.TestCase):
             expect(manuscript).to_have_value('working:main');expect(editor).to_contain_text('The keeper closes the brass door.')
             self.assertIn('她心裡',json.dumps(self.f.writing('sources/novel'),ensure_ascii=False))
 
+    def test_studio_shortcuts_reach_the_shell_from_the_editor(self):
+        """Ctrl K and Alt+digit keep working while the cursor is in the manuscript, and the text is on the server before the space changes (SPEC_16A)."""
+        from playwright.sync_api import expect
+        self.f.init();self.f.save_doc(core.document('Scene 01: Room','The keeper waits.'))
+        with self.browser() as (page,context,base):
+            editor=page.get_by_role('textbox',name='Manuscript editor')
+            editor.click();page.keyboard.press('Control+End')
+            page.keyboard.press('Control+k')
+            palette=page.get_by_role('dialog',name='Search or run a command')
+            expect(palette).to_be_visible()
+            page.keyboard.press('Escape');expect(palette).not_to_be_visible();expect(editor).to_be_focused()
+            # Ctrl+Alt+1 is the editor's own heading key: it must not move the studio.
+            page.keyboard.press('Control+Alt+1');expect(page.locator('.studio-space-btn')).to_contain_text('Story & World')
+            page.keyboard.press('Control+z')
+            # Typing and leaving at once: the other space opens only after the text is saved.
+            page.keyboard.type(' Unsaved before Alt+2.')
+            page.keyboard.press('Alt+2')
+            expect(page.locator('.studio-space-btn')).to_contain_text('Shot Stage',timeout=20000)
+            self.assertIn('Unsaved before Alt+2.',json.dumps(self.f.writing('workspace')['doc']))
+
     def test_outline_notes_replace_office_and_print(self):
         from playwright.sync_api import expect
         from docx import Document

@@ -139,7 +139,10 @@ export class WritingOutlineRecovery {
     if(result&&this.dirty())this.schedule();return result;
   }
   async flush({reason='navigation',requireServer=false}={}){
-    this.clearTimers();if(!this.discovered||this.localError&&!this.isDirty())return false;
+    this.clearTimers();
+    // A failed discovery holds no new input. Existing journal rows remain untouched; a clean form must not trap navigation.
+    if(!this.isDirty()&&!this.pending&&(!this.discovered||this.localError))return !requireServer;
+    if(!this.discovered)return false;
     if(reason==='identity'){
       // An account change requires explicit same-sequence preservation, never implicit publication.
       try{const rows=await this.journal.list(this.scope);this.recoveries=this.recoveries.map(row=>rows.find(next=>next.key===row.key)||row);}catch(error){this.localError=error;this.emit();return false;}
@@ -185,5 +188,6 @@ export class WritingOutlineRecovery {
     catch(error){this.localError=error;this.emit();return false;}
     this.base=clone(current);this.draft={scenePatches:[],lanePatches:[]};this.ackSequence=this.sequence;this.pending=null;this.conflict=null;this.review=null;this.remote=null;this.error=null;this.localError=null;this.identitySequence=-1;this.adopting=null;this.reviewRequired=false;this.state=this.recoveries.length?'recovery':'saved';this.emit();return true;
   }
-  dispose(){this.clearTimers();this.disposed=true;this.notify=()=>{};}
+  activate(){this.disposed=false;}
+  dispose(){this.clearTimers();this.disposed=true;}
 }

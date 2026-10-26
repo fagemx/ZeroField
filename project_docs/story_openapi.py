@@ -196,10 +196,20 @@ def scene_sections(content):
 
 
 def scenes_of_doc(ep, doc):
-    # Preserve paragraph boundaries for shot beats without changing script hashes or API text.
-    content = "\n\n".join(doc_text({"content": [node]}) for node in doc.get("content", []))
+    from project_docs import writing_structure
+    # Scene boundaries are document blocks, exactly as in the stable structure. A
+    # heading-looking line after a hardBreak is still inside its original block.
+    # Keep hardBreaks and paragraph spacing in the content for the shot cutter.
+    items = []
+    for part in writing_structure.sections(doc):
+        content = "\n\n".join(doc_text({"content": [node]}) for node in part['nodes'])
+        heading = part['heading']
+        if heading is None and not content.strip():
+            continue
+        title = scene_sections(node_text(heading))[0]['title'] if heading else 'Scene 01'
+        items.append({'title': title, 'content': content})
     return [{**item, "sceneId": f"sc_{ep['slug']}_{ep['episodeIndex']:02d}_S{i:02d}",
-             "episodeId": ep["episodeId"], "sceneIndex": i} for i, item in enumerate(scene_sections(content), 1)]
+             "episodeId": ep["episodeId"], "sceneIndex": i} for i, item in enumerate(items, 1)]
 
 
 def scenes(conn, ep):
@@ -548,9 +558,10 @@ def extract(conn, me, ep):
 def scene_claim(conn, me, ep, *, write=False):
     """(shot, scene) -> 'own', 'extra' or None: what a build of this scene does with a slate shot.
 
-    'own': the shot answers one of the scene's beats. Once the writing structure exists that rests on the stable scene relationship, never on a
-    positional scene id (a reorder can reuse one); before it exists it is the old positional check. 'extra': no scene can claim the shot (a
-    hand-made insert, an old shot without a proven origin), but its positional id says this scene, so it is counted here and kept as it is: it
+    'own': the shot occupies a place on the scene's slate, not necessarily an exact beat. Once the writing structure exists that rests on the
+    stable scene relationship, never on a positional scene id (a reorder can reuse one); before it exists it is the old positional check.
+    'extra': no scene can claim the shot (a hand-made insert, an old shot without a proven origin), but its positional id says this scene,
+    so it is counted here and kept as it is: it
     never answers a beat and is never rewritten. The build and its estimate both ask this, so the numbers shown before a build are the slate after it.
     """
     from project_docs import writing_store, writing_structure
@@ -558,9 +569,19 @@ def scene_claim(conn, me, ep, *, write=False):
     stable = {s['legacySceneId']: s['sceneKey'] for s in structure['scenes']}
 
     def claim(shot, scene):
+        if shot.get('detachedScene'):
+            return None
         if not structure['initialized']:
             return 'own' if shot.get('sceneId') == scene['sceneId'] else None
         keys, _, missing = writing_structure.compatibility_relationship(structure, shot)
+        origin = shot.get('storyOrigin') or {}
+        if missing == 'ambiguous' and origin.get('mapping') == 'ambiguous' and not origin.get('beatKeys'):
+            # Repeated generated descriptions cannot prove which beat produced a
+            # row, but their frozen scene key can still prove slate occupancy.
+            # Resolve only that key (including split/merge rules), never a row
+            # label or description. This does not certify an exact beat origin.
+            keys, _, missing = writing_structure.shot_relationship(structure,
+                shot | {'storyOrigin': origin | {'mapping': 'scene_only'}})
         if not missing:
             return 'own' if keys == [stable.get(scene['sceneId'])] else None
         return 'extra' if missing == 'unbound' and shot.get('sceneId') == scene['sceneId'] else None
@@ -593,9 +614,11 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
         scene_refs = list(dict.fromkeys(scene_refs)) or [f"SET-{scene['sceneIndex']:02d}"]
         cast = {a["name"].casefold(): a["assetCode"] for a in assets(conn, ep) if a["type"] == "CHARACTER" and a["isDefault"]}
         for action, index, beat, previous_shot in steps:
-            if action == "keep":
+            if action == "keep" or (action == "rewrite" and (previous_shot.get('storyOrigin') or {}).get('mapping') == 'ambiguous'):
                 created.append(previous_shot)
-                continue  # A normal build fills missing beats; existing director edits stay authoritative.
+                # A normal build fills only missing slate places. Even an explicit
+                # rebuild cannot rewrite a row whose beat origin is ambiguous.
+                continue
             grammar = infer_shot_grammar(beat, index, len(beats), medium)
             refs = scene_refs + [code for name, code in cast.items() if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", beat, re.I)]
             prompt = beat + " " + " ".join("@" + c for c in dict.fromkeys(refs) if c not in {asset_code(m[1]) for m in ASSET_RE.finditer(beat)})

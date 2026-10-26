@@ -1,8 +1,8 @@
 import { RATIOS } from './breakdownModel.js';
 
-// SPEC_18 R16: a production that starts from a story. The hub makes the production and hands what was typed to Story & World, which opens
-// with it already in the draft; nothing reaches the server until the build runs, exactly as when it is typed there. The hand-off lives in
-// this tab's sessionStorage (the hub and the production are two page loads) and is read once.
+// SPEC_18 R16: the hub hands the original text to Story & World through this tab's sessionStorage.
+// peekStart keeps it recoverable until the actor-bound writing save AND resource load succeed;
+// only the host then acknowledges that exact hand-off. takeStart remains a destructive legacy adapter.
 export const START_MODES = ['idea', 'novel', 'script'];
 export const MAX_START_TEXT = 500000;   // what the Story page accepts for one draft
 export const MAX_START_FILE = 2000000;  // bytes, as for "Upload script"
@@ -30,21 +30,59 @@ export function startPlan({mode, text, ratio = RATIOS[0], style = ''}) {
 const usable = value => Boolean(value) && typeof value === 'object' && START_MODES.includes(value.mode) && typeof value.text === 'string' && value.text.trim() !== '';
 
 export function rememberStart(slug, start) {
-  memory.set(slug, start);
-  try { globalThis.sessionStorage?.setItem(key(slug), JSON.stringify(start)); } catch { /* No storage: a hand-off inside one page load still works. */ }
+  if (usable(start) && !start.handoffId) start.handoffId = globalThis.crypto?.randomUUID?.() || `start-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  memory.set(slug, structuredClone(start));
+  try {
+    const storage = globalThis.sessionStorage;
+    if (!storage) return false;
+    storage.setItem(key(slug), JSON.stringify(start));
+    return true;
+  } catch { return false; /* Memory fallback works, but callers can refuse non-durable checkpoints. */ }
 }
 
-// The text a production was started with, once: asking again, or for another production, finds nothing.
-export function takeStart(epId) {
+// Non-destructive, including old pending starts: migrate their stable retry identity before returning.
+export function peekStart(epId) {
   const slug = slugOfEpisode(epId);
   if (!slug) return null;
   let found = memory.get(slug) || null;
-  memory.delete(slug);
+  try {
+    const saved = globalThis.sessionStorage?.getItem(key(slug));
+    if (saved) found = JSON.parse(saved);
+  } catch { /* Unreadable or no storage: whatever memory held stands. */ }
+  if (!usable(found)) return null;
+  if (!found.handoffId) {
+    const cached = memory.get(slug);
+    if (cached?.handoffId && samePayload(cached, found)) found.handoffId = cached.handoffId;
+    rememberStart(slug, found);
+  }
+  return structuredClone(found);
+}
+
+const samePayload = (left, right) => usable(left) && usable(right) && ['mode','text','ratio','style'].every(field => left[field] === right[field]);
+const sameStart = (left, right) => samePayload(left, right) && left.handoffId === right.handoffId;
+
+// Compare-and-delete: an old save/load completion must never consume a newer hand-off.
+// Checkpoint updates of the SAME start do not invalidate its eventual acknowledgement.
+export function acknowledgeStart(epId, start) {
+  const slug = slugOfEpisode(epId);
+  if (!slug || !start?.handoffId || !sameStart(peekStart(epId), start)) return false;
   try {
     const storage = globalThis.sessionStorage;
     const saved = storage?.getItem(key(slug));
-    if (saved) found = JSON.parse(saved);
-    storage?.removeItem(key(slug));
-  } catch { /* Unreadable or no storage: whatever memory held stands. */ }
-  return usable(found) ? found : null;
+    if (saved) {
+      let current;
+      try { current = JSON.parse(saved); } catch { return false; }
+      if (!sameStart(current, start)) return false;
+      try { storage.removeItem(key(slug)); } catch { return false; }
+    }
+  } catch { /* Blocked storage: only the memory copy can be acknowledged. */ }
+  if (sameStart(memory.get(slug), start)) memory.delete(slug);
+  return true;
+}
+
+// Legacy read-once callers retain their old behaviour; reliable callers use peek + acknowledge.
+export function takeStart(epId) {
+  const start = peekStart(epId);
+  if (start) acknowledgeStart(epId, start);
+  return start;
 }

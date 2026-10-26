@@ -138,7 +138,7 @@
 1. 繪本跨頁與漫劇直式成片框：表現形式透鏡只存在 `choice_traces`，集數沒有記住 `mediumLens`，工作台無從切換。
 2. 在分鏡片場改台詞／動作同步回劇本那一行：鏡頭與劇本行之間沒有對應關係。
 3. 角色造型指定到場次、場景 2.5D 圖層、道具三段狀態常駐右欄：造型變體仍在 Asset Vault 編輯；道具狀態只在碰撞提案時出現。
-4. 俯視圖拖曳走位與演出節拍軌：3D 片場沿用 `PrevisStage` 既有控制。
+4. 俯視圖拖曳走位與演出節拍軌：3D 片場沿用 `PrevisStage` 既有控制。（三空間版已做，見下方狀態表。）
 5. OpenJutsu 作為單鏡「鏡頭來源」切換：仍是獨立的 `openjutsu-lab` 表（`Ctrl K` 可達，歸在分鏡片場）。
 6. 連戲監督建議卡放進右欄：評分與重拍提示目前在審片挑片的 `TakeGrades`。
 
@@ -160,9 +160,10 @@
 | 角色與場景是故事與世界的第二個檢視，不再跳去 Soul Cast 表：左欄切換「按場次｜角色與場景」；角色與場景檢視左邊依類型篩選（全部、角色、場景、道具、缺參考圖），中間是大卡牆（參考圖、狀態、出現幾鏡、外觀設定），右邊檢視當前卡片（大圖可放大、造型縮圖列、外觀／聲音／備註、出現的鏡頭縮圖可直接開那一鏡、生成、上傳、編輯、新增）；看劇本時右欄是同一批設定的快速清單，點一張就開到牆上。檢視與選到的卡片在這個分頁記住，從表格回來仍在原處 | `WorldWall.jsx`、`worldModel.js`、`world.css`、`StoryWorld.jsx`；後端 `asset_view` 多回 `voice`、`status`、`notes`；上傳走 `POST /files` → `POST /assets/{id}/images` → `PUT /assets/{id}/selected-image`（`storyModel.js` 的 `storyUpload`，圖片 8 MB 內） |
 | 從空間開出去的頁面（角色表、導演簡報、實驗室頁）沒有分頁可離開，麵包屑出現「← 返回」回到所屬空間；不屬於任何空間的頁面回分鏡片場 | `StudioShell.jsx`（`StudioTopBar` 的 `studio-back`） |
 | 角色與場景、鏡頭詳情與更新分鏡的改版（SPEC_18 包 A、B）：背景生成（卡片上生成中、取消、重試，可多張同時，重新整理後接續）、場次篩選、空間選單捷徑、預演→首幀→影片階梯、鏡頭「出場」區塊與 `@代碼` 標籤（改的只有那個代碼，走表格的儲存格提交）、更新分鏡對話框（拆法、比例、畫風樣張、目標長度與預估鏡數、匯入分鏡表）、生成列（工作流程、比例與解析度、實測時間或「時間未知」、Router 報價）、選卡片在右側大面板開啟編輯區（不是窄側欄）、外觀屬性、造型與聲音／狀態／備註就地編輯、依位置換的劇組快捷動作 | `StoryWorld.jsx`、`WorldWall.jsx`、`AssetEditor.jsx`、`BreakdownDialog.jsx`、`breakdownModel.js`、`generation/`、`AppearanceForm.jsx`、`appearanceModel.js`、`bindingModel.js`、`ShotBindings.jsx`、`ShotStage.jsx`（`MediaLadder`）、`studioModel.js`（`mediaLadder`）、`StudioShell.jsx`（`spaceShortcuts`）、`assistant/quickActions.js`；後端 `story_generation_options.py`、`story_estimates.py`、`story_asset_edit.py`；驗證見 `docs/spec18-verification.json` |
+| 寫作工作台併入故事與世界的「按場次」檢視（[SPEC_16A](SPEC_16A_INTEGRATION_INTO_THREE_SPACE_STORY_WORLD.md)）：它是這個檢視的編輯面，取代來源模式與劇本 textarea；穩定的情節總覽在左欄、稿件在中欄、版本／改稿影響／預覽／世界·搜尋·檔案在右欄；唯一的主按鈕依稿件改變（更新分鏡、預覽改編）；建立分鏡前先存到伺服器，確認不再送 `PUT script`；儲存狀態顯示在麵包屑；從故事開始的文字進私有來源或工作中劇本 | `StoryWorld.jsx`、`storyHostModel.js`、`writing/`（`AuthoringWorkspace.jsx` 的插槽）、`StudioShell.jsx`、`App.jsx`；後端 `project_docs/writing_*.py`、`story_openapi.scene_claim`；驗證見 `docs/spec16-integration-verification.json` |
 
 **仍未實作**：
-1. 在片場或節奏台改台詞後寫回劇本那一行：對應目前靠「第 i 段 ↔ 該場第 i 個鏡頭」與提示詞比對重建，唯讀；要寫回需要 SPEC_16 的 `beatKey`。
+1. 在片場或節奏台改台詞後寫回劇本那一行：對應原本靠「第 i 段 ↔ 該場第 i 個鏡頭」與提示詞比對重建，唯讀（`ScriptOutline` 已由寫作工作台的穩定對應取代，不再畫在故事頁）；穩定的 `sceneKey`／`beatKey` 已隨 SPEC_16 併入，寫回本身還沒做。
 2. 聲音進出（J／L cut）與環境音軌：系統沒有音訊素材，只畫台詞文字。
 3. 時間軸的「剪斷」（razor）：把一鏡切開會產生新鏡頭與新素材，不是剪輯動作。
 4. 節奏提案不是 AI 提案：節奏台的「偏長」提示是本機規則（比全集平均長 20% 以上且多出至少 0.5 秒）。

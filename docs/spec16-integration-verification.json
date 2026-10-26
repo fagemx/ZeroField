@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "spec": "SPEC_16A",
+  "recordedOn": "2026-10-26",
+  "status": "runtime_gates_passed_including_strictmode_user_acceptance_pending",
+  "acceptance": "工程驗證，不代替使用者的 SPEC_16 功能驗收；未推送、未部署。使用者於 2026-10-26 明確要求完成後合回原開發分支 feat/spec18-studio-revision，合併執行結果以 Git 歷史及交付回報為準。V12 是同家族獨立閱讀，原報告有發現，不是通過結論；修正後尚無重新審查結論。",
+  "candidate": {
+    "branch": "integration/spec16-three-space",
+    "worktree": "C:/ai_project/ZeroField-spec16-merge",
+    "baseCommit": "74a0a0b6188f193e65c37c489e6a9880d5946a0f",
+    "spec16MergeCut": "ddc7023c0b5e5f9c7c28fc57e41b79c38371114d",
+    "repairs": "修正由本收據所在提交收錄；下列原始測試於提交前執行，接手核對產品指紋一致。",
+    "runtimeFingerprint": {
+      "algorithm": "從 git ls-files --cached --others --exclude-standard 取存在檔案，依以下 prefixes 篩選；逐檔 SHA256，將 path:hash 字典以 sorted compact JSON 編碼後再 SHA256。排除 docs/tests，後續只變更文件或測試不代表產品候選漂移。",
+      "prefixes": ["ui/src/", "project_docs/", "project_assistant/", "static/", "db/", "workflows/", "samples/"],
+      "fileCount": 351,
+      "sha256": "24045386a9fc0385975213e59a4f9f734caa0126b3624764ac458c9cb7fc1b2a"
+    },
+    "bundles": {
+      "static/projects/assets/index-Ba2FLkQ7.js": "f385f2e7cafbc042bd44a2d993215d1b8b8593ff91a61dba636616374ca0e784",
+      "static/projects/assets/PrevisStage-_qBQ9f2B.js": "b5df297387da0c1962205ea8213bcac7679604325f6b912626cf8218a1de31bf"
+    }
+  },
+  "closeoutVerification": {
+    "executor": "Pi 接手代理；僅收尾，未重新實作或重新合併 SPEC_16。",
+    "observedDevelopmentHead": "4e7e8e2b08c459eb77c2531916ba441d3877a971",
+    "observedIntegrationHead": "74a0a0b6188f193e65c37c489e6a9880d5946a0f",
+    "bothIndexesInitiallyEmpty": true,
+    "developmentIsAncestor": true,
+    "spec16CutAlreadyMerged": true,
+    "originalAndBackupFilesVerified": 11,
+    "originalFingerprint": "C:/Users/fagem/AppData/Local/Temp/spec16a-main-before-merge.json",
+    "fullBackup": "C:/Users/fagem/AppData/Local/Temp/spec16a-main-before-merge-backup-20261026/",
+    "runtimeFingerprintMatches": true,
+    "allRecordedLogHashesAndWheelBytesMatch": true,
+    "frontendRerun": {"command": "npm test --prefix ui", "testsRun": 503, "failures": 0, "errors": 0, "skips": 0, "cancelled": 0, "seconds": 22.0233284, "log": "spec16a-pi-closeout-frontend.log", "sha256": "5bdb9ec930d9a4e88513b85f217519b61fa42038f21716c5f4b723bfc971fc88", "evidenceLayer": "Node 與真 Chromium／合成 transport，含 development StrictMode；不是新 HTTP／PG 證據。"},
+    "buildRerun": {"command": "npm run build --prefix ui", "modulesTransformed": 427, "seconds": 5.96, "log": "spec16a-pi-closeout-build.log", "sha256": "e257a492b195e7eb79b4116b0fa973091b74181a62efc6f0d4d69ccfb013d83b", "bundlesUnchanged": true, "warnings": ["既有大型 chunk 警告仍在。"]},
+    "backendAndPgJourneys": "READ：核對原始日誌與 SHA256，未重跑、未建立 DB、未停止 PostgreSQL。",
+    "mergeTarget": "feat/spec18-studio-revision",
+    "commitAndMergeResult": "以本收據所在提交、Git 歷史及交付回報為準；本欄不預宣稱合回完成。",
+    "postRepairIndependentReview": "not_run"
+  },
+  "review": {
+    "path": "docs/SPEC16A_REVIEW.md",
+    "reviewedCommit": "74a0a0b6188f193e65c37c489e6a9880d5946a0f",
+    "reviewerModel": "claude-opus-5-5",
+    "reviewerAgent": "a580e473645ef6e1b",
+    "independence": "當時同模型家族的新唯讀代理；只稱獨立閱讀，不稱跨家族。",
+    "originalOverallVerdict": null,
+    "originalFindings": "九組 P1/P2 與 P3 備註；不是無缺陷或通過結論。",
+    "postRepairRereview": "not_run"
+  },
+  "commands": [
+    {
+      "id": "backend-full",
+      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55440/zf_spec16_v12_full_20261026 python -X utf8 -m unittest discover -s tests -v",
+      "result": "passed",
+      "testsRun": 813,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 1243.815,
+      "log": "spec16a-backend-final.log",
+      "evidenceLayer": "source backend + 專用 PostgreSQL；含真編譯 root app／授權 HTTP 的寫作旅程及注入故障，不呼叫產品模型。"
+    },
+    {
+      "id": "frontend-full-before-strictmode-addition",
+      "command": "npm test --prefix ui",
+      "result": "passed",
+      "testsRun": 502,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "cancelled": 0,
+      "seconds": 19.1134873,
+      "log": "spec16a-frontend-final.log",
+      "evidenceLayer": "Node 單元回歸，部分以真 Chromium＋合成 transport 測元件；不等於真後端或 GPU。此輪未包含尚未交付的 StrictMode 專項。"
+    },
+    {
+      "id": "frontend-full-final",
+      "command": "npm test --prefix ui",
+      "result": "passed",
+      "testsRun": 503,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "cancelled": 0,
+      "seconds": 19.3357098,
+      "log": "spec16a-frontend-with-strictmode.log",
+      "evidenceLayer": "包含已交付的 development StrictMode 專項；Node 單元回歸及真 Chromium＋合成 transport。產品 runtime 指紋未變，不冒充真後端／GPU。"
+    },
+    {
+      "id": "production-build",
+      "command": "npm run build --prefix ui",
+      "result": "passed",
+      "modulesTransformed": 427,
+      "seconds": 5.86,
+      "log": "spec16a-build-final.log",
+      "warnings": ["既有大型 chunk 警告；main bundle 約 2066 kB，沒有宣稱已完成分包優化。"]
+    },
+    {
+      "id": "host-browser",
+      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55440/zf_spec16_v12_ui_20261026 python -X utf8 -m unittest discover -s tests -p test_spec16a_host_browser.py -v",
+      "result": "passed",
+      "testsRun": 8,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 40.667,
+      "log": "spec16a-host-browser-candidate.log",
+      "coverage": ["右欄卡片前完整 flush", "outline 的 IDB＋伺服器均失敗時不能切牆或點卡片離開", "來源跳轉強制稿件且不 remount 重播", "小說伺服器已寫但 ACK 遺失，reload 同請求重播且 version 仍是 1", "非空工作中稿不覆蓋，新劇本進另稿", "建立中換 actor 後不進擷取與建立", "實際超過 1000 結構單位的 413，可下載 authoritative episode 文字並離開", "初始 workspace 失敗可離開"],
+      "evidenceLayer": "真 production root app＋token-cookie 授權 HTTP＋專用 PG；故障由 browser route／IDB 注入。"
+    },
+    {
+      "id": "story-import-browser",
+      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55440/zf_spec16_v12_journeys_20261026 python -X utf8 ui/tests/storyImport.browser.py",
+      "result": "passed",
+      "testsRun": 1,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 10.261,
+      "log": "spec16a-story-import-final-rerun.log",
+      "evidenceLayer": "真 root app／HTTP／PG 的改編、資產擷取、文字分鏡、預算、寫回與輪詢；只有圖片 inference 為替身。"
+    },
+    {
+      "id": "shot-review-browser",
+      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55440/zf_spec16_v12_journeys_20261026 python -X utf8 ui/tests/shotReview.browser.py",
+      "result": "passed",
+      "testsRun": 3,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 14.653,
+      "log": "spec16a-shot-review-final.log",
+      "evidenceLayer": "真 HTTP／PG 狀態與媒體；handoff／allocation preview 有 mock，不是實際推論。"
+    },
+    {
+      "id": "hub-three-start-modes",
+      "command": "OPENBENCH_TEST_DB_URI=postgresql://postgres@127.0.0.1:55440/zf_spec16_v12_journeys_20261026 python -X utf8 <local-temp>/spec16a-hub-journey.py",
+      "result": "passed",
+      "testsRun": 1,
+      "journeys": 3,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 12.222,
+      "log": "spec16a-hub-journey-rerun.log",
+      "reproducibility": "本機 scratch 驗證腳本，未列為已收進儲存庫的回歸檔；不要假設其他 checkout 存在此腳本。",
+      "results": [
+        {"mode": "idea", "destination": "source:idea", "initialWorkingEmpty": false, "pendingAcknowledged": true, "pageErrors": []},
+        {"mode": "novel", "destination": "source:novel", "initialWorkingEmpty": false, "pendingAcknowledged": true, "pageErrors": []},
+        {"mode": "script", "destination": "private branch", "initialWorkingEmpty": false, "originalWorkingHashUnchanged": true, "pendingAcknowledged": true, "pageErrors": []}
+      ],
+      "evidenceLayer": "真 New Production 對話框、真專案建立／導頁、production root app／授權 HTTP／PG；route.fetch 在導頁前讀實際建立回應，不假造專案。"
+    },
+    {
+      "id": "strictmode-development-browser",
+      "command": "npm test --prefix ui（包含 ui/tests/storyHostStrictMode.test.mjs）",
+      "result": "passed",
+      "agent": "ada874abec3d2961f",
+      "test": "ui/tests/storyHostStrictMode.test.mjs",
+      "testsRun": 1,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "seconds": 4.4974209,
+      "log": "spec16a-frontend-with-strictmode.log",
+      "effectReplay": ["setup", "cleanup", "setup"],
+      "coverage": ["effect replay 後 actor-bound 工作台載入", "鍵盤輸入、Ctrl+S 與 reload 留存", "outline PATCH 500 後 IndexedDB checkpoint 與 reload 發現", "明確恢復不自動發布、baseVersion=2 保存、再次 reload 留存", "無 pageerror／未知路由／identityLost"],
+      "evidenceLayer": "React development StrictMode effect replay＋真 Chromium＋合成 fetch Response transport；不是 production bundle 或真後端認證／PG。"
+    }
+  ],
+  "wheel": {
+    "buildCommand": "python -m pip wheel --no-deps --no-build-isolation --no-index . --wheel-dir <local-temp>/zerofield-spec16a-v12-wheel",
+    "buildResult": "passed",
+    "buildLog": "spec16a-wheel-build.log",
+    "filename": "openbench-0.2.0-py3-none-any.whl",
+    "bytes": 2861835,
+    "sha256": "845067ad3c62ea497c3a765f088bb573c7cfce9f59f45eed3a039c870ca1d769",
+    "installCommand": "python -m pip install --no-deps --no-index --target <local-temp>/zerofield-spec16a-v12-installed <local-temp>/zerofield-spec16a-v12-wheel/openbench-0.2.0-py3-none-any.whl",
+    "installResult": "passed",
+    "identityCommand": "在 repo 外以 installed target 作唯一 PYTHONPATH，執行本機 spec16a-verify-installed.py；核 import __file__、runtime resources exact set 與 source/installed SHA256。",
+    "identityResult": "passed",
+    "runtimeResources": 71,
+    "pythonModules": 100,
+    "identityScope": "所有 SQL／workflows／cards／Router schemas／samples／巢狀 static/projects 資源，以及 project_docs／project_assistant Python modules、server.py、run_studio.py。不是全 wheel metadata／README identity。",
+    "installedBackendIntegrationTests": "not_run",
+    "installedDatabaseRequest": "建立額外 zf_spec16_v12_installed_20261026 被工具權限拒絕；沒有換方式重試或委派。資源驗證不冒充 installed DB integration tests。"
+  },
+  "performance": {
+    "acceptance": "工程量測，不是硬體無關保證、語意品質或使用者驗收。500k 是 scene-loaded 切片，不能稱 500k 全文 DOM 輸入。",
+    "syntheticTransportLog": "spec16a-frontend-with-strictmode.log",
+    "syntheticTransportRealChromium": [
+      {"sourceCharacters": 50000, "visibleCharacters": 52108, "inputToFrameP95ms": 27.69999998807907, "maxMs": 29.700000002980232},
+      {"sourceCharacters": 500000, "visibleCharacters": 5038, "inputToFrameP95ms": 92.1000000089407, "maxMs": 92.19999998807907}
+    ],
+    "productionRootRealHttpPg": [
+      {"sourceCodePoints": 50000, "scenes": 100, "inputToFrameP95ms": 22.299999997019768, "sceneSwitchMs": 81.87670000188518},
+      {"sourceCodePoints": 500000, "scenes": 100, "inputToFrameP95ms": 35.8999999910593, "sceneSwitchMs": 141.7801000061445}
+    ],
+    "readinessRepair": "合成效能測試原只看『字』而可能命中上一集 editor，已改等待 control.consoleContext 的 episodeId＋docHash，timing 入口再驗一次；不降低內容或儲存斷言。"
+  },
+  "historicalFailedRuns": [
+    {"log": "spec16a-backend-full-20261026.log", "testsRun": 811, "failures": 1, "errors": 2, "seconds": 1264.040, "result": "failed", "note": "較早靜態資產／selector 候選，不能稱此輪通過，也不把後來的 scoped passes 拼成此輪全綠。"},
+    {"log": "spec16a-host-browser-final.log", "testsRun": 8, "failures": 2, "errors": 0, "seconds": 42.037, "result": "failed", "note": "小說 ACK-loss reload 一次未解偶發；另一項下載斷言錯把 legacy PUT 匯入前雙換行當伺服器現文，改比較 saved.scriptContent 並驗尾端 Line 1001。沒有改產品刪內容。"},
+    {"log": "spec16a-story-import-final.log", "result": "failed", "note": "兩程序同時在同一專用 DB ensure_schema 造成 PostgreSQL DeadlockDetected；改用另個專用 journey DB 並序列執行後通過。"},
+    {"log": "spec16a-hub-journey.log", "result": "failed", "note": "scratch 腳本在完整導頁後讀 response.json，Chromium 回應 body 已失效；改 route.fetch 在 fulfill 前擷取真回應，再重跑三模式。"},
+    {"log": "spec16a-tools-screenshot.log", "result": "failed", "testsRun": 1, "errors": 1, "note": "scratch 截圖以視覺文字『中』當 accessible name；實際 aria-label 為『繁體中文』。改語意標籤後 1 項通過，4.279 秒。"}
+  ],
+  "additionalDiagnostics": {
+    "novelLostAckAfterUnexplainedFailure": [
+      {"log": "spec16a-debug-handoff.log", "runs": 4, "passed": 4, "seconds": 28.419},
+      {"log": "spec16a-debug-handoff-repeat.log", "runs": 16, "passed": 16, "seconds": 114.307}
+    ],
+    "interpretation": "後續完整宿主八項與完整後端也通過，但尚未證明早先那次偶發失敗的根因或根除。"
+  },
+  "screenshots": [
+    {"path": "docs/research/screenshots/spec16a-script-en-1920.png", "viewport": "1920x900", "state": "英文三空間宿主與工作中稿；既有媒體是 fixture，未新生成", "visuallyRead": true},
+    {"path": "docs/research/screenshots/spec16a-private-idea-en-1920.png", "viewport": "1920x1080", "state": "最新真首頁點子交接；Manuscript=Idea private、原文可見、目標場數 3", "visuallyRead": true},
+    {"path": "docs/research/screenshots/spec16a-versions-zh-1280.png", "viewport": "1280x720", "state": "繁中創作版本面板", "visuallyRead": true},
+    {"path": "docs/research/screenshots/spec16a-tools-zh-1280.png", "viewport": "1280x720", "state": "最新真 root app 的已展開設定與筆記，不是只有工具導覽的空面板", "visuallyRead": true}
+  ],
+  "knownLimits": [
+    "R16 曾一次在 ACK-loss reload 後未打開 source；後續未重現，根因未明。",
+    "24h receipt 綁 actor/credential/episode；尚未 pin credential fingerprint，同 actor 換登入憑證的曖昧 branch-create 不保證去重。",
+    "空稿寫入用原子 script/ops，不是整份文件 CAS；另一作者在 GET 後新增不同 block 會保留，可能形成協作合併。",
+    "完整無 IDB＋R16、跨集 source jump 特例沒有新增直接瀏覽器證據。",
+    "缺頁面 h1／nested main，以及 save ACK 後重新讀 episode/assets 的效能備註未修。",
+    "舊 agentConsole.browser.py 的一條 .story-shot-tools 旅程在整合前 4e7e8e2 也失敗，本次未改／未重新跑，不列為通過。",
+    "沒有呼叫產品模型、真 GPU／供應商／計費驗證，未做 SPEC_17，未採用 selection-handoff 未提交後續。"
+  ],
+  "evidenceStorage": {
+    "localTempRoot": "C:/Users/fagem/AppData/Local/Temp",
+    "logs": "上述 log 是本次執行者的本機檔名，不保證存在其他 checkout；本收據保留總數、命令、分層與 SHA256，不把本機路徑當 repo 證據檔。",
+    "logSha256": {
+      "spec16a-backend-final.log": "d123e3a4374f83df0a37c3b183a959d4bfe248879a129521e91fa2f35f825c20",
+      "spec16a-frontend-final.log": "46bfcd56775456862b2cb24625b7717f87fd8a025d2f10e1128b80a3f63b9db3",
+      "spec16a-frontend-with-strictmode.log": "647f39e6cd138e1da55b7a62bc51a54806fb0168cf75f5a0f72e9b945d9d8c00",
+      "spec16a-build-final.log": "cf564cd15ded29114809428f202463d388d6438602456aec8f66b80c1223a4cb",
+      "spec16a-host-browser-candidate.log": "a33b26e92e020aee5aadbcb996dc35f7ae3f9dc101088b2267f2bd7beac5a162",
+      "spec16a-story-import-final-rerun.log": "4578f7130e7f0e2202cb21a82ce50cdbd63c5500616cd9e47b6d50c9e1d3e626",
+      "spec16a-shot-review-final.log": "baace4be771b8b5a9025077cdd8e9e37f555933ddea6daa32758b4c790cac434",
+      "spec16a-hub-journey-rerun.log": "7b618a317108094c8e25c05b128a9464972994ef518cdb0c49604c901d0e582f",
+      "spec16a-wheel-build.log": "2c77ea97e70f027df88806ab5e2b923ef6707d18f3daa07b9c7087a8a3f461f0",
+      "spec16a-installed-resources.json": "ff39e1a59a4f0a79ed6163449475675e68f46abe3182ea113dd1ef0deeeb7889",
+      "spec16a-debug-handoff.log": "38940f209445783e28439eb7fd041fe21cb7d941a51113911875e71ccf363bea",
+      "spec16a-debug-handoff-repeat.log": "96417ab5a48561528ab7d47f69487937384da620d9379d02ec073d047ff2371c",
+      "spec16a-backend-full-20261026.log": "b6f3115ffb953b448c3a72ebed227e90fa76b29a067fca9b2aaa5af12b580222",
+      "spec16a-host-browser-final.log": "15ca025d430df48f8410d88594986a5879efd671f18d5f51b7445c45319e185b",
+      "spec16a-story-import-final.log": "5d957d3ef88485a65175fe933b89aba2592437af18a8b87234512a15399ceed0",
+      "spec16a-hub-journey.log": "db8ff8afb7b94fef0f509715eeb5a970ef73680362d15c475a144ec0fdb10281",
+      "spec16a-tools-screenshot.log": "2b1e26a9f64711973437fe3a27da1f0c6a2070a21d879c40ef3392cea303bfa3",
+      "spec16a-tools-screenshot-rerun.log": "73bed522c3fd375916ccbc847aad2aec4559ac1c8c05fb576f379aece3e5a360"
+    }
+  }
+}

@@ -3464,6 +3464,11 @@
       "exportExpires": "Private export expires: {{time}}"
     },
     "integration": {
+      "startDraft": "Story start — private draft",
+      "startPending": "Saving your original story start. The pending text remains in this tab until the save is acknowledged.",
+      "startFailed": "Your story start could not be opened. The pending text is kept; retry or download it before closing this tab.",
+      "startStorageFailed": "This tab could not preserve the pending story start. Download the original text before closing it.",
+      "downloadStart": "Download original story start",
       "identityBlocked": "Resolve manuscript conflicts and save, explicitly preserve, or discard private tool drafts before changing identity.",
       "identityChanged": "Your signed-in identity changed. Uploads are stopped; sign in as the original author to recover this draft.",
       "alignmentUnavailable": "Story alignment is unavailable; freshness has not been verified.",

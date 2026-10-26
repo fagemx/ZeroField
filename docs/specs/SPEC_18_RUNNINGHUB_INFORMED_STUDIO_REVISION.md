@@ -290,8 +290,8 @@ ZeroField 的故事 API 本來就是 RH STORY 介面的本地版（`project_docs
 
 - **位置**：首頁「新增專案」對話框分成「從故事開始｜從範本開始」，預設前者；範本表單照舊（待決 7：並列，不取代）。兩邊都保持掛載，切換不會清掉已輸入的內容。
 - **從故事開始**：切換「一句話靈感｜小說／故事章節｜標準分場劇本」；一個大輸入框，可載入 `.txt`／`.md`（2 MB、50 萬字內）；畫幅比例；畫風樣張（來自 `/catalog/styles`，讀不到就用預設畫風）；名稱選填，留空取第一行前 40 字。「建立並開始」是這個對話框唯一的主按鈕，沒有內容時停用。
-- **建立**：`POST /projects/api/projects`（`zerofield_studio` 範本），然後帶著輸入跳到 `/projects/{slug}/#story-world`。內容靠這個分頁的 sessionStorage 交接，只讀一次；故事與世界開啟時把它放進對應模式的草稿、比例與畫風。伺服器端要等按「建立分鏡」才寫入，跟在故事頁自己輸入一樣。SPEC_16 包 A 讓來源文字能保存之後，這個交接可以改成存在伺服器。
-- 純函式與交接在 `ui/src/startModel.js`，介面在 `ui/src/StartFromStory.jsx`，故事頁的接收在 `StoryWorld.jsx` 載入集數的那個 effect。
+- **建立**：`POST /projects/api/projects`（`zerofield_studio` 範本），然後帶著輸入跳到 `/projects/{slug}/#story-world`；比例與畫風進故事頁的格式設定。[SPEC_16A](SPEC_16A_INTEGRATION_INTO_THREE_SPACE_STORY_WORLD.md) 的 V12 修正後，不再由故事頁 `PUT script`，也不再讀完便刪 sessionStorage。工作台先保留原文與固定交接 ID，每次寫入前把重試路徑、本文與鍵存成 checkpoint：點子／小說在同名私有來源為空時存入，劇本在工作中稿為空時使用區塊寫入；來源或稿件非空一律保留既有內容，另開私有另稿。伺服器確認且資源重新載入成功才清掉 pending；失敗可重試或下載原文。回應遺失時重播同一請求／鍵，不另外造一次寫入。收據期限為 24 小時且綁登入憑證；換憑證後不保證曖昧請求去重。文字會在建立分鏡前先到伺服器，但私有來源／另稿不等於製作來源，也不會自動生成。
+- 純函式與交接在 `ui/src/startModel.js`，介面在 `ui/src/StartFromStory.jsx`，故事頁的接收在 `StoryWorld.jsx` 載入集數的那個 effect；交接去哪裡是 `storyHostModel.js` 的 `startHandOff` 決定，工作台收下私有來源文字的是 `AuthoringWorkspace.jsx` 的 `seed`。
 
 ---
 
@@ -396,7 +396,7 @@ ZeroField 的故事 API 本來就是 RH STORY 介面的本地版（`project_docs
 
 - R14 需要新的參考圖工作流程。
 - R15 需要 TTS 與音訊素材。
-- R16 的「劇本檔」路徑可以直接接既有的 `POST /project-imports`；「點子／小說」路徑要等 SPEC_16 包 A 讓來源文字能保存。
+- R16 的「劇本檔」路徑可以直接接既有的 `POST /project-imports`；「點子／小說」路徑要等 SPEC_16 包 A 讓來源文字能保存（已由 SPEC_16A 完成：進同名的私有來源）。
 
 每包結束時記錄：實際修改了什麼、哪些驗證通過／失敗／沒跑、使用者可以用的能力、下一包的阻塞。只完成包 A，不可宣稱 SPEC_18 完成。
 
@@ -431,7 +431,7 @@ ZeroField 的故事 API 本來就是 RH STORY 介面的本地版（`project_docs
 - **A08**：階梯三格依 4.1 的規則判斷；沒有 Previs 欄就不顯示預演格；來源影片不被當成預演；影片格不自動播放；點格子會開對應的檢視。
 - **A09**：場次篩選預設「全部」；選焦點場次後只剩該場的素材；未分場素材在「全部」看得到；可以與類型、缺圖篩選疊加；從表格回來仍記得選擇。
 - **A10**：空間選單的「n 缺圖」開到牆＋缺參考圖篩選，「n 待審」開到片場＋待審篩選；鍵盤走得到捷徑；`uiBudget.test.mjs` 仍通過。
-- **A11**：主按鈕開對話框；對話框只有一顆主按鈕；確認後的請求順序跟現在相同（`PUT settings` → `PUT script` → `POST asset-extractions` → `POST storyboards`）；取消不送任何請求；`story-ui.test.mjs` 的「一顆主按鈕」仍通過。
+- **A11**：主按鈕開對話框；對話框只有一顆主按鈕；確認前工作台已把文字存到伺服器；確認後的請求依序是 `PUT settings` → `POST asset-extractions` → `POST storyboards`，不再有 `PUT script`（劇本由寫作工作台擁有，SPEC_16A 3.1）；取消不送任何請求；`story-ui.test.mjs` 的「一顆主按鈕」仍通過。
 - **A12**：「匯入分鏡表」會開表格匯入流程；取消不改任何頁面。
 
 ### 8.2 包 B
@@ -486,7 +486,7 @@ python -m build --wheel                    # 包 B 有新增 Python 模組或靜
 
 ## 11. 實作狀態（2026-10-25，分支 `feat/spec18-studio-revision`）
 
-- **已做**：包 A、包 B（R1–R13）都可在畫面上操作，已在 `968557d` 提交；下一個 commit 再加上 R16（新專案入口，見 3.8）與幾處小修（窄視窗開卡片時捲到編輯區、空間選單的「缺圖」數字跟牆一致、新專案對話框的按鈕固定在畫面上）。驗證命令、結果與未驗證事項記在 [`docs/spec18-verification.json`](../spec18-verification.json)。
+- **已做**：包 A、包 B（R1–R13）都可在畫面上操作，已在 `968557d` 提交；R16（新專案入口，見 3.8）與幾處小修（窄視窗開卡片時捲到編輯區、空間選單的「缺圖」數字跟牆一致、新專案對話框的按鈕固定在畫面上）在 `66c92f4`；角色與場景編輯區的第二次重排（見 3.1）在 `4e7e8e2`。SPEC_16 的寫作工作台併入三空間版 Story & World 之後，劇本檢視與 R16 的文字去處都改了，見 [SPEC_16A](SPEC_16A_INTEGRATION_INTO_THREE_SPACE_STORY_WORLD.md)。驗證命令、結果與未驗證事項記在 [`docs/spec18-verification.json`](../spec18-verification.json)。
 - **沒做，以及為什麼**：
   - R14 角色三視圖：卡片是 ComfyUI 的圖，沒有在 GPU 上驗證過的三視圖工作流程，只能靠提示詞包裝，出圖品質在沒有模型的環境驗不了。
   - R15 聲音：目錄只有 IMAGE、VIDEO 兩種能力，沒有 TTS 卡也沒有音訊素材；要先決定供應商，再另寫規格（音軌、配音、成片混音）。

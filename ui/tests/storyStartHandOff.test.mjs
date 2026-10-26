@@ -7,7 +7,7 @@ test('a start hands its text to the right place: a screenplay to the working scr
   assert.deepEqual(startHandOff({mode:'script', text:'INT. DOME\nKael enters.'}), {kind:'working', text:'INT. DOME\nKael enters.'});
   assert.deepEqual(startHandOff({mode:'idea', text:'A countdown in the static.'}), {kind:'source', mode:'idea', text:'A countdown in the static.'});
   assert.deepEqual(startHandOff({mode:'novel', text:'Chapter one.'}), {kind:'source', mode:'novel', text:'Chapter one.'});
-  for (const nothing of [null, undefined, {}, {mode:'idea'}, {mode:'idea', text:''}, {mode:'script', text:'  \n '}, {mode:'idea', text:42}]) {
+  for (const nothing of [null, undefined, {}, {mode:'idea'}, {mode:'idea', text:''}, {mode:'script', text:'  \n '}, {mode:'idea', text:42}, {mode:'video', text:'Wrong route'}, {text:'No mode'}]) {
     assert.deepEqual(startHandOff(nothing), {kind:'none'}, JSON.stringify(nothing));
   }
 });

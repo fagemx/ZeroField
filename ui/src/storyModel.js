@@ -55,7 +55,7 @@ export async function storyList(path) {
   return items;
 }
 
-export async function waitStoryTask(task, {signal, onProgress} = {}) {
+export async function waitStoryTask(task, {signal, onProgress, request = storyRequest} = {}) {
   while (['QUEUED','RUNNING'].includes(task.status)) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     await new Promise((resolve, reject) => {
@@ -63,7 +63,8 @@ export async function waitStoryTask(task, {signal, onProgress} = {}) {
       const timer = setTimeout(() => {signal?.removeEventListener('abort', abort); resolve();}, 800);
       signal?.addEventListener('abort', abort, {once:true});
     });
-    task = await storyRequest('/tasks/' + task.taskId);
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    task = await request('/tasks/' + task.taskId, 'GET', undefined, {signal});
     onProgress?.(task);
   }
   if (task.status !== 'SUCCEEDED') throw new Error(task.error?.message || task.status);

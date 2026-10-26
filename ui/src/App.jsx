@@ -15,6 +15,7 @@ import { isOpen } from "./rules.js";
 import { SHOT_FILTERS } from "./studioModel.js";
 import { TabRail } from "./TabRail.jsx";
 import { IdentityBadge, PROJECT_STATUS, ProjectHub, SurfaceHeader } from "./Surfaces.jsx";
+import { isPaletteKey, spaceKey } from "./shellShortcuts.js";
 import { SPACES, STAGE_TAB, STORY_VIEW, TIMELINE_VIEW, VIRTUAL_TABS, CommandPalette, FilmOverlay, StudioTopBar, episodeCounts, orderedShots, spaceOf, tabOfSpace, useEpisode } from "./StudioShell.jsx";
 import { StoryWorld } from "./StoryWorld.jsx";
 import { Timeline } from "./Timeline.jsx";
@@ -584,7 +585,10 @@ function ProjectPage({ slug }) {
     setFocus({ shotRid: rid, sceneId: shot?.sceneId ?? null });
   }, [episode.shots, setFocus]);
   // From a shot back to the sentence it came from (SPEC_16A 3.2): the writing focus carries the scene key; the workspace scrolls there.
-  const openSource = useCallback(async (ref) => { if (await navigate(STORY_VIEW) && ref?.sceneKey) setWritingFocus({ ...ref, nonce: Date.now() }); }, [navigate]);
+  const openSource = useCallback(async (ref) => {
+    if (ref?.sceneKey && await navigate(STORY_VIEW)) {setFocus({assetCode:null, assetName:null}); setWritingFocus({...ref, episodeId:storyEpisode, nonce:Date.now()});}
+  }, [navigate, storyEpisode, setFocus]);
+  const sourceDone = useCallback(nonce => setWritingFocus(current => current?.nonce === nonce ? null : current), []);
   // The workspace asks for the stage with the shots of a scene; the build asks for it with nothing (SPEC_16A 3.2).
   const stageOf = useCallback(async ({ shotIds = [] } = {}) => {
     const shot = shotIds.length ? episode.shots.find((item) => item.shotId === shotIds[0]) : null;
@@ -595,9 +599,9 @@ function ProjectPage({ slug }) {
   useEffect(() => {
     if (!isStudio || consoleView) return undefined;
     const keys = (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPalette((open) => !open); return; }
-      // Ctrl/Cmd/Alt + 1·2·3 switch space. A browser may keep Ctrl+digit for its own tabs, so Alt+digit works too.
-      const next = /^[1-3]$/.test(event.key) && (event.ctrlKey || event.metaKey || event.altKey) && !event.shiftKey ? SPACES[Number(event.key) - 1] : null;
+      if (isPaletteKey(event)) { event.preventDefault(); setPalette((open) => !open); return; }
+      // Ctrl/Cmd/Alt + 1·2·3 switch space (shellShortcuts.js).
+      const next = SPACES[spaceKey(event)];
       if (next) { event.preventDefault(); navigate(next.tab); return; }
       if (event.key.toLowerCase() !== "g" || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
       if (event.target.closest?.("input,textarea,select,[contenteditable=true],.modal-scrim") || !paEnabled) return;
@@ -689,10 +693,10 @@ function ProjectPage({ slug }) {
       + (isStudio && layout.left === false ? " hide-left" : "") + (isStudio && layout.right === false ? " hide-right" : "") + (isStudio && layout.bottom === false ? " hide-bottom" : "")
       + (paMode === "side" ? " pa-on" : "") + (paMode === "full" ? " ws-on" : "")}>
       {isStudio ? <StudioTopBar project={data.project} episodes={episode.episodes} epId={storyEpisode}
-        onEpisode={async (next) => { if (await flushSurface()) setStoryEpisode(next); }}
+        onEpisode={async (next) => { if (await flushSurface()) {setWritingFocus(null); setWritingStatus(null); setStoryEpisode(next);} }}
         space={space} pageTitle={!storyView && !timelineView && tab && tabKey !== STAGE_TAB ? tab.title : ""} crumbs={crumbs} counts={counts} writingStatus={storyView ? writingStatus : null}
         panels={panels} layout={layout} onLayout={toggleLayout}
-        onSpace={(next, target) => { setIntent(target ? { ...target, space: next, nonce: Date.now() } : null); navigate(tabOfSpace(next)); }} onCommand={() => setPalette(true)}
+        onSpace={async (next, target) => { if (await navigate(tabOfSpace(next))) setIntent(target ? { ...target, space: next, nonce: Date.now() } : null); }} onCommand={() => setPalette(true)}
         assistant={<>{todo > 0 && <button type="button" id="annBtn" className={"icon-btn" + (panel ? " on" : "")} title={uiText("app.annotationsNeedsYouAndAll")}
           onClick={() => { setPanel(!panel); setHistoryOpen(false); if (!panel && paMode === "side") setPaMode("off"); }}><NoteIcon /><span className="count">{todo}</span></button>}
           {tab?.surface_type === "doc" && !storyView && <button type="button" id="viewBtn" className={"icon-btn" + (viewMenu ? " on" : "")} title={uiText("app.chooseWhichHighlightsAndUnderlinesToShow")}
@@ -749,8 +753,8 @@ function ProjectPage({ slug }) {
           onError={onError} onToast={showToast} />
         <main className="main">
           <div className="doc-host">
-          {storyView && !identityLost && <StoryWorld slug={slug} epId={storyEpisode} me={me} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
-                controlRef={surfaceControl} onStatus={setWritingStatus} focusSource={writingFocus} onIdentityLost={loseWritingIdentity}
+          {storyView && !identityLost && <StoryWorld key={JSON.stringify([slug, storyEpisode, me.actor_id])} slug={slug} epId={storyEpisode} me={me} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
+                controlRef={surfaceControl} onStatus={setWritingStatus} focusSource={writingFocus} onSourceDone={sourceDone} onIdentityLost={loseWritingIdentity}
             focus={focus} onFocus={setFocus} onChanged={reloadAll} onStage={stageOf} onOpenShot={openShot} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")}
             intent={intent} onIntentDone={clearIntent} onImportTable={() => railControl.current?.updatePage(tabs.find((item) => item.key === STAGE_TAB))} />}
           {timelineView && <Timeline epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} focusRid={focus.shotRid}

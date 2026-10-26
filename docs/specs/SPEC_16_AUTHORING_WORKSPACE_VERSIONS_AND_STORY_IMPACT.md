@@ -3,7 +3,7 @@
 > **Authoring Workspace, Creative Versions & Story-to-Shot Impact**
 >
 > **日期**：2026-10-23。
-> **狀態**：完整設計稿，供使用者交給執行代理；**尚未實作、尚未驗收**。本文件不是已完成回執，也不自行授權派工、模型推論、部署或費用。
+> **狀態**（2026-10-26 更新）：整合分支 `spec16-20261023-b1/integration` 已實作並經三輪獨立審查（[審查紀錄](../SPEC16_REVIEW.md)），已併入三空間版 Story & World（[SPEC_16A](SPEC_16A_INTEGRATION_INTO_THREE_SPACE_STORY_WORLD.md)）；**使用者驗收尚未給**。以下維持 2026-10-23 的原始設計（那時的外殼是兩空間），不是完成回執，也不自行授權派工、模型推論、部署或費用。
 > **目標**：在既有「故事與世界／分鏡片場」雙空間內，讓創作者能安心寫作、整理故事、嘗試不同版本，並知道改稿會影響哪些鏡頭。
 > **實際閱讀基準**：`e7b2ce7`，包含 SPEC_13、14、15 實作。寫規格時 `project_docs/story_adaptation.py`、`tests/test_story_openapi.py` 有既存未提交修改；它們不屬於本次文件修改，執行者不得覆蓋或假定可以接管。
 > **外部參考**：[PowerWrite 首頁](https://powerwrite.app/)、[功能總覽](https://powerwrite.app/features)。參考的是公開功能與示意圖，不是登入實測、效能驗證或程式碼授權。PowerWrite 明確不提供 AI 續寫／改寫；本規格借鏡的是作者對結構、設定與版本的控制，不複製其品牌、素材或實作。

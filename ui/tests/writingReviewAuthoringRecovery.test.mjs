@@ -72,6 +72,18 @@ test('initial journal denial still permits controlled typing and a real server A
  const form=await create({journal,transport:async(_tail,_method,body)=>({...structure(2),clientMutationId:body.clientMutationId})});
  try{form.change({sceneKey:'s',summary:'Still editable'});assert.equal(form.isDirty(),true);assert.equal(form.recoveryState().recoverable,false);assert.equal(await form.flush({reason:'save',requireServer:true}),true);assert.equal(form.state,'saved');assert.equal(form.isDirty(),false);}finally{form.dispose();}
 });
+test('a clean outline can leave after discovery failure, and StrictMode setup can reactivate it',async()=>{
+ const journal=memory();journal.list=async()=>{throw new Error('storage unavailable');};
+ let notices=0;
+ const form=await create({journal,notify:()=>notices++});
+ try {
+  assert.equal(await form.flush(),true);
+  assert.equal(await form.flush({requireServer:true}),false);
+  form.dispose();form.activate();
+  const before=notices;form.change({sceneKey:'s',summary:'Still tracked after replay'});
+  assert.equal(form.isDirty(),true);assert.ok(notices>before);
+ }finally{form.dispose();}
+});
 test('N1 outside-anchor projection includes insert-before/after and never moves an unselected block',()=>{
  const node=(bid,text=bid)=>({type:'paragraph',attrs:{bid},content:[{type:'text',text,marks:[{type:'italic'}]}]});
  const base={type:'doc',content:['a','ha','hb','b','hc','c'].map(id=>node(id))},scene={headingBid:'hb',blockBids:['b']};

@@ -3464,6 +3464,11 @@
       "exportExpires": "私人匯出到期時間：{{time}}"
     },
     "integration": {
+      "startDraft": "故事起手式 — 私人另稿",
+      "startPending": "正在儲存原始故事起手式。確認儲存成功前，待交接文字會保留在此分頁。",
+      "startFailed": "無法開啟故事起手式。待交接文字仍保留；請重試，或先下載再關閉分頁。",
+      "startStorageFailed": "此分頁無法保留待交接的故事起手式。關閉前請先下載原始文字。",
+      "downloadStart": "下載原始故事起手式",
       "identityBlocked": "切換身份前，請解決稿件衝突，並儲存、明確保留或捨棄私人工具草稿。",
       "identityChanged": "登入身份已變更。上傳已停止；請以原作者身份登入以恢復草稿。",
       "alignmentUnavailable": "無法取得故事對齊狀態；尚未驗證是否為最新。",

@@ -46,3 +46,11 @@ test('a build stops before sending anything when the server could not take the t
   await buildStoryFromWorkspace({epId:'ep_demo_01', settings:{}, request:async (path, method) => {direct.push(method + ' ' + path); return {taskId:'x'};}, wait:async () => 'done'});
   assert.equal(direct.length, 3, 'without a workspace to ask (a page with no manuscript open) the requests simply go');
 });
+
+test('disposing a build between extraction and storyboard never sends the next mutation or navigates', async () => {
+  const controller = new AbortController(), sent = [];
+  await assert.rejects(buildStoryFromWorkspace({epId:'ep_demo_01', settings:{}, signal:controller.signal,
+    request:async (path, method, body, options) => {assert.equal(options.signal, controller.signal); sent.push(path); return {taskId:'pending'};},
+    wait:async () => {controller.abort();}, onDone:() => assert.fail('must not navigate')}), {name:'AbortError'});
+  assert.deepEqual(sent, ['/episodes/ep_demo_01/settings', '/episodes/ep_demo_01/asset-extractions']);
+});

@@ -11,10 +11,11 @@ export function primaryStoryAction({manuscript = 'working', writable = false, ha
   return {action:'none', labelKey:build, disabled:true, hintKey:manuscript === 'version' ? 'world.primaryHint_version' : 'world.primaryHint_branch'};
 }
 
-// What a production started from a story (SPEC_18 R16) hands to the workspace. A screenplay becomes the working script (the new production's
-// own document: the host saves it before the workspace opens); an idea or a novel becomes the text of the private source of that name.
+// A desired destination only, NOT permission to overwrite it. The React-free persistStartHandoff helper
+// saves through the actor-bound writing transport first, conservatively routing occupied destinations to a
+// private branch. The host peeks the pending start and acknowledges it only after saving AND loading ref.
 export function startHandOff(start) {
-  if (!start || typeof start.text !== 'string' || !start.text.trim()) return {kind:'none'};
+  if (!start || !['idea','novel','script'].includes(start.mode) || typeof start.text !== 'string' || !start.text.trim()) return {kind:'none'};
   return start.mode === 'script' ? {kind:'working', text:start.text} : {kind:'source', mode:start.mode, text:start.text};
 }
 
@@ -22,11 +23,13 @@ export function startHandOff(start) {
 // document, edited and locked by blocks), so this never sends the script itself: it makes sure the server has your text, then runs the
 // same three requests as before. The server records the production baseline when the extraction is confirmed.
 // flush: resolves true when the server holds what is on screen. wait: follows a task to its end. onDone: after the storyboard exists.
-export async function buildStoryFromWorkspace({epId, breakdownMode = 'auto', settings, request, wait, flush, onDone}) {
+export async function buildStoryFromWorkspace({epId, breakdownMode = 'auto', settings, request, wait, flush, onDone, signal}) {
   if (flush && !(await flush())) throw new Error(t('writing.authoring.serverSaveRequired'));
-  await request(`/episodes/${epId}/settings`, 'PUT', {...settings, breakdownMode});
-  await wait(await request(`/episodes/${epId}/asset-extractions`, 'POST'));
-  const result = await wait(await request(`/episodes/${epId}/storyboards`, 'POST', {breakdownMode}));
-  await onDone?.(result);
+  const check = () => {if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');};
+  const options = signal ? {signal} : undefined;
+  check(); await request(`/episodes/${epId}/settings`, 'PUT', {...settings, breakdownMode}, options);
+  check(); await wait(await request(`/episodes/${epId}/asset-extractions`, 'POST', undefined, options));
+  check(); const result = await wait(await request(`/episodes/${epId}/storyboards`, 'POST', {breakdownMode}, options));
+  check(); await onDone?.(result);
   return result;
 }

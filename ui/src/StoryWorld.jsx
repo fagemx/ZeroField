@@ -12,7 +12,8 @@ import { FALLBACK_APP, activeTasks, isActiveRun, restoredRuns, runRefused, runSt
 import { BreakdownDialog } from './BreakdownDialog.jsx';
 import { BREAKDOWN_MODES, estimatesByMode } from './breakdownModel.js';
 import { buildStoryFromWorkspace, primaryStoryAction, startHandOff } from './storyHostModel.js';
-import { takeStart } from './startModel.js';
+import { acknowledgeStart, peekStart } from './startModel.js';
+import { passesToShell } from './shellShortcuts.js';
 import { AuthoringWorkspace } from './writing/AuthoringWorkspace.jsx';
 import { WritingToolsPanel } from './writing/WritingToolsPanel.jsx';
 import { createActorBoundRequest } from './writing/writingTransport.js';
@@ -31,7 +32,7 @@ const renderTools = props => <WritingToolsPanel {...props}/>;
 // controlRef/onStatus/focusSource/onIdentityLost are the writing workspace's contract with the shell (save boundary, status chip, jump from
 // a shot back to its source, sign-in lost); me is whoever is signed in, fixed for the life of the workspace.
 export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '', writable, focus = {}, intent = null, controlRef, focusSource = null, onFocus, onStatus, onIdentityLost,
-  onChanged, onStage, onOpenShot, onAssets, onVault, onIntentDone, onImportTable}) {
+  onChanged, onStage, onOpenShot, onAssets, onVault, onIntentDone, onImportTable, onSourceDone}) {
   useLocale();
   const [breakdownMode, setBreakdownMode] = useState('auto');
   const [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123'), [styles, setStyles] = useState([]);
@@ -52,14 +53,21 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
   const slots = useMemo(() => ({left:leftSlot, right:rightSlot}), [leftSlot, rightSlot]);
   // Cookies can change in another tab: every request of the writing session carries who this workspace was opened for.
   const actorId = me?.actor_id || '';
-  const request = useMemo(() => actorId ? createActorBoundRequest(actorId, async (path, method, body, options) => {
+  const requestSession = useRef(null), buildAbort = useRef(null);
+  const request = useCallback((...args) => requestSession.current
+    ? requestSession.current(...args) : Promise.reject(new ApiError(401, t('writing.integration.identityChanged'))), []);
+  useLayoutEffect(() => {
+    buildAbort.current = new AbortController();
+    const bound = actorId ? createActorBoundRequest(actorId, async (path, method, body, options) => {
     const current = await api.get(`/projects/api/${slug}`);
     if (current.me.actor_id !== actorId) throw new ApiError(401, t('writing.integration.identityChanged'));
     // The preflight is only an early warning; the server binding closes its race.
     if (options.signal.aborted) throw new DOMException('Writing session disposed', 'AbortError');
     return storyRequest(path, method, body, options);
-  }, onIdentityLost) : storyRequest, [slug, actorId, onIdentityLost]);
-  useLayoutEffect(() => () => request.dispose?.(), [request]);
+    }, onIdentityLost) : null;
+    requestSession.current = bound;
+    return () => {buildAbort.current.abort(); bound?.dispose(); if (requestSession.current === bound) requestSession.current = null;};
+  }, [slug, actorId, onIdentityLost]);
   const reportStatus = useCallback(status => {setScriptStatus(status); onStatus?.(status);}, [onStatus]);
   const pickedScene = useCallback(scene => {
     if (scene?.sceneId && scene.sceneId !== focusRef.current.sceneId) onFocus?.({sceneId:scene.sceneId, shotRid:null});  // the scene in the editor is the focus
@@ -77,30 +85,36 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
   // What is in flight survives a reload (assetId -> taskId); finished or failed runs need nothing kept.
   const watching = JSON.stringify(activeTasks(runs));
   useEffect(() => rememberGenerations(epId, JSON.parse(watching)), [epId, watching]);
+  // Every page-local exit uses the same full boundary as leaving the space, including tool drafts. Only a successful exit applies its focus/filter.
+  const viewRef = useRef(view), viewSequence = useRef(0); viewRef.current = view;
+  const switchView = useCallback(async (next, apply) => {
+    const sequence = ++viewSequence.current;
+    if (next !== viewRef.current && viewRef.current === 'script' && control.current && !(await control.current.flush())) return false;
+    if (!mounted.current || sequence !== viewSequence.current) return false;
+    setView(next); apply?.(); return true;
+  }, [control]);
   // The shell's space menu can send you straight to a view and a filter ("2 missing images"); it is taken once.
   useEffect(() => {
     if (!intent || intent.space !== 'story' || intentSeen.current === intent.nonce) return;
-    intentSeen.current = intent.nonce;
-    if (intent.view) setView(intent.view);
-    if (intent.facet) setFacet(intent.facet);
-    if (intent.view === 'world') setSceneSel(null);  // "everything that is missing", not just this scene's
-    onIntentDone?.();
-  }, [intent]);  // eslint-disable-line react-hooks/exhaustive-deps
+    switchView(intent.view || viewRef.current, () => {
+      intentSeen.current = intent.nonce;
+      if (intent.facet) setFacet(intent.facet);
+      if (intent.view === 'world') setSceneSel(null);
+      onIntentDone?.();
+    }).catch(err => {if (mounted.current) setError(err.message);});
+  }, [intent, switchView]);  // eslint-disable-line react-hooks/exhaustive-deps
   // The settings and styles load once per episode.
   useEffect(() => {
     if (!ep || loadedFor.current === epId) return;
     loadedFor.current = epId; setLoading(true); setError('');
     // A production started from a story (SPEC_18 R16) opens with the ratio and style chosen in the hub.
-    const start = takeStart(epId);
+    const start = peekStart(epId);
     setRatio(start?.ratio || ep.settings?.aspectRatio || '16:9'); setStyle(start?.style || ep.settings?.stylePresetId || '88123');
     setBreakdownMode(['auto','scene','cinematic'].includes(ep.settings?.breakdownMode) ? ep.settings.breakdownMode : 'auto');
-    // Its text goes to the workspace: a screenplay is saved into the working script first (the workspace then opens on it); an idea or a novel
-    // opens as a private source with the text in it (SPEC_16A 3.5).
+    // The workspace acknowledges the hand-off only after a server save; opening this page never consumes its only copy.
     const plan = startHandOff(start);
-    if (plan.kind === 'working') {
-      storyRequest(`/episodes/${epId}/script`, 'PUT', {scriptContent:plan.text}).then(() => onChanged?.()).catch(err => {if (mounted.current) setError(err.message);})
-        .finally(() => {if (mounted.current) setReady(true);});
-    } else {setSeed(plan.kind === 'source' ? plan : null); setReady(true);}
+    setSeed(plan.kind === 'none' ? null : start); setReady(true);
+    if (plan.kind !== 'none') switchView('script').catch(err => {if (mounted.current) setError(err.message);});
     setGroup(restoredAssetGroup(epId));
     storyList('/catalog/styles').then(items => {if (mounted.current) setStyles(items);}).catch(err => {if (mounted.current) setError(err.message);})
       .finally(() => {if (mounted.current) setLoading(false);});
@@ -114,9 +128,15 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     if (!code || openedFor.current === focus.assetCode) return;
     const asset = assets.find(item => item.assetCode.split(':')[0] === code);
     if (!asset) return;
-    openedFor.current = focus.assetCode; setView('world'); setFacet('all'); setPick(asset.assetId);
-    requestAnimationFrame(() => document.getElementById('world-card-' + asset.assetId)?.scrollIntoView({block:'nearest'}));
-  }, [focus.assetCode, assets]);
+    switchView('world', () => {
+      openedFor.current = focus.assetCode; setFacet('all'); setPick(asset.assetId);
+      requestAnimationFrame(() => document.getElementById('world-card-' + asset.assetId)?.scrollIntoView({block:'nearest'}));
+    }).catch(err => {if (mounted.current) setError(err.message);});
+  }, [focus.assetCode, assets, switchView]);
+  useEffect(() => {
+    if (focusSource && (!focusSource.episodeId || focusSource.episodeId === epId))
+      switchView('script').catch(err => {if (mounted.current) setError(err.message);});
+  }, [focusSource, epId, switchView]);
   useEffect(() => {
     if (!focus.sceneId && !focus.shotRid && ep?.scenes?.[0]) onFocus?.({sceneId:ep.scenes[0].sceneId});
   }, [ep?.scenes, focus.sceneId, focus.shotRid]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -168,7 +188,7 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     let alive = true;
     setEstimate({status:'loading'});
     const timer = setTimeout(() => {
-      storyRequest(`/episodes/${epId}/storyboard-estimates`, 'POST', {breakdownModes:BREAKDOWN_MODES})
+      request(`/episodes/${epId}/storyboard-estimates`, 'POST', {breakdownModes:BREAKDOWN_MODES})
         .then(result => {if (alive) setEstimate({status:'ready', modes:estimatesByMode(result)});})
         .catch(() => {if (alive) setEstimate({status:'error'});});
     }, 150);
@@ -222,16 +242,22 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     try {await action(); return true;} catch (err) {if (mounted.current) setError(err.message); return false;} finally {if (mounted.current) setBusy(false);}
   };
   // Extraction and storyboard tasks show their id and can be canceled, as the old script bar allowed.
-  const follow = async pending => {setTask(pending); try {return await waitStoryTask(pending, {onProgress:setTask});} finally {if (mounted.current) setTask(null);}};
+  const follow = async pending => {
+    const signal = buildAbort.current.signal;
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (mounted.current) setTask(pending);
+    try {return await waitStoryTask(pending, {signal, request, onProgress:next => {if (mounted.current) setTask(next);}});}
+    finally {if (mounted.current) setTask(null);}
+  };
   // The build asks its few questions in a dialog (SPEC_18 R7), but only once the server holds what you wrote: the workspace saves first, and
   // if it cannot (a conflict, a lost sign-in) it says so itself and the dialog stays shut. Cancelling the dialog sends nothing.
-  const holdsScript = async () => control.current ? control.current.flush({requireServer:true}) : true;
+  const holdsScript = async () => control.current ? control.current.flush({requireServer:true}) : viewRef.current !== 'script';
   const openBuild = async () => {if (await holdsScript()) setBuilding(true);};
   // Confirming runs the requests the old button ran, in the same order, with the dialog's choices, minus the script itself: the workspace owns it.
   const build = (choice = {}) => run(async () => {
     await buildStoryFromWorkspace({epId, breakdownMode:choice.breakdownMode ?? breakdownMode,
       settings:{aspectRatio:choice.ratio ?? ratio, stylePresetId:choice.style ?? style},
-      request:storyRequest, wait:follow, flush:holdsScript, onDone:async () => {await onChanged?.(); onStage?.();}});
+      request, signal:buildAbort.current.signal, wait:follow, flush:holdsScript, onDone:async () => {if (!mounted.current) return; await onChanged?.(); if (mounted.current) onStage?.();}});
   });
   const confirmBuild = choice => {setBuilding(false); setBreakdownMode(choice.breakdownMode); setRatio(choice.ratio); setStyle(choice.style); return build(choice);};
   const importTable = () => {setBuilding(false); onImportTable?.();};
@@ -285,22 +311,19 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     const created = await storyRequest(`/episodes/${epId}/assets`, 'POST', {type, name, prompt});
     await loadAssets(); setFacet('all'); setPick(created.assetId); onChanged?.();
   });
-  const openAsset = asset => {openedFor.current = asset.assetCode; setFacet('all'); setPick(asset.assetId); setView('world'); onFocus?.({assetCode:asset.assetCode});};
+  const openAsset = asset => switchView('world', () => {openedFor.current = asset.assetCode; setFacet('all'); setPick(asset.assetId); onFocus?.({assetCode:asset.assetCode});}).catch(err => {if (mounted.current) setError(err.message);});
   // x on the editor: the wall has the whole view back, and the crew no longer thinks you are holding a card.
   const closeEditor = () => {openedFor.current = null; setPick(''); onFocus?.({assetCode:null, assetName:null});};
-  // Leaving the writing workspace for the wall is leaving a space for a moment: what you wrote is saved first, or you stay and the workspace says why.
-  const switchView = async next => {
-    if (next === view) return;
-    if (view === 'script' && !(await holdsScript())) return;
-    setView(next);
-  };
   // A scene is the focus now; the Shot Stage picks the shot that needs you. The workspace scrolls its manuscript to the scene.
   const focusScene = scene => {
     onFocus?.({sceneId:scene.sceneId, shotRid:null});
     setRailFocus({sceneId:scene.sceneId, nonce:Date.now()});
   };
-  const openScene = async scene => {if (view !== 'script') await switchView('script'); focusScene(scene);};
-  const jumpTo = railFocus && railFocus.nonce > (focusSource?.nonce || 0) ? railFocus : focusSource;
+  const openScene = async scene => {if (await switchView('script')) focusScene(scene);};
+  const externalSource = !focusSource?.episodeId || focusSource.episodeId === epId ? focusSource : null;
+  const jumpTo = railFocus && railFocus.nonce > (externalSource?.nonce || 0) ? railFocus : externalSource;
+  const sourceDone = nonce => {setRailFocus(current => current?.nonce === nonce ? null : current); onSourceDone?.(nonce);};
+  const seeded = () => {if (seed) acknowledgeStart(epId, seed); setSeed(null);};
   const scenes = ep?.scenes || [];
   const shotsByScene = useMemo(() => shots.reduce((map, shot) => map.set(shot.sceneId, (map.get(shot.sceneId) || 0) + 1), new Map()), [shots]);
   const missing = missingAssetSheets(ep);
@@ -365,7 +388,7 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
       </> : <>
         {ready && <AuthoringWorkspace slug={slug} epId={epId} me={me} ep={ep} shots={shots} writable={writable} request={request} controlRef={control}
           onChanged={onChanged} onStage={onStage} onStatus={reportStatus} onScene={pickedScene} focusSource={jumpTo} renderTools={renderTools} slots={slots}
-          seed={seed} onSeeded={() => setSeed(null)}/>}
+          seed={seed} onSeeded={seeded} onJumped={sourceDone} passKeys={passesToShell}/>}
         {notices}
       </>}
     </main>
