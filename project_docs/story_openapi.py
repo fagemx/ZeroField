@@ -202,11 +202,19 @@ def scenes_of_doc(ep, doc):
     # Keep hardBreaks and paragraph spacing in the content for the shot cutter.
     items = []
     for part in writing_structure.sections(doc):
-        content = "\n\n".join(doc_text({"content": [node]}) for node in part['nodes'])
+        bodies = [doc_text({"content": [node]}) for node in part['nodes']]
         heading = part['heading']
+        title = 'Scene 01'
+        if heading is not None:
+            # 只拆標題文字投影，不拆穩定 block 邊界。R16 可把整份劇本放在
+            # 同一 paragraph；hardBreak 後的正文仍屬此場，不能丟失或混入場名。
+            first_line, separator, inline_body = doc_text({"content": [heading]}).lstrip().partition('\n')
+            title = scene_sections(first_line)[0]['title']
+            if separator:
+                bodies.insert(0, inline_body)
+        content = "\n\n".join(bodies)
         if heading is None and not content.strip():
             continue
-        title = scene_sections(node_text(heading))[0]['title'] if heading else 'Scene 01'
         items.append({'title': title, 'content': content})
     return [{**item, "sceneId": f"sc_{ep['slug']}_{ep['episodeIndex']:02d}_S{i:02d}",
              "episodeId": ep["episodeId"], "sceneIndex": i} for i, item in enumerate(items, 1)]

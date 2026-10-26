@@ -1,0 +1,19 @@
+test_a_variant_tag_opening_a_beat_is_action_not_a_speaker_cue (test_story_openapi.StoryPureTests.test_a_variant_tag_opening_a_beat_is_action_not_a_speaker_cue) ... ok
+test_character_code_allocation_and_rich_asset_descriptions (test_story_openapi.StoryPureTests.test_character_code_allocation_and_rich_asset_descriptions) ... ok
+test_choice_contrast_detects_a_switch_and_injects_an_action_beat (test_story_openapi.StoryPureTests.test_choice_contrast_detects_a_switch_and_injects_an_action_beat) ... ok
+test_choice_trace_strikes_unchecked_and_weaves_kept_and_extra_into_scenes_one_and_two (test_story_openapi.StoryPureTests.test_choice_trace_strikes_unchecked_and_weaves_kept_and_extra_into_scenes_one_and_two) ... ok
+test_condition_collisions_differ_by_genre_and_carry_prop_slices (test_story_openapi.StoryPureTests.test_condition_collisions_differ_by_genre_and_carry_prop_slices) ... ok
+test_dynamic_catalog_and_aliases (test_story_openapi.StoryPureTests.test_dynamic_catalog_and_aliases) ... ok
+test_medium_lens_cuts_the_same_skeleton_into_different_structures_and_camera_grammar (test_story_openapi.StoryPureTests.test_medium_lens_cuts_the_same_skeleton_into_different_structures_and_camera_grammar) ... ok
+test_no_label_rule_flags_and_sanitizes_and_engine_output_is_always_clean (test_story_openapi.StoryPureTests.test_no_label_rule_flags_and_sanitizes_and_engine_output_is_always_clean) ... ok
+test_offline_adaptation_modes_and_preserved_source (test_story_openapi.StoryPureTests.test_offline_adaptation_modes_and_preserved_source) ... ok
+test_pagination_and_scene_parser (test_story_openapi.StoryPureTests.test_pagination_and_scene_parser) ... ok
+test_private_webhooks_rejected (test_story_openapi.StoryPureTests.test_private_webhooks_rejected) ... ok
+test_shot_beats_compatibility_dialogue_and_grammar (test_story_openapi.StoryPureTests.test_shot_beats_compatibility_dialogue_and_grammar) ... ok
+test_story_adapter_uses_frozen_graph_and_card_values (test_story_openapi.StoryPureTests.test_story_adapter_uses_frozen_graph_and_card_values) ... ok
+test_worker_variant_references_and_hash_alias (test_story_openapi.StoryPureTests.test_worker_variant_references_and_hash_alias) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.066s
+
+OK

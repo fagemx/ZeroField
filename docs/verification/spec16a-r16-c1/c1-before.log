@@ -1,0 +1,77 @@
+test_actual_js_persist_start_handoff_doc_reaches_python_scene_and_beat_planner (test_story_scene_projection.SceneProjectionPureTests.test_actual_js_persist_start_handoff_doc_reaches_python_scene_and_beat_planner) ... FAIL
+test_heading_and_paragraph_keep_inline_body_out_of_scene_title (test_story_scene_projection.SceneProjectionPureTests.test_heading_and_paragraph_keep_inline_body_out_of_scene_title) ... 
+  test_heading_and_paragraph_keep_inline_body_out_of_scene_title (test_story_scene_projection.SceneProjectionPureTests.test_heading_and_paragraph_keep_inline_body_out_of_scene_title) (kind='heading') ... FAIL
+  test_heading_and_paragraph_keep_inline_body_out_of_scene_title (test_story_scene_projection.SceneProjectionPureTests.test_heading_and_paragraph_keep_inline_body_out_of_scene_title) (kind='paragraph') ... FAIL
+test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition (test_story_scene_projection.SceneProjectionPureTests.test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition) ... 
+  test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition (test_story_scene_projection.SceneProjectionPureTests.test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition) (kind='heading') ... FAIL
+  test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition (test_story_scene_projection.SceneProjectionPureTests.test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition) (kind='paragraph') ... FAIL
+test_normal_block_scenes_and_title_only_fallback_still_work (test_story_scene_projection.SceneProjectionPureTests.test_normal_block_scenes_and_title_only_fallback_still_work) ... ok
+test_repeated_beats_keep_slate_ownership_without_certifying_exact_origin (test_story_scene_projection.SceneProjectionPureTests.test_repeated_beats_keep_slate_ownership_without_certifying_exact_origin) ... ok
+
+======================================================================
+FAIL: test_actual_js_persist_start_handoff_doc_reaches_python_scene_and_beat_planner (test_story_scene_projection.SceneProjectionPureTests.test_actual_js_persist_start_handoff_doc_reaches_python_scene_and_beat_planner)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField-r16-followup\tests\test_story_scene_projection.py", line 132, in test_actual_js_persist_start_handoff_doc_reaches_python_scene_and_beat_planner
+    self.assertEqual(scenes[0]['title'], 'Scene 01: Room')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Scene 01: Room @CAST-01 faces the lens at @SET-07, figh[43 chars]th."' != 'Scene 01: Room'
+- Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: "Tell me the truth."
++ Scene 01: Room
+
+
+======================================================================
+FAIL: test_heading_and_paragraph_keep_inline_body_out_of_scene_title (test_story_scene_projection.SceneProjectionPureTests.test_heading_and_paragraph_keep_inline_body_out_of_scene_title) (kind='heading')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField-r16-followup\tests\test_story_scene_projection.py", line 41, in test_heading_and_paragraph_keep_inline_body_out_of_scene_title
+    self.assertEqual(scenes[0]['title'], 'Scene 01: Room')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Scene 01: Room @CAST-01 faces the lens at @SET-07, figh[43 chars]th."' != 'Scene 01: Room'
+- Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: "Tell me the truth."
++ Scene 01: Room
+
+
+======================================================================
+FAIL: test_heading_and_paragraph_keep_inline_body_out_of_scene_title (test_story_scene_projection.SceneProjectionPureTests.test_heading_and_paragraph_keep_inline_body_out_of_scene_title) (kind='paragraph')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField-r16-followup\tests\test_story_scene_projection.py", line 41, in test_heading_and_paragraph_keep_inline_body_out_of_scene_title
+    self.assertEqual(scenes[0]['title'], 'Scene 01: Room')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Scene 01: Room @CAST-01 faces the lens at @SET-07, figh[43 chars]th."' != 'Scene 01: Room'
+- Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: "Tell me the truth."
++ Scene 01: Room
+
+
+======================================================================
+FAIL: test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition (test_story_scene_projection.SceneProjectionPureTests.test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition) (kind='heading')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField-r16-followup\tests\test_story_scene_projection.py", line 54, in test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition
+    self.assertEqual(scenes[0]['title'], 'Scene 01: Room')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Scene 01: Room @CAST-01 faces the lens at @SET-07, figh[83 chars]th."' != 'Scene 01: Room'
+- Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears.  Scene 99: quoted words, not a boundary @CAST-02: "Tell me the truth."
++ Scene 01: Room
+
+
+======================================================================
+FAIL: test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition (test_story_scene_projection.SceneProjectionPureTests.test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition) (kind='paragraph')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\ai_project\ZeroField-r16-followup\tests\test_story_scene_projection.py", line 54, in test_inline_scene_looking_lines_keep_order_and_breaks_but_never_partition
+    self.assertEqual(scenes[0]['title'], 'Scene 01: Room')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Scene 01: Room @CAST-01 faces the lens at @SET-07, figh[83 chars]th."' != 'Scene 01: Room'
+- Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears.  Scene 99: quoted words, not a boundary @CAST-02: "Tell me the truth."
++ Scene 01: Room
+
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.109s
+
+FAILED (failures=5)
+{"case": "actual-persistStartHandoff", "scenes": [{"title": "Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\"", "content": "", "sceneId": "sc_projection_01_S01", "episodeId": "ep_projection_01", "sceneIndex": 1}], "plans": [[{"title": "Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\"", "content": "", "sceneId": "sc_projection_01_S01", "episodeId": "ep_projection_01", "sceneIndex": 1}, ["Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\""]]]}
+{"case": "heading", "scenes": [{"title": "Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\"", "content": "", "sceneId": "sc_projection_01_S01", "episodeId": "ep_projection_01", "sceneIndex": 1}], "beats": [[{"title": "Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\"", "content": "", "sceneId": "sc_projection_01_S01", "episodeId": "ep_projection_01", "sceneIndex": 1}, ["Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\""]]]}
+{"case": "paragraph", "scenes": [{"title": "Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\"", "content": "", "sceneId": "sc_projection_01_S01", "episodeId": "ep_projection_01", "sceneIndex": 1}], "beats": [[{"title": "Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\"", "content": "", "sceneId": "sc_projection_01_S01", "episodeId": "ep_projection_01", "sceneIndex": 1}, ["Scene 01: Room @CAST-01 faces the lens at @SET-07, fighting back tears. @CAST-02: \"Tell me the truth.\""]]]}

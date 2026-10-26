@@ -1,0 +1,9 @@
+test_a_claim_decides_which_shots_answer_beats_and_which_are_only_counted (test_story_estimates.PlannerPureTests.test_a_claim_decides_which_shots_answer_beats_and_which_are_only_counted) ... ok
+test_beats_come_from_the_shared_cutter_and_only_scene_narrows_them (test_story_estimates.PlannerPureTests.test_beats_come_from_the_shared_cutter_and_only_scene_narrows_them) ... ok
+test_existing_slate_shots_answer_the_first_beats_and_later_beats_add (test_story_estimates.PlannerPureTests.test_existing_slate_shots_answer_the_first_beats_and_later_beats_add) ... ok
+test_planned_seconds_come_from_the_shot_grammar (test_story_estimates.PlannerPureTests.test_planned_seconds_come_from_the_shot_grammar) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.007s
+
+OK
