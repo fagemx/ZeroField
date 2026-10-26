@@ -295,7 +295,7 @@
 /* The beat track under the viewport: camera keys and acting beats on the shot's own frames. */
 .previs-beats { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .previs-beats > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; }
-.previs-beats > header span { color: var(--faint); font-size: 11.5px; text-align: right; }
+.previs-beats > header span { color: var(--faint); font-size: 11.5px; text-align: right; flex: 1; }
 .pb-grid { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; }
 .pb-labels { display: grid; grid-template-rows: 30px 34px; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
 .pb-lanes { position: relative; display: grid; grid-template-rows: 30px 34px; gap: 6px; cursor: pointer; touch-action: none; }
