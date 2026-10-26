@@ -6,13 +6,18 @@
 
 - `07d7110b76722ed791987afdd00fd3ff4ad6369b`：C1 最小產品修正、無 DB 回歸及修前／後原始輸出。
 - `6f6763dc865ee49ec1e3cb3bd200bf28ac732b82`：W2 測試 readiness、具名 gate 與診斷；沒有 Bible 產品變更。
-- 本文件所在提交：耐久複審原文、最終預設前端結果與 [新收據](spec16a-r16-c1-verification.json)。最終 HEAD 以 Git 歷史與交付報告為準。
+- `0c0fe6edd4cab4faf352e4f72b4500846a603244`：耐久複審原文、最終預設前端結果與 [新收據](spec16a-r16-c1-verification.json)，也是修後獨立複查的精確候選。
+- 後續文件收尾提交只保存修後複查與結論，不變更產品或測試；最終 HEAD 以 Git 歷史與交付報告為準。
 
 **C1 已確認並作最小修正；歷史小說 ACK-loss 根因仍未證實（`historicalRootCauseProven=false`）。** W2 已重現具體 harness readiness 缺陷並修測試，但不能宣稱它就是 b5 並行失敗的唯一原因。最終預設並行前端本輪 **504/504 通過**，不改寫 b5 的 503/504 歷史失敗。
 
 ## 新獨立複審與處置
 
-完整 [獨立複審原文](verification/spec16a-r16-c1/post-repair-review.md) 已逐 bytes 複製保存，SHA256 為 `620b82c4d20647fa00d7c923f5a511fbc480d204ebc30d82601f887d7c0b2cb3`。它對 b5 的總評為 **CHANGES REQUESTED**，工作 B 的定向調查為 **OK with notes**，是同模型家族的全新唯讀獨立閱讀，不是跨供應商或使用者驗收。本批處置不冒充 reviewer 已接受修正；這次修正後尚未再獨立複審。
+完整 [獨立複審原文](verification/spec16a-r16-c1/post-repair-review.md) 已逐 bytes 複製保存，SHA256 為 `620b82c4d20647fa00d7c923f5a511fbc480d204ebc30d82601f887d7c0b2cb3`。它對 b5 的總評為 **CHANGES REQUESTED**，工作 B 的定向調查為 **OK with notes**，是同模型家族的全新唯讀獨立閱讀，不是跨供應商或使用者驗收。該原始報告的 CHANGES REQUESTED 不改寫為通過。
+
+修後已由同一獨立 reviewer 重新檢查精確候選 `0c0fe6edd4cab4faf352e4f72b4500846a603244`，結論 **OK with notes**，C1／P1 在 `scenes_of_doc` 正文與拍點投影範圍確認關閉。完整 [修後獨立複查](verification/spec16a-r16-c1/c1-independent-recheck.md) 逐 bytes 保存，SHA256：`8f0a237e3c9ca696fa3e3c7075f60295039012fe557a512b8439ae6d12c8aaa9`。Reviewer 親跑 Python 23＋Node 23＝46 項通過，另在記憶體載入 b5 舊函式得到預期 5 failures，確認回歸能辨識原缺陷；最終預設前端 504 項屬讀取 writer 日誌，不冒稱 reviewer 重跑。
+
+第一次修後複查嘗試因供應端伺服器過載失敗，沒有產出結論；已保留失敗回執，之後以同一 Pi／同一模型及 reviewer session 接續完成，未重做修正或切換執行器。這仍是同模型家族的唯讀獨立複查，不是跨供應商或使用者驗收。
 
 | 項目 | 本批處置 |
 |---|---|
@@ -82,5 +87,6 @@
 - 歷史小說 ACK-loss 根因未證實；C1 是新複審所確認的劇本投影回歸，與那次小說 reload 故障不得混稱。
 - W2 具體 harness 問題有定向證據；b5 當輪失敗的完整歷史歸因仍未證實。舊父層錯誤提示殘留仍保留，未擴成產品重構。
 - 本批沒有重跑真 DB repeated-build、跨 cookie、真 receipt／24h／換憑證或 GPU／模型，相關舊限制保留。穩定結構的原始 title／mapping 產生方式也未藉此重設計。
-- b5 follow-up、舊收據與原日誌原樣保留；本批新複審修正後尚無新 reviewer 接受聲明。
+- b5 follow-up、舊收據與原日誌原樣保留；修後獨立複查是限定差異的 OK with notes，不代表全部情境通過或使用者驗收。
+- Reviewer 另確認穩定 outline 顯示標題仍可能混入同 block 的正文（`writing_structure.py`／`WritingOutline.jsx`）；它不再造成本次 C1 的空正文／錯誤拍點，但尚未修正，不宣稱所有結構場名都已正規化。
 - main、原 SPEC_16 工作樹／分支與無關未提交內容均不修改；未操作 PostgreSQL／權限，未推送、部署或合回；未用 skills、子代理、其他模型／CLI，也未做 SPEC_17／18 新功能。

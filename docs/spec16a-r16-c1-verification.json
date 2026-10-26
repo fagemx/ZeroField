@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "spec": "SPEC_16A_R16_C1_CORRECTION",
   "recordedAt": "2026-10-26T08:42:24.605978+00:00",
-  "status": "c1_corrected_w2_harness_improved_pending_independent_review",
+  "status": "c1_corrected_w2_harness_improved_independent_review_ok_with_notes",
   "historicalRootCauseProven": false,
   "c1RootCauseProven": true,
   "c1CorrectionApplied": true,
@@ -31,7 +31,23 @@
     "originalVerdict": "CHANGES REQUESTED",
     "reviewedCommit": "b5ccca765acf1951b8adeb816cc1e397746b7157",
     "independence": "同模型家族的全新唯讀獨立閱讀；非跨供應商或使用者驗收。",
-    "postCorrectionRereview": "not_run",
+    "postCorrectionRereview": "completed_ok_with_notes",
+    "postCorrectionReview": {
+      "reviewedCommit": "0c0fe6edd4cab4faf352e4f72b4500846a603244",
+      "verdict": "OK with notes",
+      "durableCopy": "docs/verification/spec16a-r16-c1/c1-independent-recheck.md",
+      "sha256": "8f0a237e3c9ca696fa3e3c7075f60295039012fe557a512b8439ae6d12c8aaa9",
+      "reviewerModel": "openai-codex/gpt-6.1-sol",
+      "completedRun": "245dbd9e-261c-4fb0-bbdd-58c206d4102d",
+      "failedAttempt": {"run": "70eaab1f-1ffb-4ec9-b010-0766f7ef1e57", "reason": "供應端伺服器過載，未產出審查結論；同一 Pi／模型／reviewer session 接續完成，未切換執行器。"},
+      "c1Disposition": "closed_within_scenes_of_doc_body_and_beat_projection",
+      "testsPersonallyRun": {"pythonPassed": 23, "nodePassed": 23, "failures": 0, "skips": 0, "cancelled": 0},
+      "oldFunctionCounterexample": "僅在記憶體載入 b5 原函式，5 methods 產生預期5 failures；不是修後通過結果。",
+      "defaultFrontend504": "READ writer 日誌，reviewer 未重跑預設完整前端。",
+      "hashesVerified": 25,
+      "independence": "同模型家族的唯讀獨立複查，非跨供應商、真DB或使用者驗收。",
+      "closeout": "本收據後續收尾只改文件／審查紀錄；產品及測試相對 reviewedCommit 不變。"
+    },
     "originalReviewerAcceptanceClaimed": false
   },
   "c1": {
@@ -171,10 +187,6 @@
     {
       "command": "產品模型／GPU／外部供應商／模型下載",
       "reason": "使用者禁止。"
-    },
-    {
-      "command": "修正後新獨立複審",
-      "reason": "本 worker 不派子代理，交上層接續。"
     }
   ],
   "preservation": {
@@ -201,7 +213,8 @@
     "W2 具體 harness 缺陷已證實，但 b5 並行失敗的歷史完整歸因仍未證實。",
     "父層舊錯誤提示殘留未修；不依舊 alert 推論新的 CAS 衝突。",
     "未重跑真 HTTP／PG、repeated-build／take 保存、credential／24h receipt／跨登入或產品模型；原殘餘限制不擴大。",
-    "修正後尚待上層新的獨立複審，不宣稱 reviewer 已接受。"
+    "修後獨立複查為限定差異 OK with notes，非全部情境或使用者驗收。",
+    "穩定 outline 顯示標題仍可能混入同 block 正文；不再造成本次C1空正文／錯誤拍點，但未正規化所有結構場名。"
   ],
   "manualNotes": "修前產品缺陷、W2 instrumented matcher 的 harness 問題及尚未證實的歷史歸因分開記錄；原始日誌不覆寫／裁切。新報告為 docs/SPEC16A_R16_C1_CORRECTION.md，b5文件原樣保留。"
 }
