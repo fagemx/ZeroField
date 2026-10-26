@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "spec": "SPEC_16A_R16_C1_CORRECTION",
+  "recordedAt": "2026-10-26T08:42:24.605978+00:00",
+  "status": "c1_corrected_w2_harness_improved_pending_independent_review",
+  "historicalRootCauseProven": false,
+  "c1RootCauseProven": true,
+  "c1CorrectionApplied": true,
+  "historicalParallelFailureRootCauseProven": false,
+  "candidate": {
+    "worktree": "C:/ai_project/ZeroField-r16-followup",
+    "branch": "fix/spec16a-r16-followup",
+    "baseCommit": "b5ccca765acf1951b8adeb816cc1e397746b7157",
+    "productCommit": "07d7110b76722ed791987afdd00fd3ff4ad6369b",
+    "harnessCommit": "6f6763dc865ee49ec1e3cb3bd200bf28ac732b82",
+    "finalHead": "以本收據所在提交及交付 c1-correction.md 的實際 HEAD 為準；避免自我雜湊循環。",
+    "productPathsChanged": [
+      "project_docs/story_openapi.py"
+    ],
+    "uiSrcChanged": false,
+    "runtimeSourceAndTestsSha256": {
+      "project_docs/story_openapi.py": "57b2f71da915fafe7fbd90b44bd9203cd448f56078f4d017bad91451e3ac2900",
+      "tests/test_story_scene_projection.py": "61ac8b65702114637089c68a5ce41e9e887967047a84db90b9eb99995b1f774b",
+      "ui/tests/writingToolsRecovery.test.mjs": "22af9af79bc21d54703e95380a9aee4c1b375a013199df45cfad305343361433"
+    }
+  },
+  "independentReview": {
+    "source": "C:/Users/fagem/.pi/agent/sessions/--C--ai_project-ZeroField--/subagent-artifacts/outputs/b2f70ecb-666b-476b-9b76-e60949c4c381/spec16a-r16/post-repair-review.md",
+    "durableCopy": "docs/verification/spec16a-r16-c1/post-repair-review.md",
+    "sha256": "620b82c4d20647fa00d7c923f5a511fbc480d204ebc30d82601f887d7c0b2cb3",
+    "originalVerdict": "CHANGES REQUESTED",
+    "reviewedCommit": "b5ccca765acf1951b8adeb816cc1e397746b7157",
+    "independence": "同模型家族的全新唯讀獨立閱讀；非跨供應商或使用者驗收。",
+    "postCorrectionRereview": "not_run",
+    "originalReviewerAcceptanceClaimed": false
+  },
+  "c1": {
+    "rootCause": "sections 以整個 Scene 開頭 block 為 heading，scenes_of_doc 卻只以後續 nodes 組正文，node_text 又把 heading 內換行轉成空白。真 handoff 正會產生一個 paragraph＋hardBreak 的工作中稿。",
+    "before": "場名混入全部動作／對白、content 為空、auto fallback 一拍。",
+    "after": "標題只取首行，hardBreak 後正文原序／換行保留，auto 動作＋對白為兩拍。",
+    "correction": "只改 scenes_of_doc 的文字投影；未改原 doc、sections／reconcile_structure／stable mapping、整份文件 CAS 或 handoff 格式。",
+    "coverage": [
+      "heading 型與 paragraph 型同段正文",
+      "空行／尾端換行／後續 block 的順序",
+      "段內 Scene 99 字樣不另造穩定場次",
+      "一般分 block 兩場、純標題 fallback、無標題與空文件",
+      "repeated A/B/A 保持 ambiguous 的實際 scene_claim／shot_relationship／planner 佔位防線",
+      "真正 persistStartHandoff→實際 script/ops doc→Python scenes_of_doc／beat_plans，含 CRLF 正規化"
+    ],
+    "backendExecuted": 23,
+    "backendSkips": 0,
+    "backendBoundary": "只有純單元／記憶體 transport／讀取邊界替身；不含真 HTTP／PG repeated-build、原稿採用或 take 保存。"
+  },
+  "w2": {
+    "status": "confirmed_harness_readiness_defect_corrected_with_diagnostics",
+    "oldPredicateProvenFalsePositive": true,
+    "proof": "episode-2 gate 未放行時 control episode=ep-2／docHash=null／無新 manager，原 statuses predicate=true，新 currentReady=false。",
+    "newReadiness": "當前 episodeId＋專用 docHash＋working resource＋未 dispose 且 discovered 的 actor／project／episode manager indexScope＋registry 狀態。",
+    "gates": [
+      "episode-2：重現舊 readiness 假陽性",
+      "catalog-after-save：已見 Saved on server 但 accepted callback 尚未完成、表單仍 disabled；放行且真控制項可操作後再編輯",
+      "private-form：精確阻擋新私稿 form journal put，sequence4／durable3→放行真 IDB 後4／4；期間無新 PATCH"
+    ],
+    "staleParentErrorProven": true,
+    "staleParentErrorEvidence": "父層 Shared version changed 仍可見，但 manager saved／conflict=false；PATCH 關聯為故意409及成功200，後續私稿無新 PATCH。未改此產品提示。",
+    "diagnostics": "scope／sequence／durableSequence／manager state／request id、actor、episode、status／journal key、sequence／原生 IDB tx id、mode、complete/error／父層 alerts；失敗也輸出。",
+    "traceSummary": {
+      "path": "docs/verification/spec16a-r16-c1/w2-trace-summary.json",
+      "sha256": "47837d9314596eecccb74f248c39b4ff992b8f1f3e43e005c92ace8d7e286b7a",
+      "source": "docs/verification/spec16a-r16-c1/frontend-targeted.log"
+    },
+    "noTimeoutExtensionOrBlindLoops": true,
+    "productBibleChanged": false,
+    "historicalAttribution": "b5 歷史並行失敗無同次關聯證據，不能宣稱本缺陷是其唯一原因；最終504通過只代表本次結果。"
+  },
+  "commands": [
+    {
+      "command": "python -X utf8 -m unittest discover -s tests -p test_story_scene_projection.py -v",
+      "result": "failed",
+      "testsRun": 5,
+      "failures": 5,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/c1-before.log",
+      "sha256": "5d31a03a7c50e2ea2a23182c2c790640c2efc0361856faf3c077097e56872ede",
+      "note": "修前產品缺陷：5 failures 含 heading／paragraph subtests；真 helper 跨模組同樣失敗。"
+    },
+    {
+      "command": "python -X utf8 -m unittest discover -s tests -p test_story_scene_projection.py -v",
+      "result": "passed",
+      "testsRun": 5,
+      "failures": 0,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/c1-after.log",
+      "sha256": "486f5f352f18718a9e53af73b008d1fe725c22ebcedef06047a963dcfc059713",
+      "note": "同一批無 DB 測試修後通過。"
+    },
+    {
+      "command": "python -X utf8 -m unittest discover -s tests -p test_story_openapi.py -k StoryPureTests -v",
+      "result": "passed",
+      "testsRun": 14,
+      "failures": 0,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/story-pure.log",
+      "sha256": "867ea34291b96a75aeaadaba97455acd517d66f56677f52ac79bddde5d531d2d",
+      "note": "只選純測試類；沒有執行 HTTP／PG fixture。"
+    },
+    {
+      "command": "python -X utf8 -m unittest discover -s tests -p test_story_estimates.py -k PlannerPureTests -v",
+      "result": "passed",
+      "testsRun": 4,
+      "failures": 0,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/planner-pure.log",
+      "sha256": "34fca57f2145c68bbf4c8c3711edc5547b3eaa88c305da5d96b0accf88a92337",
+      "note": "只選純 planner 類。"
+    },
+    {
+      "command": "node --test ui/tests/writingToolsRecovery.test.mjs",
+      "result": "failed",
+      "testsRun": 4,
+      "failures": 1,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/w2-gated-initial.log",
+      "sha256": "bc56dfb0c34b11d86b4dc53183652b0ac4cece70123d038abbdd90484632deff",
+      "note": "harness 問題：Playwright fieldset disabled matcher 不適用，改查 attribute，未改產品。"
+    },
+    {
+      "command": "node --test ui/tests/writingToolsRecovery.test.mjs",
+      "result": "passed",
+      "testsRun": 4,
+      "failures": 0,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/w2-gated-candidate.log",
+      "sha256": "37b9eb9d0b05ed1b9f28f96f20e259a25474bddec3cd3ea5ee1719775401d534",
+      "note": "中間版本單檔，具名 gate 通過；最終來源另以 targeted／預設套件覆蓋。"
+    },
+    {
+      "command": "node --test ui/tests/writingToolsRecovery.test.mjs ui/tests/storyStartRecovery.browser.test.mjs ui/tests/writingStartHandoff.test.mjs ui/tests/storyHostStrictMode.test.mjs",
+      "result": "passed",
+      "testsRun": 23,
+      "failures": 0,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/frontend-targeted.log",
+      "sha256": "d570bff688847bb01192f7cc08fb97fd00ccca6ae3b19560d1a066b97e3f1bb6",
+      "note": "最終來源的定向回歸。"
+    },
+    {
+      "command": "npm test --prefix ui",
+      "result": "passed",
+      "testsRun": 504,
+      "failures": 0,
+      "skips": 0,
+      "log": "docs/verification/spec16a-r16-c1/frontend-default-final.log",
+      "sha256": "1b25af598465cf59dcf2eee564dfa8bd0093181846ea7dcff9763dde636e346b",
+      "note": "本批最終預設排程只執行一次；不消除或改寫 b5 的503/504。"
+    }
+  ],
+  "notRun": [
+    {
+      "command": "完整後端／含 DB fixture 的 test_spec16a_host_browser.py 等真旅程",
+      "reason": "禁止建立／使用後端測試 DB 或操作 PostgreSQL；不借用舊813結果。"
+    },
+    {
+      "command": "npm run build --prefix ui",
+      "reason": "沒有 ui/src 變更，因此不重建 static/projects。"
+    },
+    {
+      "command": "wheel／安裝後測試",
+      "reason": "本批僅有單一後端文字投影修改及測試／文件；未執行，不冒充通過。"
+    },
+    {
+      "command": "產品模型／GPU／外部供應商／模型下載",
+      "reason": "使用者禁止。"
+    },
+    {
+      "command": "修正後新獨立複審",
+      "reason": "本 worker 不派子代理，交上層接續。"
+    }
+  ],
+  "preservation": {
+    "b5ReceiptAndAllSevenLogsRehashedUnchanged": true,
+    "fourOriginalHistoricalLogsRehashedUnchanged": true,
+    "oldResultsNotRelabeled": true,
+    "mainAndOriginalSpec16Untouched": true,
+    "selectionHandoff": false,
+    "spec17OrSpec18Features": false,
+    "postgresqlOperations": false,
+    "permissionsChanged": false,
+    "pushDeployMerge": false,
+    "skillsOrSubagents": false,
+    "newDependenciesOrDownloads": false,
+    "browserIndexedDB": "只在既有 Chromium harness 使用產品 journal 的瀏覽器 IDB 以驗 checkpoint；沒有 PostgreSQL／後端測試 DB。"
+  },
+  "validation": {
+    "sourceScopedDiffCheck": "passed",
+    "rawLogWhitespace": "原始失敗日誌有工具輸出 trailing whitespace；保留原 bytes／SHA，完整diff-check不冒稱通過。",
+    "sha256Boundary": "記錄本工作樹原始 bytes；其他 checkout 若 Git CRLF 轉換，不宣稱 raw bytes 相同。"
+  },
+  "residualRisks": [
+    "歷史小說 ACK-loss 根因仍未證實；不可拿 C1 投影修正解釋該故障。",
+    "W2 具體 harness 缺陷已證實，但 b5 並行失敗的歷史完整歸因仍未證實。",
+    "父層舊錯誤提示殘留未修；不依舊 alert 推論新的 CAS 衝突。",
+    "未重跑真 HTTP／PG、repeated-build／take 保存、credential／24h receipt／跨登入或產品模型；原殘餘限制不擴大。",
+    "修正後尚待上層新的獨立複審，不宣稱 reviewer 已接受。"
+  ],
+  "manualNotes": "修前產品缺陷、W2 instrumented matcher 的 harness 問題及尚未證實的歷史歸因分開記錄；原始日誌不覆寫／裁切。新報告為 docs/SPEC16A_R16_C1_CORRECTION.md，b5文件原樣保留。"
+}

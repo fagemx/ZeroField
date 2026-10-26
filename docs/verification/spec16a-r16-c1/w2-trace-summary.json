@@ -1,0 +1,582 @@
+[
+  {
+    "label": "W2：舊 readiness 誤命中已重現；新集 workspace gate 尚未放行",
+    "context": {
+      "episodeId": "ep-2",
+      "sourceRef": {
+        "kind": "working"
+      },
+      "sceneKeys": [],
+      "docHash": null
+    },
+    "oldReady": true,
+    "currentReady": false,
+    "alerts": [],
+    "activeManagers": [],
+    "patches": [],
+    "gateEvents": [
+      {
+        "kind": "gate-enter",
+        "name": "episode-2"
+      }
+    ],
+    "latestJournalPuts": [
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"a7bbffac-2591-4b55-9cb9-035386452602\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 1,
+        "notes": null,
+        "phase": "start"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"a7bbffac-2591-4b55-9cb9-035386452602\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 1,
+        "notes": null,
+        "phase": "complete"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"a7bbffac-2591-4b55-9cb9-035386452602\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 1,
+        "notes": "Private before reload 😀 <script>not executable</script>",
+        "phase": "start"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"a7bbffac-2591-4b55-9cb9-035386452602\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 1,
+        "notes": "Private before reload 😀 <script>not executable</script>",
+        "phase": "complete"
+      }
+    ],
+    "latestIdbEvents": [
+      {
+        "kind": "idb-start",
+        "id": 10,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 10,
+        "mode": "readwrite"
+      },
+      {
+        "kind": "idb-start",
+        "id": 11,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 11,
+        "mode": "readwrite"
+      }
+    ]
+  },
+  {
+    "label": "W2：ACK 已成功，但 catalog gate 未放行；父層舊錯誤不代表新 409",
+    "context": {
+      "episodeId": "ep-1",
+      "sourceRef": {
+        "kind": "working"
+      },
+      "sceneKeys": [],
+      "docHash": "hash-ep-1"
+    },
+    "oldReady": true,
+    "currentReady": true,
+    "alerts": [
+      "Shared version changed"
+    ],
+    "activeManagers": [
+      {
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "disposed": false,
+        "sequence": 3,
+        "durableSequence": 3,
+        "state": "saved",
+        "dirty": false,
+        "discovered": true,
+        "conflict": false,
+        "baseVersion": 3,
+        "notes": "Reviewed merge: Remote changed + my private note",
+        "recoveries": 0
+      }
+    ],
+    "patches": [
+      {
+        "id": 9,
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "path": "/episodes/ep-1/writing/bible/note-1",
+        "route": "/wire/ep-1/bible/note-1",
+        "method": "PATCH",
+        "body": {
+          "baseVersion": 1,
+          "clientMutationId": "dc475c26-c96a-476d-93ff-0a4d9ce6b36c",
+          "patch": {
+            "aliases": [],
+            "role": "",
+            "background": "",
+            "constraints": "",
+            "relationships": "",
+            "rules": "",
+            "research": "",
+            "notes": "Private newest sequence",
+            "events": [],
+            "title": "Research"
+          }
+        },
+        "phase": "error",
+        "status": 409,
+        "error": "Shared version changed"
+      },
+      {
+        "id": 11,
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "path": "/episodes/ep-1/writing/bible/note-1",
+        "route": "/wire/ep-1/bible/note-1",
+        "method": "PATCH",
+        "body": {
+          "baseVersion": 2,
+          "clientMutationId": "7a69d194-8127-4bc1-8d9d-a7cd6f9d23b9",
+          "patch": {
+            "aliases": [],
+            "role": "",
+            "background": "",
+            "constraints": "",
+            "relationships": "",
+            "rules": "",
+            "research": "",
+            "notes": "Reviewed merge: Remote changed + my private note",
+            "events": [],
+            "title": "Research"
+          }
+        },
+        "phase": "complete",
+        "status": 200
+      }
+    ],
+    "gateEvents": [
+      {
+        "kind": "gate-enter",
+        "name": "catalog-after-save"
+      }
+    ],
+    "latestJournalPuts": [
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 3,
+        "notes": null,
+        "phase": "start"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 3,
+        "notes": null,
+        "phase": "complete"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 3,
+        "notes": "Reviewed merge: Remote changed + my private note",
+        "phase": "start"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 3,
+        "notes": "Reviewed merge: Remote changed + my private note",
+        "phase": "complete"
+      }
+    ],
+    "latestIdbEvents": [
+      {
+        "kind": "idb-start",
+        "id": 50,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 50,
+        "mode": "readwrite"
+      },
+      {
+        "kind": "idb-start",
+        "id": 51,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 51,
+        "mode": "readwrite"
+      }
+    ]
+  },
+  {
+    "label": "W2：新私稿 form journal gate；sequence 尚未 durable，沒有新 PATCH",
+    "context": {
+      "episodeId": "ep-1",
+      "sourceRef": {
+        "kind": "working"
+      },
+      "sceneKeys": [],
+      "docHash": "hash-ep-1"
+    },
+    "oldReady": true,
+    "currentReady": true,
+    "alerts": [
+      "Shared version changed"
+    ],
+    "activeManagers": [
+      {
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "disposed": false,
+        "sequence": 4,
+        "durableSequence": 3,
+        "state": "dirty",
+        "dirty": true,
+        "discovered": true,
+        "conflict": false,
+        "baseVersion": 3,
+        "notes": "Private awaiting divergent restore",
+        "recoveries": 0
+      }
+    ],
+    "patches": [
+      {
+        "id": 9,
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "path": "/episodes/ep-1/writing/bible/note-1",
+        "route": "/wire/ep-1/bible/note-1",
+        "method": "PATCH",
+        "body": {
+          "baseVersion": 1,
+          "clientMutationId": "dc475c26-c96a-476d-93ff-0a4d9ce6b36c",
+          "patch": {
+            "aliases": [],
+            "role": "",
+            "background": "",
+            "constraints": "",
+            "relationships": "",
+            "rules": "",
+            "research": "",
+            "notes": "Private newest sequence",
+            "events": [],
+            "title": "Research"
+          }
+        },
+        "phase": "error",
+        "status": 409,
+        "error": "Shared version changed"
+      },
+      {
+        "id": 11,
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "path": "/episodes/ep-1/writing/bible/note-1",
+        "route": "/wire/ep-1/bible/note-1",
+        "method": "PATCH",
+        "body": {
+          "baseVersion": 2,
+          "clientMutationId": "7a69d194-8127-4bc1-8d9d-a7cd6f9d23b9",
+          "patch": {
+            "aliases": [],
+            "role": "",
+            "background": "",
+            "constraints": "",
+            "relationships": "",
+            "rules": "",
+            "research": "",
+            "notes": "Reviewed merge: Remote changed + my private note",
+            "events": [],
+            "title": "Research"
+          }
+        },
+        "phase": "complete",
+        "status": 200
+      }
+    ],
+    "gateEvents": [
+      {
+        "kind": "gate-enter",
+        "name": "catalog-after-save"
+      },
+      {
+        "kind": "gate-release",
+        "name": "catalog-after-save"
+      },
+      {
+        "kind": "gate-enter",
+        "name": "private-form"
+      }
+    ],
+    "latestJournalPuts": [
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 3,
+        "notes": "Reviewed merge: Remote changed + my private note",
+        "phase": "complete"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 4,
+        "notes": null,
+        "phase": "start"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 4,
+        "notes": null,
+        "phase": "complete"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 4,
+        "notes": "Private awaiting divergent restore",
+        "phase": "start"
+      }
+    ],
+    "latestIdbEvents": [
+      {
+        "kind": "idb-start",
+        "id": 51,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 51,
+        "mode": "readwrite"
+      },
+      {
+        "kind": "idb-start",
+        "id": 52,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 52,
+        "mode": "readwrite"
+      }
+    ]
+  },
+  {
+    "label": "W2：form IDB 完成且 sequence===durableSequence",
+    "context": {
+      "episodeId": "ep-1",
+      "sourceRef": {
+        "kind": "working"
+      },
+      "sceneKeys": [],
+      "docHash": "hash-ep-1"
+    },
+    "oldReady": true,
+    "currentReady": true,
+    "alerts": [
+      "Shared version changed"
+    ],
+    "activeManagers": [
+      {
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "disposed": false,
+        "sequence": 4,
+        "durableSequence": 4,
+        "state": "local_only",
+        "dirty": true,
+        "discovered": true,
+        "conflict": false,
+        "baseVersion": 3,
+        "notes": "Private awaiting divergent restore",
+        "recoveries": 0
+      }
+    ],
+    "patches": [
+      {
+        "id": 9,
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "path": "/episodes/ep-1/writing/bible/note-1",
+        "route": "/wire/ep-1/bible/note-1",
+        "method": "PATCH",
+        "body": {
+          "baseVersion": 1,
+          "clientMutationId": "dc475c26-c96a-476d-93ff-0a4d9ce6b36c",
+          "patch": {
+            "aliases": [],
+            "role": "",
+            "background": "",
+            "constraints": "",
+            "relationships": "",
+            "rules": "",
+            "research": "",
+            "notes": "Private newest sequence",
+            "events": [],
+            "title": "Research"
+          }
+        },
+        "phase": "error",
+        "status": 409,
+        "error": "Shared version changed"
+      },
+      {
+        "id": 11,
+        "actor": "actor-a",
+        "episode": "ep-1",
+        "path": "/episodes/ep-1/writing/bible/note-1",
+        "route": "/wire/ep-1/bible/note-1",
+        "method": "PATCH",
+        "body": {
+          "baseVersion": 2,
+          "clientMutationId": "7a69d194-8127-4bc1-8d9d-a7cd6f9d23b9",
+          "patch": {
+            "aliases": [],
+            "role": "",
+            "background": "",
+            "constraints": "",
+            "relationships": "",
+            "rules": "",
+            "research": "",
+            "notes": "Reviewed merge: Remote changed + my private note",
+            "events": [],
+            "title": "Research"
+          }
+        },
+        "phase": "complete",
+        "status": 200
+      }
+    ],
+    "gateEvents": [
+      {
+        "kind": "gate-enter",
+        "name": "catalog-after-save"
+      },
+      {
+        "kind": "gate-release",
+        "name": "catalog-after-save"
+      },
+      {
+        "kind": "gate-enter",
+        "name": "private-form"
+      },
+      {
+        "kind": "gate-release",
+        "name": "private-form"
+      }
+    ],
+    "latestJournalPuts": [
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 4,
+        "notes": null,
+        "phase": "start"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form_index\\\",\\\"index\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form_index\",\"index\"]",
+        "sequence": 4,
+        "notes": null,
+        "phase": "complete"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 4,
+        "notes": "Private awaiting divergent restore",
+        "phase": "start"
+      },
+      {
+        "kind": "journal-put",
+        "key": "[\"[\\\"http://127.0.0.1:59678\\\",\\\"production\\\",\\\"actor-a\\\",\\\"ep-1\\\",\\\"bible_form\\\",\\\"note-1\\\"]\",\"66981fda-b4cf-4a61-8c10-4bc984a8ee91\"]",
+        "scope": "[\"http://127.0.0.1:59678\",\"production\",\"actor-a\",\"ep-1\",\"bible_form\",\"note-1\"]",
+        "sequence": 4,
+        "notes": "Private awaiting divergent restore",
+        "phase": "complete"
+      }
+    ],
+    "latestIdbEvents": [
+      {
+        "kind": "idb-start",
+        "id": 52,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 52,
+        "mode": "readwrite"
+      },
+      {
+        "kind": "idb-start",
+        "id": 53,
+        "mode": "readwrite",
+        "stores": [
+          "drafts",
+          "sizes"
+        ]
+      },
+      {
+        "kind": "idb-complete",
+        "id": 53,
+        "mode": "readwrite"
+      }
+    ]
+  }
+]
