@@ -264,6 +264,8 @@ def resolve_mention(conn, slug, text, explicit_key=None):
 def roster(conn, me, slug):
     if not repo.get_project(conn,slug):
         raise AgentError(404, "Production not found.")
+    from project_assistant import crew_readiness
+    readiness = crew_readiness.cached(conn, slug)  # cached or remembered probes; the roster never probes
     rows = list_agents(conn,slug)
     for row in rows:
         from project_assistant import orchestration_store as db
@@ -271,7 +273,9 @@ def roster(conn, me, slug):
         row['active_dispatches']=db.one(conn,"SELECT count(*) FROM projectops.orchestration_dispatch WHERE project_slug=%s AND agent_key=%s AND status='running'",(slug,row['agent_key']))
         row['active_dispatches']+=db.one(conn,"SELECT count(*) FROM projectops.assistant_message WHERE project_slug=%s AND agent_key=%s AND role='assistant' AND status='running'",(slug,row['agent_key']))
         connected=profile_connected(conn,slug,row['agent_key'])
-        row['status']='busy' if connected and row['active_dispatches']>=row['max_concurrency'] else 'online' if connected else 'offline'
+        # Online needs a heartbeat and no readiness blocker; a stopped built-in worker is itself a blocker (SPEC_20 A7).
+        row['status']=('needs_setup' if crew_readiness.blocks(readiness,row) else
+                       'busy' if connected and row['active_dispatches']>=row['max_concurrency'] else 'online' if connected else 'offline')
         from project_assistant.agent_policy import can_propose_output
         row['can_propose_table']=can_propose_output(row,{'kind':'table'})
         row['can_propose_document']=can_propose_output(row,{'kind':'doc'})
