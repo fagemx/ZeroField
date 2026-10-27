@@ -263,6 +263,8 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
 
     if admission and opener is urllib.request.urlopen:
         opener = urllib.request.build_opener(_NoRedirect()).open
+    from project_assistant import gpu_arbiter  # SPEC_20 R13: a loopback model call holds the GPU for each request
+    opener = gpu_arbiter.gate(opener, config)
     if reasoning_effort not in (None, *EFFORTS):
         raise ValueError('reasoning_effort must be low, medium or high.')
     json_schema = _json_schema(json_schema)
@@ -345,7 +347,7 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                     cause = 'connection refused' if isinstance(reason, ConnectionRefusedError) else 'host name lookup failed'
                     hint = ' Start the local model server (for example Ollama), then retry.' if local else ' Nothing was sent.'
                     raise model_client.ModelError("unavailable", f'{where} is not reachable ({cause}).{hint}') from None
-                pending = '' if local else '; the outcome is uncertain until an administrator reconciles it'
+                pending ='' if local else '; the outcome is uncertain until an administrator reconciles it'
                 if isinstance(reason, TimeoutError):
                     raise model_client.ModelError("timeout", f'{where} did not answer in time{pending}.') from None
                 cause = type(reason).__name__ if isinstance(reason, BaseException) else type(exc).__name__

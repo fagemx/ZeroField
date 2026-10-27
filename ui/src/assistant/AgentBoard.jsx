@@ -7,6 +7,7 @@ import { TableProposalReview } from './TableProposalReview.jsx';
 import { ProposalRaceView } from './ProposalRaceView.jsx';
 import { groupBoardItems } from './orchestrationModel.js';
 import { providerFailureText } from './providerFailures.js';
+import { AutomationPausedNote } from './AutomationPausedNote.jsx';
 import './orchestration.css';
 
 const statusLabel = { get queued() { return uiText("agentBoard.queued"); }, get running() { return uiText("agentBoard.running"); }, get completed() { return uiText("agentBoard.completed"); }, get succeeded() { return uiText("agentBoard.completed"); }, get failed() { return uiText("agentBoard.failed"); }, get canceled() { return uiText("agentBoard.canceled"); }, get online() { return uiText("agentBoard.available"); }, get busy() { return uiText("agentBoard.busy"); }, get offline() { return uiText("agentBoard.offline"); }, get needs_setup() { return uiText("agentBoard.needsSetup"); } };
@@ -144,6 +145,7 @@ export function AgentBoard({ assistant, me, onOpenTarget }) {
         {errors[item.id] && <p className="error" role="alert">{errors[item.id]}</p>}</article>)}
     </section>
     <section className="board-group"><h4>{uiText("agentBoard.agentsWorkers")}</h4>
+      <AutomationPausedNote slug={assistant.slug} />
       <CrewReadinessBanner readiness={crew.readiness} agents={groups.idle} error={crew.error} checking={crew.checking} onCheck={checkCrew} />
       {groups.idle.map(agent => <div className="board-agent" key={agent.id}>
       <strong>{agent.icon} {agentLabel(agent)}</strong><small className={agent.status === 'needs_setup' ? 'needs-setup' : undefined}>{statusLabel[agent.status] || agent.status} · {agent.active_dispatches || 0}/{agent.max_concurrency || 1}</small>

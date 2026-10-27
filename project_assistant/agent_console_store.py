@@ -16,10 +16,10 @@ from urllib.parse import urlsplit
 from project_assistant import orchestration_store as db
 from project_assistant.agent_registry import AgentError, AGENT_KEY, validate_provider
 from project_docs import repository as repo
+from project_assistant import tool_registry
 
-# New tools are validated before their registration by the next component owner.
-STUDIO_TOOLS = {'studio_ingest_script', 'studio_manage_asset', 'studio_plan_allocation',
-                'studio_dispatch_shot', 'studio_inspect_frames', 'studio_edit_timeline', 'consult_advisor'}
+# Studio and advisor tools, derived from the declarative registry (project_assistant/tool_registry.py).
+STUDIO_TOOLS = set(tool_registry.STUDIO)
 RESOURCES = {
     'skill': ('agent_skill', 'skill_key', {'display_name', 'category', 'summary', 'instructions_md', 'recommended_tools', 'enabled'}),
     'environment': ('agent_environment', 'env_key', {'display_name', 'env_kind', 'config', 'network_access', 'allowed_hosts', 'packages', 'enabled'}),

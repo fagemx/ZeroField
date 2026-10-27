@@ -405,6 +405,8 @@ def shot_view(conn, slug, row):
     from project_docs import story_trim
     identifier = shot_id(slug, row)
     meta = shot_meta(conn, identifier)
+    from project_docs import story_previs
+    meta = story_previs.shot_fields(meta)  # SPEC_20 R26: the stored 3D plan's revision, never the plan itself
     fields = dict(zip(row["headers"], row["cells"]))
     def output(kind):
         try:
@@ -1233,7 +1235,7 @@ def notify(owner, task):
         action()
 
 
-def dispatch(conn, me, method, path, body, query, actions):
+def dispatch(conn, me, method, path, body, query, actions, headers=None):
     """Return unwrapped data; callers own commit, rollback and post-commit launches."""
     from project_docs import story_alignment, story_estimates
     previewed = story_alignment.dispatch(conn, me, method, path, body)  # read-only previews, open to viewers
@@ -1582,6 +1584,9 @@ def dispatch(conn, me, method, path, body, query, actions):
             from project_docs import story_trim
             story_trim.set_trim(conn, slug, identifier, row, body)
             return view()
+        if entity == "shot" and tail == "previs-plan" and method in ("GET", "PUT"):
+            from project_docs import story_previs  # SPEC_20 R26: the stored 3D plan, revisioned (If-Match)
+            return story_previs.route(conn, me, method, slug, identifier, body, headers)
         if entity == "shot" and tail == "grades":
             from project_assistant import take_grader
             if method == "GET":
@@ -1892,7 +1897,7 @@ def handle(handler, parsed, method):
             conn.commit()
             handler.send_skillops_bytes(200, file["contentType"], raw, cache_control="private, no-store")
             return True
-        data = upload_file(conn, me, handler, raw) if is_file else dispatch(conn, me, method, path, body, query, actions)
+        data = upload_file(conn, me, handler, raw) if is_file else dispatch(conn, me, method, path, body, query, actions, handler.headers)
         if method == "POST" and isinstance(data, dict) and data.get("taskId") and data.get("status") in ("SUCCEEDED", "CANCELED", "FAILED"):
             actions.append(lambda: notify(me.actor_id, public_task(data)))
         payload = {"code": 0, "msg": "success", "errorMessages": None, "data": data}

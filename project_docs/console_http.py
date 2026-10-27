@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, unquote
 from project_assistant import agent_console_service as app, agent_console_store as resources
 from project_assistant import console_deployments as deployments, console_connections as connections
 from project_assistant import agent_registry as agents
+from project_assistant import automation, console_model_check as model_check, console_ops as ops
 from project_docs import service
 
 ROUTE = re.compile(r'^/projects/api/([a-z0-9][a-z0-9-]{0,40})/agent-console(?:/(.*))?$')
@@ -18,7 +19,20 @@ def dispatch(conn, me, slug, path, method, body, query):
     parts = path.split('/') if path else []
     if method == 'GET':
         if path in ('', 'dashboard'):
-            return app.overview(conn, me, slug)
+            return {**app.overview(conn, me, slug), 'automation': automation.state(conn, slug)}
+        if path == 'automation':  # SPEC_20 R38-R40 operations: any member reads, the showrunner acts
+            resources.authorize(conn, me, slug)
+            return {'automation': automation.state(conn, slug)}
+        if path == 'queue':
+            try:
+                days = int(query.get('days', 7))
+            except (ValueError, TypeError):
+                resources.bad('days must be an integer from 1 to 30.')
+            return ops.queue(conn, me, slug, days=days)
+        if path == 'gpu':
+            return ops.gpu_panel(conn, me, slug)
+        if path == 'model-setup':
+            return model_check.setup(conn, me, slug)
         if path == 'quickstart':
             return app.templates(conn, me, slug)
         if path == 'agents':
@@ -69,6 +83,10 @@ def dispatch(conn, me, slug, path, method, body, query):
             return app.set_default_provider(conn, me, slug, body)
         if path == 'spend-rate-limits':
             return app.limits(conn, me, slug, body)
+        if path == 'automation' and method == 'POST':
+            return {'automation': automation.set_paused(conn, me, slug, body)}
+        if path == 'model-setup' and method == 'POST':
+            return model_check.apply_preset(conn, me, slug, body)
         if path == 'playground' and method == 'POST':
             return app.playground(conn, me, slug, body)
         if path == 'sessions' and method == 'POST':
@@ -153,7 +171,12 @@ def handle(handler, parsed, method):
     conn = None
     try:
         # Network operations open their own short, currently-authorized transactions.
-        if method == 'POST' and (path == 'connections/health' or re.fullmatch(r'sessions/[0-9a-f-]{36}/router-quotes', path)):
+        if method == 'POST' and path == 'model-check':
+            # Each step opens its own short transactions around the governed model call.
+            with http.open_connection() as c:
+                http._ensure_schema(c)
+            payload = model_check.check(http.open_connection, me, slug, body)
+        elif method == 'POST' and (path == 'connections/health' or re.fullmatch(r'sessions/[0-9a-f-]{36}/router-quotes', path)):
             with http.open_connection() as c:
                 http._ensure_schema(c)
                 resources.authorize(c, me, slug, write=True)
