@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import re
 
+from project_docs.scene_headings import HEADING_LINES as HEADING, scene_name
+
 SOURCE_MODES = {"auto", "idea", "novel", "script"}
 BREAKDOWN_MODES = {"auto", "scene", "cinematic", "cinematic_multi"}
 MEDIUM_LENSES = {"manju", "cinema", "storybook"}
 GENRE_LENSES = {"general", "melodrama", "xianxia", "comedy", "suspense"}
 CHOICE_FOCUSES = {"overall", "collision", "restraint", "reversal", "negative_space"}
 TAG = re.compile(r"@?\b((?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?)\b", re.I)
-HEADING = re.compile(r"^\s*(?:#{1,6}\s*)?(?:Scene\s*\d+|場景\s*[一二三四五六七八九十\d]+|场景\s*[一二三四五六七八九十\d]+|INT\.|EXT\.)", re.I | re.M)
 # Lens, Premise and Constraint are composed-script context: never a shot, never a speaker.
 DECLARATION = re.compile(r"^\s*(?:Character|角色|Prop|道具|Environment|Style|Lens|Premise|Constraint)\s*[:：]", re.I)
 LENS_LINE = re.compile(r"^\s*Lens\s*[:：]\s*(manju|cinema|storybook)\b", re.I | re.M)
@@ -156,13 +157,13 @@ def adapt_source_to_script(raw_text, mode="auto", target_scenes=3, style_name="S
     raw = raw_text.strip().replace("\r\n", "\n").replace("\r", "\n")
     mode = source_mode(raw, mode)
     if mode == "script":
-        index = 0
-        def heading(match):
-            nonlocal index
-            index += 1
-            title = re.sub(r"^(?:Scene\s*\d+|場景\s*[一二三四五六七八九十\d]+|场景\s*[一二三四五六七八九十\d]+)\s*[:：.-]?\s*", "", match[1], flags=re.I)
-            return f"## Scene {index:02d}: {title or 'Scene'}"
-        normalized = re.sub(r"^\s*(?:#{1,6}\s*)?((?:Scene\s*\d+|場景\s*[一二三四五六七八九十\d]+|场景\s*[一二三四五六七八九十\d]+|INT\.|EXT\.).*)$", heading, raw, flags=re.M | re.I)
+        # Each heading line becomes "## Scene NN: <name>"; its own number and Scene N label give way to NN.
+        lines, index = raw.split("\n"), 0
+        for position, line in enumerate(lines):
+            if HEADING.match(line):
+                index += 1
+                lines[position] = f"## Scene {index:02d}: {scene_name(line) or 'Scene'}"
+        normalized = "\n".join(lines)
         return normalized if index else "## Scene 01: Opening\n\n" + normalized
     if composed:
         return bounded(compose_script(raw, mode, target_scenes, style_name, medium_lens, genre_lens, choice_trace, contrast))
