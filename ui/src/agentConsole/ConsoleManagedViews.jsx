@@ -7,6 +7,7 @@ import { ProposalRaceView } from '../assistant/ProposalRaceView.jsx';
 import { allocationDispatchBody, allocationPath } from '../storyModel.js';
 import { MediaCell } from '../MediaCell.jsx';
 import { ModelSetup } from './ConsoleOpsViews.jsx';
+import { ExternalAgents } from './ConsoleExternalAgents.jsx';
 
 export function ConsoleAgents() {
   const {catalog,resource,navigate,agentDrafts}=useConsole();
@@ -95,7 +96,7 @@ export function ConsoleDeployments() {
 }
 export function ConsoleEnvironments() {
   const state=useLoad('/environments');const {resource,navigate,canEdit}=useConsole();
-  return <><p className="ac-notice">{t('console.environmentNotice')}</p><Loading state={state}/>{state.data && <><JsonView label="bridges" value={{mcp:state.data.mcp,sdk:state.data.sdk,cli:state.data.cli}}/><ResourceEditor endpoint="environments" items={state.data.environments} resourceKey="env_key" selectedKey={resource} onSelect={key=>navigate('environments',key)} canWrite={canEdit}/></>}</>;
+  return <><p className="ac-notice">{t('console.environmentNotice')}</p><ExternalAgents/><Loading state={state}/>{state.data && <><JsonView label="bridges" value={{mcp:state.data.mcp,sdk:state.data.sdk,cli:state.data.cli}}/><ResourceEditor endpoint="environments" items={state.data.environments} resourceKey="env_key" selectedKey={resource} onSelect={key=>navigate('environments',key)} canWrite={canEdit}/></>}</>;
 }
 export function ConsoleProviders() {
   const state=useLoad('/api-keys');const providers=useLoad('/providers');const {canEdit,resource,navigate,action,request,refresh,catalog}=useConsole();

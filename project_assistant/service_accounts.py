@@ -190,8 +190,15 @@ def list_accounts(conn, me, slug) -> dict:
     for row in rows:
         record = dict(zip(names, row[:-1]))
         items.append({**public(record, row[-1]), 'usage': usage(conn, slug, record['account_key'])})
-    return {'items': items, 'availableTools': [{'name': name, 'generation': name in tool_registry.GENERATION}
-                                               for name in exposed_tools()]}
+    return {'items': items, 'availableTools': available_tools()}
+
+
+def available_tools() -> list[dict]:
+    """What the token form may offer: the MCP-exposed tools in registry order, with label, category and write flags."""
+    exposed = set(exposed_tools())
+    return [{'name': tool.name, 'label': tool.label or tool.name, 'category': tool.category,
+             'writes': tool.name in tool_registry.MUTATING, 'generation': tool.name in tool_registry.GENERATION}
+            for tool in tool_registry.all_tools() if tool.name in exposed]
 
 
 def revoke(conn, me, slug, account_key) -> dict:
@@ -230,6 +237,48 @@ def usage(conn, slug, account_key) -> dict:
         reservations, cost = cur.fetchone()
     return {'calls': calls, 'succeeded': succeeded, 'refused': refused, 'lastCallAt': _iso(last),
             'generationRequests': len(allocations), 'renderReservations': reservations, 'accountedCostUsd': str(cost)}
+
+
+AUDIT_KIND = {CALL_ACTION: 'call', 'service_account_create': 'issued', 'service_account_revoke': 'revoked'}
+AUDIT_DEFAULT, AUDIT_MAX = 25, 100
+
+
+def audit_entries(conn, me, slug, account_key, limit=None) -> dict:
+    """Newest-first audit rows of one account for its admins: every call, the issue and the revoke.
+
+    A call row's actor is the showrunner whose authority the token runs under; an issue or revoke row's actor
+    is the showrunner who did it. Argument hashes stay in the log and are never returned."""
+    _admin(conn, me, slug)
+    try:
+        limit = AUDIT_DEFAULT if limit in (None, '') else int(limit)
+    except (TypeError, ValueError):
+        limit = 0
+    if not 1 <= limit <= AUDIT_MAX:
+        _bad(f'limit must be an integer from 1 to {AUDIT_MAX}.')
+    if not _row(conn, slug, account_key) or not _has_token(conn, slug, account_key):
+        raise AgentError(404, 'Service account not found.', 'NOT_FOUND')
+    from project_docs import repository as repo
+    with conn.cursor() as cur:
+        cur.execute('''SELECT id, actor_id::text, action, detail, created_at FROM projectops.audit_log
+                       WHERE project_slug=%s AND target=%s AND action = ANY(%s::text[])
+                       ORDER BY created_at DESC, id DESC LIMIT %s''', (slug, account_key, list(AUDIT_KIND), limit))
+        rows = cur.fetchall()
+    names = repo.member_names(conn)
+    items = []
+    for row_id, actor, action, detail, created_at in rows:
+        detail = detail if isinstance(detail, dict) else json.loads(detail or '{}')
+        item = {'id': row_id, 'at': _iso(created_at), 'kind': AUDIT_KIND[action],
+                'actor': {'id': actor, 'name': names.get(actor)} if actor else None, 'writeMode': detail.get('writeMode')}
+        if action == CALL_ACTION:
+            client = detail.get('client') if isinstance(detail.get('client'), dict) else None
+            item.update({'tool': detail.get('tool'), 'outcome': detail.get('outcome'), 'code': detail.get('code'),
+                         'client': client, 'requestId': detail.get('requestId'),
+                         'proposalIds': [n for n in detail.get('proposalIds') or [] if type(n) is int],
+                         'allocationId': detail.get('allocationId')})
+        elif action == 'service_account_create':
+            item.update({'tools': detail.get('tools') or [], 'expiresAt': detail.get('expiresAt')})
+        items.append(item)
+    return {'accountKey': account_key, 'limit': limit, 'items': items}
 
 
 # ---------- authenticating a token ----------
