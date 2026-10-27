@@ -80,7 +80,7 @@ function useFidelity(previsUrl, urls) {
 const framesOf = images => mergeTakes(images || [], [], {}).map(frame => ({...frame, imageId:frame.candidate?.imageId ?? null}));
 
 export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label, sceneTitle, status, proposals = [], version, inFlight = null,
-  writable, disabled, canStatus = true, hasFrame = false, controlRef, onWrite, onStatus, onRetake, onPick, onTimeline,
+  writable, disabled, canStatus = true, hasFrame = false, controlRef, onWrite, onStatus, onRetake, onReshoot, onPick, onTimeline,
   onApplyProposal, onDismissProposal, onShowStage, menu = {}, top = null, failure = null, notes = null, cast = null, history = null}) {
   useLocale();
   const id = shot?.shotId || storyShotId(slug, rid);
@@ -167,7 +167,7 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
   };
   const staleShots = new Set(film.filter(entry => staleTakeRefs(entry).length > 0).map(entry => entry.shotId));
   const aroundQueue = () => (aroundMode === 'seams' ? seamQueue() : around());
-  const refsLine = <TakeRefsLine refs={shot?.takeRefs || []} shots={film} proposals={proposals} writable={writable} onReshoot={() => focusShotPrompt(rid)}/>;
+  const refsLine = <TakeRefsLine refs={shot?.takeRefs || []} shots={film} proposals={proposals} writable={writable} onReshoot={() => onReshoot ? onReshoot() : focusShotPrompt(rid)}/>;
 
   const blocked = normalizeStatus(status) === 'Blocked', approved = normalizeStatus(status) === 'Approved';
   const menuItems = [

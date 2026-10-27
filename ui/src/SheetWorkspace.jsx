@@ -346,8 +346,11 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
   const setShotStatus=(item,value)=>statusCol>=0&&commit(parsed.rows.indexOf(item),statusCol,value);
   // R (SPEC_19 3.5): the shot goes to Retake and the focus to its prompt input, when one is on the page (the shot composer's, marked
   // data-shot-prompt with the row id); with none on the page only the status is written.
-  const retakeShot=async item=>{if(!writable||statusCol<0||!guardDraft())return;if(await setShotStatus(item,'Retake')){if(productionSheet&&mode!=='composer'){setRowOpen(item.rid);setView({mode:'composer'});}
-    requestAnimationFrame(()=>requestAnimationFrame(()=>document.querySelector(`[data-shot-prompt="${CSS.escape(item.rid)}"]`)?.focus()));}};
+  const focusPrompt=item=>{if(productionSheet&&mode!=='composer'){setRowOpen(item.rid);setView({mode:'composer'});}
+    requestAnimationFrame(()=>requestAnimationFrame(()=>document.querySelector(`[data-shot-prompt="${CSS.escape(item.rid)}"]`)?.focus()));};
+  const retakeShot=async item=>{if(!writable||statusCol<0||!guardDraft())return;if(await setShotStatus(item,'Retake'))focusPrompt(item);};
+  // "Reshoot with the new take" (SPEC_19 3.7) only opens the composer on the prompt; the reference resolves to the new adoption on send.
+  const reshootShot=item=>{if(guardDraft())focusPrompt(item);};
   // SPEC_19 R9: the composer edits the prompt cell through the sheet's own draft (editing, marked source 'composer'), so every guard of a
   // cell draft holds (no shot switch, no adoption, no A/R over unsaved text) and saving is the same guarded cell edit. Typing back to
   // the saved text ends the draft.
@@ -422,7 +425,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
     return <ShotFilmPanel slug={slug} tabKey={tab.key} rid={currentRow.rid} shot={info||null} shots={film} label={String(currentRow.cells[0]?.value||'—')}
       sceneTitle={storyScenes.find(scene=>scene.sceneId===info?.sceneId)?.title} status={status} proposals={proposals} version={`${tab.revision}:${takesNonce}`} inFlight={inFlight}
       writable={writable} disabled={busy||dirty} canStatus={statusCol>=0} hasFrame={parsed.headers.some(h=>/keyframe|reference.*image|anchor/i.test(h))} controlRef={filmControl}
-      onWrite={storyWrite} onStatus={value=>setShotStatus(currentRow,value)} onRetake={()=>retakeShot(currentRow)} onPick={pickShot}
+      onWrite={storyWrite} onStatus={value=>setShotStatus(currentRow,value)} onRetake={()=>retakeShot(currentRow)} onReshoot={()=>reshootShot(currentRow)} onPick={pickShot}
       onTimeline={()=>{if(guardDraft())window.location.hash=TIMELINE_VIEW;}}
       onApplyProposal={onApplyProposal} onDismissProposal={onDismissProposal} onShowStage={hasStage?()=>pickView('stage'):undefined}
       menu={{table:()=>openInTable(currentRow.rid,actionCol>=0?actionCol:0),compare:()=>showHistory(currentRow.rid),upload:valid?()=>pickUpload(r,col):undefined,

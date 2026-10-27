@@ -109,3 +109,11 @@ test('SPEC_19 B1, B9: the composer holds the stage\'s one primary button, and st
     assert.equal(new Set(labels).size, labels.length, `no duplicate control: ${labels.join(', ')}`);
   }
 });
+
+test('SPEC_19 D5: re-shooting with the new upstream take opens the composer on the prompt and writes nothing', async () => {
+  const source = await readFile(join(uiRoot, 'src/SheetWorkspace.jsx'), 'utf8');
+  const reshoot = source.match(/const reshootShot=([^\n]*)/)?.[1] || '';
+  assert.match(reshoot, /focusPrompt\(item\)/, 'switches to the composer like R does');
+  assert.doesNotMatch(reshoot, /setShotStatus|storyWrite|fetch/, 'no status write and no request');
+  assert.match(source, /onReshoot=\{\(\)=>reshootShot\(currentRow\)\}/, 'the film panel gets it');
+});

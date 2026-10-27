@@ -74,9 +74,9 @@ class ShotReviewInteractions(unittest.TestCase):
         self.fixture.conn.commit()
         self.page.goto(f'http://127.0.0.1:{self.fixture.server.server_port}/projects/{self.fixture.slug}/#cinema-studio')
         # SPEC_15 Shot Stage: pick the shot in the overview, then open it in Review; its controls stand in the detail column.
-        self.page.locator('.sheet-view-switch').get_by_role('button',name='Overview',exact=True).click()
+        self.page.locator('.stage-view-btn').click(); self.page.locator('.stage-view-list').get_by_role('menuitemradio',name='Overview',exact=True).click()
         self.page.get_by_role('button',name=self.shot['shotIndex'],exact=True).click()
-        self.page.locator('.sheet-view-switch').get_by_role('button',name='Review',exact=True).click()
+        self.page.locator('.stage-view-btn').click(); self.page.locator('.stage-view-list').get_by_role('menuitemradio',name='Review',exact=True).click()
         self.tools = self.page.locator('.story-shot-tools')
         expect(self.tools.locator('.story-takes figure').first).to_be_visible()
         # SPEC_19 R3: the shot column has no status menu any more. Its status moves through "Retake (R)", a take's ✓ (adoption) and

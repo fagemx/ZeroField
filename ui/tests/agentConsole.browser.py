@@ -73,9 +73,9 @@ class ConsoleInteractions(unittest.TestCase):
     def test_navigation_templates_keyboard_locale_and_production_context(self):
         self.fixture.prepare()
         self.page.goto(self.url+'#cinema-studio')
-        self.page.locator('.sheet-view-switch').get_by_role('button',name='Overview',exact=True).click()
+        self.page.locator('.stage-view-btn').click(); self.page.locator('.stage-view-list').get_by_role('menuitemradio',name='Overview',exact=True).click()
         self.page.get_by_role('button',name='SC01-S01',exact=True).click()
-        self.page.locator('.sheet-view-switch').get_by_role('button',name='Review',exact=True).click()
+        self.page.locator('.stage-view-btn').click(); self.page.locator('.stage-view-list').get_by_role('menuitemradio',name='Review',exact=True).click()
         self.page.locator('.story-shot-tools details summary').click()
         override=self.page.locator('.story-shot-tools details input').first
         override.fill('Preserve unsent shot override')
