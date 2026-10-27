@@ -5,9 +5,9 @@ import {GROUPS,PAGES,TEMPLATES,STUDIO_TOOLS,AGENT_FIELDS,LIMIT_FIELDS,RESOURCE_F
 import {setLocale,t} from '../src/i18n/index.js';
 import {normalizeStatus,statusLabel} from '../src/format.js';
 
-test('Console owns exactly four groups/twelve lean stable wire IDs and twelve templates/seven tools',()=>{
+test('Console owns exactly four groups/twelve lean stable wire IDs and twelve templates/twelve offered tools',()=>{
   assert.deepEqual(GROUPS,{workspace:['dashboard','api_keys'],build:['playground','skills'],managed_agents:['quickstart','agents','sessions','deployments','environments','memory_store'],analytics:['usage_cost','spend_rate_limits']});
-  assert.equal(PAGES.length,12);assert.equal(new Set(TEMPLATES).size,12);assert.equal(STUDIO_TOOLS.length,7);
+  assert.equal(PAGES.length,12);assert.equal(new Set(TEMPLATES).size,12);assert.equal(STUDIO_TOOLS.length,12);
   for(const excluded of ['files','batches','service_accounts','webhooks','logs','cli'])assert.ok(!PAGES.includes(excluded));
 });
 test('hash routing preserves exact resource IDs, deep links, back routes and malformed input safety',()=>{
