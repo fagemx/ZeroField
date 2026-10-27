@@ -128,7 +128,7 @@ class ProviderCoreTests(unittest.TestCase):
             return opener
         def http_error(code):
             return raising(urllib.error.HTTPError(REMOTE, code, 'fixture', {}, io.BytesIO(b'echoed synthetic-secret')))
-        terminated, uncertain, local = ('failed', True, 0), ('unknown', False, None), ('failed', True, None)
+        terminated, uncertain, local = ('failed', True, 0), ('unknown', False, None), ('failed', True, 0)
         cases = [('remote refused', REMOTE, raising(refused), terminated, 'unavailable'),
                  ('remote dns', REMOTE, raising(dns), terminated, 'unavailable'),
                  *[(f'remote {code}', REMOTE, http_error(code), terminated, kind) for code, kind in

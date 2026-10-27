@@ -120,7 +120,8 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
         headers["Authorization"] = f"Bearer {config.api_key}"
     where = "Local model endpoint" if local else "Model endpoint"
     # (outcome, known_terminated, observed_cost) for a round that fails after admission.
-    settle = ('failed', True, None) if local else ('unknown', False, None)
+    # Local failures end cleanly and are never charged (SPEC_20 §4.1), even when an operator priced the model.
+    settle = ('failed', True, 0) if local else ('unknown', False, None)
 
     try:
         for round_no in range(1, model_client.MAX_ROUNDS + 1):
