@@ -1,6 +1,6 @@
 # SPEC_20 規劃代理層：劇組真的會規劃、對內對外分工、供應商原則
 
-> **狀態：** 已實作，待驗收（2026-10-27）。使用者指示不受參賽截止時間限制、R1–R44 全部完整實作；各項實作已併入整合分支 `feat/spec20-integration`，R44 與部分項目尚未完成，逐項狀態與未完成處見 §11。目前所有檢查都用假的模型端點、假的 ACP 代理與窄範圍測試；完整分片測試、真實模型與 GPU 驗收（A14、A15、A17、R42 實跑、R44）、真實 MCP 主機檢查都還沒做。<!-- verify R24 -->
+> **狀態：** 已實作，待驗收（2026-10-27）。使用者指示不受參賽截止時間限制、R1–R44 全部完整實作；各項實作已併入整合分支 `feat/spec20-integration`，R44 與部分項目尚未完成，逐項狀態與未完成處見 §11。目前所有檢查都用假的模型端點、假的 ACP 代理與窄範圍測試；完整分片測試、真實模型與 GPU 驗收（A14、A15、A17、R42 實跑、R44）、真實 MCP 主機檢查都還沒做。
 > **依據：** [`docs/research/2026-10-27-planning-agent-layer.md`](../research/2026-10-27-planning-agent-layer.md)（研究備忘，含查證狀態）。
 > **相關：** SPEC_08（中控台）、SPEC_13／14／16（故事與拆鏡）、SPEC_18（R4 階梯、R8 生成列）、SPEC_19（生成台、採用即成片、引用與接點；另一個工作階段在 `feat/spec19-integration` 平行實作，見 §10）。
 > **截止：** 參賽截止 2026-10-30 09:00 PT（台灣 10/31 00:00）。「P0／P1／P2」只代表先後與重要性，不再是截止前後的切分。
@@ -424,8 +424,8 @@ R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 | R21 描述與造型 | done | `crew_art.py`、`ui/src/StoryWorld.jsx`、`ui/src/CrewAsk.jsx` | 美術沒有獨立的名單角色，跑在編劇的設定上 |
 | R22 出場 | done | `crew_art.py`（`appearances`） | 鏡頭與場次兩種目標；插入鏡只綁場景 |
 | R23 拆鏡與改編、自動評分接故事 API | partial | `crew_writing.py`、`project_docs/story_crew.py` | 改編與拆鏡候選已做；「故事 API 的 Take 自動評分」那一半等 SPEC_19 的生成落地合進 main |
-| R24 劇組前製流程 | done | 前製流程模組（併入後由整合者填入檔名） | 依本規格；<!-- verify R24 --> |
-| R25 觸發點 | done | 前製卡片與各入口（併入後由整合者填入檔名） | 依本規格；<!-- verify R24 --> |
+| R24 劇組前製流程 | done | `project_assistant/crew_preproduction.py`、`project_assistant/crew_continuity.py` | 三道鎖記錄內容雜湊，內容變動即停並列出變動；「誰在這鏡」改在美術段跑，避免和分拍搶同一格；連戲只查計畫、提示詞與評分，不看畫面，也不查跨場接點 |
+| R25 觸發點 | partial | `ui/src/PreproductionPanel.jsx`、`ui/src/preproductionModel.js`、`ui/src/CrewAsk.jsx` | 「讓劇組前製」卡片、StoryWorld 入口與看板取消已做；生成台的「請劇組」按鈕等 SPEC_19（`GENERATION_DESK_CREW` 掛點） |
 | R26 3D 計畫存後端 | done | `project_docs/story_previs.py`、`ui/src/previs/PrevisStage.jsx`、`storyPlan.js` | 欄位 `previsPlanFull`，帶版本號，衝突回 409 |
 | R27 結構化操作與求解 | done | `previs_ops.py`、`ui/src/previs/ops.js`、`tests/fixtures/previs_ops_golden.json` | |
 | R28 無頭算圖與看圖驗證 | partial | `headless_previs.py`、`ui/src/previs/previsRender.js`、`ui/previs-solver.html` | 只有六格接觸表，WebM 預覽沒做；看圖檢查是選用設定 `previs_vision_check` |
