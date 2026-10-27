@@ -324,5 +324,3 @@
 .episode-look-foot p { margin: 0; }
 .workbench-app.studio-shell .episode-look-foot button.primary.episode-look-apply { min-width: 220px; height: 36px; padding: 0 22px; border-radius: 8px; font-weight: 600; }
 @media (max-width: 900px) { .episode-look-format { grid-template-columns: minmax(0, 1fr); } }
-/* The storyboard dialog no longer asks the style (it is on the Episode look page): an empty style list is not shown. */
-.breakdown-dialog .breakdown-styles:not(:has(input)) { display: none; }
