@@ -110,9 +110,10 @@ The Continuity Supervisor's configured vision model (`qa_critic`, OpenAI-compati
 same rubric and brief as the hand runs, plus one ask: a rewritten shot prompt when the take fails.
 
 - **GPU hand-off.** A grade waits until ComfyUI's queue is empty (it never interrupts a render; in-process
-  renders and grades share one lock, so later renders queue behind a grade), then `POST /free`, grades, and
-  unloads the model (`keep_alive: 0` on a local Ollama-style endpoint). The ComfyUI URL is the Local 4090
-  environment's `comfy_url`.
+  renders and grades share one lock, so later renders queue behind a grade), then `POST /free` and grades. Since
+  SPEC_20 R13 the model stays loaded for further model calls and is unloaded (`keep_alive: 0` on a local
+  Ollama-style endpoint) when a render next needs the GPU. The ComfyUI URL is the Local 4090 environment's
+  `comfy_url`.
 - **Stored with the take.** Score, pass/retake, issues, notes, the contact sheet asset, model, seconds and the
   hand-off record live in `story_record` (`take_grade`), keyed by row and take asset; `GET/POST
   /aivideo/open/v1/shots/{id}/grades`, `GET/PUT /aivideo/open/v1/projects/{id}/grading`.

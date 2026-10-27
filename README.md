@@ -194,7 +194,7 @@ Still to do:
 
 - fix the blank-production break points above and walk again;
 - real MCP hosts (MCP Inspector, Goose with Ollama, Claude Code) and a real MCP Apps host;
-- the Docker Compose deployment with the local default model: `docker-compose.yml` still defaults the model to a closed OpenAI one (see [deployment](docs/DEPLOYMENT.md)).
+- the crew under Docker Compose: `docker-compose.yml` no longer defaults to any model endpoint, but inside the container `127.0.0.1` is the container itself, not the host's Ollama, and a self-hosted model on another host is tiered closed; this path is untested (see [deployment](docs/DEPLOYMENT.md)).
 
 The receipt is [`docs/spec20-verification.json`](docs/spec20-verification.json), with screenshots in [`docs/research/screenshots/spec20/`](docs/research/screenshots/spec20/). The requirement-by-requirement status, including what is partial or deferred, is in [SPEC_20 section 11](docs/specs/SPEC_20_PLANNING_AGENT_LAYER_AND_PROVIDER_PRINCIPLES.md).
 
