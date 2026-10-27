@@ -154,30 +154,38 @@ class GovernanceTests(OrchestrationFixture, unittest.TestCase):
         for private in ('owner_id','session_key','reservation_key'): self.assertNotIn(private,public)
 
 
-    def test_responses_actual_usage_hook_no_ambiguous_retry_or_duplicate_charge(self):
-        from project_assistant import model_client, agent_runtime
+    def test_compat_actual_usage_hook_no_ambiguous_retry_or_duplicate_charge(self):
+        import http.client, io, json
+        from project_assistant import agent_runtime
+        env=patch.dict(os.environ,{'OPENBENCH_AGENT_KEY_ENVS':'GOVERNANCE_FIXTURE_KEY','GOVERNANCE_FIXTURE_KEY':'synthetic-credential'})
+        env.start();self.addCleanup(env.stop)
+        base='https://priced-provider.invalid/v1'
         profile=agent_registry.save_agent(self.conn,self.me,self.slug,{'agent_key':'coordinator',
-            'provider_config':{'kind':'responses','model':'response-fixture'}})
+            'provider_config':{'kind':'openai_compat','base_url':base,'model':'priced-fixture','api_key_env':'GOVERNANCE_FIXTURE_KEY'}})
         environment=console.get_resource(self.conn,self.me,self.slug,'environment','env_local_4090')
         console.save_resource(self.conn,self.me,self.slug,'environment',{'env_key':'env_local_4090','version':environment['version'],'network_access':'full'})
-        self.settings(model_pricing={'response-fixture':dict(kind='responses',base_url=model_client.URL,input_usd_per_million=1,
+        self.settings(model_pricing={'priced-fixture':dict(kind='openai_compat',base_url=base,input_usd_per_million=1,
             output_usd_per_million=2,max_input_tokens=100000,max_output_tokens=10,byte_bounded_tokenizer=True)})
         self.conn.commit()
         config=agent_runtime.provider_for(profile)
-        def run(admission):
-            return model_client.run_turn(instructions='Fixture',turn_text='Objective',call_tool=lambda *_:None,
-                model=config.model,effort='low',cache_key='fixture',timeout=5,tool_specs=[],
-                credentials_fn=lambda:('synthetic-credential','synthetic-account'),admission=admission)
-        success={'items':[{'type':'message','content':[{'type':'output_text','text':'Candidate'}]}],
-                 'usage':{'input_tokens':7,'output_tokens':3,'input_tokens_details':{'cached_tokens':2}}}
-        with patch.object(model_client,'stream_once',return_value=success) as outbound:
-            self.assertEqual(run(gov.ProviderAdmission(self.ctx,profile,config)).status,'ok')
-            with self.assertRaises(gov.AdmissionError): run(gov.ProviderAdmission(self.ctx,profile,config))
-            self.assertEqual(outbound.call_count,1)
-        with patch.object(model_client,'stream_once',side_effect=model_client.ModelError('unavailable','safe',transient=True)) as outbound:
-            result=run(gov.ProviderAdmission(self.ctx,profile,config,purpose='independent-failure'))
-            self.assertEqual(result.status,'error')
-            self.assertEqual(outbound.call_count,1)
+        sent=[]
+        def run(admission,reply):
+            def opener(request,timeout):
+                sent.append(json.loads(request.data))
+                return reply()
+            return providers.run_openai_compat_turn(config=config,instructions='Fixture',turn_text='Objective',call_tool=lambda *_:None,
+                timeout=5,tool_specs=[],opener=opener,admission=admission)
+        success=lambda:io.BytesIO(json.dumps({'choices':[{'message':{'content':'Candidate'}}],
+            'usage':{'prompt_tokens':7,'completion_tokens':3,'prompt_tokens_details':{'cached_tokens':2}}}).encode())
+        self.assertEqual(run(gov.ProviderAdmission(self.ctx,profile,config),success).status,'ok')
+        self.assertEqual(sent[0]['max_completion_tokens'],10)
+        with self.assertRaises(gov.AdmissionError): run(gov.ProviderAdmission(self.ctx,profile,config),success)
+        self.assertEqual(len(sent),1)
+        def reset():
+            raise http.client.RemoteDisconnected('fixture reset after send')
+        result=run(gov.ProviderAdmission(self.ctx,profile,config,purpose='independent-failure'),reset)
+        self.assertEqual((result.status,result.error_kind),('error','unavailable'))
+        self.assertEqual(len(sent),2)
         ledger=db.many(self.conn,'SELECT to_jsonb(l) FROM projectops.agent_usage_ledger l WHERE project_slug=%s',(self.slug,))
         self.assertEqual(len(ledger),2)
         self.assertEqual(sum(l['cached_tokens'] for l in ledger),2)

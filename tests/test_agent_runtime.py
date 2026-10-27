@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 import test_agent_registry as registry_fixture
-from project_assistant import agent_registry, agent_policy, agent_runtime, service, store, tools, providers, model_client, mcp_stdio
+from project_assistant import agent_registry, agent_policy, agent_runtime, service, store, tools, providers, mcp_stdio
 from project_assistant import prompting
 
 
@@ -86,7 +86,7 @@ class TransportPolicyTests(unittest.TestCase):
         ctx=type('Ctx',(),{'slug':'fixture','me':type('Me',(),{'actor_id':'actor'})()})()
         with patch.dict(os.environ,{'PROJECT_ASSISTANT_ENGINE':'codex','OPENBENCH_PROVIDER':'','OPENBENCH_ENGINE':''}), \
              patch.object(agent_runtime,'run_cli',return_value=agent_runtime.Outcome('ok')) as cli, \
-             patch.object(model_client,'run_turn',side_effect=AssertionError('legacy codex must not invoke Responses')):
+             patch.object(providers,'run_openai_compat_turn',side_effect=AssertionError('legacy codex must not invoke the HTTP transport')):
             agent_runtime.run_agent(profile=profile,ctx=ctx,instructions='',turn_text='fixture',timeout=1,settings=settings_from_env())
         cli.assert_called_once()
 
@@ -131,10 +131,16 @@ class TransportPolicyTests(unittest.TestCase):
         self.assertEqual(result.status,'lockdown')
         self.assertEqual([s['function']['name'] for s in captured[0]['tools']],['read_page'])
 
-    def test_responses_request_uses_filtered_tools(self):
-        allowed = [s for s in providers.tool_specs.TOOLS if s['name']=='read_page']
-        body = model_client.request_body(model='fixture',effort='low',instructions='',items=[],cache_key='test',tool_specs=allowed)
-        self.assertEqual([s['name'] for s in body['tools']],['read_page'])
+    def test_removed_responses_kind_is_a_configuration_error_without_network(self):
+        ctx=type('Ctx',(),{'slug':'fixture','me':type('Me',(),{'actor_id':'actor'})()})()
+        for env,kind in (({},'responses'),({'OPENBENCH_PROVIDER':'direct'},None)):
+            profile={'agent_key':'coordinator','role_kind':'primary','allowed_tools':[],'provider_config':{'kind':kind} if kind else {}}
+            with self.subTest(kind=kind or env),patch.dict(os.environ,env), \
+                 patch.object(providers,'run_openai_compat_turn',side_effect=AssertionError('removed kinds must not reach a transport')), \
+                 patch('urllib.request.urlopen',side_effect=AssertionError('no network')):
+                outcome=agent_runtime.run_agent(profile=profile,ctx=ctx,instructions='',turn_text='fixture',timeout=1)
+            self.assertEqual((outcome.status,outcome.kind),('error','kind_removed'))
+            self.assertIn('removed',outcome.detail)
 
     def test_mcp_list_and_call_share_authoritative_host_policy(self):
         allowed = [s for s in providers.tool_specs.TOOLS if s['name']=='read_page']

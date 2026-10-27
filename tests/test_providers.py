@@ -14,8 +14,9 @@ class ProviderTests(unittest.TestCase):
             instructions='',turn_text='',call_tool=lambda *_:'',timeout=5,opener=opener)
         self.assertEqual(result.error_kind,'auth')
         self.assertNotIn('private-fixture-secret',result.error)
-    def test_default_is_standard_api_and_cli_is_explicit(self):
-        self.assertEqual(providers.provider_from_env({}).kind, "openai_compat")
+    def test_default_is_local_open_weights_and_cli_is_explicit(self):
+        default = providers.provider_from_env({})
+        self.assertEqual((default.kind, default.base_url, default.model), ("openai_compat", "http://127.0.0.1:11434/v1", "qwen3.8:27b"))
         configured = worker.settings_from_env({"OPENBENCH_PROVIDER": "codex_cli", "OPENBENCH_MODEL": "chosen-model"})
         self.assertEqual(configured.engine, "codex")
         self.assertEqual(configured.model, "chosen-model")

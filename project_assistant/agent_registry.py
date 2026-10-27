@@ -149,7 +149,10 @@ def validate_provider(value):
     allowed = {'kind', 'base_url', 'api_key_env', 'model', 'effort'}
     if not isinstance(value, dict) or set(value) - allowed or any(not isinstance(v, str) for v in value.values()):
         raise AgentError(400, "Model settings support kind/base_url/api_key_env/model/effort only. Do not store credentials here.")
-    if value.get('kind', 'openai_compat') not in ('openai_compat', 'responses', 'codex_cli'):
+    from project_assistant.providers import KIND_REMOVED, REMOVED_KINDS
+    if value.get('kind') in REMOVED_KINDS:
+        raise AgentError(400, KIND_REMOVED, 'kind_removed')
+    if value.get('kind', 'openai_compat') not in ('openai_compat', 'codex_cli'):
         raise AgentError(400, "Unsupported model runtime.")
     if any(len(v) > 2000 or '\x00' in v for v in value.values()):
         raise AgentError(400, "Model configuration is too long or malformed.")
@@ -171,7 +174,7 @@ def validate_provider(value):
         permitted = {n.strip() for n in os.environ.get('OPENBENCH_AGENT_KEY_ENVS', '').split(',') if n.strip()}
         if not re.fullmatch(r'[A-Z_][A-Z0-9_]{0,127}', value['api_key_env']) or value['api_key_env'] not in permitted:
             raise AgentError(400, "This credential reference is not allowed by the deployment.")
-    if value.get('kind') in ('responses', 'codex_cli') and (value.get('base_url') or value.get('api_key_env')):
+    if value.get('kind') == 'codex_cli' and (value.get('base_url') or value.get('api_key_env')):
         raise AgentError(400, "This runtime uses local credentials and does not accept a custom endpoint or api_key_env.")
     return dict(value)
 

@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from project_assistant import providers,model_client,codex_runner,tools,agent_policy,agent_registry
+from project_assistant import providers,codex_runner,tools,agent_policy,agent_registry
 from project_assistant.tool_host import ToolHost,summarize
 
 
@@ -43,6 +43,8 @@ def provider_for(profile,env=None):
     kind=config.get('kind',base.kind)
     if kind=='codex': kind='codex_cli'
     effort = profile.get('effort') if profile.get('effort_configured', 'effort' in profile) else None
+    if effort is None and not config.get('base_url') and not config.get('model'):
+        effort = base.effort  # the deployment default model keeps its default effort
     return providers.ProviderConfig(kind,config.get('base_url',base.base_url),key,
                                     config.get('model',base.model), config.get('effort',effort))
 
@@ -83,6 +85,11 @@ def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on
             conn.close()
     ctx.turn_context=turn_text
     config=provider_for(profile)
+    if config.kind not in ('openai_compat','codex_cli'):
+        # Configuration error before any approved action, admission or network call.
+        removed=config.kind in providers.REMOVED_KINDS
+        return Outcome('error',kind='kind_removed' if removed else 'configuration',
+            detail=providers.KIND_REMOVED if removed else 'Unsupported model runtime; configure kind openai_compat.',version=config.kind,model=config.model)
     specs=agent_policy.tool_specs_for(profile)
     ctx.allowed_tools={s['name'] for s in specs}
     if getattr(ctx, 'dispatch_id', None) and not getattr(ctx, 'advisor_call', False):
@@ -163,12 +170,7 @@ def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on
     common=dict(instructions=instructions,turn_text=turn_text,call_tool=call_tool,timeout=timeout,
                 on_text=on_text,on_round=on_round,images=images,tool_specs=specs,**({'admission': admission} if admission else {}))
     try:
-        if config.kind=='openai_compat':
-            result=providers.run_openai_compat_turn(config=config,**common)
-        else:
-            result=model_client.run_turn(model=config.model,
-                effort=config.effort or getattr(settings,'effort','medium'),
-                cache_key=f'pa-{ctx.slug}-{ctx.me.actor_id}-{profile["agent_key"]}',**common)
+        result=providers.run_openai_compat_turn(config=config,**common)
     except DecisionPending:
         return Outcome('awaiting_gate',answer='需要你的決定，問題已列在待你裁決。',version=config.kind,model=config.model)
     return Outcome(result.status,result.answer,result.blocked,result.error_kind or result.status,

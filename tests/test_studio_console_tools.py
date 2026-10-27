@@ -35,7 +35,7 @@ class StudioSchemaTests(unittest.TestCase):
                 tool_specs.validate_studio_args('studio_dispatch_shot', {'episode_id':'ep','shot_ids':ids,'allocation_id':'al'})
 
     def test_transport_attaches_real_multimodal_tool_output(self):
-        from project_assistant import providers, model_client
+        from project_assistant import providers
         seen = []
         def opener(request, **kwargs):
             seen.append(json.loads(request.data))
@@ -47,15 +47,6 @@ class StudioSchemaTests(unittest.TestCase):
             instructions='',turn_text='',call_tool=lambda *_:tools.ToolResult('{"timing_seconds":[0.1]}',[image]),timeout=5,opener=opener,tool_specs=[spec])
         self.assertEqual(result.status,'ok')
         self.assertEqual(seen[1]['messages'][-1]['content'][1]['image_url']['url'], image)
-        captured = []
-        def stream(body, **kwargs):
-            captured.append(body)
-            return {'items':[{'type':'function_call','name':'studio_inspect_frames','arguments':'{}','call_id':'a'}] if len(captured)==1 else [], 'usage':{}}
-        with patch.object(model_client,'_stream_with_retry',side_effect=stream):
-            result = model_client.run_turn(instructions='',turn_text='',call_tool=lambda *_:tools.ToolResult('{}',[image]),model='fixture',effort='low',cache_key='fixture',
-                timeout=5,credentials_fn=lambda:('fixture','fixture'),tool_specs=[spec])
-        self.assertEqual(result.status,'ok')
-        self.assertEqual(captured[1]['input'][-1]['content'][1]['image_url'],image)
 
 
 @unittest.skipUnless(os.environ.get('OPENBENCH_TEST_DB_URI'), 'dedicated PostgreSQL URI required')

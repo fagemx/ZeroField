@@ -1,7 +1,7 @@
 """Authenticated lean Console routes. Long polling holds no DB connection/lock."""
 import re
 import time
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, unquote
 
 from project_assistant import agent_console_service as app, agent_console_store as resources
 from project_assistant import console_deployments as deployments, console_connections as connections
@@ -85,6 +85,8 @@ def dispatch(conn, me, slug, path, method, body, query):
             return {'entry': resources.save_memory_entry(conn, me, slug, body, episode_id=episode)}
         if path == 'memory-stores/consolidate' and method == 'POST':
             return app.consolidate(conn, me, slug, body)
+        if len(parts) == 3 and parts[0] == 'reservations' and parts[2] == 'reconcile' and method == 'POST':
+            return reconcile(conn, me, slug, unquote(parts[1]), body)
     if method == 'DELETE':
         if len(parts) == 2 and parts[0] in RESOURCE:
             app.fields(body, {'version'}, {'version'})
@@ -106,6 +108,21 @@ def dispatch(conn, me, slug, path, method, body, query):
             app.fields(body, {'version'}, {'version'})
             return deployments.save(conn, me, slug, {'deployment_key': parts[1], 'version': body['version'], 'enabled': False})
     raise agents.AgentError(404, 'Console endpoint not found.')
+
+
+def reconcile(conn, me, slug, request_key, body):
+    """Showrunner-only settlement of an uncertain reservation; no owner/session identity returned."""
+    from project_assistant import execution_governance as governance
+    from project_docs import repository as repo
+    resources.authorize(conn, me, slug, admin=True)
+    app.fields(body, {'observedCostUsd'}, {'observedCostUsd'})
+    if not isinstance(body['observedCostUsd'], str):
+        resources.bad('observedCostUsd must be a decimal string.')
+    row = governance.reconcile(conn, me, slug, request_key, observed_cost=body['observedCostUsd'])
+    repo.add_audit(conn, slug, action='console_reconcile', actor_id=me.actor_id, target=request_key,
+                   detail={'observed_cost_usd': body['observedCostUsd']})
+    return {'reservation': {k: row.get(k) for k in ('request_key', 'state', 'agent_key', 'usage_kind', 'category',
+                                                    'provider_name', 'model_name', 'ceiling_cost_usd', 'accounted_cost_usd')}}
 
 
 def handle(handler, parsed, method):

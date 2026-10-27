@@ -40,7 +40,7 @@ SETTINGS = {
     'spend_limit_monthly_usd': 100, 'spend_limit_session_usd': 5, 'spend_limit_episode_usd': 15,
     'on_spend_limit': 'downgrade_open_weights', 'model_pricing': {}, 'comfy_router_budget_mode': 'hard',
     'judge_trial_mode': False, 'judge_trial_cap_runs': 10,
-    'rate_limits': {'rpm_per_agent': 30, 'max_concurrent_renders': 2, 'max_concurrent_llm': 4},
+    'rate_limits': {'rpm_per_agent': 30, 'max_concurrent_renders': 2, 'max_concurrent_llm': 4, 'uncertain_hold_seconds': 600},
     'retention_policy': {'session_logs_days': 90, 'temp_media_days': 14, 'zero_data_retention_notice': True},
     'otel_config': {'enabled': False, 'endpoint': '', 'service_name': 'zerofield-studio'}, 'webhooks': [],
 }
@@ -385,7 +385,11 @@ def ensure_defaults(conn, slug):
 
 def get_settings(conn, me, slug):
     authorize(conn, me, slug)
-    return db.one(conn, 'SELECT to_jsonb(s) FROM projectops.agent_console_settings s WHERE project_slug=%s', (slug,))
+    row = db.one(conn, 'SELECT to_jsonb(s) FROM projectops.agent_console_settings s WHERE project_slug=%s', (slug,))
+    if row and isinstance(row.get('rate_limits'), dict):
+        # Rows saved before a limit existed read its default.
+        row['rate_limits'] = {**SETTINGS['rate_limits'], **row['rate_limits']}
+    return row
 
 
 def save_settings(conn, me, slug, body):
@@ -395,6 +399,9 @@ def save_settings(conn, me, slug, body):
     _lock(conn, slug)
     existing = get_settings(conn, me, slug)
     values = {**SETTINGS, **({n: existing[n] for n in SETTINGS} if existing else {}), **{n: body[n] for n in SETTINGS if n in body}}
+    if isinstance(values['rate_limits'], dict) and 'uncertain_hold_seconds' not in values['rate_limits']:
+        # Drafts written before the hold existed keep the current hold.
+        values['rate_limits'] = {**values['rate_limits'], 'uncertain_hold_seconds': ((existing or {}).get('rate_limits') or SETTINGS['rate_limits'])['uncertain_hold_seconds']}
     for n in ('spend_limit_monthly_usd', 'spend_limit_session_usd', 'spend_limit_episode_usd'):
         values[n] = money(values[n])
         if values[n].as_tuple().exponent < -2:
@@ -414,7 +421,9 @@ def save_settings(conn, me, slug, body):
         if not isinstance(price, dict) or set(price) != {'input_usd_per_million', 'output_usd_per_million', 'max_input_tokens', 'max_output_tokens', 'byte_bounded_tokenizer', 'base_url', 'kind'}:
             bad('Supply rates, enforced token ceilings and explicit byte-tokenizer attestation.')
         endpoint(price['base_url'])
-        if price['kind'] not in ('openai_compat', 'responses'):
+        if price['kind'] == 'responses':
+            raise AgentError(400, 'The responses transport was removed; delete this price entry or price an openai_compat endpoint.', 'kind_removed')
+        if price['kind'] != 'openai_compat':
             bad('Unsupported priced provider transport.')
         if price['byte_bounded_tokenizer'] is not True:
             bad('Hard admission requires an operator-verified byte-bounded tokenizer.')
@@ -427,7 +436,7 @@ def save_settings(conn, me, slug, body):
         if not isinstance(v, dict) or set(v) != set(SETTINGS[name]):
             bad('Invalid settings object.')
     for n, v in values['rate_limits'].items():
-        integer(v, 1, 10000 if n == 'rpm_per_agent' else 32)
+        integer(v, *((0, 86400) if n == 'uncertain_hold_seconds' else (1, 10000) if n == 'rpm_per_agent' else (1, 32)))
     retention = values['retention_policy']
     for n in ('session_logs_days', 'temp_media_days'):
         integer(retention[n], 1, 3650)
