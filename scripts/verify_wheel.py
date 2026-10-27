@@ -14,13 +14,13 @@ def source_resources(source):
     for package in ("project_assistant", "project_docs", "openbench_data"):
         resources.update({p.relative_to(source).as_posix(): p for p in (source / package).rglob("*.py")
                           if "__pycache__" not in p.parts})
-    for pattern in ("db/*.sql", "project_assistant/prompts/*.md", "workflows/*.json", "workflows/*.md",
+    for pattern in ("db/*.sql", "project_assistant/prompts/*.md", "project_docs/*.json", "workflows/*.json", "workflows/*.md",
                     "workflows/cards/*.json", "workflows/router/*.json", "samples/*.png", "samples/*.mp4",
                     "samples/*.md", "samples/*.py", "static/projects/**/*"):
         for path in source.glob(pattern):
             if path.is_file():
                 relative = path.relative_to(source).as_posix()
-                key = relative if relative.startswith("project_assistant/") else "openbench_data/" + relative
+                key = relative if relative.startswith(("project_assistant/", "project_docs/")) else "openbench_data/" + relative
                 resources[key] = path
     return resources
 
