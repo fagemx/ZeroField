@@ -79,8 +79,11 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
     if(r<0||!Number.isInteger(c)||c<0||c>=target.headers.length){handledFocus.current=token;onError?.(uiText("sheetWorkspace.aSourceRowOrColumnNoLongerExistsReview"));return;}
     handledFocus.current=token;setQuery('');setStatusFilter('');setHidden(old=>old.filter(index=>index!==c));setPanel(null);setPreview(null);
     const prior=restoreViewPreferences(localPreference?.key===preferenceKey?localPreference.raw:storedPreference,target);
-    setLocalPreference({key:preferenceKey,raw:JSON.stringify(viewPreferences(target,{...prior,mode:productionSheet&&focusRow.openRow?'review':'grid'}))});setActive({r,c});setAnchor({r,c});
-    if(focusRow.openRow){setRowOpen(focusRow.rowId);setPanel('row');setComment('');setHistory(null);if(productionSheet){const stage=mediaStages(target,target.rows[r])[0];if(stage){setPanel(null);setPreview({...stage.media,r,c:stage.column,label:stage.label,value:stage.value});}}}
+    // openStage: a shot whose crew proposal is reviewed on the 3D Stage (SPEC_20 R18); a sheet without a previs column opens its row instead.
+    const toStage=focusRow.openStage&&target.headers.some(h=>/previs|blockout/i.test(h));
+    setLocalPreference({key:preferenceKey,raw:JSON.stringify(viewPreferences(target,{...prior,mode:toStage?'stage':productionSheet&&focusRow.openRow?'review':'grid'}))});setActive({r,c});setAnchor({r,c});
+    if(toStage){setRowOpen(focusRow.rowId);setStageFocus({rid:focusRow.rowId});}
+    else if(focusRow.openRow){setRowOpen(focusRow.rowId);setPanel('row');setComment('');setHistory(null);if(productionSheet){const stage=mediaStages(target,target.rows[r])[0];if(stage){setPanel(null);setPreview({...stage.media,r,c:stage.column,label:stage.label,value:stage.value});}}}
     requestAnimationFrame(()=>{const cell=grid.current?.querySelector(`[data-cell="${r}:${c}"]`);cell?.focus();cell?.scrollIntoView({block:'nearest',inline:'nearest'});});
   },[focusRow,tab.key,tables,parsed?.tableId,dirty,busy,preferenceKey,storedPreference,localPreference,onError]);
   useEffect(()=>{

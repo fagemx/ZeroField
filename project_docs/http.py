@@ -198,6 +198,7 @@ GET_ROUTES = [
     (re.compile(rf"/projects/api/{SLUG}/assistant"), "assistant_state"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/manager"), "assistant_manager"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/messages/(\d{{1,18}})/document"), "assistant_document"),
+    (re.compile(rf"/projects/api/{SLUG}/assistant/shots/(sh_[A-Za-z0-9_-]{{1,160}})/proposals"), "assistant_shot_proposals"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/conversations"), "assistant_conversations"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/conversations/(\d{{1,18}})"), "assistant_conversation"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/attachments/(\d{{1,18}})/(thumb|preview|file)"),
@@ -288,6 +289,8 @@ def _assistant_call(name, conn, me, args, body, raw=b""):
         return assistant_service.apply_proposal(conn, me, slug, int(args[1]), body)
     if name == "assistant_dismiss":
         return assistant_service.dismiss_proposal(conn, me, slug, int(args[1]))
+    if name == "assistant_shot_proposals":
+        return assistant_service.shot_proposals(conn, me, slug, args[1])
     if name == "assistant_note":
         return assistant_service.add_note(conn, me, slug, body)
     if name == "assistant_note_done":
