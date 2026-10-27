@@ -108,6 +108,18 @@ If the crew cannot work (the background worker is off, Ollama is unreachable, or
 
 The default and the contest demo path use local open weights only. To use a different local server that speaks the OpenAI chat-completions protocol (vLLM, llama.cpp server, LM Studio), set `OPENBENCH_API_BASE` (the base URL including `/v1`) and `OPENBENCH_MODEL`; see [worker setup](docs/WORKERS.md) for the supported settings and ACP configuration. Hosted endpoints such as OpenRouter and closed models (OpenAI, Anthropic, Gemini) are optional and outside the demo path: an admin has to allow the host in an environment and set a price ceiling for the model in the Agent Console, and closed models are for hybrid productions only. For contest workflows, use open-weights models and open-source nodes.
 
+### Connect an external agent
+
+Agents that speak MCP (Claude Code, Goose, MCP Inspector) can work on one production through `zerofield-mcp`, a stdio MCP server installed with the package (MCP 2026-07-28 and the 2025-11-25 `initialize` handshake). It talks to the running studio on this machine only. A showrunner issues a service-account token for the production; the token lists the tools the agent may use, a write mode (`propose_only`, or `generate` to also allow `request_generation`) and an expiry (at most 365 days). The response shows the token once; ZeroField keeps only its hash. In development mode the request below runs as the default showrunner; with token sign-in add `Authorization = 'Bearer <your crew token>'` to the headers.
+
+```powershell
+$body = @{ accountKey = 'claude-code'; tools = @('list_pages', 'read_page', 'propose_table_edit', 'get_workflow'); writeMode = 'propose_only'; expiresInDays = 30 } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3020/projects/api/<production>/service-accounts -ContentType application/json -Headers @{ 'X-Requested-With' = 'projects' } -Body $body
+claude mcp add zerofield -e ZEROFIELD_MCP_TOKEN=zfsa_... -e ZEROFIELD_PROJECT=<production> -- zerofield-mcp
+```
+
+`ZEROFIELD_URL` selects another local port (default `http://127.0.0.1:3020`). Everything the agent writes is a proposal that a crew member adopts in ZeroField. `request_generation` submits only free local open-weights renders and refuses closed or paid plans. `GET .../service-accounts` lists tokens with their call counts; `POST .../service-accounts/<accountKey>/revoke` revokes one. Every call is audited under the service account.
+
 ## External workflows and reference preparation
 
 The seeded OpenJutsu slate includes independently replaceable **Source Driving Video**, **First Frame**, **Motion Structure**, **Anchor Keyframe**, **Remastered Video** and **Split-Screen MP4** cells. The preparation stages use the original source video. Each result is reviewed before downstream generation proceeds.
