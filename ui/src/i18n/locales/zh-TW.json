@@ -3072,7 +3072,21 @@
     "empty": "（空白）",
     "cleared": "（清除）",
     "showInStage": "在 3D 片場看這個機位",
-    "failed": "沒有套用成功，助理那邊有詳細訊息。"
+    "failed": "沒有套用成功，助理那邊有詳細訊息。",
+    "ruleFallback": "規則退路產生，非模型撰寫：劇組的答案兩次都沒通過檢查。",
+    "askCrew": "請劇組",
+    "askCrewHint": "攝影指導只提出提案；你套用之前不會改動任何內容。",
+    "askBeats": "寫分拍",
+    "askCamera": "選鏡頭與運鏡",
+    "crewQueued": "等待劇組…",
+    "crewRunning": "攝影指導處理中…",
+    "crewCanceled": "已取消。",
+    "crewFailed": "劇組沒有完成：{{v0}}",
+    "crewUnchanged": "沒有變更：這一鏡已經是這樣寫。",
+    "crewProposed": "提案已放在上方。",
+    "crewFallback": "規則退路產生（非模型撰寫）：提案已放在上方。",
+    "crewCancel": "取消",
+    "crewNotReady": "劇組目前無法工作，沒有寫入任何內容。請先處理："
   },
   "timeline": {
     "trackTitle": "時間軸",

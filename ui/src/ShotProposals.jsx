@@ -19,6 +19,7 @@ export function ShotProposals({items = [], writable, onApply, onDismiss, onShow}
       const message = failed[key] || entry.proposal.error;
       return <article key={key} className="shot-proposal" aria-busy={busy === key || undefined}>
         <header><b>{t('shotProposal.title')}</b>{entry.size > 1 && <small>{t(entry.partial ? 'shotProposal.partOf' : 'shotProposal.together', {count: entry.size})}</small>}</header>
+        {entry.proposal.target?.crew?.source === 'rule_fallback' && <small className="shot-proposal-note">{t('shotProposal.ruleFallback')}</small>}
         <dl>{entry.group.changes.map((change, index) => <div key={index}><dt>{change.column}</dt>
           <dd><del>{change.before || t('shotProposal.empty')}</del><ins>{change.after || t('shotProposal.cleared')}</ins></dd></div>)}</dl>
         {message && <p className="shot-proposal-error" role="alert">{message}</p>}

@@ -27,6 +27,11 @@ python -X utf8 scripts/crew_eval.py --canned research/crew_eval/runs/q27-v2 --re
 
 `--type beats`, `--case blocking-03` (an id prefix) select part of the set; `--fail-under 80` turns the total into an exit code.
 
+The real beats job (SPEC_20 R7, R19: one model call asking for the JSON schema, validation, one retry, rule fallback) has an adapter:
+`--job project_assistant.crew_planning:run_eval_job --type beats`. It calls the deployment's model from the `OPENBENCH_*`
+settings and refuses anything but a loopback endpoint (an evaluation has no production to govern a hosted call against).
+The camera job writes sheet text, not the blocking ops of this set, so `blocking` waits for R27's `propose_previs_ops`.
+
 ## When the model or the prompts change
 
 1. Run the self-check (`--reference`) so you know the harness itself is sound.
@@ -84,7 +89,8 @@ In JSON write a regex word boundary as `\\b`: a single `\b` is a backspace and `
 
 ## Assumptions to confirm when the real jobs land
 
-- The input shapes above are this set's; the later crew-job adapter maps its own job inputs onto them.
+- The input shapes above are this set's. The beats job builds its input in exactly this shape from a shot
+  (`project_assistant/crew_planning.py` `gather`), so the adapter hands a case input to the job unchanged.
 - 4.6 is a P1 draft: `size` (wide, full, medium, close, extreme_close) and `angle` (low, eye, high, overhead) are this set's
   vocabulary, `retime.beat` counts from 1 (`RETIME_BEAT_BASE`) and `retime.at` is where that beat now starts, as a fraction of the
   shot. Change the constants at the top of `scripts/crew_eval.py` if the solver decides otherwise.

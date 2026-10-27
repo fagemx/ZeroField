@@ -271,6 +271,8 @@ def roster(conn, me, slug):
         from project_assistant.orchestration_flow import profile_connected
         row['active_dispatches']=db.one(conn,"SELECT count(*) FROM projectops.orchestration_dispatch WHERE project_slug=%s AND agent_key=%s AND status='running'",(slug,row['agent_key']))
         row['active_dispatches']+=db.one(conn,"SELECT count(*) FROM projectops.assistant_message WHERE project_slug=%s AND agent_key=%s AND role='assistant' AND status='running'",(slug,row['agent_key']))
+        from project_assistant import crew_jobs
+        row['active_dispatches']+=crew_jobs.running_count(conn,slug,row['agent_key'])  # SPEC_20 R7/R20 planning jobs
         connected=profile_connected(conn,slug,row['agent_key'])
         # Online needs a heartbeat and no readiness blocker; a stopped built-in worker is itself a blocker (SPEC_20 A7).
         row['status']=('needs_setup' if crew_readiness.blocks(readiness,row) else

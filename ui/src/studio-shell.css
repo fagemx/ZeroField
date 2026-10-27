@@ -271,6 +271,15 @@
 .workbench-app.studio-shell .shot-proposal-actions button { height: 28px; padding: 0 10px; font-size: 12px; }
 .workbench-app.studio-shell .shot-proposal-actions button.apply { border-color: var(--primary); background: var(--primary); color: var(--primary-ink); font-weight: 600; }
 .workbench-app.studio-shell .shot-proposal-actions button.apply:hover:not(:disabled) { background: #fff; border-color: #fff; }
+.shot-proposal-note { color: #f0b46a; font-size: 11.5px; }
+/* Asking the crew (SPEC_20 R7, R20): two quiet asks; the answer lands above as a proposal. */
+.crew-ask { display: grid; gap: 6px; }
+.crew-ask > header { display: grid; gap: 2px; font-size: 12.5px; }
+.crew-ask > header small, .crew-ask-state { color: var(--faint); font-size: 11.5px; }
+.crew-ask-state.failed { color: #f0728a; }
+.crew-ask-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.workbench-app.studio-shell .crew-ask-row button { height: 28px; padding: 0 10px; font-size: 12px; }
+.crew-ask .shot-proposal-error ul { margin: 4px 0 0; padding-left: 16px; }
 /* The same proposal inside the 3D Stage's inspector: the dashed camera is on the plan, these choose what to do with it. */
 .previs-proposal { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed rgba(255, 255, 255, .42); border-radius: 8px;
   background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .06) 0 5px, transparent 5px 10px), var(--surface); }

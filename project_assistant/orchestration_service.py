@@ -107,7 +107,9 @@ def _counts(conn,me,slug):
     finished_tasks=db.one(conn,"SELECT count(*) FROM projectops.orchestration_task t JOIN projectops.orchestration_run r ON r.id=t.run_id WHERE r.project_slug=%s AND r.created_by=%s AND t.status IN ('completed','failed','canceled')",params)
     roster=db.one(conn,'SELECT count(*) FROM projectops.agent_profile WHERE project_slug=%s',(slug,))
     roster+=db.one(conn,'SELECT count(*) FROM projectops.agent_limb WHERE allowed_projects ? %s',(slug,))
-    return {'needs_you':gates+proposals,'working':dispatches+flows,'done':finished_runs+finished_tasks,'idle':roster}
+    from project_assistant import crew_jobs  # SPEC_20 R7/R20: crew planning jobs are the role's activity too
+    crew_working,crew_done=crew_jobs.counts(conn,me,slug)
+    return {'needs_you':gates+proposals,'working':dispatches+flows+crew_working,'done':finished_runs+finished_tasks+crew_done,'idle':roster}
 
 
 def _page(groups,limit,cursor):
@@ -198,6 +200,10 @@ def board(conn,me,slug,*,cursor=None,limit=50,counts_only=False):
                 target=next((t['target'] for t in reversed(tasks) if t['run_id']==run['id'] and t['target'].get('tab_key')), {})
                 groups['done'].append({'id':'run:'+run['id'],'kind':'run','run_id':run['id'],'title':run['objective'],
                     'status':run['status'],'summary':run['summary'],'target':target,'created_at':run['created_at']})
+        from project_assistant import crew_jobs
+        crew_working,crew_done=crew_jobs.board(conn,me,slug)
+        groups['working'].extend(crew_working)
+        groups['done'].extend(crew_done)
         for agent in agent_registry.roster(conn,me,slug):
             groups['idle'].append({k:agent.get(k) for k in ('agent_key','display_name','icon','role_kind','runtime_kind','capabilities','labels','status','active_dispatches','max_concurrency','enabled','can_propose_table','can_propose_document')}|
                                  {'id':'agent:'+agent['agent_key'],'kind':'agent','created_at':''})

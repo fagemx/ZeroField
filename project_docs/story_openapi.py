@@ -1587,6 +1587,9 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
         if entity == "shot" and tail == "previs-plan" and method in ("GET", "PUT"):
             from project_docs import story_previs  # SPEC_20 R26: the stored 3D plan, revisioned (If-Match)
             return story_previs.route(conn, me, method, slug, identifier, body, headers)
+        if entity == "shot" and tail in ("beat-proposals", "camera-proposals", "crew-jobs"):
+            from project_docs import story_crew  # SPEC_20 R7, R19, R20: crew planning jobs, proposals only
+            return story_crew.route(conn, me, method, slug, identifier, tail, body, query)
         if entity == "shot" and tail == "grades":
             from project_assistant import take_grader
             if method == "GET":

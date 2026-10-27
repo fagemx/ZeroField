@@ -219,6 +219,9 @@ def _run_codex(settings: Settings, host, prompt: str) -> Outcome:
 def execute(connection_factory, claim: dict, settings: Settings, worker_id: str) -> str:
     if 'admission_no' in claim:
         return execute_dispatch(connection_factory,claim,settings,worker_id)
+    if 'crewJob' in claim:  # SPEC_20 R7/R19/R20: a crew planning job (one governed call, validated, proposals only)
+        from project_assistant import crew_jobs
+        return crew_jobs.execute(connection_factory, claim, worker_id)
     worker_id=claim.get('lease_owner',worker_id)
     started = time.monotonic()
     stop = threading.Event()
@@ -351,6 +354,8 @@ def poll_once(connection_factory, settings: Settings, worker_id: str, submit, bu
         getters=[claim_background,lambda c:store.claim_next(c,worker_id,LEASE_SECONDS)]
         if not prefer_background:
             getters.reverse()
+        from project_assistant import crew_jobs  # crew planning jobs first: one bounded call each, asked for by hand
+        getters.insert(0,lambda c:crew_jobs.claim(c,worker_id))
         claim=None
         for getter in getters:
             claim=_with_conn(connection_factory,getter)
