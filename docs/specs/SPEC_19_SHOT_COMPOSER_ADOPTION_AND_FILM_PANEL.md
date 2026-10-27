@@ -81,7 +81,7 @@
 
 **E. 成片 API 是 RH 相容介面。** `film_shots` 被 `POST /episodes/{id}/films` 使用，外部用戶端照 RunningHub 的語意送 `{}` 或 `{fillPrevis: true}`。新行為只在明確帶 `selection: "adopted"` 時生效。
 
-**F. `#` 已經被造型代碼用了。** `assetReferences()` 接受 `@CAST-01#night` 這種寫法（`#` 前面是英數字）。運鏡標籤只認前面是空白或行首、而且是目錄裡的代號：`(?<![\w@:#-])#([a-z][a-z0-9-]{1,40})`。不認得的 `#xxx` 保留原文，不畫成標籤，也不丟掉。
+**F. `#` 已經被造型代碼用了。** `assetReferences()` 接受 `@CAST-01#night` 這種寫法（`#` 前面是英數字）。運鏡標籤只認前面是空白或行首（`。#pan`、`]#pan` 都不算）、後面不接 ASCII 英數字、`_` 或 `-`（`#push-inX` 不算），而且是目錄裡的代號。這樣也避開 Python 與 JavaScript 對 `\w` 認定不同的問題；前後端必須用同一套規則（實作見 `project_docs/story_look.py` 的 `move_tokens()`）。不認得的 `#xxx` 保留原文，不畫成標籤，也不丟掉。`#auto` 是認得的標籤：展開成空字串，並讓 `Camera Movement` 那一行消失（交給模型決定）。
 
 **G. 運鏡在提示詞裡有位置。** `#push-in` 放在哪一段時間碼，就代表那一段發生。編譯時就地展開成描述句，不能像 `PUT /shots/{id}/assets` 那樣把標籤全搬到句尾。
 
@@ -296,7 +296,9 @@
 shotState({status, adoption, takes, inFlight}) →
   'blocked' | 'generating' | 'new_take' | 'retake' | 'adopted' | 'empty'
 // 優先順序：blocked > generating > new_take > retake > adopted > empty
-// new_take：takes 中有 createdAt 晚於 adoption.at 的影片 Take；或未採用（狀態不是 Approved）且至少有一支 Take
+// new_take：有「採用基準」時（狀態 Approved，或狀態 Retake 且有 adoption 紀錄），createdAt 晚於 adoption.at 的影片 Take 才算新；
+//           沒有基準時（從沒採用過），每一支 Take 都算新
+// 按 R 只寫 Retake 狀態，不刪 adoption；只有 DELETE /shots/{id}/adoption 會刪
 ```
 
 - `takes` 來自 `GET /shots/{id}/videos`（候選）與這一列的待套用媒體提案（既有 `rowProposals()`），合併、去重（以網址）、依時間新到舊排序。
@@ -327,7 +329,7 @@ shotState({status, adoption, takes, inFlight}) →
 
 - 目錄檔：`project_docs/look_catalog.json`（隨套件發佈；範例媒體在 `ui/public/assets/look-samples/`）。
 - 種類：`camera`（機身＋鏡頭＋光圈，寫 `Optical Rig`）、`move`（運鏡，`#` 標籤）、`genre`、`era`、`tempo`、`palette`（`hex` 最多 12 色，第一色為主色）、`light`。
-- 每個選項：`id`（小寫連字號）、`labelKey`（i18n）、`promptText`（英文具體畫面描述，例：`light:window` → `soft daylight from a side window, one cool key, deep falloff on the far side of the face`）、`preview`。
+- 每個選項：`id`（小寫連字號，同一個 kind 內唯一；每組第一項是 Auto，`promptText` 為空，例如 `auto-body`、`auto-lens`、`auto-aperture`、`auto`）、`labelKey`（i18n，一律在 `lookCatalog.<kind>.…` 底下，避免和按鈕文字的 `look.*` 衝突）、`promptText`（英文具體畫面描述，例：`light:window` → `soft daylight from a side window, one cool key, deep falloff on the far side of the face`）、`preview`。
 - `compile_look(episode_look, shot_look)`（`project_docs/story_look.py`）：鏡頭覆寫優先，回傳 `{"film": "...", "color": "... palette #2E3A4A, #5B6F86 ...", "light": "..."}`。
 - `context_compiler`：在 `Optical Rig`／`Camera Movement` 之後加 `Film: …`、`Color: …`、`Lighting: …` 三行（有值才加）；靜態圖（`image_gen`）保留色調與燈光，不加運鏡。`#` 標籤就地展開成 `promptText`，展開後的句子仍維持原段落順序。
 - 自訂調色盤與自訂燈位不在本規格（Higgsfield 有；先做預設）。
@@ -445,7 +447,7 @@ shotState({status, adoption, takes, inFlight}) →
 2. **「已採用」字樣的範圍。** 建議只在分鏡片場顯示「已採用」；表格狀態欄與其他頁面仍顯示「Approved」，避免素材的「定案」也跟著改名。
 3. **時間碼批註。** 建議另開規格（Frame.io 式，釘在播放列上）；本規格只顯示既有列標註。
 4. **範例媒體是否打包進 wheel。** 建議打包（總量預估 < 15 MB）；若超過，改成首次開啟時從專案內產生。
-5. **片型、色調、燈光的選項清單與中文名稱。** 執行代理先提一份清單（每類 6–12 個），由使用者確認後才產範例。
+5. **片型、色調、燈光的選項清單與中文名稱。** 執行代理先提一份清單（每類 6–12 個），由使用者確認後才產範例。草稿見 `docs/specs/SPEC_19_LOOK_OPTIONS_DRAFT.md`（另附 9 個待你決定的問題）。
 6. **網格總覽多選的「全部採用最新 Take」是否需要。** 建議要，但放在多選後才出現的底部動作列，外框按鈕。
 7. **「接上一鏡」預設當首幀還是當參考。** 建議：劇本把這兩鏡標成同一個連續動作（同一拍拆出來的相鄰鏡頭）時預設當首幀，其他情況預設當參考。
 8. **接點檢查是否在採用後自動排隊。** 建議跟現有「自動評分新 Take」用同一個開關（預設關）；開著時，任一邊採用或改剪裁就排進佇列。
