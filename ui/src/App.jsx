@@ -419,9 +419,12 @@ function ProjectPage({ slug }) {
   const [paView, setPaView] = useState("chat");   // chat｜manage（管理者才有）
   const [paFocus, setPaFocus] = useState(null);
   const [sheetFocus, setSheetFocus] = useState(null);
+  // A Console refresh keeps the production context. On the Shot Stage the saved row is also the shell's shot focus: the stage follows
+  // that focus, so restoring only the sheet row would land back on the first shot (and drop that shot's unsent review draft).
   useEffect(() => {
     if (!data?.me?.actor_id || !consoleRoute(window.location.hash)) return;
-    try {const saved=JSON.parse(sessionStorage.getItem('zf.productionContext:'+slug+':'+data.me.actor_id));if(saved){setPaDraft(saved.chatDraft || '');if(['off','side','full'].includes(saved.dockMode))setPaMode(saved.dockMode);if(saved.episodeId)setStoryEpisode(saved.episodeId);if(saved.focus)setSheetFocus({...saved.focus,nonce:Date.now()});}} catch { /* Ignore unavailable or obsolete local context. */ }
+    try {const saved=JSON.parse(sessionStorage.getItem('zf.productionContext:'+slug+':'+data.me.actor_id));if(saved){setPaDraft(saved.chatDraft || '');if(['off','side','full'].includes(saved.dockMode))setPaMode(saved.dockMode);if(saved.episodeId)setStoryEpisode(saved.episodeId);
+      if(saved.focus){setSheetFocus({...saved.focus,nonce:Date.now()});if(saved.focus.rowId&&spaceOf(saved.focus.tabKey)==='stage')setFocus({shotRid:saved.focus.rowId});}}} catch { /* Ignore unavailable or obsolete local context. */ }
   }, [slug,data?.me?.actor_id]);
   const paInput = useRef(null);
   const paEnabled = Boolean(data && data.assistant && data.assistant.enabled);
