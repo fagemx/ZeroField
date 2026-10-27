@@ -6,6 +6,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import subprocess
 import threading
 
 from openbench_data import resource_path
@@ -513,8 +514,9 @@ def main(argv=None):
         if not (os.environ.get("OPENBENCH_DB_URI") or os.environ.get("DATABASE_URL")):
             try:
                 uri, cleanup_pg = server._start_local_postgres()
-            except (ImportError, OSError) as exc:
-                parser.error("Configure DATABASE_URL / OPENBENCH_DB_URI, install .[embedded], or set OPENBENCH_PG_BIN to PostgreSQL bin. " + type(exc).__name__)
+            except (ImportError, OSError, subprocess.CalledProcessError) as exc:
+                parser.error("Configure DATABASE_URL / OPENBENCH_DB_URI, install .[embedded], or set OPENBENCH_PG_BIN to PostgreSQL bin "
+                             "(OPENBENCH_PG_PORT picks the embedded database port; its log is .openbench_pg/postgres.log). " + type(exc).__name__)
             os.environ["OPENBENCH_DB_URI"] = uri
         conn = http.open_connection()
         try:

@@ -1,0 +1,55 @@
+{
+  "setup": "One continuous 10-second shot, 85 mm, slow dolly push-in. @SET-04: a harbour radio office at night—cluttered desk, bank of dials, storm lamp, rain on a small window. @CAST-05 sits at the desk facing the lens, @PROP-03 in front of her, its green dial glowing. She is the only person on screen.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1.5,
+      "camera": "Dolly begins a slow, steady push toward Ines; frame tightens from a medium waist-up toward a medium close-up.",
+      "action": "@CAST-05 tilts her head slightly, one brow lifted, lips parted as she listens to @PROP-03. A faint, almost hopeful smile touches her mouth. The green dial and the rain-streaked window frame her."
+    },
+    {
+      "from": 1.5,
+      "to": 3,
+      "camera": "Push continues, frame now a medium close-up; her face occupies the upper two-thirds.",
+      "action": "Her eyes widen a fraction, her gaze locks onto @PROP-03's dial. The faint smile lingers, then begins to waver—her lower lip trembles and the corners of her mouth fall."
+    },
+    {
+      "from": 3,
+      "to": 4.5,
+      "camera": "Push slows slightly; frame edges into a close-up, her face filling more of the frame.",
+      "action": "The hope drains visibly: her shoulders slump a few millimetres, her jaw unclenches, her tired dark eyes go glassy. The small smile is gone; her expression flattens into blank recognition."
+    },
+    {
+      "from": 4.5,
+      "to": 6,
+      "camera": "Push nearly stops; frame holds at a tight close-up on her face and upper chest.",
+      "action": "@CAST-05 raises her right hand and presses her palm flat over her mouth. Her eyes glisten, lids flutter but do not close. The brass whistle on the cord swings once against her navy sweater."
+    },
+    {
+      "from": 6,
+      "to": 7.5,
+      "camera": "Dolly is at rest; frame is static, holding the tight close-up.",
+      "action": "She slowly lowers her hand from her mouth, fingers splaying and releasing. Her face is now fully visible, emptied of expression. Her gaze drifts upward, away from @PROP-03."
+    },
+    {
+      "from": 7.5,
+      "to": 9,
+      "camera": "Static frame; the 85 mm compresses the background dials and storm lamp into a soft bokeh behind her.",
+      "action": "@CAST-05 turns her eyes directly to the lens and stares. No blink. No expression. Numb. The green glow of @PROP-03 still paints a faint light on the left side of her cheek."
+    },
+    {
+      "from": 9,
+      "to": 10,
+      "camera": "Hold, completely static. Frame freezes on her unblinking stare.",
+      "action": "She does not move. The rain scratches the small window behind her. The green dial of @PROP-03 pulses once and holds."
+    }
+  ],
+  "sound": "Low radio static and a muffled voice reading a vessel name carry over from the previous shot, fading to near-silence by the mid-point. A constant soft patter of rain on the small window. The faint electrical hum of the storm lamp. After Ines lowers her hand the room goes almost quiet—only rain and the radio's low hiss remain.",
+  "constraints": [
+    "One person only (@CAST-05)",
+    "No text or captions on screen",
+    "No cuts; single continuous take",
+    "Lens: 85 mm only",
+    "No camera, lens, or sensor brand names"
+  ]
+}

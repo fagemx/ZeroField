@@ -1,0 +1,37 @@
+{
+  "setup": "One continuous 4-second shot inside @SET-01, a circular glass-dome observatory at dawn, rain streaking the curved dome and amber instrument lights glowing along a ring of brass consoles. @CAST-02 stands in front of @CAST-01 at medium distance, both framed from the waist up; @PROP-01 sits on the console beside him. 35 mm anamorphic, handheld urgency.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1.0,
+      "camera": "Handheld, slightly low, tight on both torsos; the frame jolts with the force of the shove.",
+      "action": "@CAST-02 drives both palms hard into @CAST-01's chest; his body jerks backward, boots scraping the console base, his charcoal field jacket bunching as he is pushed off balance."
+    },
+    {
+      "from": 1.0,
+      "to": 2.0,
+      "camera": "Camera lurches backward with the impact; a streak of anamorphic flare arcs across the amber console lights.",
+      "action": "@CAST-01's back slams into the brass console behind him, knocking @PROP-01 off the surface; the battered field recorder clatters and bounces on the metal, its cracked leather strap flapping."
+    },
+    {
+      "from": 2.0,
+      "to": 3.0,
+      "camera": "Handheld settles into a slight breathing hold, drifting up to catch @CAST-01's face as it rises into frame; he turns his gaze directly toward the lens.",
+      "action": "@CAST-01 stares up at @CAST-02, eyes wide and unblinking, jaw slack, his short dark hair disheveled by the impact; his stubble is visible as his face shifts from pain into stunned disbelief."
+    },
+    {
+      "from": 3.0,
+      "to": 4.0,
+      "camera": "Gentle handheld hold, both faces level in a two-shot; the anamorphic oval bokeh of the amber dome lights softens behind them.",
+      "action": "@CAST-01 remains frozen, staring at @CAST-02 without speaking; @CAST-02 stands over him, chest heaving, her auburn hair catching the dawn light through the rain-streaked glass; @PROP-01 lies clattered on the console between them."
+    }
+  ],
+  "sound": "Low, sustained rain on the glass dome; a sharp percussive thud as the shove connects; the metallic clatter and rattle of @PROP-01 bouncing on brass; a brief hum of the amber instrument lights flickering; both characters' hard, close breathing in the final second. No spoken dialogue.",
+  "constraints": [
+    "Two persons only",
+    "No text or graphics on screen",
+    "One continuous take, no cuts",
+    "Lens 35 mm anamorphic",
+    "Handheld throughout, no tripod"
+  ]
+}

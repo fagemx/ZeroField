@@ -1,0 +1,43 @@
+{
+  "setup": "One continuous 6-second shot in the observatory at dawn (@SET-01): Kael (@CAST-01) stands at a brass console, rain streaking the curved glass above, amber instrument lights catching his face. A slow dolly push-in at 50 mm gradually closes the distance for the entire take.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1,
+      "camera": "Slow dolly push-in begins; frame eases from a medium-wide to a medium, Kael's torso and hands on the console edge filling the lower frame.",
+      "action": "Kael grips the brass console edge with both hands, jaw locked, eyes fixed on the spot where Mira just stood. His shoulders are rigid; he breathes through his nose in short, controlled pulls."
+    },
+    {
+      "from": 1,
+      "to": 2.5,
+      "camera": "Push-in continues into a medium close-up; the amber instrument lights and rain-streaked glass softens slightly in the background as the frame tightens.",
+      "action": "His fingers tighten on the metal, knuckles whitening. A small hitch runs through his shoulders. His throat works once, twice — he swallows hard but his face stays shut."
+    },
+    {
+      "from": 2.5,
+      "to": 4,
+      "camera": "Push-in nears its final position at close-up; the lens isolates his face against the blurred dome and amber glow.",
+      "action": "The composure cracks: his lower lip trembles, the corner of his mouth drags down, and a wet sheen swells at the base of his lashes. His eyes squeeze shut for a beat, then open glistening with tears."
+    },
+    {
+      "from": 4,
+      "to": 5,
+      "camera": "Dolly settles; the frame holds tight on his face, 50 mm, shallow depth.",
+      "action": "He lifts his head slowly toward the rain-streaked glass above, chin jutting. A full, shuddering sob pulls through his chest. Tears track down his stubble; his eyes are wide and glassy, staring up through the curved glass."
+    },
+    {
+      "from": 5,
+      "to": 6,
+      "camera": "Held static at close-up; the last inch of push is done, the frame sits still on his wet face and the glowing dome behind him.",
+      "action": "He stays with his head lifted, breathing ragged and shallow, tears still streaming. His hands remain locked on the console edge. He does not wipe his face; he just holds the look upward as the shot ends."
+    }
+  ],
+  "sound": "Continuous rain hiss on the glass dome, low amber-lit hum of the brass instruments. At 0–2 s his breathing is tight and nasal. From 2.5 s a small, involuntary catch in the throat. At 4 s a full, wet sob breaks through, followed by ragged, shallow inhales and a faint exhale trembling out. No words spoken.",
+  "constraints": [
+    "One person only",
+    "No dialogue",
+    "No text or graphics on screen",
+    "No cuts; single continuous take",
+    "Camera motion is a single slow dolly push-in only"
+  ]
+}

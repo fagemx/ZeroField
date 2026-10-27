@@ -1,0 +1,42 @@
+{
+  "setup": "One continuous 6-second shot in the flooded village chapel @SET-05 at dusk. Tomas @CAST-06 is centre-frame in extreme close-up; the single tall candle @PROP-04 in its brass holder and the rows of empty pews are revealed as the 85mm dolly pulls back.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1.25,
+      "camera": "85 mm, extreme close-up on Tomas's face, eyes centred; the dolly begins its slow backward crawl.",
+      "action": "Tomas @CAST-06 stares straight into the lens; a fine tremor runs through his jaw and his eyes glisten as grief tightens the muscles around them."
+    },
+    {
+      "from": 1.25,
+      "to": 2.5,
+      "camera": "Dolly continues pulling; frame widens to a medium close-up, shoulders and upper chest in view.",
+      "action": "His breath catches audibly, shoulders rising once under the coat; the brass holder of the candle @PROP-04 catches a glint of warm light at the bottom edge of frame."
+    },
+    {
+      "from": 2.5,
+      "to": 3.75,
+      "camera": "Pull-out steadies; the front pew enters the lower third, ankle-deep dark water glistening between the pews.",
+      "action": "The candle @PROP-04 is now fully in frame, its single flame steady against the dusk; Tomas's gaze remains fixed on the lens, his lips parting slightly as if to speak but no sound comes."
+    },
+    {
+      "from": 3.75,
+      "to": 5,
+      "camera": "Wider still; the shallow 85 mm depth of field softens the back rows into warm bokeh; the hole in the roof is visible above.",
+      "action": "Rows of empty wooden pews stretch into the chapel; candles on every sill cast small halos. Tomas @CAST-06 is a small, motionless figure, utterly alone in the space."
+    },
+    {
+      "from": 5,
+      "to": 6,
+      "camera": "Hold on the full reveal; no further movement.",
+      "action": "The flooded chapel @SET-05 holds in frame. Tomas does not move. The candle flickers once; the dark water lies perfectly still. End."
+    }
+  ],
+  "sound": "The low resonance of the single bell from S20 still fading over the water. A soft drip from the roof hole. The faint crackle and hush of the candle flame. No dialogue.",
+  "constraints": [
+    "One person only",
+    "No text on screen",
+    "No lens or sensor maker names",
+    "End on a static hold of at least one second"
+  ]
+}

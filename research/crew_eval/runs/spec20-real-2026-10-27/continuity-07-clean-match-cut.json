@@ -1,0 +1,15 @@
+{
+  "score": 82,
+  "findings": [
+    {
+      "kind": "body_state",
+      "shots": [
+        "S23",
+        "S24"
+      ],
+      "subject": "@CAST-05",
+      "severity": "minor",
+      "detail": "S23 ends with Ines' mouth open mid-word (she freezes while speaking); S24 opens with her lips pressed. The shot text for S24 does not explain a change in her speech or mouth state, so the open-to-closed transition is unaccounted for across the cut."
+    }
+  ]
+}

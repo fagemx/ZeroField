@@ -1,0 +1,45 @@
+{
+  "setup": "One continuous 8-second shot inside @SET-01, a circular glass-dome observatory at dawn, rain streaking the curved glass and amber instrument lights glowing along a ring of brass consoles. @CAST-01 and @CAST-02 stand a metre apart over @PROP-06 on the console, neither moving; the camera begins framing @CAST-01's pleading face and orbits 180° around the console to end on @CAST-02's. 35 mm anamorphic, f/1.4.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1.5,
+      "camera": "Locked on @CAST-01's face at a shallow f/1.4; the anamorphic bokeh of amber console lights blurs behind him. Rain streaks the dome above.",
+      "action": "@CAST-01 holds still; his brow is drawn up and in, lower lip pressed, eyes wet and searching in a clear pleading expression. @PROP-06 sits on the brass console below his chin, the two torn pieces with small figures slightly soft."
+    },
+    {
+      "from": 1.5,
+      "to": 3,
+      "camera": "Begin a slow, smooth 180° orbit to the left around the console; @CAST-01's face drifts toward frame-right and starts to soften out of focus.",
+      "action": "@PROP-06 gains crisp focus at the centre of frame; the two small figures on the torn halves are plainly visible against the brass. @CAST-01's charcoal field jacket shoulder slides out as the frame widens past him."
+    },
+    {
+      "from": 3,
+      "to": 4.5,
+      "camera": "Orbit passes the midpoint; @PROP-06 is now dead-centre on the console with the ring of amber instrument lights flanking it. Rain still streaks the curved glass above.",
+      "action": "No figure moves. The torn photograph's two halves sit motionless; a fresh raindrop traces a slow line down the dome behind the console, catching amber light."
+    },
+    {
+      "from": 4.5,
+      "to": 6,
+      "camera": "Orbit continues; @CAST-02 enters frame from the left, her face sharpening into focus as the lens racks slightly with the anamorphic field.",
+      "action": "@CAST-02's jaw tightens, the corners of her mouth draw down into a hard flat line, and the muscles in her cheek shift—fury made visible. Her auburn hair is still, her dark green wool long coat shoulders tense but unmoving."
+    },
+    {
+      "from": 6,
+      "to": 7,
+      "camera": "Settle into a tight framing on @CAST-02's face; @PROP-06 recedes to a soft amber blur at the lower edge. Anamorphic gate-weave flares from the console lights behind her.",
+      "action": "@CAST-02's eyes blaze forward, nostrils slightly flared, brow lowered—a sustained, locked fury. She does not blink, does not shift."
+    },
+    {
+      "from": 7,
+      "to": 8,
+      "camera": "Hold on @CAST-02's furious face, perfectly still. Shallow depth holds her sharp against the streaked glass dome and warm bokeh beyond.",
+      "action": "Neither @CAST-01 nor @CAST-02 moves. A final raindrop slides down the curved glass. Amber instrument light steadies. The torn photograph remains a soft shape at the frame's bottom edge."
+    }
+  ],
+  "sound": "A low, steady hum of the observatory's brass instruments; rain pattering on the curved glass dome overhead; the faint tick and creak of metal as it cools at dawn. No dialogue; no footsteps; no breathing audible. A single, soft *tick* as the last raindrop strikes a console rim near the 7-second mark.",
+  "constraints": [
+    "Two people only."
+  ]
+}
