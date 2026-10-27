@@ -11,11 +11,32 @@ export const PREVIS_FIELD = 'previsPlan';
 
 // GET /projects/api/{slug}/assistant/shots/{shotId}/proposals: my pending proposals for the shot, each with its proposed value.
 export const shotProposalsPath = (slug, shotId) => `/projects/api/${slug}/assistant/shots/${encodeURIComponent(shotId)}/proposals`;
-// get is api.get (a test passes a fake). Only well-formed pending 3D plan proposals are kept.
+// get is api.get (a test passes a fake). Only well-formed pending 3D plan proposals are kept: a plan, or (SPEC_20 R27) the
+// operations a server without a headless browser could not solve, which this stage solves itself.
+const isPlan = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const opsOnly = p => !isPlan(p?.value) && Array.isArray(p?.ops) && p.ops.length > 0;
 export async function loadShotProposals(get, slug, shotId) {
   const data = await get(shotProposalsPath(slug, shotId));
   return (Array.isArray(data?.proposals) ? data.proposals : []).filter(p => p?.action === SHOT_META && p.status === 'pending'
-    && p.field === PREVIS_FIELD && p.value && typeof p.value === 'object' && !Array.isArray(p.value));
+    && p.field === PREVIS_FIELD && (isPlan(p.value) || opsOnly(p)));
+}
+// POST: the stage's solve of an operations-only proposal, attached before it is approved (previs_ops.attach_solution).
+export const solutionPath = (slug, id) => `/projects/api/${slug}/assistant/proposals/${id}/solution`;
+
+// The operations as lines the inspector shows: [{key (stage.* text), params}], in the order they were sent.
+export function opLines(ops, moveKeys = { static: 1, orbit: 3 }) {
+  const metres = value => `${value > 0 ? '+' : ''}${Math.round(value * 100) / 100}`;
+  return (Array.isArray(ops) ? ops : []).map(op => {
+    if (op?.op === 'place') {
+      const [x, z] = Array.isArray(op.offset) ? op.offset : [0, 0];
+      return { key: 'metaOpPlace', params: { cast: op.cast, where: op.relativeTo + (x || z ? ` ${metres(x)}, ${metres(z)} m` : ''), facing: op.facing } };
+    }
+    if (op?.op === 'camera') {
+      const last = moveKeys[op.move] ?? 2, keys = op.move === 'static' ? '' : ` ${op.from || 'K1'}→${op.to || 'K' + last}`;
+      return { key: 'metaOpCamera', params: { size: String(op.size || '').replace('_', ' '), angle: op.angle, lens: op.lens, move: op.move, keys } };
+    }
+    return { key: 'metaOpRetime', params: { beat: op?.beat, percent: Math.round((op?.at ?? 0) * 100) } };
+  });
 }
 
 // The assistant's list carries my proposals without their values; the ids pending for this shot tell the stage when to read
@@ -71,20 +92,29 @@ export function authorLabel(author) {
 
 // The review the stage shows for a shot: its first pending proposal (others wait their turn), or null.
 //   plan: the plan on stage now; revision: the stored revision the stage holds; writable: this person may edit;
-//   draft: the shot has unsaved edits in this browser (approving would leave them behind, so it waits); error: a refusal to show.
-export function shotMetaReview(list, { plan = null, revision = 0, writable = false, draft = false, error = '' } = {}) {
-  const pending = Array.isArray(list) ? list.filter(p => p?.status === 'pending' && p.value) : [];
+//   draft: the shot has unsaved edits in this browser (approving would leave them behind, so it waits); error: a refusal to show;
+//   solve(proposal) -> plan: this stage's own solve (ops.js) of an operations-only proposal (SPEC_20 R27); it throws when it cannot.
+export function shotMetaReview(list, { plan = null, revision = 0, writable = false, draft = false, error = '', solve = null } = {}) {
+  const pending = Array.isArray(list) ? list.filter(p => p?.status === 'pending' && (isPlan(p.value) || opsOnly(p))) : [];
   const first = pending[0];
   if (!first) return null;
-  const proposed = { ...defaultPlan(), ...first.value };
+  let solved = isPlan(first.value) ? first.value : null, solveError = '';
+  if (!solved) {
+    try { solved = solve ? solve(first) : null; } catch (e) { solveError = e?.message || String(e); }  // null: not ready yet
+  }
+  const proposed = solved ? { ...defaultPlan(), ...solved } : null;
   const current = Math.max(Number.isInteger(first.currentRevision) ? first.currentRevision : 0, Number.isInteger(revision) ? revision : 0);
   const canDecide = Boolean(writable && first.canDecide);
-  const changes = planChanges(plan, proposed);
+  const changes = proposed ? planChanges(plan, proposed) : [];
   return {
     id: first.id, proposal: first, plan: proposed, label: first.shot?.label || '', author: authorLabel(first.author),
     summary: String(first.summary || ''), baseRevision: first.baseRevision, currentRevision: current,
     stale: Number.isInteger(first.baseRevision) && first.baseRevision !== current,
-    changes, same: changes.length === 0, marks: ghostMarks(proposed),
-    canDecide, readOnly: !canDecide, blockedByDraft: canDecide && Boolean(draft), more: pending.length - 1, error: error || '',
+    changes, same: Boolean(proposed) && changes.length === 0, marks: proposed ? ghostMarks(proposed) : [],
+    // SPEC_20 R27, R28: the operations, the server's contact sheet, how it was solved and an optional model note.
+    ops: opLines(first.ops), preview: first.preview?.url ? first.preview : null, warnings: first.solve?.warnings || [],
+    opsOnly: opsOnly(first), solveError, vision: first.vision || null,
+    canDecide, readOnly: !canDecide, blockedByDraft: canDecide && Boolean(draft), blockedBySolve: canDecide && !proposed,
+    more: pending.length - 1, error: error || '',
   };
 }

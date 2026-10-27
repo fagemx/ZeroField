@@ -93,9 +93,9 @@
         "set": {"code": "@SET-01", "name": "Observatory", "stage": "observatory", "targets": ["console", "plinth", "dial", "recorder", "console_edge", "window_glass"]},
         "base_revision": 12,
         "beats": [
-          {"from": 0, "to": 1.2, "action": "Mira squares up to Kael, fists clenched"},
-          {"from": 1.2, "to": 2.0, "action": "Mira shoves Kael hard in the chest"},
-          {"from": 2.0, "to": 4.0, "action": "Kael slams back into the console and stares into the lens, stunned"}
+          {"from": 0, "to": 1.2, "skill": "standIdle", "action": "Kael holds his ground at the console while Mira squares up to him, fists clenched"},
+          {"from": 1.2, "to": 2.0, "skill": "walkTo", "action": "Mira's shove drives Kael a step back toward the console"},
+          {"from": 3.2, "to": 4.0, "skill": "reachGrip", "action": "Kael's hands hit the console edge; he stares into the lens, stunned"}
         ]
       },
       "expect": {

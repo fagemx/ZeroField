@@ -613,6 +613,8 @@ from project_assistant import studio_tools
 HANDLERS.update(studio_tools.HANDLERS)
 from project_assistant import context_tools
 HANDLERS.update(context_tools.HANDLERS)
+from project_assistant import previs_ops  # SPEC_20 R27: propose_previs_ops (text result, like propose_table_edit)
+HANDLERS.update(previs_ops.HANDLERS)
 # Results that are structured JSON, already sanitized and bounded by their handlers: never re-masked as text
 # (that would break the JSON) nor clipped.
 _STRUCTURED = frozenset(studio_tools.HANDLERS) | frozenset(context_tools.HANDLERS)

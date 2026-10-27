@@ -32,6 +32,8 @@ HISTORIC_GRANTS = {
 EXTERNAL_ONLY = {'get_workflow', 'request_generation'}  # declared for zerofield-mcp; no built-in grant
 # SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
 CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
+# SPEC_20 R27: the Cinematographer proposes 3D blocking as operations (declared before the context tools).
+PREVIS = {'sheet_ops': ['propose_previs_ops']}
 # SPEC_20 R7/R19/R20: the Cinematographer's proposal tools, after the context tools (the Showrunner has every tool).
 CREW = {'sheet_ops': ['propose_shot_prompt', 'propose_camera']}
 
@@ -93,7 +95,7 @@ class RegistryDerivationTests(unittest.TestCase):
                                                        'ask_decision_gate', 'trigger_flow_run'})
         self.assertEqual(tool_specs.MUTATING_TOOLS, {'propose', 'propose_table_edit', 'spawn_agent', 'cancel_delegation',
                                                      'ask_decision_gate', 'trigger_flow_run', 'request_generation',
-                                                     'propose_shot_prompt', 'propose_camera'}
+                                                     'propose_shot_prompt', 'propose_camera', 'propose_previs_ops'}
                          | set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual({n for n, p in tool_specs.DEFAULT_POLICIES.items() if p != 'auto'},
                          {'studio_ingest_script', 'studio_manage_asset', 'studio_dispatch_shot', 'studio_edit_timeline'})
@@ -110,7 +112,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(tool_registry.ANALYSIS_ONLY_DENIED, {'propose', 'propose_table_edit', 'trigger_flow_run',
                                                               'studio_ingest_script', 'studio_manage_asset',
                                                               'studio_dispatch_shot', 'studio_edit_timeline',
-                                                              'request_generation', 'propose_shot_prompt', 'propose_camera'})
+                                                              'request_generation', 'propose_shot_prompt', 'propose_camera',
+                                                              'propose_previs_ops'})
         self.assertEqual(tool_registry.RACE_DENIED, {'studio_ingest_script', 'studio_manage_asset',
                                                      'studio_dispatch_shot', 'studio_edit_timeline', 'request_generation'})
         self.assertEqual(dict(tool_registry.REQUIRES), {'spawn_agent': ('allow_subagents',),
@@ -124,7 +127,7 @@ class RegistryDerivationTests(unittest.TestCase):
                 self.assertIs(tools.HANDLERS[name], tool_registry.handler(name))
         self.assertEqual(set(studio_tools.HANDLERS), set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual(set(delegation_tools.HANDLERS), tool_specs.DELEGATION_TOOLS)
-        self.assertEqual(studio_tools.EXTERNAL_TOOLS, {'studio_plan_allocation', 'studio_inspect_frames', 'consult_advisor'})
+        self.assertEqual(studio_tools.EXTERNAL_TOOLS, {'studio_plan_allocation', 'studio_inspect_frames', 'consult_advisor', 'propose_previs_ops'})
         with self.assertRaises(LookupError):
             tool_registry.handlers('project_assistant.studio_tools', {})
 
@@ -138,8 +141,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertFalse(any(tool_registry.get(name).grants for name in EXTERNAL_ONLY))
         for key, grants in HISTORIC_GRANTS.items():
             with self.subTest(key=key):
-                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + CONTEXT + CREW.get(key, []))
-                self.assertEqual(agent_registry.default_tools(key, False), grants + CONTEXT + CREW.get(key, []))
+                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + PREVIS.get(key, []) + CONTEXT + CREW.get(key, []))
+                self.assertEqual(agent_registry.default_tools(key, False), grants + PREVIS.get(key, []) + CONTEXT + CREW.get(key, []))
         self.assertEqual(agent_registry.default_tools('custom_agent'), agent_registry.default_tools('qa_critic'))
 
     def test_ui_catalog_matches_console_model(self):
@@ -154,7 +157,8 @@ class RegistryDerivationTests(unittest.TestCase):
                     category='context', handler='fixture.module:fixture_tool', grants=['qa_critic'])
         self.assertEqual(tool_registry.declare(good).grants, ('qa_critic',))
         for change in ({'schema': tool_registry._obj({'q': {'type': 'string', 'format': 'uri'}})},
-                       {'schema': tool_registry._obj({'q': {'type': 'number'}})},
+                       {'schema': tool_registry._obj({'q': {'type': 'null'}})},
+                       {'schema': tool_registry._obj({'q': {'type': 'number', 'minimum': True}})},
                        {'schema': tool_registry._obj({'q': {'type': 'array'}})},
                        {'schema': {'type': 'object', 'properties': {}}},
                        {'schema': tool_registry._obj({}, ['q'])},

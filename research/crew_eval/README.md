@@ -69,7 +69,8 @@ The vocabulary is the stage's own: `LENSES`, `MOVES`, `DURATIONS`, `SETS` and `F
 `{"setup", "beats": [{"from", "to", "camera", "action"}], "sound", "constraints": []}`.
 
 **blocking** (SPEC_20 4.6). Input: `shot`, `cast`, `set` {code, name, stage (`observatory`/`parallax`/`empty`), targets},
-`base_revision`, and `beats` when the instruction retimes one. Output:
+`base_revision`, and `beats` when the instruction retimes one: the stored plan's acting beats in the 3D Stage, in order,
+`{from, to, skill, action}` in seconds (see the assumptions below). Output:
 `{"shotId", "baseRevision", "ops": [place | camera | retime]}` with `place {cast, relativeTo, offset [x, z], facing}`,
 `camera {size, angle, lens, move, from?, to?}`, `retime {beat, at}`. Stage coordinates are station-local metres: `+z` toward the
 glass and the console, `-z` toward the camera side, `x` the actor's right. Facing the lens is `"camera"` (or `"room"`, the stage's
@@ -91,9 +92,14 @@ In JSON write a regex word boundary as `\\b`: a single `\b` is a backspace and `
 
 - The input shapes above are this set's. The beats job builds its input in exactly this shape from a shot
   (`project_assistant/crew_planning.py` `gather`), so the adapter hands a case input to the job unchanged.
-- 4.6 is a P1 draft: `size` (wide, full, medium, close, extreme_close) and `angle` (low, eye, high, overhead) are this set's
-  vocabulary, `retime.beat` counts from 1 (`RETIME_BEAT_BASE`) and `retime.at` is where that beat now starts, as a fraction of the
-  shot. Change the constants at the top of `scripts/crew_eval.py` if the solver decides otherwise.
+- 4.6 is final since R27 (`project_assistant/previs_ops.py`, `ui/src/previs/ops.js`) and keeps this set's choices: `size` (wide,
+  full, medium, close, extreme_close), `angle` (low, eye, high, overhead), offsets in metres within ±8, at most 32 ops,
+  `retime.beat` counted from 1 (`RETIME_BEAT_BASE`) and `retime.at` the fraction of the shot where the beat now starts
+  (`tests/test_previs_ops.py` checks these constants against the solver and every blocking reference against the server's
+  validator). A `retime` names one of the 3D Stage's **acting beats** (the plan's own actor's skills in `plan.use`, or the Walk
+  in action's walk), so a blocking case's `beats` are those acting beats (`skill` names each), and a plan without acting beats
+  refuses a retime. A retime keeps a beat between its neighbours, so a case leaves the beat room to move. Camera keys belong
+  to the move (static K1, orbit K1-K3, the others K1-K2).
 - "Camera within LENSES/MOVES" is checked on the blocking `camera` op and, for beats, on every lens named in the text; a beat's
   `camera` is free text, so its move is only scored softly.
 - Soft criteria are lexical. Spot-check a real run by eye, and add synonyms to a case's patterns when a good answer loses marks

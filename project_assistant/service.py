@@ -476,6 +476,15 @@ def shot_proposals(conn, me, slug, shot_id):
     return shot_meta.listing(conn, me, slug, shot_id)
 
 
+def attach_shot_solution(conn, me, slug, proposal_id, body):
+    """The 3D Stage's solve of an operations-only 3D plan proposal, attached before approval (SPEC_20 R27)."""
+    problem = _gate(conn, me, slug)
+    if problem:
+        return problem
+    from project_assistant import previs_ops
+    return previs_ops.attach_solution(conn, me, slug, proposal_id, body)
+
+
 # ---------- 管理視角 ----------
 
 def manager(conn, me, slug):

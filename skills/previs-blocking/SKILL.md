@@ -22,7 +22,7 @@ You describe the staging in film language as operations. A deterministic solver 
 1. **Operations, never code.** Send only the operation types the tool's schema lists (`place`, `camera`, `retime`). Unknown operations and fields are rejected. Do not send expressions or scripts.
 2. **`baseRevision` on every request.** It is the plan revision you read from `read_shot`. If the stored plan moved on, the server answers 409 (`DRAMA_PREVIS_REVISION_CONFLICT`) and writes nothing. Re-read and rebuild your operations against the current plan; never replay the old ones.
 3. **Look at the preview.** Attach the preview image to the proposal and look at it before presenting. If no preview can be rendered (no headless browser), say so; the proposal then stores operations only and the director previews in the 3D Stage.
-4. **The vocabulary is closed.** Lens 24, 35, 50 or 85. Move pushin, pullout, orbit, crane, track or static. Shot length 4, 6, 8 or 10 seconds. People are named by `@CAST` code from the stored plan's cast options; places by a named anchor of the set. The solver rejects anything else.
+4. **The vocabulary is closed.** Lens 24, 35, 50 or 85. Move pushin, pullout, orbit, crane, track or static. Size wide, full, medium, close or extreme_close; angle low, eye, high or overhead. Shot length 4, 6, 8 or 10 seconds. People are named by `@CAST` code from the stored plan's cast options; places by a named target of the set (observatory: console, plinth, dial, recorder, console_edge, window_glass or window; parallax: far, mid, near; the empty stage has none), `mark` (the stage origin) or someone already on set. The solver rejects anything else.
 5. **One shot, one plan.** Each request names a single `shotId`. Do not touch other shots' plans.
 6. **Block the hard case.** Prefer front-facing, high-tension shots with the face toward the camera, and check in the preview that the face is readable. Do not hide a failure behind a back or profile view.
 7. **Appearance is not yours.** The stage uses figure presets; leave looks to the cast record. No camera brand names in any text field.
@@ -42,7 +42,7 @@ Read the shot first, then ask only what is missing, at most five questions with 
 
 1. **Read.** `read_shot` for the stored plan, `planRevision`, camera meta, length, and the previous and next shot (screen direction, how it cuts). `read_scene` for the set and its anchors. `read_cast` for codes and looks in the scene. If shot beats exist (see `shot-beats`), block to them.
 2. **Plan in words.** Two to four lines: who stands where, where the camera starts and ends, which beat lands when.
-3. **Write operations.** The shape below is a draft; the tool's own schema is authoritative.
+3. **Write operations.** The tool's own schema is authoritative (SPEC_20 §4.6). Stage metres: +z toward the console and the glass, -z toward the camera side, the mark at [0, 0]. `offset` is added to the `relativeTo` point; `facing` is a target, a cast code, `camera` or `room`. `from`/`to` pick the span of the move's keys (K1-K2; orbit K1-K3; static holds K1). `retime.beat` is the 3D Stage's acting beat counted from 1, `at` where it now starts as a fraction of the shot. Use at most one camera operation and place each person once.
 ```json
 {"shotId": "sh_...", "baseRevision": 7, "ops": [
   {"op": "place", "cast": "@CAST-01", "relativeTo": "console", "offset": [-1.0, 0.0], "facing": "window"},
@@ -79,5 +79,5 @@ Checked before sending, and again by the solver:
 - Operations rejected (422): fix exactly the field the error names and retry once. Typical: an anchor the set does not have, a cast code not in the cast options, a lens outside the list.
 - 409 on `baseRevision`: re-read, rebuild, send once more with the new revision.
 - Second failure, or no model available: rule fallback. Propose nothing and say so; the 3D Stage seeds a first plan from the shot's camera motion, lens and action text.
-- No headless browser: send operations only and tell the director to preview in the 3D Stage.
+- No headless browser: the server stores the operations only (the tool says so). Tell the director to preview them in the 3D Stage, which solves them with the same code before they can be approved.
 - Refusal for scope or policy: report it and stop.
