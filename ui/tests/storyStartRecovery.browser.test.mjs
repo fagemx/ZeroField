@@ -48,7 +48,8 @@ window.fetch = async (url, options={}) => {
   const call = {path,method,body,actor:headers.get('X-Writing-Expected-Actor'),key:headers.get('Idempotency-Key'),signal:options.signal};
   calls.push(call);
   if(path === '/projects/api/r16' || path === '/projects/api/other') return response({me:actor});
-  if(path === '/aivideo/open/v1/catalog/styles' || /\/episodes\/(ep_r16_01|ep_other_01)\/assets$/.test(path)) return response({code:0,data:{items:[],nextCursor:null}});
+  // The episode's crew jobs (SPEC_20 R23) are a plain read outside the writing session.
+  if(path === '/aivideo/open/v1/catalog/styles' || /\/episodes\/(ep_r16_01|ep_other_01)\/(assets|crew-jobs)$/.test(path)) return response({code:0,data:{items:[],nextCursor:null}});
   const match = /\/episodes\/(ep_r16_01|ep_other_01)\/writing\/(.+)$/.exec(path);
   if(match) {
     const [,epId,tail] = match;

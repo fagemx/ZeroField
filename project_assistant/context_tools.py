@@ -25,7 +25,8 @@ are kept, and only this production's asset URLs are returned. Project membership
 policies are enforced before a handler runs (agent_policy.authorize_tool).
 
 Default grants reach only newly seeded agents; top_up_grants gives the existing built-in crew the read-only tools of
-this category once, and never adds a write tool. These tools are also the read surface of the MCP server (§4.7), so
+this category, and the proposal-only crew tools (tool_registry.proposal_only), once each, and never adds a tool that
+writes or spends directly. These tools are also the read surface of the MCP server (§4.7), so
 they depend on nothing but the ToolContext fields every transport sets.
 """
 from __future__ import annotations
@@ -41,7 +42,9 @@ from project_docs import repository as repo, story_openapi as story, story_previ
 AUDIT_ACTION = 'agent_context_read'
 TOPUP_ACTION = 'agent_tool_topup'
 TOPUP_SETTING = 'crew_context_tools_offered'  # {agent_key: [tool names already offered]}
+PROPOSAL_TOPUP_SETTING = 'crew_proposal_tools_offered'  # the same, for proposal-only tools (SPEC_20 R21-R23)
 CATEGORY = 'context'
+PROPOSAL_CATEGORY = 'proposal'  # the audit detail's category for proposal-only top-ups
 MAX_CHARS = 9000      # the whole envelope as compact JSON; tools.call neither clips nor re-masks these results
 PLAN_CHARS = 3000     # a stored 3D plan longer than this (as compact JSON) is summarised
 TAKES_SHOWN = 20
@@ -655,20 +658,31 @@ def list_takes(ctx, conn, args):
 # ---------- grants for existing crews ----------
 
 def top_up_grants(conn, slug):
-    """Give the existing built-in crew agents the read-only context tools a newly seeded agent receives (idempotent).
+    """Give the existing built-in crew agents the tools a newly seeded agent receives that cannot write (idempotent).
 
-    Default grants only reach agents seeded after a tool is declared. This adds each read-only tool of this category to
-    the built-in agents its declaration grants, once: every offered tool is recorded per agent in the project setting
-    TOPUP_SETTING, so a tool an administrator later removes is not added back, and a write tool is never added.
-    Called by agent_registry.ensure_default_agents after the seed (startup and every project upsert)."""
-    from project_assistant import agent_registry
-    offers = {role: [tool.name for tool in tool_registry.all_tools()
-                     if tool.category == CATEGORY and not tool.mutating and role in tool.grants]
-              for role in tool_registry.BUILTIN_ROLES}
+    Default grants only reach agents seeded after a tool is declared. This adds, once, to the built-in agents each
+    declaration grants:
+      - the read-only tools of this category (recorded in the project setting TOPUP_SETTING), and
+      - the proposal-only tools (tool_registry.proposal_only: propose_shot_prompt, propose_camera,
+        propose_asset_description, propose_look, propose_cast and any later propose_* tool of the same shape;
+        recorded in PROPOSAL_TOPUP_SETTING).
+    Every offered tool is recorded per agent, so a tool an administrator later removes is not added back, and a tool
+    that writes or spends directly (studio, delegation, generation, legacy) is never added. Called by
+    agent_registry.ensure_default_agents after the seed (startup and every project upsert)."""
     with conn.cursor() as cur:
         cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ('crew-context-topup:' + slug,))
+    _top_up(conn, slug, TOPUP_SETTING, CATEGORY,
+            lambda tool: tool.category == CATEGORY and not tool.mutating)
+    _top_up(conn, slug, PROPOSAL_TOPUP_SETTING, PROPOSAL_CATEGORY, lambda tool: tool.name in tool_registry.PROPOSAL_ONLY)
+
+
+def _top_up(conn, slug, setting, label, eligible):
+    """Add the eligible tools of each built-in role's default grants once, recording the offer in `setting`."""
+    from project_assistant import agent_registry
+    offers = {role: [tool.name for tool in tool_registry.all_tools() if eligible(tool) and role in tool.grants]
+              for role in tool_registry.BUILTIN_ROLES}
     try:
-        offered = json.loads(store.get_setting(conn, slug, TOPUP_SETTING) or '{}')
+        offered = json.loads(store.get_setting(conn, slug, setting) or '{}')
     except ValueError:
         offered = {}
     offered = offered if isinstance(offered, dict) else {}
@@ -687,11 +701,11 @@ def top_up_grants(conn, slug):
             with conn.cursor() as cur:
                 cur.execute('UPDATE projectops.agent_profile SET allowed_tools=%s::jsonb WHERE project_slug=%s AND agent_key=%s',
                             (json.dumps(allowed + missing), slug, role))
-            repo.add_audit(conn, slug, action=TOPUP_ACTION, target=role, detail={'added': missing, 'category': CATEGORY})
+            repo.add_audit(conn, slug, action=TOPUP_ACTION, target=role, detail={'added': missing, 'category': label})
         offered[role] = done + fresh
         changed = True
     if changed:
-        store.set_setting(conn, slug, TOPUP_SETTING, json.dumps(offered, sort_keys=True))
+        store.set_setting(conn, slug, setting, json.dumps(offered, sort_keys=True))
 
 
 HANDLERS = tool_registry.handlers(__name__, globals())

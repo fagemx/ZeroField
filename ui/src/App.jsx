@@ -758,7 +758,8 @@ function ProjectPage({ slug }) {
           {storyView && !identityLost && <StoryWorld key={JSON.stringify([slug, storyEpisode, me.actor_id])} slug={slug} epId={storyEpisode} me={me} ep={episode.ep} shots={episode.shots} loadError={episode.error} writable={me.can_write !== false}
                 controlRef={surfaceControl} onStatus={setWritingStatus} focusSource={writingFocus} onSourceDone={sourceDone} onIdentityLost={loseWritingIdentity}
             focus={focus} onFocus={setFocus} onChanged={reloadAll} onStage={stageOf} onOpenShot={openShot} onAssets={() => navigate("soul-cast")} onVault={() => setStudioModal("assets")}
-            intent={intent} onIntentDone={clearIntent} onImportTable={() => railControl.current?.updatePage(tabs.find((item) => item.key === STAGE_TAB))} />}
+            intent={intent} onIntentDone={clearIntent} onImportTable={() => railControl.current?.updatePage(tabs.find((item) => item.key === STAGE_TAB))}
+            proposals={assistant.state?.proposals || []} onApplyProposal={assistant.apply} onDismissProposal={assistant.dismiss} onReloadProposals={assistant.reload} />}
           {timelineView && <Timeline epId={storyEpisode} shots={episode.shots} writable={me.can_write !== false} focusRid={focus.shotRid}
             onFocus={focusShot} onChanged={episode.reload} />}
           {!tab && !storyView && !timelineView && <div className="center-note">{uiText("app.loading")}</div>}

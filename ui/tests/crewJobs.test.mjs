@@ -8,7 +8,8 @@ import {build} from 'esbuild';
 import {mkdtemp, writeFile, rm} from 'node:fs/promises';
 import {join, dirname, resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
-import {CREW_KINDS, crewActive, crewCancelPath, crewJobLine, crewJobPath, crewJobsPath, latestCrewJobs, newlyProposed} from '../src/crewJobModel.js';
+import {ASSET_CREW_KINDS, CREW_KINDS, EPISODE_CREW_KINDS, SHOT_CREW_KINDS, assetProposals, crewActive, crewCancelPath, crewCandidates,
+  crewJobLine, crewJobPath, crewJobsPath, crewRunningKey, latestCrewJobs, newlyProposed} from '../src/crewJobModel.js';
 import {cancellationRequest} from '../src/assistant/orchestrationModel.js';
 import {rowProposals} from '../src/proposalModel.js';
 
@@ -64,6 +65,60 @@ test('a writer sees two asks in the shot detail; a viewer sees none', async () =
   assert.equal(render('CrewAsk', {slug: 'demo', shotId: 'sh_demo_b1', writable: false}), '');
   await components.setLocale('zh-TW');
   assert.match(render('CrewAsk', {slug: 'demo', shotId: 'sh_demo_b1', writable: true}), />寫分拍<\/button>.*>選鏡頭與運鏡<\/button>/s);
+  await components.setLocale('en');
+});
+
+test('SPEC_20 R21-R23: every target kind asks on its own route, and the running line names who works', () => {
+  assert.deepEqual(SHOT_CREW_KINDS, ['beats', 'camera', 'appearances']);
+  assert.equal(crewJobPath('sh_demo_b1', 'appearances'), '/shots/sh_demo_b1/appearance-proposals');
+  assert.equal(crewJobPath('as_demo_b2', 'description'), '/assets/as_demo_b2/description-proposals');
+  assert.equal(crewJobPath('as_demo_b2', 'look'), '/assets/as_demo_b2/look-proposals');
+  assert.equal(crewJobPath('sc_demo_01_S01', 'appearances'), '/scenes/sc_demo_01_S01/appearance-proposals');
+  assert.equal(crewJobPath('ep_demo_01', 'adaptation'), '/episodes/ep_demo_01/adaptation-proposals');
+  assert.equal(crewJobPath('ep_demo_01', 'breakdown'), '/episodes/ep_demo_01/breakdown-proposals');
+  assert.equal(crewJobsPath('as_demo_b2'), '/assets/as_demo_b2/crew-jobs');
+  assert.equal(crewJobsPath('ep_demo_01'), '/episodes/ep_demo_01/crew-jobs');
+  assert.deepEqual(Object.keys(latestCrewJobs([job('look', 'running'), job('beats', 'failed')], ASSET_CREW_KINDS)), ['look'], 'only the kinds asked here');
+  assert.equal(crewRunningKey({role: 'sheet_ops', kind: 'beats'}), 'crewRunning');
+  assert.equal(crewRunningKey({role: 'doc_writer', kind: 'look'}), 'crewRunningArt');
+  assert.equal(crewRunningKey({role: 'doc_writer', kind: 'breakdown'}), 'crewRunningWriter');
+});
+
+test('SPEC_20 R23: candidates are listed for the director to pick, and a rule-only result says so', () => {
+  const model = {source: 'model', previewId: 'wpre_1', branchId: 'wbr_1', impact: {shotCount: 6, newShots: 1}};
+  const rule = {source: 'rule', previewId: null, branchId: null, impact: {shotCount: 5, newShots: 0}};
+  const done = job('breakdown', 'succeeded', {source: 'model', result: {candidates: [model, rule], proposalIds: []}});
+  assert.deepEqual(crewJobLine(done), {key: 'crewCandidates'});
+  assert.deepEqual(crewCandidates(done), [model, rule]);
+  assert.deepEqual(crewJobLine(job('adaptation', 'succeeded', {source: 'rule_fallback', result: {candidates: [rule]}})), {key: 'crewCandidatesFallback'});
+  assert.deepEqual(crewCandidates(job('adaptation', 'running')), []);
+  assert.deepEqual(newlyProposed({breakdown: done}, new Set()), [], 'candidates need no proposal reload');
+});
+
+test('SPEC_20 R21: an asset card shows its own proposals and the looks proposed for it', () => {
+  const review = rid => ({groups: [{index: 0, row_id: rid, changes: [{column: 'Locked Appearance Prompt / Seed', before: 'a', after: 'b'}]}], partial_allowed: false, version: 'v'});
+  const own = {id: 1, action: 'table_edit', status: 'pending', target: {tab_key: 'soul-cast', crew: {kind: 'description', assetRowId: 'b1'}}, review: review('b1')};
+  const look = {id: 2, action: 'table_edit', status: 'pending', target: {tab_key: 'soul-cast', crew: {kind: 'look', assetRowId: 'b1'}}, review: review('bnew')};
+  const other = {id: 3, action: 'table_edit', status: 'pending', target: {tab_key: 'soul-cast', crew: {kind: 'look', assetRowId: 'b9'}}, review: review('bnew9')};
+  const done = {...look, id: 4, status: 'applied'};
+  assert.deepEqual(assetProposals([own, look, other, done], {rowId: 'b1', tabKey: 'soul-cast'}).map(entry => entry.proposal.id), [1, 2]);
+  assert.deepEqual(assetProposals([own], {}), []);
+});
+
+test('a writer sees Art on an asset card and the Screenwriter on the episode', async () => {
+  await components.setLocale('en');
+  const card = render('CrewAsk', {slug: 'demo', targetId: 'as_demo_b1', kinds: ASSET_CREW_KINDS, noteKinds: ['look'], title: 'shotProposal.askArt',
+    hint: 'shotProposal.askArtHint', writable: true});
+  assert.match(card, /aria-label="Ask Art"/);
+  assert.match(card, /<button type="button">Ask Art to fill the description<\/button>/);
+  assert.match(card, /<button type="button">Propose a new look<\/button>/);
+  assert.match(card, /placeholder="What the look is, for example: soaked rain coat for the night scene"/);
+  const episode = render('CrewAsk', {slug: 'demo', targetId: 'ep_demo_01', kinds: EPISODE_CREW_KINDS, title: 'shotProposal.askWriter', hint: 'shotProposal.askWriterHint', writable: true});
+  assert.match(episode, />Adapt my idea or novel<\/button>.*>Propose a shot breakdown<\/button>/s);
+  assert.doesNotMatch(episode, /crew-ask-note/, 'no note field where no ask takes one');
+  assert.match(render('CrewAsk', {slug: 'demo', shotId: 'sh_demo_b1', writable: true}), />Who is in this shot<\/button>/);
+  await components.setLocale('zh-TW');
+  assert.match(render('CrewAsk', {slug: 'demo', targetId: 'as_demo_b1', kinds: ASSET_CREW_KINDS, title: 'shotProposal.askArt', writable: true}), />請美術補描述<\/button>/);
   await components.setLocale('en');
 });
 

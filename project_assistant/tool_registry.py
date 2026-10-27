@@ -82,6 +82,9 @@ class Tool:
     # None derives it (see zerofield_exposed): read-only tools outside the legacy/delegation categories that
     # need no review turn. Writes and legacy tools opt in explicitly with True.
     zerofield_mcp: bool | None = None
+    # Creates reviewable proposals and never writes production data itself, so existing built-in crews may receive it
+    # from their default grants (context_tools.top_up_grants). None derives it (see proposal_only); True is checked.
+    proposal_only: bool | None = None
 
     def spec(self) -> dict:
         """The tool-host/MCP shape, identical to the historic tool_specs.TOOLS entries."""
@@ -171,7 +174,36 @@ def _check_declaration(tool: Tool) -> None:
     if tool.zerofield_mcp and (not tool.mcp or tool.policy != 'auto' or tool.requires or tool.primary_only):
         # An external call has no review turn, crew switches or primary role to satisfy.
         bad('a zerofield-mcp tool must be MCP-exposed, default to auto, and need no switches or primary role.')
+    if tool.proposal_only is not None and type(tool.proposal_only) is not bool:
+        bad('proposal_only must be a boolean or None.')
+    if tool.proposal_only and not _proposal_shape(tool):
+        # A proposal tool is journaled (mutating) with an auto default, needs no switch or primary role, and is not a
+        # legacy, delegation, studio or generation tool (those write or spend directly).
+        bad('a proposal-only tool must be mutating, auto, need no switches or primary role, and sit outside the writing categories.')
     _check_schema(tool, tool.schema, 'inputSchema', top=True)
+
+
+# Categories whose mutating tools write or spend directly (or predate proposal-only tools): never proposal-only.
+DIRECT_CATEGORIES = ('legacy', 'delegation', 'studio', 'advisor', 'generation')
+
+
+def _proposal_shape(tool) -> bool:
+    # external is allowed: propose_previs_ops renders its preview outside the shared transaction, yet only proposes.
+    return (tool.mutating and tool.policy == 'auto' and not tool.requires and not tool.primary_only
+            and tool.category not in DIRECT_CATEGORIES)
+
+
+def proposal_only(tool) -> bool:
+    """Whether a tool only creates proposals for review (SPEC_20 fixed decisions 8, 9).
+
+    An explicit proposal_only wins. Otherwise a propose_* tool of the proposal shape counts: mutating (it records a
+    proposal), auto by default, no switches or primary role, and outside DIRECT_CATEGORIES, so the crew planning
+    tools (propose_shot_prompt, propose_camera, propose_previs_ops, propose_asset_description, propose_look,
+    propose_cast) and any later propose_* tool declared the same way qualify, while propose_table_edit and propose
+    (legacy) and every studio, delegation or generation tool never do."""
+    if tool.proposal_only is not None:
+        return tool.proposal_only
+    return tool.name.startswith('propose_') and _proposal_shape(tool)
 
 
 def _check_schema(tool, schema, path, top=False):
@@ -580,6 +612,50 @@ register(
          annotations=_PROPOSAL, label='Propose Camera', grants=('coordinator', 'sheet_ops'), zerofield_mcp=True),
 )
 
+# The Art department's proposals (SPEC_20 R21, R22, §4.7): checked by the crew jobs' validators
+# (project_assistant/crew_art.py) and written only as table proposals on the Soul Cast or the shot's prompt cell.
+_ASSET = {'type': 'string', 'minLength': 1, 'maxLength': 200}
+_LOOK_KINDS = ['OUTFIT', 'POSE', 'LOOK']  # story_openapi.LOOK_KINDS (tests cross-check)
+_ART = ('coordinator', 'doc_writer')  # no Art role in the roster yet: the Screenwriter owns Soul Cast proposals
+register(
+    Tool('propose_asset_description',
+         "Propose the locked appearance description of a cast member, set or prop (or one of its looks) on the Soul "
+         'Cast. asset is a code such as CAST-01 or SET-02 (CAST-01:night for a look) or an asset id. Describe '
+         'appearance only: no shot size, angle, lens, framing, background or backdrop, "no people", lighting setup, '
+         'seed numbers, quality words or camera brands, and no @ tags; every shot that uses the tag is generated from '
+         'this text. The tool checks it and creates a proposal for that one cell, reviewed on the asset card; nothing '
+         'is written until the director adopts it. Read the asset first with read_cast.',
+         _obj({'asset': _ASSET, 'description': {'type': 'string', 'minLength': 1, 'maxLength': 1200},
+               'reason': {'type': 'string', 'maxLength': 300}}, ['asset', 'description']),
+         'crew', 'project_assistant.crew_art:propose_asset_description', mutating=True, analysis_only=False,
+         annotations=_PROPOSAL, label='Propose Description', grants=_ART, zerofield_mcp=True),
+    Tool('propose_look',
+         'Propose a new look (outfit, pose or look variant) for a cast member: a new Soul Cast row such as '
+         'CAST-01:night, never an overwrite of the base description. asset is the cast member (CAST-01 or its asset '
+         'id); key is the new look key (lower-case letters, digits, - or _), unused so far; description is the whole '
+         'appearance in this look, appearance only, as for propose_asset_description. Creates a proposal that adds '
+         'the row, reviewed on the cast card; nothing is written until the director adopts it.',
+         _obj({'asset': _ASSET, 'key': {'type': 'string', 'pattern': '^[a-z0-9_-]{1,40}$'},
+               'name': {'type': 'string', 'minLength': 1, 'maxLength': 200},
+               'kind': {'type': 'string', 'enum': _LOOK_KINDS},
+               'description': {'type': 'string', 'minLength': 1, 'maxLength': 1200},
+               'reason': {'type': 'string', 'maxLength': 300}}, ['asset', 'key', 'description']),
+         'crew', 'project_assistant.crew_art:propose_look', mutating=True, analysis_only=False,
+         annotations=_PROPOSAL, label='Propose Look', grants=_ART, zerofield_mcp=True),
+    Tool('propose_cast',
+         "Propose who appears in a shot: the @CAST tags of its Action & Audio Prompt. cast lists the shot's people as "
+         'codes of characters of its scene (CAST-01, or CAST-01:night for an existing look); resolve "he" and "she" '
+         'from the scene. insert true marks an insert (a hand, a sleeve, an object): it binds only the scene, so cast '
+         'must be empty and the visible part stays described in words. Tags of other people are removed, missing ones '
+         'appended, the set tag kept. Creates a proposal for that one cell, reviewed on the shot; nothing is written '
+         'until the director adopts it. Read the scene first with read_scene.',
+         _obj({'shot_id': _ID, 'cast': {'type': 'array', 'maxItems': 12, 'uniqueItems': True,
+                                        'items': {'type': 'string', 'pattern': '^@?CAST-[0-9]+(?::[a-z0-9_-]+)?$'}},
+               'insert': {'type': 'boolean'}, 'reason': {'type': 'string', 'maxLength': 300}}, ['shot_id', 'cast']),
+         'crew', 'project_assistant.crew_art:propose_cast', mutating=True, analysis_only=False,
+         annotations=_PROPOSAL, label='Propose Cast', grants=_ART, zerofield_mcp=True),
+)
+
 for _module in EXTENSIONS:
     register(*importlib.import_module(_module).TOOLS)
 _sealed = True
@@ -633,6 +709,7 @@ def zerofield_exposed(tool) -> bool:
 
 
 ZEROFIELD_MCP = _names(zerofield_exposed)
+PROPOSAL_ONLY = _names(proposal_only)  # what context_tools.top_up_grants may add to existing built-in crews
 GENERATION = _names(lambda t: t.category == 'generation')  # never listed to propose_only tokens
 UI = tuple(tool.name for tool in _TOOLS.values() if tool.ui)
 REQUIRES = MappingProxyType({tool.name: tool.requires for tool in _TOOLS.values() if tool.requires})
