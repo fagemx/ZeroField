@@ -1,0 +1,302 @@
+{
+  "schema": "zerofield.crew_eval.cases/1",
+  "type": "blocking",
+  "description": "Job: shot + cast + set -> 3D operations (SPEC_20 4.6). Stage coordinates are station-local metres: offset is [x, z] from relativeTo, +z toward the glass and the console, -z toward the camera side, x is the actor's right (-x is the reaching-arm side). facing toward the lens is \"camera\" (or \"room\", the camera side).",
+  "cases": [
+    {
+      "id": "blocking-01-tears-front-closeup",
+      "title": "One actor, facing the lens, breaking into tears, slow push-in (6 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "grief breaking into tears",
+        "traps": ["facing the console is the stage default and shows his back", "a close-up needs a long lens", "the revision must be echoed"]
+      },
+      "input": {
+        "shot": {"id": "S06", "seconds": 6, "text": "Close-up, facing the camera: Kael stands with his back against the console, jaw clenched, and breaks into tears as the camera pushes in."},
+        "cast": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "stage": "observatory", "targets": ["console", "plinth", "dial", "recorder", "console_edge", "window_glass"]},
+        "base_revision": 3
+      },
+      "expect": {
+        "hard": {},
+        "soft": [
+          {"id": "kael_faces_lens", "weight": 3, "check": "place", "cast": "@CAST-01", "facing_any": ["camera", "room"], "relativeTo_any": ["console", "console_edge", "mark"], "x": [-0.6, 0.6], "z": [-1.2, -0.2], "desc": "Kael stands on the camera side of the console and faces the lens"},
+          {"id": "close_long_lens", "weight": 3, "check": "camera", "size_any": ["close", "extreme_close"], "angle_any": ["eye", "low"], "lens_any": [50, 85], "desc": "a close-up at eye level or lower on a 50 or 85 mm lens"},
+          {"id": "push_in", "weight": 2, "check": "camera", "move_any": ["pushin"], "desc": "the camera pushes in"}
+        ]
+      },
+      "reference": {
+        "shotId": "S06",
+        "baseRevision": 3,
+        "ops": [
+          {"op": "place", "cast": "@CAST-01", "relativeTo": "console", "offset": [0.0, -0.55], "facing": "camera"},
+          {"op": "camera", "size": "close", "angle": "eye", "lens": 50, "move": "pushin", "from": "K1", "to": "K2"}
+        ]
+      }
+    },
+    {
+      "id": "blocking-02-nose-to-nose",
+      "title": "Two actors nose to nose, he faces the lens, she faces him (6 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "cornered fear against fury",
+        "traps": ["both actors facing the camera would break the confrontation", "she stands between him and the lens", "nose to nose is under 0.8 m"]
+      },
+      "input": {
+        "shot": {"id": "S10", "seconds": 6, "text": "Mira closes on Kael until they are nose to nose; Kael is cornered against the console, facing the camera, while Mira's face is turned up to his, her back to us."},
+        "cast": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"},
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair and a dark green wool long coat"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "stage": "observatory", "targets": ["console", "plinth", "dial", "recorder", "console_edge", "window_glass"]},
+        "base_revision": 7
+      },
+      "expect": {
+        "hard": {},
+        "soft": [
+          {"id": "kael_faces_lens", "weight": 3, "check": "place", "cast": "@CAST-01", "facing_any": ["camera", "room"], "relativeTo_any": ["console", "console_edge", "mark"], "z": [-1.0, -0.2], "desc": "Kael is against the console, facing the lens"},
+          {"id": "mira_faces_kael", "weight": 3, "check": "place", "cast": "@CAST-02", "facing_any": ["@CAST-01"], "desc": "Mira faces Kael, not the lens"},
+          {"id": "nose_to_nose", "weight": 3, "check": "distance", "a": "@CAST-01", "b": "@CAST-02", "min": 0.25, "max": 0.8, "desc": "they stand between 0.25 m and 0.8 m apart"},
+          {"id": "two_shot_framing", "weight": 2, "check": "camera", "size_any": ["medium", "close"], "angle_any": ["eye", "low"], "lens_any": [35, 50], "desc": "a medium or close two-shot on a 35 or 50 mm lens"},
+          {"id": "slow_move", "weight": 1, "check": "camera", "move_any": ["pushin", "static"], "desc": "a push-in or a locked camera"}
+        ]
+      },
+      "reference": {
+        "shotId": "S10",
+        "baseRevision": 7,
+        "ops": [
+          {"op": "place", "cast": "@CAST-01", "relativeTo": "console_edge", "offset": [0.1, -0.5], "facing": "camera"},
+          {"op": "place", "cast": "@CAST-02", "relativeTo": "@CAST-01", "offset": [0.0, -0.45], "facing": "@CAST-01"},
+          {"op": "camera", "size": "medium", "angle": "eye", "lens": 35, "move": "pushin", "from": "K1", "to": "K2"}
+        ]
+      }
+    },
+    {
+      "id": "blocking-03-shove-after-standoff",
+      "title": "The standoff must hold for 2.4 s before the shove: place, camera and retime (4 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "held threat before violence",
+        "traps": ["the timing request needs a retime op on the right beat", "the beat number is not the beat time", "the squaring-up distance"]
+      },
+      "input": {
+        "shot": {"id": "S11", "seconds": 4, "text": "Mira squares up to Kael and holds the standoff for 2.4 seconds before she shoves him; Kael faces the camera, his back to the console."},
+        "cast": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"},
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair and a dark green wool long coat"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "stage": "observatory", "targets": ["console", "plinth", "dial", "recorder", "console_edge", "window_glass"]},
+        "base_revision": 12,
+        "beats": [
+          {"from": 0, "to": 1.2, "action": "Mira squares up to Kael, fists clenched"},
+          {"from": 1.2, "to": 2.0, "action": "Mira shoves Kael hard in the chest"},
+          {"from": 2.0, "to": 4.0, "action": "Kael slams back into the console and stares into the lens, stunned"}
+        ]
+      },
+      "expect": {
+        "hard": {"require_ops": ["retime"]},
+        "soft": [
+          {"id": "shove_starts_at_60_percent", "weight": 3, "check": "retime", "beat": 2, "at": [0.55, 0.65], "desc": "beat 2 (the shove) now starts at about 0.6 of the shot, 2.4 s"},
+          {"id": "kael_faces_lens", "weight": 3, "check": "place", "cast": "@CAST-01", "facing_any": ["camera", "room"], "relativeTo_any": ["console", "console_edge", "mark"], "desc": "Kael is by the console, facing the lens"},
+          {"id": "mira_faces_kael", "weight": 2, "check": "place", "cast": "@CAST-02", "facing_any": ["@CAST-01"], "desc": "Mira faces Kael"},
+          {"id": "squaring_up", "weight": 2, "check": "distance", "a": "@CAST-01", "b": "@CAST-02", "min": 0.5, "max": 1.6, "desc": "they start between 0.5 m and 1.6 m apart"},
+          {"id": "framing", "weight": 2, "check": "camera", "size_any": ["medium"], "angle_any": ["eye", "low"], "lens_any": [35, 50], "desc": "a medium two-shot on a 35 or 50 mm lens"}
+        ]
+      },
+      "reference": {
+        "shotId": "S11",
+        "baseRevision": 12,
+        "ops": [
+          {"op": "place", "cast": "@CAST-01", "relativeTo": "console", "offset": [0.0, -0.45], "facing": "camera"},
+          {"op": "place", "cast": "@CAST-02", "relativeTo": "@CAST-01", "offset": [-0.4, -0.9], "facing": "@CAST-01"},
+          {"op": "camera", "size": "medium", "angle": "low", "lens": 35, "move": "static"},
+          {"op": "retime", "beat": 2, "at": 0.6}
+        ]
+      }
+    },
+    {
+      "id": "blocking-04-pier-farewell-crane",
+      "title": "Parallax pier: she shouts after the ferry, crane up to a high wide (8 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "desperate calling after someone leaving",
+        "traps": ["the parallax stage has only far, mid and near cards, no console", "the ferry is on a card, not a cast member", "she faces the lens even though she calls toward the ferry"]
+      },
+      "input": {
+        "shot": {"id": "S15", "seconds": 8, "text": "Odile stands at the pier rail, facing the camera, shouting after the departing ferry; the camera cranes up from her face to a high wide of the ferry sliding into the rain."},
+        "cast": [
+          {"code": "@CAST-03", "name": "Odile", "look": "an elderly woman in her late sixties with silver hair in a bun, round wire glasses on a chain and a navy cardigan under a yellow oilskin"}
+        ],
+        "set": {"code": "@SET-02", "name": "Ferry pier", "stage": "parallax", "targets": ["far", "mid", "near"]},
+        "base_revision": 2
+      },
+      "expect": {
+        "hard": {},
+        "soft": [
+          {"id": "odile_faces_lens", "weight": 3, "check": "place", "cast": "@CAST-03", "facing_any": ["camera", "room"], "relativeTo_any": ["near", "mid", "mark"], "desc": "Odile stands in front of the cards and faces the lens"},
+          {"id": "crane", "weight": 3, "check": "camera", "move_any": ["crane"], "desc": "the camera cranes"},
+          {"id": "framing", "weight": 2, "check": "camera", "size_any": ["medium", "wide", "full"], "angle_any": ["low", "eye"], "lens_any": [24, 35], "desc": "a medium or wide start at eye level or lower on a 24 or 35 mm lens"}
+        ]
+      },
+      "reference": {
+        "shotId": "S15",
+        "baseRevision": 2,
+        "ops": [
+          {"op": "place", "cast": "@CAST-03", "relativeTo": "near", "offset": [0.0, 0.6], "facing": "camera"},
+          {"op": "camera", "size": "medium", "angle": "low", "lens": 35, "move": "crane", "from": "K1", "to": "K2"}
+        ]
+      }
+    },
+    {
+      "id": "blocking-05-empty-stage-scream",
+      "title": "Empty stage: one actor screams into a tight locked-off lens (6 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a full-throated scream",
+        "traps": ["the empty stage has no named targets: inventing a console or a wall fails", "extreme close-up needs the longest lens", "relativeTo has only the mark to use"]
+      },
+      "input": {
+        "shot": {"id": "S31", "seconds": 6, "text": "Black-box rehearsal: Mira alone, centre stage, facing the camera, screams straight into the lens; locked off, as tight as the lens allows."},
+        "cast": [
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair, freckles and a dark green wool long coat"}
+        ],
+        "set": {"code": "@SET-07", "name": "Rehearsal room", "stage": "empty", "targets": []},
+        "base_revision": 0
+      },
+      "expect": {
+        "hard": {},
+        "soft": [
+          {"id": "mira_centre_stage", "weight": 3, "check": "place", "cast": "@CAST-02", "facing_any": ["camera", "room"], "relativeTo_any": ["mark"], "x": [-0.3, 0.3], "z": [-0.3, 0.3], "desc": "Mira stands on her mark and faces the lens"},
+          {"id": "tight_long_lens", "weight": 3, "check": "camera", "size_any": ["close", "extreme_close"], "angle_any": ["eye"], "lens_any": [85], "desc": "an extreme or plain close-up at eye level on the 85 mm lens"},
+          {"id": "locked_off", "weight": 2, "check": "camera", "move_any": ["static"], "desc": "the camera is locked off"}
+        ]
+      },
+      "reference": {
+        "shotId": "S31",
+        "baseRevision": 0,
+        "ops": [
+          {"op": "place", "cast": "@CAST-02", "relativeTo": "mark", "offset": [0.0, 0.0], "facing": "camera"},
+          {"op": "camera", "size": "extreme_close", "angle": "eye", "lens": 85, "move": "static"}
+        ]
+      }
+    },
+    {
+      "id": "blocking-06-triangle-argument",
+      "title": "Three actors: she stands between them facing the lens while they argue across her (8 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "white-knuckled silence between two arguing people",
+        "traps": ["cast codes are not consecutive (@CAST-05): an invented @CAST-03 fails", "the two arguers face each other, not the lens", "the span between them is 1.5 m, not the 0.7 m of a two-shot"]
+      },
+      "input": {
+        "shot": {"id": "S22", "seconds": 8, "text": "Ines stands at the console, facing the camera, white-knuckled, between Kael and Mira who argue across her a metre and a half apart; the camera orbits slowly from Kael to Mira."},
+        "cast": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"},
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair and a dark green wool long coat"},
+          {"code": "@CAST-05", "name": "Ines", "look": "a woman in her early forties with a black bob, tired dark eyes and a navy knit sweater"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "stage": "observatory", "targets": ["console", "plinth", "dial", "recorder", "console_edge", "window_glass"]},
+        "base_revision": 9
+      },
+      "expect": {
+        "hard": {},
+        "soft": [
+          {"id": "ines_faces_lens", "weight": 3, "check": "place", "cast": "@CAST-05", "facing_any": ["camera", "room"], "relativeTo_any": ["console", "console_edge", "mark"], "desc": "Ines is at the console and faces the lens"},
+          {"id": "kael_faces_mira", "weight": 2, "check": "place", "cast": "@CAST-01", "facing_any": ["@CAST-02", "@CAST-05"], "desc": "Kael faces the argument, not the lens"},
+          {"id": "mira_faces_kael", "weight": 2, "check": "place", "cast": "@CAST-02", "facing_any": ["@CAST-01", "@CAST-05"], "desc": "Mira faces the argument, not the lens"},
+          {"id": "arguers_apart", "weight": 3, "check": "distance", "a": "@CAST-01", "b": "@CAST-02", "min": 1.2, "max": 2.0, "desc": "Kael and Mira stand 1.2 m to 2 m apart"},
+          {"id": "ines_between", "weight": 2, "check": "distance", "a": "@CAST-05", "b": "@CAST-01", "min": 0.6, "max": 1.2, "desc": "Ines is 0.6 m to 1.2 m from Kael"},
+          {"id": "orbit_framing", "weight": 2, "check": "camera", "size_any": ["medium", "wide"], "lens_any": [24, 35], "move_any": ["orbit"], "desc": "a medium or wide orbit on a 24 or 35 mm lens"}
+        ]
+      },
+      "reference": {
+        "shotId": "S22",
+        "baseRevision": 9,
+        "ops": [
+          {"op": "place", "cast": "@CAST-05", "relativeTo": "console", "offset": [0.0, -0.5], "facing": "camera"},
+          {"op": "place", "cast": "@CAST-01", "relativeTo": "@CAST-05", "offset": [-0.75, 0.1], "facing": "@CAST-02"},
+          {"op": "place", "cast": "@CAST-02", "relativeTo": "@CAST-05", "offset": [0.75, 0.1], "facing": "@CAST-01"},
+          {"op": "camera", "size": "medium", "angle": "eye", "lens": 35, "move": "orbit", "from": "K1", "to": "K2"}
+        ]
+      }
+    },
+    {
+      "id": "blocking-07-plinth-fear-handheld",
+      "title": "She is afraid of the window but must face the lens (4 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "fear, breathing hard",
+        "traps": ["the text says her eyes go to the window glass: facing the window glass would turn her back to the lens", "the text mentions a door, but this stage has no door target", "handheld is not a camera move, push-in is"]
+      },
+      "input": {
+        "shot": {"id": "S24", "seconds": 4, "text": "Ines stands at the plinth's edge, facing the camera, breathing hard, afraid; her eyes keep flicking toward the window glass and the door behind the camera. Handheld, pushing in."},
+        "cast": [
+          {"code": "@CAST-05", "name": "Ines", "look": "a woman in her early forties with a black bob, tired dark eyes and a navy knit sweater"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "stage": "observatory", "targets": ["console", "plinth", "dial", "recorder", "console_edge", "window_glass"]},
+        "base_revision": 5
+      },
+      "expect": {
+        "hard": {},
+        "soft": [
+          {"id": "ines_faces_lens", "weight": 4, "check": "place", "cast": "@CAST-05", "facing_any": ["camera", "room"], "relativeTo_any": ["plinth", "mark"], "x": [-0.8, 0.8], "z": [-1.2, -0.3], "desc": "Ines stands at the plinth's near edge and faces the lens, not the window"},
+          {"id": "push_in_framing", "weight": 3, "check": "camera", "size_any": ["medium", "close"], "lens_any": [35, 50], "move_any": ["pushin"], "desc": "a medium or close push-in on a 35 or 50 mm lens"}
+        ]
+      },
+      "reference": {
+        "shotId": "S24",
+        "baseRevision": 5,
+        "ops": [
+          {"op": "place", "cast": "@CAST-05", "relativeTo": "plinth", "offset": [0.0, -0.7], "facing": "camera"},
+          {"op": "camera", "size": "medium", "angle": "eye", "lens": 35, "move": "pushin", "from": "K1", "to": "K2"}
+        ]
+      }
+    },
+    {
+      "id": "blocking-08-shoulder-to-shoulder-pull-out",
+      "title": "Two actors shoulder to shoulder, both frozen and facing the lens, slow pull-out (6 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "shared shock",
+        "traps": ["both actors face the lens here, unlike the confrontations", "shoulder to shoulder is about 0.7 m, not nose to nose", "pull-out, not push-in"]
+      },
+      "input": {
+        "shot": {"id": "S30", "seconds": 6, "text": "Kael and Mira stand shoulder to shoulder at the console edge, both facing the camera, both frozen as the recorder crackles to life; slow pull-out."},
+        "cast": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"},
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair and a dark green wool long coat"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "stage": "observatory", "targets": ["console", "plinth", "dial", "recorder", "console_edge", "window_glass"]},
+        "base_revision": 21
+      },
+      "expect": {
+        "hard": {},
+        "soft": [
+          {"id": "kael_faces_lens", "weight": 2, "check": "place", "cast": "@CAST-01", "facing_any": ["camera", "room"], "relativeTo_any": ["console_edge", "console", "mark"], "desc": "Kael is at the console edge and faces the lens"},
+          {"id": "mira_faces_lens", "weight": 2, "check": "place", "cast": "@CAST-02", "facing_any": ["camera", "room"], "relativeTo_any": ["console_edge", "console", "mark", "@CAST-01"], "desc": "Mira is beside him and faces the lens"},
+          {"id": "shoulder_to_shoulder", "weight": 3, "check": "distance", "a": "@CAST-01", "b": "@CAST-02", "min": 0.4, "max": 1.0, "desc": "they stand 0.4 m to 1 m apart"},
+          {"id": "pull_out", "weight": 3, "check": "camera", "size_any": ["medium"], "lens_any": [35, 50], "move_any": ["pullout"], "desc": "a medium pull-out on a 35 or 50 mm lens"}
+        ]
+      },
+      "reference": {
+        "shotId": "S30",
+        "baseRevision": 21,
+        "ops": [
+          {"op": "place", "cast": "@CAST-01", "relativeTo": "console_edge", "offset": [-0.35, -0.5], "facing": "camera"},
+          {"op": "place", "cast": "@CAST-02", "relativeTo": "console_edge", "offset": [0.35, -0.5], "facing": "camera"},
+          {"op": "camera", "size": "medium", "angle": "eye", "lens": 50, "move": "pullout", "from": "K1", "to": "K2"}
+        ]
+      }
+    }
+  ]
+}
