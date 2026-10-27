@@ -1,17 +1,43 @@
-"""Crew planning jobs (SPEC_20 fixed decisions 9, 10, 12; R7, R19, R20).
+"""Crew planning jobs (SPEC_20 fixed decisions 9, 10, 12; R7, R19, R20, R21, R22, R23).
 
-A crew job is one judgment step a built-in crew role makes for a shot (the Cinematographer writing a beat sheet or
-choosing the camera). Every job has the four things of fixed decision 12: a JSON output schema, a validator in
-code, at most one retry, and a rule fallback. A job declares them once (:class:`CrewJob`, registered in ``JOBS``):
+A crew job is one judgment step a built-in crew role makes for one target: a shot (the Cinematographer writing a beat
+sheet or choosing the camera; who is in the shot), an asset (Art writing a locked appearance description or a new
+look), a scene (who is in each of its shots) or an episode (the Screenwriter's adaptation and shot breakdown
+candidates). Every job has the four things of fixed decision 12: a JSON output schema, a validator in code, at most
+one retry, and a rule fallback. A job declares them once (:class:`CrewJob`, registered in ``JOBS``):
 
-    kind          'beats' | 'camera' (crew_planning declares both)
-    role          the built-in crew agent that does it (agent_registry.ROSTER key; both jobs are 'sheet_ops')
+    kind          'beats' | 'camera' (crew_planning); 'description' | 'look' | 'appearances' (crew_art);
+                  'adaptation' | 'breakdown' (crew_writing)
+    role          the built-in crew agent that does it (agent_registry.ROSTER key)
+    targets       the target kinds it is asked on: ('shot',) by default; see TARGETS
     schema        the JSON Schema the model answers with (``response_format`` on a tool-free round, else in the prompt)
     effort        the job's own reasoning_effort (SPEC_20 R10)
-    gather        (ctx, conn, shot_id, request) -> {'input', 'shot', 'reads'}: context from the R16 read tools
+    gather        (ctx, conn, target_id, request) -> {'input', 'reads', ...}: context from the R16 read tools
     instructions  (input) -> system prompt          prompt  (input) -> the user turn
     validate      (output, input) -> [errors]       fallback  (input) -> an output built by rules
-    propose       (ctx, conn, gathered, outcome) -> result: cell-scoped proposals only, never a write (decision 9)
+    propose       (ctx, conn, gathered, outcome) -> result: proposals only, never a write (decision 9). Table
+                  proposals are cell-scoped (R17); the Screenwriter's candidates are writing previews.
+    check_row     (row) -> a sentence when the job cannot apply to this sheet row (shot and asset targets)
+    check         (conn, me, target) -> a sentence when the job cannot apply to this target (any target)
+    summary       (record) -> the crew board's line for a finished job, when the default does not fit
+
+Targets (one API; the pre-production flow, R24, drives it)::
+
+    {'kind': 'shot',    'id': 'sh_<slug>_<rowId>'}     a slate row (cinema-studio or openjutsu-lab)
+    {'kind': 'asset',   'id': 'as_<slug>_<rowId>'}     a Soul Cast row (a cast member, set, prop or one of its looks)
+    {'kind': 'scene',   'id': 'sc_<slug>_<NN>_S<NN>'}  a scene of an episode's working script
+    {'kind': 'episode', 'id': 'ep_<slug>_<NN>'}        an episode
+
+    request(conn, me, slug, kind, target, body, *, automatic=False) -> the public job record
+        target is a {kind, id} dict, or a bare shot id (the shot routes' form, kept). 422 when the job is not asked
+        on that kind of target or the target cannot take it; 404 for a target of another production; 409
+        DRAMA_CREW_NOT_READY / DRAMA_AUTOMATION_PAUSED as below. The same member's active job of one kind for one
+        target is returned instead of a second one.
+    listing(conn, me, slug, target_id) -> this member's jobs for one target, newest first.
+
+A job record carries ``target`` ({kind, id}), ``targetId`` and ``targetLabel``; a shot job also keeps ``shotId`` and
+``shotLabel`` as before, so the shot routes, listings and the crew board read old and new records alike. The routes
+for each target live in project_docs/story_crew.py.
 
 Runner (:func:`run_pipeline`): one governed model call asking for the schema, validate, at most one retry that shows
 the model its answer and the validation errors, and if that is still invalid the rule fallback, marked
@@ -53,6 +79,9 @@ PAUSED = 'DRAMA_AUTOMATION_PAUSED'
 BAD_OUTPUT = ('empty', 'output')  # failure classes that describe the answer, not the transport: they count as invalid
 JOB_ID = re.compile(r'cj_[0-9a-f]{32}')
 BOARD_LIMIT = 100
+TARGETS = ('shot', 'asset', 'scene', 'episode')
+TARGET_NOUN = {'shot': 'the shot', 'asset': 'the asset card', 'scene': "the scene's shots", 'episode': 'the episode'}
+JOB_MODULES = ('crew_planning', 'crew_art', 'crew_writing')  # the modules that declare the built-in jobs
 RETRY_NOTE = ('Your answer did not pass validation:\n{errors}\n'
               'Fix exactly these problems and answer again with the whole JSON object, nothing else.')
 # Readiness blockers in words, for the 409 sentence (the UI shows its own text for each fix hint).
@@ -114,8 +143,11 @@ class CrewJob:
     fallback: Callable
     propose: Callable
     options: Callable = no_options  # (request body) -> normalized options, or raise ValueError
-    check_row: Callable | None = None  # (shot row) -> a sentence when the job cannot apply to this sheet, else None
+    check_row: Callable | None = None  # (sheet row) -> a sentence when the job cannot apply to this sheet, else None
     timeout: int = MODEL_TIMEOUT
+    targets: tuple = ('shot',)  # the target kinds it is asked on (TARGETS)
+    check: Callable | None = None  # (conn, me, Target) -> a sentence when the job cannot apply to this target
+    summary: Callable | None = None  # (record) -> the crew board line of a succeeded job
 
 
 JOBS: dict[str, CrewJob] = {}
@@ -126,14 +158,72 @@ def declare(job: CrewJob) -> CrewJob:
         raise ValueError(f'Crew job {job.kind!r} is declared twice.')
     if job.effort not in ('low', 'medium', 'high'):
         raise ValueError('A crew job effort is low, medium or high.')
+    if not job.targets or set(job.targets) - set(TARGETS):
+        raise ValueError('A crew job is asked on targets among ' + ', '.join(TARGETS) + '.')
     JOBS[job.kind] = job
     return job
 
 
 def job(kind) -> CrewJob:
     if kind not in JOBS:
-        from project_assistant import crew_planning  # noqa: F401  (declares the built-in jobs)
+        import importlib
+        for module in JOB_MODULES:  # each declares its built-in jobs on import
+            importlib.import_module('project_assistant.' + module)
     return JOBS[kind]
+
+
+# ---------- targets ----------
+
+@dataclass(frozen=True)
+class Target:
+    """One resolved job target: what it is, where it lives and how the crew board names it."""
+    kind: str
+    id: str
+    slug: str
+    label: str
+    tab_key: str | None = None
+    row_id: str | None = None
+    row: dict | None = None        # shot and asset targets: the sheet row (story_openapi.table_rows shape)
+    episode: dict | None = None    # scene and episode targets
+    scene: dict | None = None      # scene targets
+
+    def ref(self):
+        return {'kind': self.kind, 'id': self.id}
+
+
+def target_ref(target):
+    """{kind, id} of a request's target: a dict, or a bare shot id (the shot routes' form)."""
+    if isinstance(target, str):
+        return {'kind': 'shot', 'id': target}
+    if not isinstance(target, dict) or target.get('kind') not in TARGETS or not isinstance(target.get('id'), str) or not target['id']:
+        raise ValueError('A crew target is {"kind": "' + '|'.join(TARGETS) + '", "id": text}.')
+    return {'kind': target['kind'], 'id': target['id']}
+
+
+def resolve_target(conn, ref):
+    """The Target of a {kind, id}; story_openapi.StoryError 404 when it does not exist."""
+    from project_docs import story_openapi as story
+    kind, identifier = ref['kind'], ref['id']
+    if kind in ('shot', 'asset'):
+        slug, row = story.find_row(conn, identifier, kind)
+        cells = row['cells'] or ['']
+        label = cells[0] or identifier
+        if kind == 'asset' and len(cells) > 1 and cells[1].strip() and cells[1].strip() != cells[0]:
+            label = f'{label} {cells[1].strip()}'
+        return Target(kind, identifier, slug, label[:160], row['tabKey'], row['rid'], row=row)
+    if kind == 'scene':
+        ep, scene = story.locate_scene(conn, identifier)
+        title = re.sub(r'^Scene\s*\d+\s*[:：.-]?\s*', '', scene['title'], flags=re.I).strip()
+        label = f"Scene {scene['sceneIndex']:02d}" + (f': {title}' if title else '')
+        return Target(kind, identifier, ep['slug'], label[:160], ep['tabKey'], episode=ep, scene=scene)
+    ep = story.episode(conn, identifier)
+    return Target('episode', identifier, ep['slug'], (ep.get('title') or f"Episode {ep['episodeIndex']}")[:160],
+                  ep['tabKey'], episode=ep)
+
+
+def target_of(record):
+    """A record's {kind, id}; records from before targets were general are shot jobs."""
+    return record.get('target') or {'kind': 'shot', 'id': record['shotId']}
 
 
 # ---------- the pipeline: call, validate, retry once, fall back ----------
@@ -261,21 +351,24 @@ def _save(conn, record):
 def public(record):
     keys = ('jobId', 'kind', 'role', 'shotId', 'shotLabel', 'status', 'source', 'requestedBy', 'requestedAt', 'startedAt',
             'finishedAt', 'request', 'result', 'error', 'failure', 'attempts', 'model', 'usage')
-    return {k: record.get(k) for k in keys}
+    target = target_of(record)
+    return {**{k: record.get(k) for k in keys}, 'target': target, 'targetId': target['id'],
+            'targetLabel': record.get('targetLabel') or record.get('shotLabel')}
 
 
-def _records(conn, slug, *, owner=None, shot_id=None, limit=BOARD_LIMIT):
+def _records(conn, slug, *, owner=None, target_id=None, limit=BOARD_LIMIT):
     with conn.cursor() as cur:
         cur.execute("""SELECT data FROM projectops.story_record WHERE kind=%s AND project_slug=%s
-                       AND (%s::uuid IS NULL OR owner_id=%s::uuid) AND (%s::text IS NULL OR data->>'shotId'=%s)
+                       AND (%s::uuid IS NULL OR owner_id=%s::uuid)
+                       AND (%s::text IS NULL OR COALESCE(data->>'targetId', data->>'shotId')=%s)
                        ORDER BY data->>'requestedAt' DESC, id DESC LIMIT %s""",
-                    (KIND, slug, owner, owner, shot_id, shot_id, limit))
+                    (KIND, slug, owner, owner, target_id, target_id, limit))
         return [dict(row[0], slug=slug) for row in cur.fetchall()]
 
 
-def listing(conn, me, slug, shot_id):
-    """This member's crew jobs for one shot, newest first."""
-    return [public(r) for r in _records(conn, slug, owner=me.actor_id, shot_id=shot_id, limit=20)]
+def listing(conn, me, slug, target_id):
+    """This member's crew jobs for one target (a shot, asset, scene or episode id), newest first."""
+    return [public(r) for r in _records(conn, slug, owner=me.actor_id, target_id=target_id, limit=20)]
 
 
 def running_count(conn, slug, role):
@@ -311,25 +404,33 @@ def _relock(conn, slug):
         cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ('story-write:' + slug,))
 
 
-def request(conn, me, slug, kind, shot_id, body, *, automatic=False):
-    """Queue one crew job for a shot (manual unless automatic), or explain with 409 why the crew cannot work.
+def request(conn, me, slug, kind, target, body, *, automatic=False):
+    """Queue one crew job for a target (manual unless automatic), or explain with 409 why the crew cannot work.
 
-    Raises story_openapi.StoryError: 422 for a bad request, 409 DRAMA_CREW_NOT_READY (nothing written) when a
-    readiness blocker stops the role, 409 DRAMA_AUTOMATION_PAUSED for an automatic request while paused.
-    The same member's active job of the same kind for the same shot is returned instead of a second one."""
+    target is {'kind': 'shot'|'asset'|'scene'|'episode', 'id'} or a bare shot id. Raises story_openapi.StoryError:
+    422 for a bad request or a target the job does not take, 404 for an unknown target or one of another production,
+    409 DRAMA_CREW_NOT_READY (nothing written) when a readiness blocker stops the role, 409 DRAMA_AUTOMATION_PAUSED
+    for an automatic request while paused. The same member's active job of the same kind for the same target is
+    returned instead of a second one."""
     from project_assistant import agent_registry, automation
     from project_docs import repository as repo, story_openapi as story
     crew_job = job(kind)
     if not isinstance(body, dict):
         story.invalid('Send the crew request as a JSON object.')
     try:
+        ref = target_ref(target)
         options = crew_job.options(body)
     except ValueError as exc:
         story.invalid(str(exc))
+    if ref['kind'] not in crew_job.targets:
+        story.invalid(f"{crew_job.title} is asked on {' or '.join('a ' + t for t in crew_job.targets)}, not on a {ref['kind']}.")
     if automatic and automation.automation_paused(conn, slug):
         raise story.StoryError(409, PAUSED, 'Automatic crew work is paused for this production.')
-    _, row = story.find_row(conn, shot_id, 'shot')
-    problem = crew_job.check_row(row) if crew_job.check_row else None
+    resolved = resolve_target(conn, ref)
+    if resolved.slug != slug:
+        raise story.StoryError(404, 'DRAMA_NOT_FOUND', 'Resource not found.')
+    problem = crew_job.check_row(resolved.row) if crew_job.check_row and resolved.row is not None else None
+    problem = problem or (crew_job.check(conn, me, resolved) if crew_job.check else None)
     if problem:
         story.invalid(problem)
     blockers = readiness_blockers(conn, me, slug, crew_job.role)  # may end the transaction: lock again below
@@ -338,17 +439,21 @@ def request(conn, me, slug, kind, shot_id, body, *, automatic=False):
         name = next((r[1] for r in agent_registry.ROSTER if r[0] == crew_job.role), crew_job.role)
         raise story.StoryError(409, NOT_READY, not_ready_message(blockers, name),
                                details={'agentKey': crew_job.role, 'blockers': blockers})
-    for record in _records(conn, slug, owner=me.actor_id, shot_id=shot_id, limit=20):
-        if record['kind'] == kind and record['status'] in ACTIVE:
+    for record in _records(conn, slug, owner=me.actor_id, target_id=resolved.id, limit=20):
+        if record['kind'] == kind and record['status'] in ACTIVE and target_of(record) == resolved.ref():
             return public(record)
     job_id = 'cj_' + uuid.uuid4().hex
-    record = {'jobId': job_id, 'kind': kind, 'role': crew_job.role, 'shotId': shot_id, 'shotLabel': (row['cells'] or [''])[0],
-              'tabKey': row['tabKey'], 'rowId': row['rid'], 'status': 'queued', 'requestedBy': me.actor_id,
-              'requestedAt': now(), 'request': options, 'automatic': bool(automatic), 'attempts': [], 'usage': {},
-              'slug': slug}
+    record = {'jobId': job_id, 'kind': kind, 'role': crew_job.role, 'target': resolved.ref(), 'targetId': resolved.id,
+              'targetLabel': resolved.label, 'tabKey': resolved.tab_key, 'rowId': resolved.row_id, 'status': 'queued',
+              'requestedBy': me.actor_id, 'requestedAt': now(), 'request': options, 'automatic': bool(automatic),
+              'attempts': [], 'usage': {}, 'slug': slug}
+    detail = {'kind': kind, 'role': crew_job.role, 'target': resolved.ref(), 'request': options}
+    if resolved.kind == 'shot':
+        record.update(shotId=resolved.id, shotLabel=resolved.label)
+        detail['shotId'] = resolved.id
     _save(conn, record)
-    repo.add_audit(conn, slug, action='crew_job_requested', actor_id=me.actor_id, tab_key=row['tabKey'], target=job_id,
-                   detail={'kind': kind, 'role': crew_job.role, 'shotId': shot_id, 'request': options})
+    repo.add_audit(conn, slug, action='crew_job_requested', actor_id=me.actor_id, tab_key=resolved.tab_key, target=job_id,
+                   detail=detail)
     return public(record)
 
 
@@ -365,7 +470,7 @@ def cancel(conn, me, slug, job_id):
     record.update(status='canceled', finishedAt=now(), canceledBy=me.actor_id)
     _save(conn, record)
     repo.add_audit(conn, slug, action='crew_job_canceled', actor_id=me.actor_id, tab_key=record.get('tabKey'),
-                   target=job_id, detail={'kind': record['kind'], 'shotId': record['shotId']})
+                   target=job_id, detail={'kind': record['kind'], 'target': target_of(record)})
     return public(record)
 
 
@@ -472,7 +577,7 @@ def execute(connection_factory, claimed, worker_id, *, opener=None):
             _finish(conn, job_id, worker_id, status='failed', error='The member who asked is no longer on this production.')
             return 'failed'
         ctx = tools.ToolContext(connection_factory, slug, me, None, None, agent_key=crew_job.role)
-        gathered = crew_job.gather(ctx, conn, record['shotId'], record.get('request') or {})
+        gathered = crew_job.gather(ctx, conn, target_of(record)['id'], record.get('request') or {})
         profile = agent_registry.get_agent(conn, slug, crew_job.role)
         if not profile or not profile.get('enabled', True):
             raise Refused('The crew role that does this job is disabled.')
@@ -520,8 +625,8 @@ def execute(connection_factory, claimed, worker_id, *, opener=None):
         return 'failed' if done else 'canceled'
     except FallbackFailed as exc:
         done = _finish(conn, job_id, worker_id, status='failed', attempts=exc.attempts, usage=_usage(exc.attempts),
-                       error='The model answer failed validation twice and the rule fallback is not usable for this shot: '
-                             + '; '.join(exc.errors[:3]))
+                       error='The model answer failed validation twice and the rule fallback is not usable for this '
+                             + target_of(record)['kind'] + ': ' + '; '.join(exc.errors[:3]))
         return 'failed' if done else 'canceled'
     except Refused as exc:
         done = _finish(conn, job_id, worker_id, status='failed', attempts=attempts, error=str(exc)[:500])
@@ -544,17 +649,26 @@ def _summary(record):
     result = record.get('result') or {}
     if record['status'] != 'succeeded':
         return None
+    crew_job = job(record['kind'])
+    if crew_job.summary:
+        return crew_job.summary(record)
+    noun = TARGET_NOUN[target_of(record)['kind']]
     if result.get('unchanged'):
-        return 'No change: the shot already says this.'
-    ids = ', '.join('#' + str(i) for i in result.get('proposalIds', []))
+        return f'No change: {noun} already says this.'
+    proposals = result.get('proposalIds', [])
+    ids = ', '.join('#' + str(i) for i in proposals)
+    waiting = ('proposals ' + ids + ' are' if len(proposals) > 1 else 'proposal ' + ids + ' is') + ' waiting on ' + noun + '.'
     if record.get('source') == SOURCE_FALLBACK:
-        return f'Rule fallback, not model-written: proposal {ids} is waiting on the shot.'
-    return f'Proposal {ids} is waiting on the shot.'
+        return 'Rule fallback, not model-written: ' + waiting
+    return waiting[:1].upper() + waiting[1:]
 
 
 def board_item(record):
-    title = job(record['kind']).title + ' · ' + (record.get('shotLabel') or record['shotId'])
-    return {'id': 'crew:' + record['jobId'], 'kind': 'crew_job', 'job_id': record['jobId'], 'shot_id': record['shotId'],
+    target = target_of(record)
+    title = job(record['kind']).title + ' · ' + (record.get('targetLabel') or record.get('shotLabel') or target['id'])
+    return {'id': 'crew:' + record['jobId'], 'kind': 'crew_job', 'job_id': record['jobId'],
+            'shot_id': target['id'] if target['kind'] == 'shot' else None,
+            'target_kind': target['kind'], 'target_id': target['id'],
             'title': title, 'status': record['status'], 'agent_key': record['role'],
             'target': {k: v for k, v in (('tab_key', record.get('tabKey')), ('row_id', record.get('rowId'))) if v},
             'created_at': record['requestedAt'], 'summary': _summary(record), 'source': record.get('source'),

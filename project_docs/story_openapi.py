@@ -1381,6 +1381,9 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
                 ep["title"] = text(body, "title", ep["title"], 200)
                 store(conn, ep["episodeId"], "episode", ep, slug)
                 return episode_view(conn, ep)
+        from project_docs import story_crew  # SPEC_20 R23: the Screenwriter's candidates, proposals only
+        if tail in story_crew.tails("episode"):
+            return story_crew.route(conn, me, method, slug, ep["episodeId"], tail, body, query, "episode")
         if tail == "script" and method == "PUT":
             if "breakdownMode" in body:
                 ep["breakdownMode"] = text(body, "breakdownMode")
@@ -1587,9 +1590,9 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
         if entity == "shot" and tail == "previs-plan" and method in ("GET", "PUT"):
             from project_docs import story_previs  # SPEC_20 R26: the stored 3D plan, revisioned (If-Match)
             return story_previs.route(conn, me, method, slug, identifier, body, headers)
-        if entity == "shot" and tail in ("beat-proposals", "camera-proposals", "crew-jobs"):
-            from project_docs import story_crew  # SPEC_20 R7, R19, R20: crew planning jobs, proposals only
-            return story_crew.route(conn, me, method, slug, identifier, tail, body, query)
+        from project_docs import story_crew  # SPEC_20 R7, R19-R23: crew planning jobs, proposals only
+        if tail in story_crew.tails(entity):
+            return story_crew.route(conn, me, method, slug, identifier, tail, body, query, entity)
         if entity == "shot" and tail == "grades":
             from project_assistant import take_grader
             if method == "GET":
@@ -1672,6 +1675,9 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1])]}
     if parts[0] == "scenes" and len(parts) >= 2:
         ep, scene = locate_scene(conn, parts[1]); tail = "/".join(parts[2:])
+        from project_docs import story_crew  # SPEC_20 R22: who is in each shot of the scene, proposals only
+        if tail in story_crew.tails("scene"):
+            return story_crew.route(conn, me, method, ep["slug"], scene["sceneId"], tail, body, query, "scene")
         if not tail and method == "GET":
             return scene
         if not tail and method == "PATCH":

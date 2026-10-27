@@ -620,6 +620,8 @@ from project_assistant import external_tools
 HANDLERS.update(external_tools.HANDLERS)
 from project_assistant import crew_planning  # SPEC_20 R7/R19/R20: propose_shot_prompt, propose_camera
 HANDLERS.update(crew_planning.HANDLERS)
+from project_assistant import crew_art  # SPEC_20 R21/R22: propose_asset_description, propose_look, propose_cast
+HANDLERS.update(crew_art.HANDLERS)
 
 
 class ToolResult(str):

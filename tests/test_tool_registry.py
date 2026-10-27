@@ -32,8 +32,11 @@ HISTORIC_GRANTS = {
 EXTERNAL_ONLY = {'get_workflow', 'request_generation'}  # declared for zerofield-mcp; no built-in grant
 # SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
 CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
-# SPEC_20 R7/R19/R20: the Cinematographer's proposal tools, after the context tools (the Showrunner has every tool).
-CREW = {'sheet_ops': ['propose_shot_prompt', 'propose_camera']}
+# SPEC_20 R7/R19/R20: the Cinematographer's proposal tools, after the context tools (the Showrunner has every tool);
+# R21/R22: Art's proposal tools, on the Screenwriter until the roster has an Art role.
+CREW = {'sheet_ops': ['propose_shot_prompt', 'propose_camera'],
+        'doc_writer': ['propose_asset_description', 'propose_look', 'propose_cast']}
+PROPOSAL_TOOLS = {'propose_shot_prompt', 'propose_camera', 'propose_asset_description', 'propose_look', 'propose_cast'}
 
 
 class ToolSurfaceAuditTests(unittest.TestCase):
@@ -92,9 +95,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(tool_specs.DELEGATION_TOOLS, {'list_agents', 'spawn_agent', 'check_delegation', 'cancel_delegation',
                                                        'ask_decision_gate', 'trigger_flow_run'})
         self.assertEqual(tool_specs.MUTATING_TOOLS, {'propose', 'propose_table_edit', 'spawn_agent', 'cancel_delegation',
-                                                     'ask_decision_gate', 'trigger_flow_run', 'request_generation',
-                                                     'propose_shot_prompt', 'propose_camera'}
-                         | set(tool_specs.STUDIO_SCHEMAS))
+                                                     'ask_decision_gate', 'trigger_flow_run', 'request_generation'}
+                         | PROPOSAL_TOOLS | set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual({n for n, p in tool_specs.DEFAULT_POLICIES.items() if p != 'auto'},
                          {'studio_ingest_script', 'studio_manage_asset', 'studio_dispatch_shot', 'studio_edit_timeline'})
         self.assertEqual(agent_console_store.STUDIO_TOOLS, set(tool_specs.STUDIO_SCHEMAS))
@@ -110,7 +112,7 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(tool_registry.ANALYSIS_ONLY_DENIED, {'propose', 'propose_table_edit', 'trigger_flow_run',
                                                               'studio_ingest_script', 'studio_manage_asset',
                                                               'studio_dispatch_shot', 'studio_edit_timeline',
-                                                              'request_generation', 'propose_shot_prompt', 'propose_camera'})
+                                                              'request_generation'} | PROPOSAL_TOOLS)
         self.assertEqual(tool_registry.RACE_DENIED, {'studio_ingest_script', 'studio_manage_asset',
                                                      'studio_dispatch_shot', 'studio_edit_timeline', 'request_generation'})
         self.assertEqual(dict(tool_registry.REQUIRES), {'spawn_agent': ('allow_subagents',),
@@ -181,6 +183,32 @@ class RegistryDerivationTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             tool_registry.register(good)
         self.assertNotIn('fixture_tool', tool_specs.TOOL_NAMES)
+
+    def test_proposal_only_tools_are_derived_from_their_shape_and_checked(self):
+        # SPEC_20 R21-R23: what top_up_grants may add to existing crews. Writes, spends and legacy tools never qualify.
+        self.assertEqual(tool_registry.PROPOSAL_ONLY, PROPOSAL_TOOLS)
+        self.assertFalse(tool_registry.PROPOSAL_ONLY & (tool_registry.STUDIO | tool_registry.DELEGATION | tool_registry.GENERATION))
+        self.assertNotIn('propose_table_edit', tool_registry.PROPOSAL_ONLY)
+        self.assertNotIn('propose', tool_registry.PROPOSAL_ONLY)
+        good = dict(name='propose_fixture', description='Fixture.', schema=tool_registry._obj({'q': {'type': 'string'}}),
+                    category='crew', handler='fixture.module:propose_fixture', mutating=True, grants=['sheet_ops'])
+        only = lambda **change: tool_registry.proposal_only(tool_registry.declare({**good, **change}))  # noqa: E731
+        self.assertTrue(only(), 'a later propose_* tool of the same shape (e.g. propose_previs_ops) qualifies')
+        self.assertFalse(only(name='write_fixture'))
+        self.assertTrue(only(name='write_fixture', proposal_only=True))
+        self.assertFalse(only(proposal_only=False))
+        self.assertFalse(only(mutating=False))
+        self.assertFalse(only(category='studio'))
+        self.assertFalse(only(category='generation'))
+        self.assertFalse(only(external=True))
+        for change in ({'proposal_only': 1}, {'proposal_only': True, 'mutating': False},
+                       {'proposal_only': True, 'category': 'legacy'}, {'proposal_only': True, 'policy': 'always_ask'},
+                       {'proposal_only': True, 'requires': ['allow_subagents']}, {'proposal_only': True, 'external': True}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                tool_registry.declare({**good, **change})
+        from project_docs import story_openapi
+        look = tool_registry.get('propose_look').schema['properties']
+        self.assertEqual(tuple(look['kind']['enum']), story_openapi.LOOK_KINDS)
 
     def test_extension_modules_add_tools_without_editing_the_declarations(self):
         marker = 'EXTENSIONS: tuple[str, ...] = ()'
