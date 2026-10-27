@@ -1,6 +1,6 @@
 {
   "date": "2026-10-27",
-  "stage": "SPEC_19 packages A, B and D, and the code of package C (film setup, colour and lighting looks, the episode look); package C's sample media and OpenJutsu in the composer are not built",
+  "stage": "SPEC_19 packages A, B and D, and package C except OpenJutsu in the composer: film setup, colour and lighting looks, the episode look and the sample media of every look and camera option",
   "base_commit": "3b8ca651f67ec518c3dc81a6ca06944db274f2bc",
   "branch": "feat/spec19-integration",
   "commit": "0a6782572a72c47995611d5a74ea67f4d930b6f2 is the tree every check below ran against (the backend suite ran at 2478e6f; nothing under project_docs, project_assistant or tests changed after it). The commit that adds this receipt, the README line and the screenshots sits on top of it.",
@@ -17,7 +17,6 @@
     "Film segments carry take, in / out, reference snapshots and the cut result (D10)"
   ],
   "not_done": [
-    "Package C sample media (R13, C5): every camera, move, genre, era, tempo, palette and light option shows a texture or a swatch; the walls switch to a picture once a catalog option has a preview. Needs the GPU, which another session's acceptance run is using",
     "OpenJutsu in the composer (R14, C6), held until the fix/spec20-r44 branch (pipeline default steps) is on main",
     "First-frame workflow choice in the composer is not filtered by production policy, held for the same reason",
     "No crew or MCP tool proposes a shot look yet: the shot_meta look field (SPEC_20 R18) and its review in the walls are built, but only tests create such proposals. crew_art.LOOK_HOOK is left unset: it hangs on a costume variant (CAST-01:night), which has no catalog look to map to",
@@ -220,9 +219,45 @@
     },
     "unverified": [
       "No take was generated with a look: the lines were checked as compiled text (prompt preview, worker compiler, and the C3 test that compares the Story API and pipeline paths), not as pictures",
-      "The long-form promptText was used everywhere; the short-versus-long comparison is part of the sample media run",
       "Look proposals were only created by tests",
       "A look write racing another member's write was tested at the API (409) but not driven in two browsers"
-    ]
+    ],
+    "sample_media": {
+      "date": "2026-10-28",
+      "commits": [
+        "35c8e45 stills",
+        "89101e0 move loops (merged in 53c9246)",
+        "b1636f1 the server serves .webp and .mp4",
+        "519412a frontend rebuilt with the samples"
+      ],
+      "stills": "49 WebP 640x360 (camera 13, genre 8, era 5, tempo 4, palette 12, light 7), 2.4 MB in all, each 31-80 KB; local ComfyUI with FLUX 3 Klein (flux3-image-klein-base-int8-convrot, workflows/flux3_klein_soul_cast.json text-to-image), 1280x720 at 50 steps then downscaled; one original test scene (a courier in a rain-streaked observatory), one seed per kind (1901-1906; two palettes moved to 2905 because the first seed framed the room in an oval); every image looked at for text, logos and real-looking faces; scripts/make_look_samples.py",
+      "moves": "12 MP4 loops (H.264, 480x270, 24 fps, 2.0 s, +faststart, 54-153 KB) with 480x270 WebP posters (under 9 KB), rendered by the 3D Stage's own scene, plan and WebCodecs export in headless Edge on SwiftShader, grey-box observatory and the default mannequin; byte-identical on re-run; scripts/make_move_samples.mjs",
+      "compact_versus_full": "each still option was also generated with a ~15-word compact text on the same seed; three switched to the compact text because the model followed it visibly better (genre close-warmth, era tape-era, light practical-lamp); the other 46 keep the full text. Side-by-side sheets in docs/research/look-samples-compare/, reasons in SPEC_19_LOOK_OPTIONS_DRAFT.md section 8",
+      "manifest": "ui/public/assets/look-samples/manifest.json: workflow, model, seed (null for move renders), prompt, variant, generatedAt, license CC0-1.0 per item; tests/test_look_samples.py checks files, sizes, dimensions, fields, catalog match and the 15 MB folder limit",
+      "packaging": {
+        "wheel_sha256": "061e104f4cd554440c803f29a86e2062bc0721403b63b3fc28989b69fed713af",
+        "verify": "scripts/verify_wheel.py passed",
+        "look_sample_files": 74,
+        "look_sample_size": "3.6 MB"
+      },
+      "observations": [
+        "Genre stills differ less than palette, light and camera stills: the fixed scene dominates the frame",
+        "Tempo barely shows in a still; the samples keep the tempo clause in the Film line so they differ, while a real still compile drops tempo",
+        "Palette hex codes push a few stills toward an illustrated look",
+        "Move loops: pov reads as a head turn and a reaching hand; whip-pan lands on an unremarkable stretch of console; orbit-180's loop seam is visible"
+      ],
+      "ui_checks": [
+        "The served samples answer 200 image/webp and 200 video/mp4 (before b1636f1 the static server refused both)",
+        "Light, film setup and camera walls show the stills at 1280x720 and 1920x1080",
+        "Hovering 慢推 on the move wall plays move/push-in.mp4 and no other video plays"
+      ],
+      "screenshots": [
+        "docs/research/screenshots/spec19-c-light-wall-samples-1920.png",
+        "docs/research/screenshots/spec19-c-film-wall-samples-1280.png",
+        "docs/research/screenshots/spec19-c-camera-wall-samples-1920.png",
+        "docs/research/screenshots/spec19-c-move-wall-hover-1920.png"
+      ],
+      "tests": "test_look_samples 6, test_story_look 30, test_story_look_api 8, test_story_openapi 48, test_story_generation_options 20: all passed, 0 skipped"
+    }
   }
 }
