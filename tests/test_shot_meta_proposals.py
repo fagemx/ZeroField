@@ -48,6 +48,17 @@ class ShotMetaMessageTests(unittest.TestCase):
                          "鏡頭 S03 的 3D 計畫在提案建立後已被修改（提案依據第 2 版，現在是第 5 版）；未套用任何變更，請重新產生提案。")
         self.assertEqual(fill(zh["shotProposalShotDeleted"], shapes[2][2]), "鏡頭 S05 在提案建立後已被刪除；未套用任何變更，請重新產生提案。")
 
+    def test_look_refusals_name_the_shot_and_carry_message_keys(self):
+        """SPEC_19 R11: the look field's sentences have their own patterns (the locale files add the keys at integration)."""
+        field = shot_meta.FIELDS["look"]
+        reason = "Unknown palette option 'teal'; choose an option from the look catalog."
+        shapes = [(field.conflict.format(label="SC01-S02", base=3, current=4), "shotProposalLookChanged", {"v0": "SC01-S02", "v1": "3", "v2": "4"}),
+                  (field.invalid.format(label="S 04", reason=reason), "shotProposalLookInvalid", {"v0": "S 04", "v1": reason})]
+        for message, key, params in shapes:
+            result = locale.error_details({"error": message})
+            self.assertEqual((result["message_key"], result["message_params"]), ("errors." + key, params), message)
+        self.assertEqual((field.name, field.conflict_code), ("look", "DRAMA_LOOK_REVISION_CONFLICT"))
+
 
 @unittest.skipUnless(os.environ.get("OPENBENCH_TEST_DB_URI"), "set OPENBENCH_TEST_DB_URI for shot proposal tests")
 class ShotMetaProposalTests(unittest.TestCase):
@@ -113,7 +124,7 @@ class ShotMetaProposalTests(unittest.TestCase):
         self.assertNotIn("value", card["target"])
         self.assertEqual(card["target"]["shot"]["rowId"], shot["rowId"])
         listed = self.listed(shot)
-        self.assertEqual((listed["shotId"], listed["revisions"], listed["shot"]["label"]), (shot["shotId"], {"previsPlan": 1}, shot["shotIndex"]))
+        self.assertEqual((listed["shotId"], listed["revisions"], listed["shot"]["label"]), (shot["shotId"], {"previsPlan": 1, "look": 0}, shot["shotIndex"]))
         [item] = listed["proposals"]
         self.assertEqual({k: item[k] for k in ("id", "action", "field", "baseRevision", "currentRevision", "value", "summary", "canDecide")},
                          {"id": made["id"], "action": "shot_meta", "field": "previsPlan", "baseRevision": 1, "currentRevision": 1,
@@ -217,7 +228,8 @@ class ShotMetaProposalTests(unittest.TestCase):
                  ({**DEFAULT, "code": "@CAST-77"}, {}, 422, "not on the cast sheet"),
                  (None, {}, 422, "cannot clear the stored plan"),
                  ([DEFAULT], {}, 422, "must be a plan object"),
-                 (DEFAULT, {"field": "look"}, 400, "not 'look'"),
+                 (DEFAULT, {"field": "dialogue"}, 400, "not 'dialogue'"),
+                 (DEFAULT, {"field": "look"}, 422, "The proposed look for shot"),  # a plan is not a look
                  (DEFAULT, {"base_revision": 3}, 409, "is at revision 0, not 3"),
                  (DEFAULT, {"base_revision": True}, 400, "baseRevision"),
                  (DEFAULT, {"summary": "x" * 501}, 400, "summary"),
@@ -231,6 +243,63 @@ class ShotMetaProposalTests(unittest.TestCase):
             with self.assertRaises(shot_meta.ProposalError) as caught:
                 shot_meta.propose(self.conn, self.slug, self.actor, missing, DEFAULT)
             self.assertEqual(caught.exception.status, 404)
+        self.conn.rollback()
+        self.assertEqual(shot_meta.pending(self.conn, self.slug, shot["shotId"]), [])
+
+    # ---- the look field (SPEC_19 R11) ----
+    def test_a_look_proposal_is_written_by_the_look_writer_when_approved(self):
+        shot = self.prepare()[0]
+        self.ok(f"/shots/{shot['shotId']}/look", "PUT", {"palette": "midnight-slate", "light": "window-side"})  # lookRevision 1
+        change = {"palette": "lamp-amber", "light": None, "tempo": "still-hold"}
+        made = self.propose(shot, change, field="look", summary="Warm the console scene", agent_key="sheet_ops")
+        self.assertEqual({k: made["target"][k] for k in ("shotId", "field", "baseRevision", "value")},
+                         {"shotId": shot["shotId"], "field": "look", "baseRevision": 1, "value": change})
+        listed = self.listed(shot)
+        self.assertEqual(listed["revisions"], {"previsPlan": 0, "look": 1})
+        [item] = listed["proposals"]
+        self.assertEqual((item["field"], item["baseRevision"], item["currentRevision"], item["value"]), ("look", 1, 1, change))
+        code, applied = self.decide(made, "apply", {"content": made["content"]})
+        self.assertEqual(code, 200, applied)
+        self.assertEqual(applied["proposal"]["result"], {"shotId": shot["shotId"], "field": "look", "revision": 2})
+        view = self.ok("/shots/" + shot["shotId"])
+        self.assertEqual((view["look"], view["lookRevision"]), ({"palette": "lamp-amber", "tempo": "still-hold"}, 2))
+        self.assertEqual(self.listed(shot)["proposals"], [])
+
+    def test_a_look_proposal_after_the_look_moved_conflicts_and_stays_pending(self):
+        from unittest.mock import patch
+        from project_docs import story_openapi as story
+        first, second = self.prepare()[:2]
+        made = self.propose(first, {"palette": "bone-ink"}, field="look")
+        self.assertEqual(made["target"]["baseRevision"], 0)
+        self.ok(f"/shots/{first['shotId']}/look", "PUT", {"light": "hard-top"})  # someone sets the light meanwhile
+        code, refused = self.decide(made, "apply")
+        self.assertEqual(code, 409, refused)
+        self.assertEqual(refused["error"], f"The look of shot {first['shotIndex']} changed after this proposal was made (revision 0, now 1). "
+                                           "Nothing was applied; generate a new proposal.")
+        self.assertEqual((refused["message_key"], refused["message_params"]), ("errors.shotProposalLookChanged", {"v0": first["shotIndex"], "v1": "0", "v2": "1"}))
+        self.assertEqual(store.proposal(self.conn, made["id"])["status"], "pending")
+        view = self.ok("/shots/" + first["shotId"])
+        self.assertEqual((view["look"], view["lookRevision"]), ({"light": "hard-top"}, 1), "nothing was written")
+        # A look that no longer fits the catalog when it is approved (an option taken out since) gets the invalid sentence.
+        fitted = self.propose(second, {"era": "tape-era"}, field="look")
+        refusal = story.StoryError(400, "DRAMA_VALIDATION_FAILED", "Unknown era option 'tape-era'; choose an option from the look catalog.")
+        with patch.object(story, "put_shot_look", side_effect=refusal):
+            code, refused = self.decide(fitted, "apply")
+        self.assertEqual((code, refused["message_key"]), (409, "errors.shotProposalLookInvalid"), refused)
+        self.assertEqual(refused["message_params"]["v1"], "Unknown era option 'tape-era'; choose an option from the look catalog.")
+        self.assertEqual(store.proposal(self.conn, fitted["id"])["status"], "pending")
+
+    def test_an_invalid_look_is_refused_when_the_proposal_is_made(self):
+        shot = self.prepare()[0]
+        for value, fragment in (({"palette": "teal"}, "Unknown palette option 'teal'"), ({"camera": {"body": "film-35mm"}}, "Unknown look setting 'camera'"),
+                                (None, "must be an object"), ({"light": 3}, "Unknown light option '3'")):
+            with self.subTest(value=value), self.assertRaises(shot_meta.ProposalError) as caught:
+                shot_meta.propose(self.conn, self.slug, self.actor, shot["shotId"], value, field="look")
+            self.assertEqual(caught.exception.status, 422)
+            self.assertIn(fragment, str(caught.exception))
+        with self.assertRaises(shot_meta.ProposalError) as caught:
+            shot_meta.propose(self.conn, self.slug, self.actor, shot["shotId"], {"palette": "auto"}, field="look", base_revision=2)
+        self.assertEqual(caught.exception.status, 409)
         self.conn.rollback()
         self.assertEqual(shot_meta.pending(self.conn, self.slug, shot["shotId"]), [])
 

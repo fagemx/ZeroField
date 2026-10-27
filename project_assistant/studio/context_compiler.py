@@ -248,6 +248,17 @@ def compile_ltx_ingredients_prompt(ctx: dict) -> str:
     return (base + "\nReference Sheet Layout: " + " ".join(panels)).strip()
 
 
+def _source_look(source):
+    """The compiled look a task source carries (story_look.source_look: film, filmStill, color, light, camera as text);
+    {} for a source without one (an older job, an asset, a shot with no look)."""
+    look = source.get("look")
+    if look is None:
+        return {}
+    if not isinstance(look, dict) or not all(isinstance(value, str) for value in look.values()):
+        raise runtime.WorkerError("The task's look must be compiled text lines")
+    return {key: value.strip() for key, value in look.items()}
+
+
 def _appearance(text):
     """The lock text describes the subject; its seed is a parameter, not words to draw."""
     return re.sub(r"[;,.]?\s*\bseed[:\s=]+\d+\b", "", str(text), flags=re.I).strip(" ;,.")
@@ -346,6 +357,14 @@ def resolve_studio_context(task: dict) -> dict:
     mode = column(r"jutsu\s*mode|^mode$")
     action = column(r"action.*prompt|swap\s*prompt|prompt|appearance")
     still = task.get("capability") == "image_gen"
+    asset_row = row.get("tab_key") in ("soul-cast", "assets", "asset-sheet")
+    # SPEC_19 R11: the episode look and the shot's override arrive compiled (story_look.source_look, written into the
+    # source by the Story API and by flow_runner); this only places them. A still takes the Film line without tempo.
+    # An asset's reference render stays neutral, and the episode camera stands in only for an empty Optical Rig cell.
+    look = {} if asset_row else _source_look(source)
+    if not optical and look.get("camera"):
+        optical = look["camera"]
+    film = look.get("filmStill", look.get("film", "")) if still else look.get("film", "")
     # SPEC_19 R10: catalog #move tags become their sentences where they stand (a still drops them); once a prompt has
     # one, the tags are the shot's camera movement and the Camera Motion column no longer applies.
     camera_moves = [item_id for _, item_id in story_look.move_tokens(action)]
@@ -356,12 +375,12 @@ def resolve_studio_context(task: dict) -> dict:
     action = story_take_refs.expand(action, take_refs)
     # Text-to-image encoders read "Optical Rig: RED ..." / "Static Tripod" as props to draw; a still has no camera move.
     parts = [f"{label}: {value.rstrip('.')}." for label, value in
-             (("Optical Rig", "" if still else optical), ("Camera Movement", "" if still else motion), ("Mode", mode)) if value]
+             (("Optical Rig", "" if still else optical), ("Camera Movement", "" if still else motion), ("Film", film),
+              ("Color", look.get("color", "")), ("Lighting", look.get("light", "")), ("Mode", mode)) if value]
     if still and optical:
         # Image models letter camera brands onto props ("RED V-RAPTOR" on a recorder); keep the lens look only.
         lens = optical.split("/")[-1].strip().rstrip(".")
         parts.insert(0, f"Cinematic film still, {lens} lens look; no camera equipment or brand text in frame.")
-    asset_row = row.get("tab_key") in ("soul-cast", "assets", "asset-sheet")
     if resolved and not asset_row:
         parts.append("References: " + "; ".join(f"{a['asset_id']} ({a['name']}): {_appearance(a['appearance_prompt'])}" for a in resolved) + ".")
     # Fallback is scoped to this row; full tab text can include unrelated shots/assets.
@@ -437,6 +456,7 @@ def resolve_studio_context(task: dict) -> dict:
            "action_prompt": action,
            "seed": _take_seed(next((a["seed"] for a in resolved if a["seed"] is not None), None), source.get("take")),
            "optical_rig": optical, "camera_motion": motion, "camera_moves": camera_moves, "jutsu_mode": mode,
+           "look_film": film, "look_color": look.get("color", ""), "look_light": look.get("light", ""),
            "resolved_assets": resolved, "asset_map": asset_map,
            "excluded_refs": excluded_refs, "slot_plan": planned_slots,
            "asset_images": references, "reference_image_urls": references,

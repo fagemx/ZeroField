@@ -13,9 +13,11 @@ shot; it pins nothing. Approving writes the value through the field's own revisi
 409 with a sentence that names the shot (localized through ``project_docs.error_messages``), so the proposal stays
 pending like any other conflicting chat or dispatch proposal.
 
-The fields a proposal may change are ``FIELDS``. ``previsPlan`` is the first. ``look`` joins once SPEC_19's
-``project_docs/story_look.py`` is on main: give it a ``Field`` with its revision reader, validator, revisioned writer
-and its own conflict and invalid sentences (each with a pattern in ``project_docs/error_messages.py``).
+The fields a proposal may change are ``FIELDS``: ``previsPlan`` and ``look`` (SPEC_19 R11, the shot's look override).
+A ``look`` value is a change as ``PUT /shots/{id}/look`` takes it, ``{genre?, era?, tempo?, palette?, light?}`` with an
+option id or null ("back to the episode") per kind, checked by ``story_openapi.valid_shot_look`` and written by
+``story_openapi.put_shot_look`` against ``lookRevision``. Each field has its own conflict and invalid sentences, each
+with a pattern in ``project_docs/error_messages.py``; a new field needs the same.
 
 ``propose`` (or ``propose_from_tool`` with a tool context) is the one way in, and it validates the value when the
 proposal is made. The crew's way in is ``propose_previs_ops`` (SPEC_20 R27, ``project_assistant/previs_ops.py``): its
@@ -84,6 +86,18 @@ def _plan_write(conn, slug, shot_id, value, base, actor_id):
     return story_previs.put(conn, slug, shot_id, value, base, actor_id)["planRevision"]  # validates against the cast sheet
 
 
+def _look_revision(conn, shot_id):
+    return story.look_revision(story.shot_meta(conn, shot_id))
+
+
+def _look_validate(conn, slug, value):
+    story.valid_shot_look(value)
+
+
+def _look_write(conn, slug, shot_id, value, base, actor_id):
+    return story.put_shot_look(conn, slug, shot_id, value, base)  # checks the value against the catalog again
+
+
 FIELDS = {
     story_previs.FIELD: Field(
         name=story_previs.FIELD, noun="3D plan", revision=_plan_revision, validate=_plan_validate, write=_plan_write,
@@ -91,7 +105,12 @@ FIELDS = {
         conflict=("The 3D plan of shot {label} changed after this proposal was made (revision {base}, now {current}). "
                   "Nothing was applied; generate a new proposal."),
         invalid="The 3D plan proposed for shot {label} no longer fits the production: {reason} Nothing was applied; generate a new proposal."),
-    # "look": Field(...) once SPEC_19's story_look.py is on main (see the module docstring).
+    "look": Field(
+        name="look", noun="look", revision=_look_revision, validate=_look_validate, write=_look_write,
+        conflict_code=story.LOOK_CONFLICT,
+        conflict=("The look of shot {label} changed after this proposal was made (revision {base}, now {current}). "
+                  "Nothing was applied; generate a new proposal."),
+        invalid="The look proposed for shot {label} no longer fits the look catalog: {reason} Nothing was applied; generate a new proposal."),
 }
 
 
