@@ -6,12 +6,10 @@ import copy
 import json
 import os
 from pathlib import Path
-import secrets
 import threading
-import uuid
 
 from openbench_data import resource_path
-from project_assistant import flow_runner, limb_worker, limbs, worker as assistant_worker
+from project_assistant import flow_runner, limb_worker, limbs, local_workers, worker as assistant_worker
 from project_docs import auth, doc_schema, http, repository as repo, service, templates
 import server
 
@@ -311,20 +309,22 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
     }
 
 
-def register_workers(conn, slug, configs, actor_id):
-    """Stable built-in worker identities, with fresh in-memory credentials each launch."""
-    registered = {}
-    for key, capabilities in configs.items():
-        identifier = str(uuid.uuid5(uuid.NAMESPACE_URL, f"zerofield-studio:{slug}:{key}"))
-        token = secrets.token_urlsafe(32)
-        with conn.cursor() as cur:
-            cur.execute("""INSERT INTO projectops.agent_limb(id,name,capabilities,allowed_projects,token_hash,created_by)
-                VALUES(%s,%s,%s::jsonb,%s::jsonb,%s,%s) ON CONFLICT(id) DO UPDATE SET
-                token_hash=EXCLUDED.token_hash,enabled=TRUE,last_seen_at=NULL
-                RETURNING id""", (identifier, "ZeroField Studio / " + key, json.dumps(list(capabilities)),
-                json.dumps([slug]), limbs.token_hash(token), actor_id))
-        registered[key] = {"id": identifier, "token": token, "capabilities": capabilities}
-    return registered
+SHOWCASE_STAGES = {"image", "cinema", "v2v", "split", "assemble", "extract", "structure"}  # seed_showcase_pipeline's base
+
+
+def register_workers(conn, configs, actor_id):
+    """Stable built-in worker identities serving every production on this server, with fresh in-memory credentials
+    each launch (SPEC_20 R14)."""
+    return local_workers.register(conn, configs, actor_id)
+
+
+def _launch_actor(conn):
+    """Outside development mode the earliest active showrunner (else any active member) owns the worker rows."""
+    with conn.cursor() as cur:
+        cur.execute("""SELECT actor_id::text FROM projectops.member WHERE status='active'
+                       ORDER BY role<>'admin',created_at,actor_id LIMIT 1""")
+        row = cur.fetchone()
+    return row[0] if row else None
 
 
 def seed_showcase_pipeline(conn, slug, registered, actor_id):
@@ -386,6 +386,9 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
         "edges": [edge for edge in legacy_edges if edge["source"] != "v2v"] + [
             {"source": a, "target": b} for a, b in zip(["extract", "structure", "v2v"], ["structure", "v2v", "split"])]})
     known = [original, legacy, without_anchor, previous, without_anchor_previous]
+    default = local_workers.studio_pipeline(conn, slug, registered)  # a showcase created while local workers existed
+    if default:
+        known.append(default)
     lanes = []  # (audit action, chain) appended once to a pipeline the user has rearranged
     if "motion" in registered:
         # Fourth lane: previs-driven shots (grey blockout -> motion pass -> look key -> look pass).
@@ -517,12 +520,7 @@ def main(argv=None):
                 server.seed_demo_data(conn)
                 seed_showcase_media(conn)
                 seed_showcase_previs(conn)
-                configurations = worker_configs(args.router_url or args.comfy_url or limb_worker.comfy_base_url({}, args.platform),
-                                                platform=args.platform,
-                                               api_key_env="COMFY_API_KEY" if os.environ.get("COMFY_API_KEY") else None)
-                configurations = load_worker_configs(args.worker_config, configurations)
-                registered = register_workers(conn, SHOWCASE_SLUG, configurations, server.DEMO_MEMBERS[0]["actor_id"])
-                seed_showcase_pipeline(conn, SHOWCASE_SLUG, registered, server.DEMO_MEMBERS[0]["actor_id"])
+                actor = server.DEMO_MEMBERS[0]["actor_id"]
             else:
                 repo.ensure_schema(conn)
                 with conn.cursor() as cur:
@@ -533,6 +531,23 @@ def main(argv=None):
                     if not actor:
                         parser.error("First start in header mode requires OPENBENCH_ADMIN_ID")
                     repo.upsert_member(conn, actor, os.environ.get("OPENBENCH_ADMIN_NAME", "Admin"), "admin")
+                actor = _launch_actor(conn)
+            if not args.no_worker and actor:
+                # One set of local media workers serves every production on this server, in every auth mode.
+                configurations = worker_configs(args.router_url or args.comfy_url or limb_worker.comfy_base_url({}, args.platform),
+                                                platform=args.platform,
+                                               api_key_env="COMFY_API_KEY" if os.environ.get("COMFY_API_KEY") else None)
+                configurations = load_worker_configs(args.worker_config, configurations)
+                registered = register_workers(conn, configurations, actor)
+            elif not args.no_worker:
+                print("No active crew member owns the media workers; none were registered.", flush=True)
+            if cfg["mode"] == "dev":
+                # --no-worker leaves worker rows untouched; the showcase binds to those an earlier launch registered.
+                workers = registered or local_workers.existing(conn, SHOWCASE_SLUG)
+                if SHOWCASE_STAGES <= set(workers):
+                    seed_showcase_pipeline(conn, SHOWCASE_SLUG, workers, actor)
+            if registered:
+                local_workers.adopt_template_pipelines(conn, service.Identity(actor, "ZeroField Studio", "admin"), registered)
             conn.commit()
         finally:
             conn.close()

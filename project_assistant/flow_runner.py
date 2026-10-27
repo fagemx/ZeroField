@@ -7,7 +7,7 @@ import re
 import secrets
 import uuid
 
-from project_assistant import camera_fidelity, limbs, privacy, store, table_edits
+from project_assistant import camera_fidelity, limbs, local_workers, privacy, store, table_edits
 from project_docs import repository as repo, service
 from project_docs.doc_schema import column_ids
 
@@ -233,8 +233,9 @@ def _node_connected(conn, slug, node, workers):
     if node.get('agent_key'):
         from project_assistant.orchestration_flow import profile_connected
         return profile_connected(conn,slug,node['agent_key'])
+    # A launcher worker runs one fixed graph, so it serves only steps bound to it (see claim).
     return any(node['capability'] in w['capabilities'] and
-               (not node.get('limb_id') or node['limb_id']==w['id']) for w in workers)
+               (node['limb_id']==w['id'] if node.get('limb_id') else not local_workers.is_local(w['id'])) for w in workers)
 
 
 def save_definition(conn, me, slug, key, body):
@@ -927,14 +928,17 @@ def claim(conn, worker):
         cur.execute(f"""SELECT {_RUN_COLUMNS} FROM projectops.flow_run WHERE status IN ('queued','running','awaiting_approval')
                         AND project_slug=ANY(%s) ORDER BY created_at FOR UPDATE SKIP LOCKED""", (worker["allowed_projects"],))
         runs = [_run(row) for row in cur.fetchall()]
+    # The launcher's workers serve every production with one fixed graph each: they take only tasks bound to them,
+    # never an unbound step another production meant for a worker of its own choosing.
+    bound_only = local_workers.is_local(worker["id"])
     for run in runs:
         _recover(conn, run)
         with conn.cursor() as cur:
             cur.execute(f"""SELECT {_TASK_COLUMNS} FROM projectops.limb_task WHERE run_id=%s AND status='queued'
-                            AND capability=ANY(%s) AND (assigned_limb IS NULL OR assigned_limb=%s)
+                            AND capability=ANY(%s) AND (assigned_limb=%s OR (assigned_limb IS NULL AND NOT %s))
                             AND NOT (node_id=ANY(%s))
                             ORDER BY created_at,node_id,row_id FOR UPDATE SKIP LOCKED LIMIT 1""",
-                        (run["id"], worker["capabilities"], worker["id"],[n['id'] for n in run['definition']['nodes'] if n.get('agent_key')]))
+                        (run["id"], worker["capabilities"], worker["id"], bound_only, [n['id'] for n in run['definition']['nodes'] if n.get('agent_key')]))
             row = cur.fetchone()
             if not row:
                 continue

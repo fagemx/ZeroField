@@ -143,8 +143,8 @@ class ShowcaseDatabaseTests(unittest.TestCase):
     def test_workers_keep_ids_rotate_tokens_and_bind_disjoint_pipeline_branches(self):
         configs = studio.worker_configs("http://127.0.0.1:8188")
         studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
-        first = studio.register_workers(self.conn, self.slug, configs, self.actor)
-        again = studio.register_workers(self.conn, self.slug, configs, self.actor)
+        first = studio.register_workers(self.conn, configs, self.actor)
+        again = studio.register_workers(self.conn, configs, self.actor)
         self.assertEqual({k: v["id"] for k, v in first.items()}, {k: v["id"] for k, v in again.items()})
         self.assertNotEqual(first["cinema"]["token"], again["cinema"]["token"])
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, again, self.actor))
@@ -170,17 +170,17 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         configs = studio.worker_configs("http://127.0.0.1:8188")
         studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
         older = {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look", "swapkey", "swap", "layoutkey", "layout")}
-        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, self.slug, older, self.actor), self.actor))
+        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, older, self.actor), self.actor))
         self.assertNotIn("motion", {n["id"] for n in flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]["nodes"]})
-        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, self.slug, configs, self.actor), self.actor))
+        self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, studio.register_workers(self.conn, configs, self.actor), self.actor))
         self.assertIn("look", {n["id"] for n in flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]["nodes"]})
 
     def test_four_lane_pipeline_gains_the_object_swap_lane_for_swap_rows_only(self):
         configs = studio.worker_configs("http://127.0.0.1:8188")
         studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
-        older = studio.register_workers(self.conn, self.slug, {k: v for k, v in configs.items() if k not in ("swapkey", "swap", "layoutkey", "layout")}, self.actor)
+        older = studio.register_workers(self.conn, {k: v for k, v in configs.items() if k not in ("swapkey", "swap", "layoutkey", "layout")}, self.actor)
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, older, self.actor))
-        everyone = studio.register_workers(self.conn, self.slug, configs, self.actor)
+        everyone = studio.register_workers(self.conn, configs, self.actor)
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, everyone, self.actor))
         graph = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]
         nodes = {n["id"]: n for n in graph["nodes"]}
@@ -197,9 +197,9 @@ class ShowcaseDatabaseTests(unittest.TestCase):
     def test_five_lane_pipeline_gains_the_layout_lane(self):
         configs = studio.worker_configs("http://127.0.0.1:8188")
         studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
-        older = studio.register_workers(self.conn, self.slug, {k: v for k, v in configs.items() if k not in ("layoutkey", "layout")}, self.actor)
+        older = studio.register_workers(self.conn, {k: v for k, v in configs.items() if k not in ("layoutkey", "layout")}, self.actor)
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, older, self.actor))
-        everyone = studio.register_workers(self.conn, self.slug, configs, self.actor)
+        everyone = studio.register_workers(self.conn, configs, self.actor)
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, everyone, self.actor))
         graph = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")["definition"]
         nodes = {n["id"]: n for n in graph["nodes"]}
@@ -210,13 +210,13 @@ class ShowcaseDatabaseTests(unittest.TestCase):
     def test_rearranged_pipeline_gets_the_previs_lane_appended_once(self):
         configs = studio.worker_configs("http://127.0.0.1:8188")
         studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)
-        older = studio.register_workers(self.conn, self.slug, {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look", "swapkey", "swap", "layoutkey", "layout")}, self.actor)
+        older = studio.register_workers(self.conn, {k: v for k, v in configs.items() if k not in ("motion", "lookkey", "look", "swapkey", "swap", "layoutkey", "layout")}, self.actor)
         studio.seed_showcase_pipeline(self.conn, self.slug, older, self.actor)
         current = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")
         moved = copy.deepcopy(current["definition"]); moved["nodes"][0]["x"] += 37  # the user tidied the layout
         flow_runner.save_definition(self.conn, service.Identity(self.actor, "Alex", "admin"), self.slug, "comfy-pipeline",
                                     {"revision": current["revision"], "definition": moved})
-        everyone = studio.register_workers(self.conn, self.slug, configs, self.actor)
+        everyone = studio.register_workers(self.conn, configs, self.actor)
         self.assertTrue(studio.seed_showcase_pipeline(self.conn, self.slug, everyone, self.actor))
         after = flow_runner.definition(self.conn, self.slug, "comfy-pipeline")
         nodes = {n["id"]: n for n in after["definition"]["nodes"]}
