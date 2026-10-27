@@ -47,6 +47,8 @@ export function stageShots(parsed, rows = parsed.rows, assetLookup = null, shotI
     slate: { motion: text(row, motion), rig: text(row, rig), action: text(row, action) },
     setAsset: setAsset(row),
     previsPlan: shotInfo[row.rid]?.previsPlan || null,
+    // SPEC_20 R26: a story shot stores its full plan by revision (the stage reads the plan itself from the shot's previs-plan route).
+    shotId: shotInfo[row.rid]?.shotId || null, previsRevision: shotInfo[row.rid]?.previsPlanRevision ?? null, previsStored: Boolean(shotInfo[row.rid]?.previsPlanStored),
   }));
 }
 // A shot's stages as bench columns and the links between them: one source fans out to every control pass,

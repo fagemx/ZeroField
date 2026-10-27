@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useLocale } from '../i18n/react.jsx';
 import { t as uiText } from '../i18n/index.js';
 import { ACTIONS, DURATIONS, FACINGS, FPS, HEIGHT, LENSES, MOODS, MOVES, SETS, WIDTH, cameraKeys, defaultPlan, describePlan, framesOf, sampleCamera, verticalFov } from './plan.js';
-import { resolveShotPlan } from './storyPlan.js';
+import { addCastMember, codesOnSet, loadPlan, plansToLoad, readDraft, removeCastMember, resolveShotPlan, samePlan, savePlan, setCastCode, slateFromPlan, storable } from './storyPlan.js';
+import { storyRequest } from '../storyModel.js';
 import { buildStage, prepareRenderer, shotGuides } from './scene.js';
 import { encodeCanvas, fetchPlan } from './webm.js';
 import { drawSkeleton, poseKeypoints } from './skeleton.js';
@@ -26,9 +27,9 @@ const save = (blob, name) => {  // a local file to the browser's downloads
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 const draftKey = (slug, rid) => `zf.previs:${slug}:${rid}`;
-function loadDraft(slug, rid) { try { return JSON.parse(localStorage.getItem(draftKey(slug, rid)) || 'null'); } catch { return null; } }
-function saveDraft(slug, rid, plan) {  // unrendered edits stay in this browser; a render stores its plan in the project
-  try { if (plan) localStorage.setItem(draftKey(slug, rid), JSON.stringify(plan)); else localStorage.removeItem(draftKey(slug, rid)); } catch { /* optional */ }
+function loadDraft(slug, rid) { try { return readDraft(JSON.parse(localStorage.getItem(draftKey(slug, rid)) || 'null')); } catch { return null; } }
+function saveDraft(slug, rid, draft) {  // {plan, base}: edits not saved in the project yet stay in this browser (SPEC_20 R26)
+  try { if (draft) localStorage.setItem(draftKey(slug, rid), JSON.stringify(draft)); else localStorage.removeItem(draftKey(slug, rid)); } catch { /* optional */ }
 }
 const pick = (label, value, options, onChange, text) => <fieldset className="previs-field"><legend>{label}</legend>
   {options.map(o => <button type="button" key={o} aria-pressed={value === o} onClick={() => onChange(o)}>{text(o)}</button>)}</fieldset>;
@@ -36,13 +37,21 @@ const pick = (label, value, options, onChange, text) => <fieldset className="pre
 // The 3D stage of a slate: every shot in one set. Look through a shot's lens, see all shot cameras on an overhead
 // plan, frame custom paths in a free camera, play a shot or the whole scene, and render a shot's grey previs
 // (97 frames, 24 fps) into its Previs cell, its actor matte into Actor Matte and its pose skeleton into Pose Skeleton
-// (the Layout Render frees the actor and takes the acting from the skeleton). The render carries its plan, so the
-// project keeps it.
+// (the Layout Render frees the actor and takes the acting from the skeleton). A story shot's plan is saved in the project
+// with a revision (SPEC_20 R26): Save plan stores it, a render stores it first, and edits not saved yet are a draft in
+// this browser. The render still carries its plan in the WebM, the backup for shots outside the story sheets.
 export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, onDismissProposal, shots, focus, writable, busy, onRender, onMotion, onLayout, onShot }) {
   useLocale();
   const [rid, setRid] = useState(() => (shots.some(s => s.rid === focus?.rid) ? focus.rid : shots[0]?.rid));
-  const [drafts, setDrafts] = useState(() => Object.fromEntries(shots.map(s => [s.rid, loadDraft(slug, s.rid)]).filter(([, p]) => p)));
-  const [stored, setStored] = useState({}), [rendered, setRendered] = useState({});  // url -> plan in that file; rid -> plan rendered here
+  const [drafts, setDrafts] = useState(() => Object.fromEntries(shots.map(s => [s.rid, loadDraft(slug, s.rid)]).filter(([, d]) => d)));
+  const [embedded, setEmbedded] = useState({}), [rendered, setRendered] = useState({});  // url -> plan in that file; rid -> plan rendered here
+  // saved: rid -> the plan the project stores ({plan, revision, ...}); castOptions: the production's cast codes (SPEC_20 R29);
+  // conflict: a save someone else's revision refused ({rid, plan, currentRevision, stored}); synced: rid -> slate text written here.
+  const [saved, setSaved] = useState({}), [castOptions, setCastOptions] = useState(null), [conflict, setConflict] = useState(null);
+  const [saving, setSaving] = useState(false), [notice, setNotice] = useState(''), [synced, setSynced] = useState({});
+  const [loadFailed, setLoadFailed] = useState({}), [retries, setRetries] = useState(0);
+  const draftsNow = useRef(drafts), loading = useRef(new Set());
+  draftsNow.current = drafts;
   const [view, setView] = useState('lens'), [frame, setFrame] = useState(0), [playing, setPlaying] = useState(false);
   const [rendering, setRendering] = useState(false), [error, setError] = useState('');
   const [showDemo, setShowDemo] = useState(false), [demoPlan] = useState(createMotionDemoPlan);
@@ -52,29 +61,54 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
   const [, setMoved] = useState(0);  // changes when the overhead plan pans or zooms, so its drag handles are placed again
   useEffect(() => () => cancelAnimationFrame(bumping.current), []);
 
-  const planOf = s => resolveShotPlan(s, { draft: drafts[s.rid], stored: stored[s.previs], rendered: rendered[s.rid] });
+  const planOf = s => resolveShotPlan(s, { draft: drafts[s.rid]?.plan, stored: saved[s.rid]?.plan, embedded: embedded[s.previs], rendered: rendered[s.rid] });
   const shot = shots.find(s => s.rid === rid) || shots[0];
   const plan = showDemo ? demoPlan : shot ? planOf(shot) : defaultPlan(), frames = framesOf(plan);
   // A crew member's proposed camera for this shot: dashed on the plan, and one click puts the lens through it (a comparison, not a change).
   const ghost = showDemo || !shot || !proposals?.length ? null : ghostsFor(proposals, shots.filter(s => s.rid === shot.rid), tabKey, planOf)[0] || null;
   const [lookGhost, setLookGhost] = useState(false);
   useEffect(() => { if (!ghost) setLookGhost(false); }, [ghost?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
-  const statusOf = s => (drafts[s.rid] ? 'edited' : s.previs ? 'rendered' : 'none');
-  const edit = patch => { const next = { ...plan, ...patch }; saveDraft(slug, shot.rid, next); setDrafts(d => ({ ...d, [shot.rid]: next })); };
-  const discard = () => { saveDraft(slug, shot.rid, null); setDrafts(({ [shot.rid]: _, ...rest }) => rest); };
+  // A story shot's stored plan is known (or it has none), so what the stage shows is what an edit starts from and a save replaces.
+  const known = s => !storable(s) || (saved[s.rid] ? saved[s.rid].revision >= s.previsRevision : !s.previsStored);
+  const revisionOf = s => saved[s.rid]?.revision ?? s.previsRevision ?? 0;
+  // Saved in the project while its previs shows another plan, or none yet: render it before the motion pass.
+  const unrendered = s => storable(s) && Boolean(saved[s.rid]?.plan) && (!s.previs || (Boolean(embedded[s.previs]) && !samePlan(saved[s.rid].plan, embedded[s.previs])));
+  const statusOf = s => (drafts[s.rid] ? 'edited' : unrendered(s) ? 'saved' : s.previs ? 'rendered' : 'none');
+  const keepDraft = (id, draft) => { saveDraft(slug, id, draft); setDrafts(({ [id]: _, ...rest }) => (draft ? { ...rest, [id]: draft } : rest)); };
+  // An edit is a draft of the whole plan that remembers the stored revision it started from (its save names that revision).
+  const change = next => { if (known(shot)) keepDraft(shot.rid, { plan: next, base: drafts[shot.rid]?.base ?? revisionOf(shot) }); };
+  const edit = patch => change({ ...plan, ...patch });
+  const discard = () => keepDraft(shot.rid, null);
 
   useEffect(() => { if (focus && shots.some(s => s.rid === focus.rid)) setRid(focus.rid); }, [focus]);
   useEffect(() => { if (shot) onShot?.(shot.rid); }, [shot?.rid]);  // the sheet's current shot follows the stage
   const previsUrls = shots.map(s => s.previs).filter(Boolean).join('|');
-  useEffect(() => {  // plans stored in the rendered previs files
-    const urls = previsUrls.split('|').filter(u => u && !(u in stored));
+  useEffect(() => {  // plans carried in the rendered previs files
+    const urls = previsUrls.split('|').filter(u => u && !(u in embedded));
     if (!urls.length) return;
     let alive = true;
     Promise.all(urls.map(u => fetchPlan(u).catch(() => null))).then(plans => {
-      if (alive) setStored(old => ({ ...old, ...Object.fromEntries(urls.map((u, i) => [u, plans[i]])) }));
+      if (alive) setEmbedded(old => ({ ...old, ...Object.fromEntries(urls.map((u, i) => [u, plans[i]])) }));
     });
     return () => { alive = false; };
   }, [previsUrls]);
+  // Plans stored in the project: every stored one, a newer revision than the one held, and the shot on stage (its cast codes).
+  const keep = (id, state) => {
+    setSaved(old => (old[id]?.revision > state.revision ? old : { ...old, [id]: state }));
+    setCastOptions(state.castOptions);
+  };
+  const toLoad = plansToLoad(shots, saved, shot?.rid).filter(s => !loadFailed[s.rid]);
+  useEffect(() => {
+    for (const s of toLoad) {
+      const key = s.rid + ':' + s.previsRevision;
+      if (loading.current.has(key)) continue;
+      loading.current.add(key);
+      loadPlan(storyRequest, s.shotId).then(state => keep(s.rid, state))
+        .catch(e => setLoadFailed(old => ({ ...old, [s.rid]: e.message || String(e) })))
+        .finally(() => loading.current.delete(key));
+    }
+  }, [toLoad.map(s => s.rid + ':' + s.previsRevision).join('|'), retries]);
+  useEffect(() => setNotice(''), [shot?.rid]);  // a note on what was just done belongs to the shot it was done on
 
   useEffect(() => {  // one renderer; overhead pan/zoom drive an orthographic plan camera
     if (!host.current) return undefined;
@@ -229,9 +263,52 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
     const keys = cameraKeys(plan);
     edit({ keys: which === 'start' ? [key, keys[keys.length - 1]] : [keys[0], key] });
   };
+  // SPEC_20 R26: store a story shot's plan over revision base. The draft it saved goes; edits made while it was on its way stay
+  // a draft, now on top of the new revision. A refused revision becomes the conflict to settle; nothing is lost either way.
+  const persist = async (target, p, base) => {
+    setSaving(true); setError(''); setNotice('');
+    try {
+      const result = await savePlan(storyRequest, target.shotId, p, base);
+      if (!result.ok) { setConflict({ rid: target.rid, plan: p, ...result.conflict }); return false; }
+      setConflict(old => (old?.rid === target.rid ? null : old)); keep(target.rid, result.saved);
+      const draft = draftsNow.current[target.rid];
+      if (draft) keepDraft(target.rid, samePlan(draft.plan, p) ? null : { plan: draft.plan, base: result.saved.revision });
+      return true;
+    } catch (e) { setError(e.message || String(e)); return false; }
+    finally { setSaving(false); }
+  };
+  const savable = s => storable(s) && known(s) && (Boolean(drafts[s.rid]) || !samePlan(planOf(s), saved[s.rid]?.plan));
+  const savePlanNow = () => persist(shot, plan, drafts[shot.rid]?.base ?? revisionOf(shot));
+  const reloadSaved = () => {  // the conflict's way back: the stored plan, without this browser's draft
+    const { rid: id, stored } = conflict;
+    setConflict(null); keepDraft(id, null); keep(id, stored);
+  };
+  const overwrite = () => {  // the conflict's other way: this plan, over the revision that is stored now
+    const target = shots.find(s => s.rid === conflict.rid);
+    if (target) persist(target, conflict.plan, conflict.currentRevision);
+  };
+  // SPEC_20 R29: the slate's Optical Rig and Camera Motion say what the plan does (a person's direct edit of those two cells).
+  // What was written here stands in for the sheet's text until the sheet reloads with it (or with someone else's).
+  const sheetSlate = s => ({ opticalRig: s.slate?.rig ?? '', cameraMotion: s.slate?.motion ?? '' });
+  const slateOf = s => (synced[s.rid] && samePlan(synced[s.rid].from, sheetSlate(s)) ? synced[s.rid].fields : sheetSlate(s));
+  const slateText = shot && !showDemo && storable(shot) ? slateFromPlan(plan, { rig: slateOf(shot).opticalRig }) : null;
+  const slateDiffers = Boolean(slateText) && !samePlan(slateText, slateOf(shot));
+  const syncSlate = async () => {
+    const target = shot, fields = slateText;
+    setSaving(true); setError(''); setNotice('');
+    try {
+      await storyRequest(`/shots/${target.shotId}`, 'PATCH', fields);
+      setSynced(old => ({ ...old, [target.rid]: { fields, from: sheetSlate(target) } })); setNotice(uiText('stage.planSlateSynced'));
+    } catch (e) { setError(e.message || String(e)); }
+    finally { setSaving(false); }
+  };
   const render = async () => {
     const ctx = live.current, target = shot, p = plan;
-    setPlaying(false); setRendering(true); setError('');
+    setPlaying(false); setError('');
+    // A story shot's plan is stored before its render (when it is not stored as it is), so a previs always shows a stored plan.
+    if (!showDemo && storable(target) && (drafts[target.rid] || !samePlan(p, saved[target.rid]?.plan))
+      && !(await persist(target, p, drafts[target.rid]?.base ?? revisionOf(target)))) return;
+    setRendering(true);
     try {
       // Always the full canvas through the shot camera, whatever the viewport showed (the split view uses two).
       ctx.renderer.setScissorTest(false); ctx.renderer.setViewport(0, 0, WIDTH, HEIGHT);
@@ -255,8 +332,8 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
         skeleton = await encode(canvas, f => { ctx.stage.frame(f, p); drawSkeleton(pen, poseKeypoints(ctx.stage.scene, ctx.stage.camera)); });
       }
       if (await onRender(target, blob, matte, skeleton)) {
-        saveDraft(slug, target.rid, null);
-        setDrafts(({ [target.rid]: _, ...rest }) => rest); setRendered(r => ({ ...r, [target.rid]: p }));
+        if (!storable(target)) keepDraft(target.rid, null);  // a story shot's draft went when its plan was stored
+        setRendered(r => ({ ...r, [target.rid]: p }));
       }
     } catch (e) { setError(e.message || String(e)); }
     finally { setRendering(false); setView('lens'); }
@@ -283,6 +360,12 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
   const decide = async work => { setError(''); try { if (!(await work())) setError(uiText('shotProposal.failed')); } catch (e) { setError(e.message || String(e)); } };
   if (!shot) return <div className="sheet-empty"><p>{t('empty')}</p></div>;
   const layoutable = shot.matteCol >= 0 && shot.skeletonCol >= 0;  // the Layout Render binds both
+  const editable = writable && !rendering && known(shot), stale = Boolean(drafts[shot.rid]) || unrendered(shot);  // stale: the previs is not this plan
+  const stateLabel = state => (state === 'saved' ? uiText('stage.planStateSaved') : t('state_' + state));
+  // SPEC_20 R29: everyone on set with the cast code they play, chosen from the cast sheet (each code once per shot).
+  const onSet = [['actor', plan.code, uiText('stage.planActor')], ...(plan.cast || []).map((member, i) => [i, member.code, uiText('stage.planCastMember', { index: i + 1 })])];
+  const taken = codesOnSet(plan), free = (castOptions || []).filter(option => !taken.includes(option.code));
+  const storedNow = saved[shot.rid];
   return <div className="previs-stage" tabIndex={-1} onKeyDown={onKey}>
     <nav className="previs-shots" aria-label={t('shots')}>
       <h2>{t('shots')}</h2>
@@ -291,7 +374,7 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
         return <button type="button" key={s.rid} disabled={rendering} aria-current={!showDemo && s.rid === shot.rid} onClick={() => { setShowDemo(false); setPlaying(false); setFrame(0); setRid(s.rid); }}>
           {s.keyframe ? <img src={s.keyframe} alt="" loading="lazy" /> : <span className="previs-thumb" />}
           <span><b>{s.shot}</b><small>{t('move_' + (p.keys ? 'custom' : p.move))} · {p.lens}mm</small>
-            <small className={'previs-state ' + state}>{t('state_' + state)}</small></span>
+            <small className={'previs-state ' + state}>{stateLabel(state)}</small></span>
         </button>;
       })}
       <p className="previs-note">{t('keys')}</p>
@@ -313,7 +396,7 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
         </div>
         {pip && (view === 'free' || view === 'overhead') && <div className="previs-pip" aria-hidden="true"><span>{t('view_lens')}</span></div>}
         {(view === 'overhead' || view === 'split') && !showDemo && !rendering && <div className="plan-layer" role="group" aria-label={t('dragHint')}>
-          <PlanHandles plan={plan} project={project} unproject={unproject} writable={writable}
+          <PlanHandles plan={plan} project={project} unproject={unproject} writable={writable && known(shot)}
             onDummy={(id, point, options) => edit(moveDummy(plan, id, point, options))} onKey={(index, point, options) => edit(moveCameraKey(plan, index, point, options))} /></div>}
         {view === 'lens' && returnView ? <p className="previs-hint">{t('hint_return', { view: t('view_' + returnView) })}</p>
           : view !== 'lens' && <p className={'previs-hint' + (pip && view !== 'split' ? ' beside-pip' : '')}>{t('hint_' + view)}</p>}
@@ -325,14 +408,14 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
           valueText={f => `${f} · ${(f / FPS).toFixed(2)} s`} onChange={f => { setPlaying(false); setFrame(f); }} /></span>
         <span>{Math.min(frame, frames - 1)}/{frames - 1}</span>
       </div>
-      {!showDemo && <BeatTrack plan={plan} frames={frames} frame={Math.min(frame, frames - 1)} writable={writable && !rendering}
+      {!showDemo && <BeatTrack plan={plan} frames={frames} frame={Math.min(frame, frames - 1)} writable={editable}
         onEdit={edit} onSeek={f => { setPlaying(false); setFrame(f); }} />}
       <p className="previs-summary">{showDemo ? t('demoBeats') : describePlan(plan)}</p>
     </section>
     <aside className="previs-controls" aria-label={t('inspector')}>
       {showDemo ? <section className="previs-howto"><h3>{t('demoTitle')}</h3><p>{t('demoDescription')}</p><ol>{[1, 2, 3, 4].map(n => <li key={n}>{t('demoStep' + n)}</li>)}</ol></section>
         : <details className="previs-howto"><summary>{t('howto')}</summary><ol>{[1, 2, 3, 4, 5].map(n => <li key={n}>{t('step' + n)}</li>)}</ol></details>}
-      {!showDemo && <fieldset className="previs-fields" disabled={!writable || rendering}>
+      {!showDemo && <fieldset className="previs-fields" disabled={!editable}>
         {/* Switching to the parallax set hangs the shot's @SET image as its far card. */}
         {pick(t('set'), plan.set, SETS, v => edit({ set: v, ...(v === 'parallax' && shot.setAsset && !plan.layers ? { layers: [{ id: 'far', src: shot.setAsset.url }] } : {}) }), v => t('set_' + v))}
         {plan.set === 'observatory' && pick(t('beacon'), plan.beacon !== false, [true, false], v => edit({ beacon: v }), v => t(v ? 'beacon_on' : 'beacon_off'))}
@@ -343,6 +426,21 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
         {pick(t('lens'), plan.lens, LENSES, v => edit({ lens: v }), v => `${v}mm`)}
         {pick(t('duration'), plan.seconds, DURATIONS, v => edit({ seconds: v }), v => `${v} s`)}
         {pick(t('light'), plan.mood, MOODS, v => edit({ mood: v }), v => t('mood_' + v))}
+        {storable(shot) && castOptions && <fieldset className="previs-field previs-cast"><legend>{uiText('stage.planOnSet')}</legend>
+          {onSet.map(([who, code, label]) => <label key={who}><span className="previs-note">{label}</span>{' '}
+            <select value={code || ''} onChange={e => change(setCastCode(plan, who, e.target.value))}>
+              <option value="">{uiText('stage.planCastNone')}</option>
+              {code && !castOptions.some(option => option.code === code) && <option value={code}>{code} · {uiText('stage.castUnknown')}</option>}
+              {castOptions.map(option => <option key={option.code} value={option.code} disabled={option.code !== code && taken.includes(option.code)}>{option.code} · {option.name}</option>)}
+            </select>
+            {who !== 'actor' && <button type="button" aria-label={uiText('stage.planCastRemove', { index: who + 1 })} onClick={() => change(removeCastMember(plan, who))}>×</button>}
+          </label>)}
+          {free.length > 0 && (plan.cast || []).length < 8 && <select value="" aria-label={uiText('stage.planCastAdd')} onChange={e => e.target.value && change(addCastMember(plan, e.target.value))}>
+            <option value="">{uiText('stage.planCastAdd')}</option>
+            {free.map(option => <option key={option.code} value={option.code}>{option.code} · {option.name}</option>)}
+          </select>}
+          {!castOptions.length && <p className="previs-note">{uiText('stage.planCastEmpty')}</p>}
+        </fieldset>}
         {/* Only the framing actions that can act now (CozyClay R2/R3): set start/end in the free view, otherwise one
             button that opens it; the preset and discard only once there is a path or an edit to undo. */}
         <fieldset className="previs-field"><legend>{t('framing')}</legend>
@@ -354,7 +452,7 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
           {drafts[shot.rid] && <button type="button" onClick={discard}>{t('discard')}</button>}
         </fieldset>
       </fieldset>}
-      {!showDemo && <CameraMove plan={plan} frames={frames} frame={Math.min(frame, frames - 1)} writable={writable && !rendering} onEdit={edit} />}
+      {!showDemo && <CameraMove plan={plan} frames={frames} frame={Math.min(frame, frames - 1)} writable={editable} onEdit={edit} />}
       {ghost && <section className="previs-proposal" aria-label={uiText('shotProposal.title')}>
         <h3>{uiText('shotProposal.title')}</h3>
         <p className="previs-note">{t('ghostLegend', { shot: ghost.label })}</p>
@@ -372,18 +470,36 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
           <ul>{qa.groups.map(g => <li key={g.kind + g.subject}>
             <b>{t('qaIssue', { kind: g.kind, subject: g.subject, worst: g.worst, frame: g.worstFrame })}</b><small>{g.hint}</small></li>)}</ul>
         </>}
-        {plan.fix ? <p className="previs-note">{t('autoFixOn')}{writable && !showDemo && <> <button type="button" className="previs-link" disabled={rendering} onClick={() => edit({ fix: undefined })}>{t('autoFixOff')}</button></>}</p>
-          : !qa.ok && writable && !showDemo && <button type="button" className="previs-motion" disabled={rendering} onClick={() => edit({ fix: AUTO_FIX })}>{t('autoFix')}</button>}
+        {plan.fix ? <p className="previs-note">{t('autoFixOn')}{writable && !showDemo && <> <button type="button" className="previs-link" disabled={!editable} onClick={() => edit({ fix: undefined })}>{t('autoFixOff')}</button></>}</p>
+          : !qa.ok && writable && !showDemo && <button type="button" className="previs-motion" disabled={!editable} onClick={() => edit({ fix: AUTO_FIX })}>{t('autoFix')}</button>}
       </section>}
+      {/* SPEC_20 R26: someone stored another revision since this plan's edits began. Nothing is lost: reload the stored one, or save this one over it. */}
+      {!showDemo && conflict?.rid === shot.rid && <section className="previs-proposal" role="alert" aria-label={uiText('stage.planConflictTitle')}>
+        <h3>{uiText('stage.planConflictTitle')}</h3>
+        <p className="previs-note">{uiText('stage.planConflict', { revision: conflict.currentRevision })}</p>
+        <div className="previs-proposal-actions">
+          <button type="button" className="apply" disabled={saving || rendering} onClick={reloadSaved}>{uiText('stage.planReload')}</button>
+          {writable && <button type="button" disabled={saving || rendering} onClick={overwrite}>{uiText('stage.planOverwrite')}</button>}
+        </div>
+      </section>}
+      {!showDemo && loadFailed[shot.rid] && <p className="sheet-save-error" role="alert">{uiText('stage.planLoadFailed', { message: loadFailed[shot.rid] })}{' '}
+        <button type="button" className="previs-link" onClick={() => { setLoadFailed(({ [shot.rid]: _, ...rest }) => rest); setRetries(n => n + 1); }}>{uiText('stage.planRetry')}</button></p>}
       {error && <p className="sheet-save-error" role="alert">{error}</p>}
-      {(writable || showDemo) && <button type="button" className="primary previs-render" disabled={busy || rendering} onClick={render}>
+      {(writable || showDemo) && <button type="button" className="primary previs-render" disabled={busy || rendering || saving || (!showDemo && !known(shot))} onClick={render}>
         {rendering ? <>{t('rendering')} <span ref={progress} /></> : showDemo ? t('demoDownload') : t('render')}</button>}
-      {!showDemo && writable && onMotion && <button type="button" className="previs-motion" disabled={busy || rendering || !shot.previs || !!drafts[shot.rid]} onClick={() => onMotion(shot)}>{t('motion')}</button>}
+      {!showDemo && writable && storable(shot) && <button type="button" className="previs-motion" title={uiText('stage.planSaveHint')}
+        disabled={busy || rendering || saving || !savable(shot)} onClick={savePlanNow}>{saving ? uiText('stage.planSaving') : savable(shot) ? uiText('stage.planSave') : uiText('stage.planSaved')}</button>}
+      {!showDemo && storable(shot) && <p className="previs-note">{!known(shot) ? uiText('stage.planLoading') : drafts[shot.rid] ? uiText('stage.planUnsaved')
+        : storedNow?.plan ? uiText('stage.planStored', { revision: storedNow.revision }) : uiText('stage.planNotStored')}</p>}
+      {!showDemo && writable && slateDiffers && <button type="button" className="previs-motion" title={uiText('stage.planSyncSlateHint', { rig: slateText.opticalRig, motion: slateText.cameraMotion })}
+        disabled={busy || rendering || saving} onClick={syncSlate}>{uiText('stage.planSyncSlate')}</button>}
+      {notice && <p className="previs-note" role="status">{notice}</p>}
+      {!showDemo && writable && onMotion && <button type="button" className="previs-motion" disabled={busy || rendering || !shot.previs || stale} onClick={() => onMotion(shot)}>{t('motion')}</button>}
       {!showDemo && writable && onLayout && layoutable && <button type="button" className="previs-motion" title={t('layoutHint')}
-        disabled={busy || rendering || !shot.matte || !shot.skeleton || !!drafts[shot.rid]} onClick={() => onLayout(shot)}>{t('layout')}</button>}
+        disabled={busy || rendering || !shot.matte || !shot.skeleton || stale} onClick={() => onLayout(shot)}>{t('layout')}</button>}
       <button type="button" className="previs-motion" title={t('keyframePackHint')} disabled={rendering} onClick={exportPack}>{t('keyframePack')}</button>
-      {!showDemo && writable && onMotion && (!shot.previs || drafts[shot.rid]) && <p className="previs-note">{t('renderFirst')}</p>}
-      {!showDemo && writable && onLayout && layoutable && shot.previs && (!shot.matte || !shot.skeleton) && !drafts[shot.rid] && <p className="previs-note">{t('renderMatte')}</p>}
+      {!showDemo && writable && onMotion && (!shot.previs || stale) && <p className="previs-note">{t('renderFirst')}</p>}
+      {!showDemo && writable && onLayout && layoutable && shot.previs && (!shot.matte || !shot.skeleton) && !stale && <p className="previs-note">{t('renderMatte')}</p>}
       <p className="previs-note">{showDemo ? t('demoLocal') : t('note')}</p>
     </aside>
   </div>;
