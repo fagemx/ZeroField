@@ -256,6 +256,15 @@ class StoryCutsTests(unittest.TestCase):
         self.assertEqual(story_cuts.dispatch(self.conn, self.me, "POST", "cut-checks", ep, {"pairs": None}, actions)["queued"], 0)
         self.assertEqual(len(actions), 1)  # nothing new queued: no wake-up
 
+    def test_the_episode_routes_reach_the_cut_handler(self):
+        self.adopt("S01", self.video("a"))
+        self.adopt("S02", self.video("b"))
+        path, actions = f"/episodes/ep_{self.slug}_01/", []
+        listed = story.dispatch(self.conn, self.me, "GET", path + "cuts", {}, {}, actions)
+        self.assertEqual([c["toShotIndex"] for c in listed["items"]], ["S02", "S03"])
+        queued = story.dispatch(self.conn, self.me, "POST", path + "cut-checks", {}, {}, actions)
+        self.assertEqual((queued["queued"], actions), (1, [grader.kick]))
+
     def test_automatic_checks_after_an_adoption_are_off_until_the_production_opts_in(self):
         for code in ("S01", "S02", "S03"):
             self.adopt(code, self.video(code))

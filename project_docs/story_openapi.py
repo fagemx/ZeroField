@@ -1422,6 +1422,11 @@ def dispatch(conn, me, method, path, body, query, actions):
         ep = episode(conn, parts[1]); slug = ep["slug"]
         authorize(conn, me, slug, write=method != "GET")
         tail = "/".join(parts[2:])
+        if tail in ("cuts", "cut-checks"):
+            from project_docs import story_cuts
+            result = story_cuts.dispatch(conn, me, method, tail, ep, body, actions)
+            if result is not None:
+                return result
         if not tail:
             if method == "GET":
                 return episode_view(conn, ep)
