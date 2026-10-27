@@ -5,9 +5,10 @@ production state, its category, where it is exposed, the built-in crew roles tha
 and its handler as a lazy "module:function" reference. The older tool tables are derived from this one,
 so existing imports keep working: tool_specs (TOOLS, STUDIO_SCHEMAS, DEFAULT_POLICIES, MUTATING_TOOLS,
 TOOL_NAMES, DELEGATION_TOOLS), the agent_policy deny lists, studio_tools.HANDLERS and EXTERNAL_TOOLS,
-tool_host.LABELS, agent_console_store.STUDIO_TOOLS, agent_registry.default_tools and the MCP tools/list
-filter. validate_args() checks any tool's arguments against its schema; agent_policy.authorize_tool runs
-it for every tool on every transport.
+tool_host.LABELS, agent_console_store.STUDIO_TOOLS, agent_registry.default_tools, the MCP tools/list
+filter and what zerofield-mcp lists to service-account tokens (ZEROFIELD_MCP, SPEC_20 R30).
+validate_args() checks any tool's arguments against its schema; agent_policy.authorize_tool runs it for
+every tool on every transport.
 
 Adding a tool
 1. Declare it once below, or in a data-only module named in EXTENSIONS (see there).
@@ -77,6 +78,10 @@ class Tool:
     external: bool = False  # handler runs outside the shared transaction (inference, FFmpeg, probes)
     requires: tuple = ()  # multiagent_config switches that must be set
     grants: tuple = ()  # built-in roles that receive the tool by default
+    # Listed by zerofield-mcp to external service-account tokens (SPEC_20 R30), still narrowed per token.
+    # None derives it (see zerofield_exposed): read-only tools outside the legacy/delegation categories that
+    # need no review turn. Writes and legacy tools opt in explicitly with True.
+    zerofield_mcp: bool | None = None
 
     def spec(self) -> dict:
         """The tool-host/MCP shape, identical to the historic tool_specs.TOOLS entries."""
@@ -156,6 +161,11 @@ def _check_declaration(tool: Tool) -> None:
         bad('only Console catalog tools can be granted by default.')
     if tool.primary_only and set(tool.grants) - set(PRIMARY_ROLES):
         bad('a primary-only tool can only be granted to primary roles.')
+    if tool.zerofield_mcp is not None and type(tool.zerofield_mcp) is not bool:
+        bad('zerofield_mcp must be a boolean or None.')
+    if tool.zerofield_mcp and (not tool.mcp or tool.policy != 'auto' or tool.requires or tool.primary_only):
+        # An external call has no review turn, crew switches or primary role to satisfy.
+        bad('a zerofield-mcp tool must be MCP-exposed, default to auto, and need no switches or primary role.')
     _check_schema(tool, tool.schema, 'inputSchema', top=True)
 
 
@@ -305,14 +315,15 @@ register(
                   "row_edits": {"type": "array", "items": _obj({"row_id": _S, "cells": {"type": "object", "additionalProperties": {"type": "string"}}}, ["row_id", "cells"])},
                   "new_rows": {"type": "array", "items": {"type": "array", "items": _S}}}, ["tab_key", "row_edits"]),
             annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
-            mutating=True, analysis_only=False, label="Propose Slate Changes", grants=('coordinator', 'sheet_ops')),
+            mutating=True, analysis_only=False, label="Propose Slate Changes", grants=('coordinator', 'sheet_ops'),
+            zerofield_mcp=True),
     _legacy("list_pages", "列出專案頁所有分頁：代號、名稱、第一段說明。", _obj({}),
-            annotations=_RO, label="Production Pages", grants=_EVERYONE),
+            annotations=_RO, label="Production Pages", grants=_EVERYONE, zerofield_mcp=True),
     _legacy("read_page",
             "讀專案頁某一個分頁的最新內容。key 用 list_pages 的代號（也可以寫分頁名稱）；section 可以只讀某一段"
             "（段落標題的關鍵字）。狀態會顯示成〔等待回覆〕這種樣子，可填的空格顯示成（空白，可填）。",
             _obj({"key": _S, "section": _S, "offset": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 30}}, ["key"]),
-            annotations=_RO, label="Production Page", grants=_EVERYONE),
+            annotations=_RO, label="Production Page", grants=_EVERYONE, zerofield_mcp=True),
     _legacy("search_pages", "在整個專案頁搜尋關鍵字，回傳出現在哪個分頁、哪一段，以及那一行。",
             _obj({"query": _S}, ["query"]), annotations=_RO, label="Search Pages", grants=_EVERYONE),
     _legacy("my_todo",
@@ -449,6 +460,34 @@ register(
              _obj({'shot_id': _ID, 'kind': {'type': 'string', 'enum': ['video', 'image']}}, ['shot_id']), 'Takes & Grades'),
 )
 
+# External-agent tools (SPEC_20 R30, §4.7). No built-in role receives them by default; an admin may still
+# grant them in the Console. request_generation dispatches only for a generate-mode service account.
+register(
+    Tool('get_workflow',
+         'Read a ZeroField workflow guide (skills/<name>/SKILL.md), such as crew pre-production, beat prompts, '
+         '3D blocking or continuity checks. Without name, lists the installed guides. A long guide is returned '
+         'in pages: call again with the offset it gives. Guides describe the work; the tools still enforce '
+         'scope, review and spending limits.',
+         _obj({'name': {'type': 'string', 'pattern': '^[a-z0-9][a-z0-9-]{0,63}$'},
+               'offset': {'type': 'integer', 'minimum': 0, 'maximum': 1000000}}),
+         'workflow', 'project_assistant.external_tools:get_workflow', annotations=_RO, label='Workflow Guide',
+         zerofield_mcp=True),
+    Tool('request_generation',
+         'Request video takes for shots of one episode through the production policy and return the cost '
+         'estimate. Only free local open-weights renders are submitted; a plan with closed, hosted or paid '
+         'generation is refused so a crew member can review it in ZeroField. Takes arrive as candidates for '
+         'review and are never adopted automatically. request_id makes retries safe: the same request_id with '
+         'the same arguments returns the first result without submitting again.',
+         # At most 40 shots, so the result (one task per shot) stays within the tool output limit.
+         _obj({'episode_id': _ID, 'shot_ids': {**_IDS, 'maxItems': 40},
+               'request_id': {'type': 'string', 'pattern': '^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$'},
+               'budget_mode': {'type': 'string', 'enum': ['lab_economical', 'hybrid_balanced', 'deadline_rush']},
+               'app_code': _ID}, ['episode_id', 'shot_ids', 'request_id']),
+         'generation', 'project_assistant.external_tools:request_generation', mutating=True, analysis_only=False,
+         race_candidate=False, label='Request Generation', zerofield_mcp=True,
+         annotations={'readOnlyHint': False, 'destructiveHint': False, 'idempotentHint': True, 'openWorldHint': False}),
+)
+
 for _module in EXTENSIONS:
     register(*importlib.import_module(_module).TOOLS)
 _sealed = True
@@ -484,6 +523,25 @@ RACE_DENIED = _names(lambda t: not t.race_candidate)
 EXTERNAL = _names(lambda t: t.external)
 CONSOLE = _names(lambda t: t.console)
 MCP = _names(lambda t: t.mcp)
+
+# Categories that predate zerofield-mcp: their tools reach external agents only by declaring zerofield_mcp=True.
+INTERNAL_CATEGORIES = ('legacy', 'delegation')
+
+
+def zerofield_exposed(tool) -> bool:
+    """Whether zerofield-mcp may list this tool to a service-account token (SPEC_20 R30).
+
+    An explicit zerofield_mcp wins. Otherwise only a read-only MCP tool outside INTERNAL_CATEGORIES, running
+    inside the shared transaction with an auto default and no switches or primary role, is exposed; so the
+    R16 read tools appear without extra flags, while every write must opt in."""
+    if tool.zerofield_mcp is not None:
+        return tool.zerofield_mcp
+    return (tool.mcp and not tool.mutating and not tool.external and tool.category not in INTERNAL_CATEGORIES
+            and tool.policy == 'auto' and not tool.requires and not tool.primary_only)
+
+
+ZEROFIELD_MCP = _names(zerofield_exposed)
+GENERATION = _names(lambda t: t.category == 'generation')  # never listed to propose_only tokens
 UI = tuple(tool.name for tool in _TOOLS.values() if tool.ui)
 REQUIRES = MappingProxyType({tool.name: tool.requires for tool in _TOOLS.values() if tool.requires})
 DEFAULT_POLICIES = MappingProxyType({tool.name: tool.policy for tool in _TOOLS.values()})

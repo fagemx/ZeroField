@@ -20,6 +20,7 @@ fidelity = ["opencv-python-headless>=4.8,<5", "numpy>=1.26"]
 zerofield-studio = "run_studio:main"
 openbench = "server:main"
 openbench-worker = "project_assistant.limb_worker:main"
+zerofield-mcp = "project_assistant.zerofield_mcp:main"
 
 [tool.setuptools]
 py-modules = ["server", "run_studio"]

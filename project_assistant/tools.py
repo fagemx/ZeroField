@@ -616,6 +616,8 @@ HANDLERS.update(context_tools.HANDLERS)
 # Results that are structured JSON, already sanitized and bounded by their handlers: never re-masked as text
 # (that would break the JSON) nor clipped.
 _STRUCTURED = frozenset(studio_tools.HANDLERS) | frozenset(context_tools.HANDLERS)
+from project_assistant import external_tools
+HANDLERS.update(external_tools.HANDLERS)
 
 
 class ToolResult(str):
