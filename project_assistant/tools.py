@@ -611,6 +611,11 @@ from project_assistant import delegation_tools
 HANDLERS.update(delegation_tools.HANDLERS)
 from project_assistant import studio_tools
 HANDLERS.update(studio_tools.HANDLERS)
+from project_assistant import context_tools
+HANDLERS.update(context_tools.HANDLERS)
+# Results that are structured JSON, already sanitized and bounded by their handlers: never re-masked as text
+# (that would break the JSON) nor clipped.
+_STRUCTURED = frozenset(studio_tools.HANDLERS) | frozenset(context_tools.HANDLERS)
 from project_assistant import external_tools
 HANDLERS.update(external_tools.HANDLERS)
 
@@ -702,7 +707,7 @@ def call(ctx: ToolContext, name: str, args) -> str:
             out = json.dumps(studio_tools.public_result(conn, ctx.slug, value), ensure_ascii=False) if name in studio_tools.HANDLERS else value
             if approved and name in {'studio_inspect_frames', 'consult_advisor'}:
                 studio_tools.validate_review(ctx, conn, approved)
-        if name not in DELEGATION_TOOLS and name not in studio_tools.HANDLERS:
+        if name not in DELEGATION_TOOLS and name not in _STRUCTURED:
             out = privacy.text(conn, ctx.slug, out)[0]
         if journal_owner and (name in MUTATING_TOOLS or mode == 'always_ask'):
             journal[cache_key] = {'tool': name, 'result': out}
@@ -726,7 +731,7 @@ def call(ctx: ToolContext, name: str, args) -> str:
         action()
     if name == 'spawn_agent' and args.get('wait') is True:
         return delegation_tools.wait_for_task(ctx, out)
-    return ToolResult(out if name in DELEGATION_TOOLS or name in studio_tools.HANDLERS else _clip(out), ctx.pending_images)
+    return ToolResult(out if name in DELEGATION_TOOLS or name in _STRUCTURED else _clip(out), ctx.pending_images)
 
 
 def _save_journal(conn, owner, journal):

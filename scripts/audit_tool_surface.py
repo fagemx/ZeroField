@@ -1,10 +1,17 @@
-"""Offline audit of the tool surface agents can see (SPEC_20 R43).
+"""Offline audit of the tool surface agents can see (SPEC_20 R43, R35).
 
 Lists every tool each built-in crew role sees with its seeded defaults (the internal model transports)
 and through the MCP server (mcp_stdio tools/list against a loopback tool host), what zerofield-mcp lists
 to an external service-account token granted every exposed tool in each write mode (SPEC_20 R30), plus
 the registry catalog, and compares them with tests/fixtures/tool_surface.json. One unexpected tool fails
 the audit.
+
+The `acp` section is the optional ACP worker (R35): `ceiling` is every tool an ACP turn could be granted,
+listed through the same openbench MCP mount the bridge gives the agent (no agent or model is started),
+and the rest is the bridge's fixed lock-down (one MCP server, no client files or terminal, agent built-ins,
+allow_once grants, environment allowlist, config homes, refused modes, disabled Codex features). A new
+tool, server, built-in, grant kind or environment variable fails the audit; so does dropping a refused
+mode, a config home or a disabled feature, or any change to the client capabilities or default mode.
 
     python -X utf8 scripts/audit_tool_surface.py          # compare; exit 1 with a diff on any change
     python -X utf8 scripts/audit_tool_surface.py --write  # accept the current surface deliberately
@@ -86,6 +93,29 @@ def spec_digest(tool):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
 
 
+def acp_ceiling_profile():
+    """An ACP agent granted every declared tool with every switch on: the most an ACP turn could see."""
+    from project_assistant import tool_registry
+    names = [tool.name for tool in tool_registry.all_tools()]
+    return {'agent_key': 'acp_audit', 'role_kind': 'primary', 'runtime_kind': 'acp_stdio', 'enabled': True,
+            'allowed_tools': names, 'tool_policies': {name: 'auto' for name in names},
+            'multiagent_config': {switch: True for tool in tool_registry.all_tools() for switch in tool.requires}}
+
+
+def acp_surface():
+    """The optional ACP worker's surface: the tool ceiling through the real mount, plus the fixed lock-down."""
+    from project_assistant import acp_bridge, acp_lockdown, orchestration_limb
+    profile = acp_ceiling_profile()
+    listed = acp_bridge.list_turn_tools({'ceiling': lambda: orchestration_limb.remote_tool_specs(profile, set(profile['allowed_tools']))})
+    return {'ceiling': listed['ceiling'], **acp_lockdown.manifest()}
+
+
+# How a change in the acp section is judged: growth, shrinkage or any change is the unexpected direction.
+ACP_GROWS = ('ceiling', 'mcp_servers', 'agent_builtins', 'non_tool_kinds', 'grant_kinds', 'env_keep')
+ACP_SHRINKS = ('forbidden_modes', 'config_homes', 'codex_features_disabled')
+ACP_FIXED = ('client_capabilities', 'default_mode')
+
+
 def surface():
     from project_assistant import agent_policy, tool_registry
     catalog = {tool.name: {
@@ -102,7 +132,29 @@ def surface():
                       'internal': [spec['name'] for spec in agent_policy.tool_specs_for(profile)],
                       'mcp': mcp_listing(profile)}
     zerofield = {mode: zerofield_listing(mode) for mode in ('propose_only', 'generate')}
-    return {'catalog': catalog, 'roles': roles, 'zerofield_mcp': zerofield, 'ui_catalog': list(tool_registry.UI)}
+    return {'catalog': catalog, 'roles': roles, 'zerofield_mcp': zerofield, 'ui_catalog': list(tool_registry.UI),
+            'acp': acp_surface()}
+
+
+def acp_differences(expected, actual):
+    """(unexpected, other) lines for the acp section."""
+    unexpected, other = [], []
+    old, new = expected.get('acp', {}), actual.get('acp', {})
+    for key in ACP_GROWS + ACP_SHRINKS:
+        before, after = old.get(key, []), new.get(key, [])
+        extra = [name for name in after if name not in before]
+        missing = [name for name in before if name not in after]
+        widened, narrowed = (extra, missing) if key in ACP_GROWS else (missing, extra)
+        if widened:
+            unexpected.append(f'acp {key}: unexpected {"addition" if key in ACP_GROWS else "removal"} {", ".join(widened)}')
+        if narrowed:
+            other.append(f'acp {key}: {"no longer listed" if key in ACP_GROWS else "added"} {", ".join(narrowed)}')
+        if not extra and not missing and before != after:
+            other.append(f'acp {key}: order changed to {", ".join(after)}')
+    for key in ACP_FIXED:
+        if old.get(key) != new.get(key):
+            unexpected.append(f'acp {key}: changed {json.dumps(old.get(key))} -> {json.dumps(new.get(key))}')
+    return unexpected, other
 
 
 def differences(expected, actual):
@@ -144,7 +196,8 @@ def differences(expected, actual):
             other.append(f'catalog: {name} changed: ' + '; '.join(changed))
     if expected.get('ui_catalog') != actual.get('ui_catalog'):
         other.append(f'ui_catalog: {expected.get("ui_catalog")} -> {actual.get("ui_catalog")}')
-    return unexpected + other
+    acp_unexpected, acp_other = acp_differences(expected, actual)
+    return unexpected + acp_unexpected + other + acp_other
 
 
 def report(lines):
@@ -161,8 +214,10 @@ def render(snapshot):
     roles = ',\n'.join(f'    {line(role)}: {{\n' + ',\n'.join(f'      {line(view)}: {line(names)}' for view, names in views.items())
                        + '\n    }' for role, views in snapshot['roles'].items())
     tokens = ',\n'.join(f'    {line(mode)}: {line(names)}' for mode, names in snapshot['zerofield_mcp'].items())
+    acp = ',\n'.join(f'    {line(key)}: {line(value)}' for key, value in snapshot['acp'].items())
     return ('{\n  "_note": ' + line(NOTE) + ',\n  "catalog": {\n' + catalog + '\n  },\n  "roles": {\n' + roles +
-            '\n  },\n  "zerofield_mcp": {\n' + tokens + '\n  },\n  "ui_catalog": ' + line(snapshot['ui_catalog']) + '\n}\n')
+            '\n  },\n  "zerofield_mcp": {\n' + tokens + '\n  },\n  "ui_catalog": ' + line(snapshot['ui_catalog']) +
+            ',\n  "acp": {\n' + acp + '\n  }\n}\n')
 
 
 def main(argv=None):
@@ -185,7 +240,8 @@ def main(argv=None):
     seen = ', '.join(f'{role} {len(view["internal"])}/{len(view["mcp"])}' for role, view in actual['roles'].items())
     tokens = ', '.join(f'{mode} {len(names)}' for mode, names in actual['zerofield_mcp'].items())
     print(f'Tool surface matches the snapshot: {len(actual["catalog"])} tools; internal/MCP per role: {seen}; '
-          f'zerofield-mcp per token: {tokens}.')
+          f'zerofield-mcp per token: {tokens}; '
+          f'ACP ceiling {len(actual["acp"]["ceiling"])} tools on {", ".join(actual["acp"]["mcp_servers"])}.')
     return 0
 
 

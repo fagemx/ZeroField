@@ -33,27 +33,30 @@ class Refusal(ValueError):
 
 # ---------- get_workflow (R32) ----------
 
-def skills_root() -> Path:
+def _resource(*parts) -> Path:
+    """A packaged resource: the checkout's file, else the installed wheel's (openbench_data)."""
     from openbench_data import resource_path
-    return resource_path('skills')
+    return resource_path(*parts)
 
 
-def guides(root=None) -> dict:
-    """{name: SKILL.md path} of the installed guides. A missing or unreadable folder simply has none."""
-    root = Path(root if root is not None else skills_root())
+def guides() -> dict:
+    """{name: SKILL.md path} of the installed manuals, read as resource_path('skills', name, 'SKILL.md') (R32).
+
+    A missing or unreadable skills folder simply has none."""
+    root = _resource('skills')
     try:
-        if not root.is_dir():
-            return {}
-        base, folders = root.resolve(), sorted(root.iterdir())
+        names = sorted(entry.name for entry in root.iterdir() if entry.is_dir()) if root.is_dir() else []
+        base = root.resolve()
     except OSError:
         return {}
     found = {}
-    for folder in folders:
-        path = folder / SKILL_FILE
+    for name in names:
+        if not _GUIDE.fullmatch(name):
+            continue
+        path = _resource('skills', name, SKILL_FILE)
         try:
-            if (_GUIDE.fullmatch(folder.name) and path.is_file() and path.resolve().is_relative_to(base)
-                    and path.stat().st_size <= MAX_GUIDE_BYTES):
-                found[folder.name] = path
+            if path.is_file() and path.resolve().is_relative_to(base) and path.stat().st_size <= MAX_GUIDE_BYTES:
+                found[name] = path
         except OSError:
             continue
     return found

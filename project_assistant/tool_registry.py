@@ -13,9 +13,10 @@ every tool on every transport.
 Adding a tool
 1. Declare it once below, or in a data-only module named in EXTENSIONS (see there).
 2. Write the handler `def <name>(ctx, conn, args)` in the module its `handler` names. tools.call
-   dispatches through tools.HANDLERS: the tools.py table plus delegation_tools.HANDLERS and
-   studio_tools.HANDLERS (studio_tools derives its table from here). A handler kept anywhere else must be
-   merged there too; tests/test_tool_registry.py fails while dispatch and the registry disagree.
+   dispatches through tools.HANDLERS: the tools.py table plus delegation_tools.HANDLERS,
+   studio_tools.HANDLERS and context_tools.HANDLERS (both derive their tables from here). A handler kept
+   anywhere else must be merged there too; tests/test_tool_registry.py fails while dispatch and the
+   registry disagree.
 3. Accept the new tool surface deliberately, then review and commit the snapshot with the change:
        python -X utf8 scripts/audit_tool_surface.py --write
    tests/test_tool_registry.py fails until tests/fixtures/tool_surface.json matches.
@@ -416,6 +417,47 @@ register(
             _obj({'question': {'type': 'string', 'minLength': 1, 'maxLength': 4000}, 'candidate': {'type': 'string', 'maxLength': 12000}}, ['question']),
             category='advisor', read_only=True, external=True, requires=('advisor_agent_key',),
             grants=('coordinator', 'doc_writer', 'sheet_ops')),
+)
+
+
+def _context(name, description, schema, label):
+    # SPEC_20 R16: structured, bounded, read-only reads of the story model (project_assistant/context_tools.py).
+    # Every result is the §4.5 envelope {status, data, sources, warnings, limitations, hash} and every call is
+    # audited; they are also the MCP read surface (§4.7). Existing crews receive them through
+    # context_tools.top_up_grants, which only ever adds read-only tools of this category.
+    return Tool(name, description, schema, 'context', 'project_assistant.context_tools:' + name, annotations=_RO,
+                label=label, ui=True, grants=_EVERYONE)
+
+
+register(
+    _context('read_episode',
+             'Read one episode as JSON: title and settings, every scene (id, title, opening lines) with the shots placed '
+             'in it (id, shot number, review status, whether it has a take and a stored 3D plan), unplaced shots and cast '
+             'codes still missing a reference image. Omit episode_id for the episode in focus, else the first. '
+             'Use read_scene and read_shot for full text.',
+             _obj({'episode_id': _ID}), 'Episode'),
+    _context('read_scene',
+             'Read one scene as JSON: its script text, the previous and next scene ids, its shots (shot number, '
+             'description, optics, camera motion, cast codes, review status) and the cast it references with '
+             'reference image URLs. scene_id comes from read_episode.',
+             _obj({'scene_id': _ID}, ['scene_id']), 'Scene'),
+    _context('read_shot',
+             'Read one shot as JSON: its row and table ids with every sheet cell by zero-based column (for '
+             'propose_table_edit), episode and scene, dialogue, trim, readiness, the stored 3D previs plan with its '
+             'planRevision (include_plan false leaves the plan out), the previous and next shot in cut order, and its '
+             'cast with reference image URLs.',
+             _obj({'shot_id': _ID, 'include_plan': {'type': 'boolean'}}, ['shot_id']), 'Shot'),
+    _context('read_cast',
+             'Read the Soul Cast as JSON. Without asset: every cast member, set and prop with its looks (variants) and '
+             'reference image URL; type narrows it to CHARACTER, SCENE or PROP. With asset (a code such as CAST-01 or '
+             'an asset id): that asset with its full description, every look, its reference images and the shots and '
+             'scenes that use it.',
+             _obj({'asset': {'type': 'string', 'minLength': 1, 'maxLength': 200},
+                   'type': {'type': 'string', 'enum': ['CHARACTER', 'SCENE', 'PROP']}}), 'Cast & Looks'),
+    _context('list_takes',
+             "List one shot's takes as JSON: each take's id and URL, which one is selected, and its continuity grade "
+             '(status, score, passed, issues, feedback, retake prompt). kind image lists keyframe candidates instead.',
+             _obj({'shot_id': _ID, 'kind': {'type': 'string', 'enum': ['video', 'image']}}, ['shot_id']), 'Takes & Grades'),
 )
 
 # External-agent tools (SPEC_20 R30, §4.7). No built-in role receives them by default; an admin may still

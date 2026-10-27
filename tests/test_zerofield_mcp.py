@@ -256,41 +256,52 @@ class TokenScopeTests(unittest.TestCase):
         self.assertNotIn('request_generation', service_accounts.exposed_tools('propose_only'))
         self.assertIn('request_generation', service_accounts.exposed_tools('generate'))
 
-    def test_get_workflow_reads_skill_folders_and_pages_long_guides(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / 'skills'
-            (root / 'beat-prompts').mkdir(parents=True)
-            (root / 'beat-prompts' / 'SKILL.md').write_text(
-                '---\nname: beat-prompts\ndescription: "Write timed beats for one shot."\n---\n# Beat prompts\nStep one.\n', encoding='utf-8')
-            (root / 'long-guide').mkdir()
-            long_text = '# Long\n' + 'x' * 12000
-            (root / 'long-guide' / 'SKILL.md').write_text(long_text, encoding='utf-8')
-            (root / 'no-skill-file').mkdir()
-            (root / 'Bad_Name').mkdir()
-            (root / 'Bad_Name' / 'SKILL.md').write_text('hidden', encoding='utf-8')
-            with patch.object(external_tools, 'skills_root', return_value=root):
-                listing = json.loads(external_tools.get_workflow(None, None, {}))
-                self.assertEqual(listing['status'], 'ok')
-                self.assertEqual(listing['workflows'], [{'name': 'beat-prompts', 'description': 'Write timed beats for one shot.'},
-                                                        {'name': 'long-guide', 'description': ''}])
-                self.assertIn('Step one.', external_tools.get_workflow(None, None, {'name': 'beat-prompts'}))
-                first = external_tools.get_workflow(None, None, {'name': 'long-guide'})
-                self.assertIn('offset 5000', first)
-                rest = external_tools.get_workflow(None, None, {'name': 'long-guide', 'offset': 5000})
-                last = external_tools.get_workflow(None, None, {'name': 'long-guide', 'offset': 10000})
-                self.assertEqual(first.split('\n\n[')[0] + rest.split('\n\n[')[0] + last, long_text)
-                for args, code in (({'name': 'missing'}, 'NOT_FOUND'), ({'name': 'Bad_Name'}, 'NOT_FOUND'),
-                                   ({'name': 'beat-prompts', 'offset': 99999}, 'INVALID_REQUEST')):
-                    with self.subTest(args=args), self.assertRaises(external_tools.Refusal) as caught:
-                        external_tools.get_workflow(None, None, args)
-                    self.assertEqual(caught.exception.code, code)
-            with patch.object(external_tools, 'skills_root', return_value=Path(directory) / 'absent'):
-                self.assertEqual(json.loads(external_tools.get_workflow(None, None, {}))['status'], 'unavailable')
-                with self.assertRaises(external_tools.Refusal):
-                    external_tools.get_workflow(None, None, {'name': 'beat-prompts'})
+    def test_get_workflow_reads_the_packaged_manuals_and_pages_them(self):
+        from openbench_data import resource_path
+        manuals = ('continuity-check', 'crew-preproduction', 'previs-blocking', 'shot-beats')
+        listing = json.loads(external_tools.get_workflow(None, None, {}))
+        self.assertEqual(listing['status'], 'ok')
+        self.assertEqual([w['name'] for w in listing['workflows']], list(manuals))
+        for name in manuals:
+            with self.subTest(name=name):
+                text = resource_path('skills', name, 'SKILL.md').read_text(encoding='utf-8')
+                description = next(w['description'] for w in listing['workflows'] if w['name'] == name)
+                self.assertTrue(description)
+                self.assertIn(description[:60], text)
+                pages, offset = [], 0
+                while True:
+                    page = external_tools.get_workflow(None, None, {'name': name, 'offset': offset} if offset else {'name': name})
+                    body, _, note = page.partition('\n\n[The guide continues:')
+                    pages.append(body)
+                    if not note:
+                        break
+                    self.assertIn(f'offset {offset + external_tools.PAGE_CHARS}', note)
+                    offset += external_tools.PAGE_CHARS
+                self.assertEqual(''.join(pages), text)
+                self.assertGreater(len(pages), 1)
+        for args, code in (({'name': 'missing'}, 'NOT_FOUND'), ({'name': 'shot-beats', 'offset': 999999}, 'INVALID_REQUEST')):
+            with self.subTest(args=args), self.assertRaises(external_tools.Refusal) as caught:
+                external_tools.get_workflow(None, None, args)
+            self.assertEqual(caught.exception.code, code)
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(external_tools, '_resource', side_effect=lambda *parts: Path(directory, 'absent', *parts)):
+            self.assertEqual(json.loads(external_tools.get_workflow(None, None, {}))['status'], 'unavailable')
+            with self.assertRaises(external_tools.Refusal):
+                external_tools.get_workflow(None, None, {'name': 'shot-beats'})
         for bad in ('../secrets', 'a/b', 'UPPER', ''):
             with self.subTest(name=bad), self.assertRaises(ValueError):
                 tool_registry.validate_args('get_workflow', {'name': bad})
+
+    def test_context_read_tools_reach_zerofield_mcp_by_the_default_rule(self):
+        context = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
+        for name in context:
+            with self.subTest(name=name):
+                tool = tool_registry.get(name)
+                self.assertIsNone(tool.zerofield_mcp)  # no flag: derived as a read-only tool
+                self.assertTrue(tool_registry.zerofield_exposed(tool))
+        for mode in ('propose_only', 'generate'):
+            self.assertLessEqual(set(context), set(service_accounts.exposed_tools(mode)))
+        self.assertEqual(self.names(tools=context + ['spawn_agent'], writeMode='propose_only'), context)
 
     def test_only_free_local_open_weights_plans_may_be_submitted(self):
         from project_assistant import execution_governance
@@ -605,7 +616,8 @@ class AgentHttpTests(unittest.TestCase):
 
     def test_admin_routes_agent_api_and_stdio_client_end_to_end(self):
         base = f'/projects/api/{self.slug}/service-accounts'
-        body = {'accountKey': 'claude-code', 'displayName': 'Claude Code', 'tools': ['list_pages', 'read_page', 'propose_table_edit'],
+        body = {'accountKey': 'claude-code', 'displayName': 'Claude Code',
+                'tools': ['list_pages', 'read_page', 'propose_table_edit', 'get_workflow'],
                 'expiresInDays': 3}
         self.assertEqual(self.request(base, method='POST', data=body, authenticated=False)[0], 401)
         self.assertEqual(self.request(base, method='POST', data=body, headers={'X-Requested-With': ''})[0], 403)
@@ -617,7 +629,7 @@ class AgentHttpTests(unittest.TestCase):
         self.assertNotIn(token, json.dumps(listed))
         self.assertNotIn(hashlib.sha256(token.encode()).hexdigest(), json.dumps(listed))
         code, tools, _ = self.agent('/agent-mcp/v1/tools', token)
-        self.assertEqual((code, [t['name'] for t in tools['tools']]), (200, ['propose_table_edit', 'list_pages', 'read_page']))
+        self.assertEqual((code, [t['name'] for t in tools['tools']]), (200, ['propose_table_edit', 'list_pages', 'read_page', 'get_workflow']))
         self.assertEqual(self.agent('/agent-mcp/v1/tools', token, headers={'Origin': 'http://evil.example'})[1]['code'], 'LOCAL_ONLY')
         self.assertEqual(self.agent('/agent-mcp/v1/tools', token, headers={'Cf-Connecting-Ip': '1.2.3.4'})[0], 403)
         self.assertEqual(self.agent('/agent-mcp/v1/tools', token, headers={'X-ZeroField-Project': 'another-one'})[1]['code'], 'WRONG_PROJECT')
@@ -629,7 +641,12 @@ class AgentHttpTests(unittest.TestCase):
         self.assertEqual(self.agent('/agent-mcp/v1/tools/spawn_agent', token, method='POST', data={'arguments': {}})[1]['code'], 'UNKNOWN_TOOL')
         server = mcp.Server(mcp.HttpBackend(f'http://127.0.0.1:{self.server.server_port}', token, self.slug, timeout=30))
         self.assertIn('2026-07-28', server.handle(rpc('server/discover'))['result']['supportedVersions'])
-        self.assertEqual([t['name'] for t in server.handle(rpc('tools/list', 2))['result']['tools']], ['propose_table_edit', 'list_pages', 'read_page'])
+        self.assertEqual([t['name'] for t in server.handle(rpc('tools/list', 2))['result']['tools']],
+                         ['propose_table_edit', 'list_pages', 'read_page', 'get_workflow'])
+        manual = server.handle(rpc('tools/call', 6, name='get_workflow', arguments={'name': 'shot-beats'}))['result']
+        self.assertFalse(manual['isError'])
+        self.assertIn('name: shot-beats', manual['content'][0]['text'])
+        self.assertIn('[The guide continues', manual['content'][0]['text'])
         legacy = mcp.Server(mcp.HttpBackend(f'http://127.0.0.1:{self.server.server_port}', token, timeout=30))
         legacy.handle({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-11-25', 'capabilities': {}}})
         called = legacy.handle({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {'name': 'list_pages', 'arguments': {}}})['result']

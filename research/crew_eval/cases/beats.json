@@ -1,0 +1,442 @@
+{
+  "schema": "zerofield.crew_eval.cases/1",
+  "type": "beats",
+  "description": "Job: shot -> beat sheet (SPEC_20 4.4). Eight hard shots: faces to the lens, high tension, emotion shown. Original characters and sets only.",
+  "cases": [
+    {
+      "id": "beats-01-tears-closeup",
+      "title": "Close-up: a man holds it together, then breaks into tears (6 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "suppressed grief breaking into tears",
+        "traps": ["listener Mira is off screen and untagged", "rig string names a camera maker", "the face must stay toward the lens through all three phases"]
+      },
+      "input": {
+        "shot": {
+          "id": "S06",
+          "seconds": 6,
+          "text": "Kael holds it together against the console while Mira's words land, then his face breaks and he lifts his head, crying. @CAST-01 @SET-01",
+          "optical_rig": "ARRI Alexa 65 / 50mm Prime",
+          "camera_motion": "Slow Dolly Push-In"
+        },
+        "cast": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket over a dark henley"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory at dawn, rain streaking the curved glass above a ring of brass consoles with amber instrument lights"},
+        "props": [],
+        "previous_shot": {"id": "S05", "text": "Mira says the one thing he cannot take back, then turns for the door. @CAST-02 @SET-01"},
+        "next_shot": {"id": "S07", "text": "Kael wipes his face with his sleeve and turns to the console. @CAST-01 @SET-01"}
+      },
+      "expect": {
+        "hard": {"beats": [3, 4]},
+        "soft": [
+          {"id": "face_to_camera", "weight": 3, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "toward us", "into the lens"], "desc": "the face is toward the lens"},
+          {"id": "no_back_views", "weight": 3, "check": "forbids", "scope": "all", "none": ["from behind", "back of (?:his|her|their) head", "over[- ]the[- ]shoulder", "in profile", "profile (?:view|shot)", "silhouett", "seen from (?:the )?back", "back (?:is |turned )?to (?:the )?camera"], "desc": "no back, profile or silhouette view of the performer"},
+          {"id": "emotion_arc", "weight": 3, "check": "ordered", "groups": [["clench", "fights? to hold", "hold it together", "glisten", "swallow"], ["crumpl", "\\bchin\\b", "tremble", "quiver", "shoulders drop"], ["tears", "sobs?\\b", "weep", "crying"]], "desc": "restraint, then the crumple, then tears, in that order"},
+          {"id": "break_timing", "weight": 2, "check": "event_time", "pattern": "crumpl|\\bchin\\b|tremble|quiver", "between": [1.0, 3.0], "desc": "the face breaks between 1 s and 3 s"},
+          {"id": "face_in_every_beat", "weight": 2, "check": "each_beat", "any": ["face", "eyes", "jaw", "chin", "mouth", "lips", "cheeks", "brows"], "desc": "every beat says what the face does"},
+          {"id": "push_in", "weight": 1, "check": "camera_move", "any": ["pushin"], "desc": "the slow push-in of Camera Motion is kept"},
+          {"id": "one_person", "weight": 1, "check": "contains", "scope": "constraints", "any": ["one person", "only one person", "single person"], "desc": "a one-person constraint (Mira stays off screen)"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint"},
+          {"id": "sound_breath", "weight": 1, "check": "contains", "scope": "sound", "any": ["breath", "sob", "rain", "sniff"], "desc": "the sound line has breath, sobs or rain"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "One continuous 6-second 50mm close-up in @SET-01 at dawn, rain streaming down the curved glass behind him. @CAST-01 stands with his back against the console, facing the camera, his face turned toward us as he looks just past the lens at Mira, who stays off camera.",
+        "beats": [
+          {"from": 0, "to": 1.8, "camera": "close-up at eye level, the slow dolly push-in begins", "action": "Facing the camera, Kael clenches his jaw and fights to hold it together; his eyes glisten and he swallows hard, looking at Mira just off camera."},
+          {"from": 1.8, "to": 4.2, "camera": "the dolly keeps creeping in on his face", "action": "His face crumples: his chin trembles and his brows pull up in the middle, his shoulders drop and his head sinks forward as the first sob breaks, still turned toward the camera."},
+          {"from": 4.2, "to": 6, "camera": "tight close-up on his face, the push-in settling", "action": "He lifts his head and looks into the lens, tears streaming down his cheeks, eyes red and wet, mouth trembling, breathing in ragged sobs."}
+        ],
+        "sound": "rain on glass, a held breath, ragged sobs, the low hum of the console",
+        "constraints": ["One person in frame; Mira stays off camera", "No text"]
+      }
+    },
+    {
+      "id": "beats-02-scream-variant-tag",
+      "title": "Close-up: a woman screams at the man just past the lens (6 s, variant tag)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "rage turning into a full scream",
+        "traps": ["variant tag @CAST-02:coat must survive whole", "the target @CAST-01 is tagged but must stay out of frame", "rig string names a camera maker"]
+      },
+      "input": {
+        "shot": {
+          "id": "S09",
+          "seconds": 6,
+          "text": "Mira @CAST-02:coat glares at @CAST-01 just past the lens, lunges forward and screams at him, then pulls back out of breath. @SET-01",
+          "optical_rig": "RED V-Raptor / 85mm Prime",
+          "camera_motion": "Static Tripod"
+        },
+        "cast": [
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair, freckles and sharp cheekbones; the coat variant is a dark green wool long coat over a cream sweater"},
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory at dawn, rain streaking the curved glass above a ring of brass consoles with amber instrument lights"},
+        "props": [],
+        "previous_shot": {"id": "S08", "text": "Kael says her name and does not finish the sentence. @CAST-01 @SET-01"},
+        "next_shot": {"id": "S10", "text": "Kael staggers back from her. @CAST-01 @SET-01"}
+      },
+      "expect": {
+        "hard": {"beats": [3, 4]},
+        "soft": [
+          {"id": "face_to_camera", "weight": 3, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "toward us", "into the lens"], "desc": "the face is toward the lens"},
+          {"id": "no_back_views", "weight": 3, "check": "forbids", "scope": "all", "none": ["from behind", "back of (?:his|her|their) head", "over[- ]the[- ]shoulder", "in profile", "profile (?:view|shot)", "silhouett", "seen from (?:the )?back", "back (?:is |turned )?to (?:the )?camera"], "desc": "no back, profile or silhouette view"},
+          {"id": "emotion_arc", "weight": 3, "check": "ordered", "groups": [["glare", "nostrils", "jaw (?:tight|set|clenched)", "breathing hard"], ["lunge", "lean(?:s|ing)? (?:in|forward)", "scream", "mouth wide", "teeth"], ["pulls? back", "upright", "chest heaving", "out of breath", "gasp"]], "desc": "glare, then the lunge and scream, then the pull back"},
+          {"id": "scream_timing", "weight": 2, "check": "event_time", "pattern": "lunge|scream", "between": [1.0, 2.5], "desc": "the lunge starts between 1 s and 2.5 s"},
+          {"id": "offscreen_target", "weight": 2, "check": "contains", "scope": "actions", "any": ["just (?:past|off)", "off[- ]camera", "out of frame", "off[- ]screen"], "desc": "Kael is kept just off camera"},
+          {"id": "face_in_every_beat", "weight": 2, "check": "each_beat", "any": ["face", "eyes", "jaw", "mouth", "teeth", "brows", "nostrils"], "desc": "every beat says what the face does"},
+          {"id": "locked_off", "weight": 1, "check": "camera_move", "any": ["static"], "desc": "the Static Tripod motion is kept"},
+          {"id": "one_person", "weight": 2, "check": "contains", "scope": "constraints", "any": ["one person", "only one person", "single person"], "desc": "a one-person constraint although two codes are tagged"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint"},
+          {"id": "sound_scream", "weight": 1, "check": "contains", "scope": "sound", "any": ["scream", "shout", "breath", "gasp"], "desc": "the sound line has the scream or breath"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "One continuous 6-second 85mm close-up in @SET-01 at dawn, rain on the curved glass behind her. @CAST-02:coat, in her dark green wool coat, faces the camera; @CAST-01 stands just past the lens and never enters the frame.",
+        "beats": [
+          {"from": 0, "to": 1.5, "camera": "locked-off close-up on her face, eye level", "action": "Facing the camera, Mira glares straight at Kael just past the lens, nostrils flaring, jaw tight, breathing hard with rage."},
+          {"from": 1.5, "to": 2.3, "camera": "locked-off, her face fills the frame", "action": "She lunges forward from the hips and screams at him, mouth wide open, teeth bared, brows crushed down."},
+          {"from": 2.3, "to": 4.8, "camera": "locked-off, no move", "action": "She keeps screaming into the lens, leaning in, eyes blazing, her whole face shaking with fury."},
+          {"from": 4.8, "to": 6, "camera": "locked-off, no move", "action": "She pulls back upright, chest heaving, her eyes still glaring at Kael just off camera, mouth open, out of breath."}
+        ],
+        "sound": "a raw scream, ragged breath, rain on the glass",
+        "constraints": ["One person only; Kael stays off camera", "No text"]
+      }
+    },
+    {
+      "id": "beats-03-shove-two-shot",
+      "title": "Handheld two-shot: she shoves him into the console (4 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "violence and stunned disbelief",
+        "traps": ["only 4 s for squaring up, the shove and the reaction", "three tags including a prop that must be kept and must move", "rig string names a camera maker"]
+      },
+      "input": {
+        "shot": {
+          "id": "S11",
+          "seconds": 4,
+          "text": "Mira shoves Kael hard in the chest; he slams back into the console, the recorder clattering, and stares at her, stunned. @CAST-02 @CAST-01 @PROP-01 @SET-01",
+          "optical_rig": "Sony Venice 2 / 35mm Anamorphic",
+          "camera_motion": "Handheld Urgency"
+        },
+        "cast": [
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair and a dark green wool long coat"},
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory at dawn, rain streaking the curved glass above a ring of brass consoles with amber instrument lights"},
+        "props": [
+          {"code": "@PROP-01", "name": "Field recorder", "look": "a battered analog field recorder with a brass dial and a cracked leather strap"}
+        ],
+        "previous_shot": {"id": "S10", "text": "Kael staggers back from her. @CAST-01 @SET-01"},
+        "next_shot": {"id": "S12", "text": "Mira stands over him, breathing hard, and does not apologise. @CAST-02 @SET-01"}
+      },
+      "expect": {
+        "hard": {"beats": [2, 3]},
+        "soft": [
+          {"id": "kael_face_to_camera", "weight": 3, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "into the lens"], "desc": "Kael's face is toward the lens"},
+          {"id": "no_back_views_of_kael", "weight": 2, "check": "forbids", "scope": "all", "none": ["from behind", "back of (?:his|kael)", "silhouett"], "desc": "Kael is never seen from behind (Mira's back to the lens is fine)"},
+          {"id": "shove_timing", "weight": 3, "check": "event_time", "pattern": "shove|shoves|shoved|slams? (?:him|into)", "between": [0.5, 2.0], "desc": "the shove lands between 0.5 s and 2 s"},
+          {"id": "stunned_reaction", "weight": 3, "check": "contains", "scope": "actions", "any": ["stun", "shock", "stare", "wide[- ]eyed", "eyes wide", "gasp", "disbelief"], "desc": "Kael's stunned reaction is shown"},
+          {"id": "recorder_moves", "weight": 2, "check": "contains", "scope": "all", "any": ["recorder[^.\\n]*(?:clatter|rattl|skid|fall|tumbl|bounc)", "(?:clatter|rattl|skid|fall|tumbl|bounc)\\w*[^.\\n]*recorder", "@PROP-01[^.\\n]*(?:clatter|rattl|skid|fall|tumbl|bounc)"], "desc": "the recorder reacts to the impact"},
+          {"id": "handheld", "weight": 1, "check": "contains", "scope": "cameras", "any": ["handheld", "shak", "jolt", "lurch", "jitter"], "desc": "the handheld motion is kept"},
+          {"id": "sound_impact", "weight": 1, "check": "contains", "scope": "sound", "any": ["thud", "clatter", "crash", "slam", "bang"], "desc": "the impact is heard"},
+          {"id": "two_people", "weight": 1, "check": "contains", "scope": "constraints", "any": ["two people", "2 people", "only two"], "desc": "a two-people constraint"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "One continuous 4-second handheld 35mm two-shot in @SET-01 at dawn. @CAST-01 stands with his back to the console, facing the camera; @CAST-02 is close in front of him, her shoulder and the back of her head toward the lens. @PROP-01, the field recorder, sits on the console beside him.",
+        "beats": [
+          {"from": 0, "to": 1.4, "camera": "handheld two-shot, the frame jittering as she steps in", "action": "Mira steps in and squares up to Kael, fists clenched; he faces the camera, jaw tight, breath held."},
+          {"from": 1.4, "to": 2.2, "camera": "handheld, a violent jolt", "action": "Mira shoves Kael hard in the chest with both hands, and he slams back into the console, the recorder skidding along the brass."},
+          {"from": 2.2, "to": 4, "camera": "handheld, settling on Kael", "action": "Kael stares into the lens, stunned, eyes wide and mouth open, gasping, as the recorder clatters to the floor."}
+        ],
+        "sound": "a hard thud against brass, the recorder clattering on the floor, a sharp gasp",
+        "constraints": ["Two people only", "No text"]
+      }
+    },
+    {
+      "id": "beats-04-accusation-dialogue",
+      "title": "Close-up: an old woman accuses, one spoken line, voice breaking (8 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "controlled fury giving way to grief",
+        "traps": ["the quoted line must survive word for word", "the listener Tomas is untagged and off screen", "the beat must show the voice shaking, not only say the line"]
+      },
+      "input": {
+        "shot": {
+          "id": "S14",
+          "seconds": 8,
+          "text": "Odile faces the lens across the kitchen table and says quietly, \"You knew the lamp was dark, and you let him sail.\" Her voice shakes; she grips the table edge. @CAST-03 @SET-03 @PROP-02",
+          "optical_rig": "Panavision Millennium DXL2 / 50mm Prime",
+          "camera_motion": "Slow Dolly Push-In"
+        },
+        "cast": [
+          {"code": "@CAST-03", "name": "Odile", "look": "an elderly woman in her late sixties with silver hair in a bun, round wire glasses on a chain, a navy cardigan buttoned to the neck and weathered hands"}
+        ],
+        "set": {"code": "@SET-03", "name": "Lighthouse kitchen", "look": "a lighthouse keeper's kitchen at night: a scrubbed pine table, a coal stove, a rain-lashed window"},
+        "props": [
+          {"code": "@PROP-02", "name": "Oil lantern", "look": "a brass oil lantern with a smoked glass chimney, burning low"}
+        ],
+        "previous_shot": {"id": "S13", "text": "Tomas stands in the doorway, dripping, and cannot meet her eye. @CAST-06 @SET-03"},
+        "next_shot": {"id": "S15", "text": "Tomas finally looks up. @CAST-06 @SET-03"}
+      },
+      "expect": {
+        "hard": {"beats": [3, 5]},
+        "soft": [
+          {"id": "face_to_camera", "weight": 3, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "toward us", "into the lens", "facing the lens"], "desc": "the face is toward the lens"},
+          {"id": "no_back_views", "weight": 2, "check": "forbids", "scope": "all", "none": ["from behind", "back of (?:his|her|their) head", "over[- ]the[- ]shoulder", "in profile", "profile (?:view|shot)", "silhouett", "seen from (?:the )?back", "back (?:is |turned )?to (?:the )?camera"], "desc": "no back, profile or silhouette view"},
+          {"id": "line_kept", "weight": 3, "check": "quotes", "scope": "all", "texts": ["You knew the lamp was dark, and you let him sail."], "desc": "the spoken line survives word for word"},
+          {"id": "speech_timing", "weight": 2, "check": "event_time", "pattern": "says|speaks|whisper|voice", "between": [0.5, 3.5], "desc": "she starts to speak between 0.5 s and 3.5 s"},
+          {"id": "emotion_arc", "weight": 3, "check": "ordered", "groups": [["still", "silent", "steady", "controlled", "calm"], ["voice (?:shakes|trembles|cracks|breaks)", "shak", "trembl", "crack", "grips?"], ["swallow", "eyes (?:brim|fill|glisten)", "a tear", "tears", "silence"]], "desc": "control, then the shaking voice, then tears and silence"},
+          {"id": "grip", "weight": 1, "check": "contains", "scope": "actions", "any": ["grips? (?:the )?(?:table|edge)", "knuckles"], "desc": "the grip on the table edge is shown"},
+          {"id": "face_in_every_beat", "weight": 2, "check": "each_beat", "any": ["face", "eyes", "lips", "mouth", "cheek", "jaw", "brow"], "desc": "every beat says what the face does"},
+          {"id": "push_in", "weight": 1, "check": "camera_move", "any": ["pushin"], "desc": "the slow push-in is kept"},
+          {"id": "no_dead_air", "weight": 1, "check": "beat_lengths", "max": 3.5, "desc": "no beat longer than 3.5 s"},
+          {"id": "one_person", "weight": 1, "check": "contains", "scope": "constraints", "any": ["one person", "only one person", "single person"], "desc": "a one-person constraint"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint"},
+          {"id": "sound_room", "weight": 1, "check": "contains", "scope": "sound", "any": ["rain", "wind", "creak", "stove", "silence", "voice"], "desc": "the sound line has the room or the voice"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "One continuous 8-second 50mm close-up in @SET-03 at night; rain lashes the window behind her and the oil lantern (@PROP-02) burns low on the pine table. @CAST-03 sits across the table, facing the camera, her face lit from below by the flame.",
+        "beats": [
+          {"from": 0, "to": 2, "camera": "50mm close-up at eye level, the slow dolly push-in begins", "action": "Facing the lens, Odile sits perfectly still and silent, her lips pressed together, steady and controlled, staring straight at Tomas just past the camera."},
+          {"from": 2, "to": 5, "camera": "the dolly pushes in slowly on her face", "action": "She says quietly, \"You knew the lamp was dark, and you let him sail.\" Her voice shakes on the last word and her knuckles whiten as she grips the table edge."},
+          {"from": 5, "to": 8, "camera": "tight close-up on her face, the push-in settling", "action": "She swallows, her eyes fill and a tear runs down her cheek; she does not look away from the lens, lips trembling, in a long silence."}
+        ],
+        "sound": "rain on the window, the crackle of the stove, her shaking voice, a long silence",
+        "constraints": ["One person only", "No text"]
+      }
+    },
+    {
+      "id": "beats-05-radio-realization-10s",
+      "title": "Slow push-in: hope drains from a woman's face as the radio names the lost boat (10 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "hope collapsing into numb grief",
+        "traps": ["ten seconds need four to six beats with no dead stretch", "the hand-over-mouth moment must land in the second half", "rig string names a camera maker"]
+      },
+      "input": {
+        "shot": {
+          "id": "S18",
+          "seconds": 10,
+          "text": "Ines listens to the radio, hope draining from her face as she realizes the lost boat is her brother's; she covers her mouth, then lowers her hand and stares into the lens, numb. @CAST-05 @SET-04 @PROP-03",
+          "optical_rig": "ARRI Alexa 65 / 85mm Prime",
+          "camera_motion": "Slow Dolly Push-In"
+        },
+        "cast": [
+          {"code": "@CAST-05", "name": "Ines", "look": "a woman in her early forties with a black bob, tired dark eyes, a navy knit sweater and a brass whistle on a cord"}
+        ],
+        "set": {"code": "@SET-04", "name": "Harbour office", "look": "a harbour radio office at night: a cluttered desk, a bank of dials, a storm lamp, rain on a small window"},
+        "props": [
+          {"code": "@PROP-03", "name": "Shortwave radio", "look": "a battered shortwave radio with a glowing green dial"}
+        ],
+        "previous_shot": {"id": "S17", "text": "The radio crackles with a distress call. @PROP-03 @SET-04"},
+        "next_shot": {"id": "S19", "text": "Ines stands and grabs her coat. @CAST-05 @SET-04"}
+      },
+      "expect": {
+        "hard": {"beats": [4, 6]},
+        "soft": [
+          {"id": "face_to_camera", "weight": 3, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "toward us", "into the lens"], "desc": "the face is toward the lens"},
+          {"id": "no_back_views", "weight": 2, "check": "forbids", "scope": "all", "none": ["from behind", "back of (?:his|her|their) head", "over[- ]the[- ]shoulder", "in profile", "profile (?:view|shot)", "silhouett", "seen from (?:the )?back", "back (?:is |turned )?to (?:the )?camera"], "desc": "no back, profile or silhouette view"},
+          {"id": "emotion_arc", "weight": 3, "check": "ordered", "groups": [["hope", "lean(?:s|ing)? (?:in|toward|closer)", "listens?", "brighten", "expectan"], ["drain", "falter", "fade", "realiz", "freeze", "stiffen", "eyes widen"], ["cover(?:s|ing)? her mouth", "hand (?:to|over) (?:her )?mouth"], ["numb", "hollow", "blank", "stares?"]], "desc": "hope, the drain, the hand over the mouth, then numbness"},
+          {"id": "hand_timing", "weight": 2, "check": "event_time", "pattern": "cover(?:s|ing)? her mouth|hand (?:to|over) (?:her )?mouth", "between": [4.0, 8.0], "desc": "the hand goes to her mouth between 4 s and 8 s"},
+          {"id": "no_dead_air", "weight": 2, "check": "beat_lengths", "max": 3.5, "desc": "no beat longer than 3.5 s"},
+          {"id": "face_in_every_beat", "weight": 2, "check": "each_beat", "any": ["face", "eyes", "lips", "mouth", "cheek", "jaw", "brow"], "desc": "every beat says what the face does"},
+          {"id": "push_in", "weight": 1, "check": "camera_move", "any": ["pushin"], "desc": "the slow push-in is kept"},
+          {"id": "sound_radio", "weight": 1, "check": "contains", "scope": "sound", "any": ["radio", "static", "crackle", "voice"], "desc": "the radio is heard"},
+          {"id": "one_person", "weight": 1, "check": "contains", "scope": "constraints", "any": ["one person", "only one person", "single person"], "desc": "a one-person constraint"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "One continuous 10-second 85mm close-up in @SET-04 at night, rain on the small window and a storm lamp steady on the desk. @CAST-05 sits at the radio (@PROP-03), facing the camera, its green dial glowing on her face.",
+        "beats": [
+          {"from": 0, "to": 2.2, "camera": "85mm close-up at eye level, a very slow dolly push-in begins", "action": "Facing the camera, Ines listens to the radio with hope in her eyes, leaning in toward it, lips parted, waiting for the name."},
+          {"from": 2.2, "to": 4.6, "camera": "the dolly keeps creeping in on her face", "action": "A name comes through the static and the hope drains from her face: she freezes, her eyes widen and she stops breathing."},
+          {"from": 4.6, "to": 6.4, "camera": "tight on her face, still pushing in", "action": "She realizes it is her brother's boat; she covers her mouth with her hand, her eyes brimming, looking into the lens."},
+          {"from": 6.4, "to": 8.4, "camera": "the push-in continues, very slow", "action": "Her hand slides away from her mouth, trembling, and her eyes go glassy and hollow."},
+          {"from": 8.4, "to": 10, "camera": "tight close-up on her face, the move settling", "action": "She lowers her hand and stares into the lens, numb and blank, not blinking, as the radio's green glow flickers over her face."}
+        ],
+        "sound": "the radio crackling, a man's voice reading the list of lost boats, her held breath",
+        "constraints": ["One person only", "No text"]
+      }
+    },
+    {
+      "id": "beats-06-chapel-pull-out-reveal",
+      "title": "Pull-out reveal: a grieving sailor, then the empty flooded chapel (6 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "rigid grief that breaks into tears",
+        "traps": ["the reveal must come late, not in the first beat", "the move starts extremely tight and ends wide", "rig string names a camera maker"]
+      },
+      "input": {
+        "shot": {
+          "id": "S21",
+          "seconds": 6,
+          "text": "Tight on Tomas as he stares into the lens, grief-stricken; the camera pulls back to reveal he is alone among the empty pews of the flooded chapel. @CAST-06 @SET-05 @PROP-04",
+          "optical_rig": "Sony Venice 2 / 85mm Macro",
+          "camera_motion": "Slow Dolly Pull-Out"
+        },
+        "cast": [
+          {"code": "@CAST-06", "name": "Tomas", "look": "a weathered sailor in his fifties with a grey beard, a cable-knit sweater under a black oilskin coat and red-rimmed eyes"}
+        ],
+        "set": {"code": "@SET-05", "name": "Flooded chapel", "look": "a flooded village chapel at dusk: ankle-deep dark water between rows of wooden pews, candles on every sill, a hole in the roof"},
+        "props": [
+          {"code": "@PROP-04", "name": "Candle", "look": "a single tall candle in a brass holder on the front pew"}
+        ],
+        "previous_shot": {"id": "S20", "text": "The church bell tolls once over the water. @SET-05"},
+        "next_shot": null
+      },
+      "expect": {
+        "hard": {"beats": [3, 4]},
+        "soft": [
+          {"id": "face_to_camera", "weight": 3, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "toward us", "into the lens"], "desc": "the face is toward the lens"},
+          {"id": "no_back_views", "weight": 2, "check": "forbids", "scope": "all", "none": ["from behind", "back of (?:his|her|their) head", "over[- ]the[- ]shoulder", "in profile", "profile (?:view|shot)", "silhouett", "seen from (?:the )?back", "back (?:is |turned )?to (?:the )?camera"], "desc": "no back, profile or silhouette view"},
+          {"id": "start_tight", "weight": 2, "check": "contains", "scope": "first", "any": ["extreme close", "tight", "close-up", "close up"], "desc": "the first beat is tight on the face"},
+          {"id": "pull_out", "weight": 3, "check": "camera_move", "any": ["pullout"], "desc": "the camera pulls out"},
+          {"id": "reveal_timing", "weight": 3, "check": "event_time", "pattern": "reveal|empty|alone", "between": [2.5, 5.0], "desc": "the empty chapel is revealed between 2.5 s and 5 s, not in the first beat"},
+          {"id": "empty_pews", "weight": 2, "check": "contains", "scope": "all", "any": ["empty pews", "empty benches", "empty chapel", "no one else"], "desc": "the empty pews are named"},
+          {"id": "end_wide", "weight": 2, "check": "contains", "scope": "last", "any": ["wide", "full", "far"], "desc": "the last beat is wide"},
+          {"id": "grief_arc", "weight": 3, "check": "ordered", "groups": [["jaw", "clench", "rigid", "stoic", "unblinking"], ["tears", "weep", "crumple"]], "desc": "rigid grief first, then tears"},
+          {"id": "one_person", "weight": 2, "check": "contains", "scope": "constraints", "any": ["one person", "only one person", "single person"], "desc": "a one-person constraint"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint"},
+          {"id": "sound_water", "weight": 1, "check": "contains", "scope": "sound", "any": ["water", "drip", "candle", "wind", "silence"], "desc": "the chapel is heard"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "One continuous 6-second shot in @SET-05: the flooded chapel at dusk, ankle-deep dark water between the pews and candles on every sill. @CAST-06 sits alone on a pew, facing the camera; @PROP-04, a single tall candle, burns on the front pew beside him.",
+        "beats": [
+          {"from": 0, "to": 2, "camera": "85mm extreme close-up on his face, locked, then the slow dolly pull-out begins", "action": "Facing the camera, Tomas stares into the lens, jaw clenched, red-rimmed eyes unblinking, holding himself rigid."},
+          {"from": 2, "to": 4.2, "camera": "the dolly pulls back, widening past his shoulders", "action": "His face crumples and tears run down into his grey beard as he keeps staring into the lens; the candle (@PROP-04) comes into frame beside him."},
+          {"from": 4.2, "to": 6, "camera": "wide shot, the pull-out finishes on the whole chapel", "action": "The reveal shows him alone among rows of empty pews in the black water, candles reflected around him, small and still."}
+        ],
+        "sound": "water dripping into the flooded nave, a candle flame guttering, his ragged breathing",
+        "constraints": ["One person only", "No text"]
+      }
+    },
+    {
+      "id": "beats-07-stairwell-panic-4s",
+      "title": "Handheld: a woman against a locked door drops the key (4 s, take reference)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "mounting panic ending in terror",
+        "traps": ["the take reference @S23.end must survive", "only 4 s: two beats at most three", "she stands against the door but must still face the lens"]
+      },
+      "input": {
+        "shot": {
+          "id": "S24",
+          "seconds": 4,
+          "text": "Pick up from @S23.end: Ines backs against the locked door, hands shaking, fumbles the brass key and drops it, then looks up into the lens in terror. @CAST-05 @SET-06 @PROP-05",
+          "optical_rig": "RED V-Raptor / 35mm Prime",
+          "camera_motion": "Handheld Urgency"
+        },
+        "cast": [
+          {"code": "@CAST-05", "name": "Ines", "look": "a woman in her early forties with a black bob, tired dark eyes and a navy knit sweater"}
+        ],
+        "set": {"code": "@SET-06", "name": "Stairwell landing", "look": "a narrow stone stairwell landing lit by one bare bulb, a heavy iron door"},
+        "props": [
+          {"code": "@PROP-05", "name": "Brass key", "look": "a brass key on a loop of string"}
+        ],
+        "previous_shot": {"id": "S23", "text": "Ines runs up the stairs, pursued. @CAST-05 @SET-06"},
+        "next_shot": {"id": "S25", "text": "The bulb dies. @SET-06"}
+      },
+      "expect": {
+        "hard": {"beats": [2, 3]},
+        "soft": [
+          {"id": "face_to_camera", "weight": 3, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "toward us", "into the lens"], "desc": "the face is toward the lens"},
+          {"id": "no_back_views", "weight": 3, "check": "forbids", "scope": "all", "none": ["from behind", "back of (?:his|her|their) head", "over[- ]the[- ]shoulder", "in profile", "profile (?:view|shot)", "silhouett", "seen from (?:the )?back", "back (?:is |turned )?to (?:the )?camera"], "desc": "no back, profile or silhouette view"},
+          {"id": "key_drops", "weight": 3, "check": "event_time", "pattern": "\\bdrops?\\b|\\bslips?\\b|\\bfalls?\\b|clatter", "between": [1.0, 3.0], "desc": "the key falls between 1 s and 3 s"},
+          {"id": "terror_last", "weight": 2, "check": "contains", "scope": "last", "any": ["terror", "terrified", "fear", "panic", "eyes wide", "wide eyes"], "desc": "the last beat ends in terror"},
+          {"id": "handheld", "weight": 2, "check": "contains", "scope": "cameras", "any": ["handheld", "shak", "jitter", "lurch"], "desc": "the handheld motion is kept"},
+          {"id": "pick_up", "weight": 2, "check": "contains", "scope": "setup", "any": ["@S23\\.end"], "desc": "the setup says where the shot picks up"},
+          {"id": "face_in_every_beat", "weight": 1, "check": "each_beat", "any": ["face", "eyes", "lips", "mouth", "breath"], "desc": "every beat says what the face does"},
+          {"id": "sound_key", "weight": 1, "check": "contains", "scope": "sound", "any": ["breath", "gasp", "key", "clink", "clatter"], "desc": "breath or the key is heard"},
+          {"id": "one_person", "weight": 1, "check": "contains", "scope": "constraints", "any": ["one person", "only one person", "single person"], "desc": "a one-person constraint"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "Continuing straight from @S23.end: one 4-second handheld 35mm shot on the stairwell landing of @SET-06, a single bare bulb overhead. @CAST-05 has her back pressed against the heavy iron door and faces the camera, the brass key (@PROP-05) on its loop of string clutched in her shaking hands.",
+        "beats": [
+          {"from": 0, "to": 2, "camera": "handheld, jittery, tight on her face and hands", "action": "Facing the camera, Ines fumbles the key at the lock behind her, hands shaking, breath coming in gasps, eyes darting toward the stairs."},
+          {"from": 2, "to": 4, "camera": "handheld, a lurch as the key falls", "action": "The key slips from her fingers and drops, clattering on the stone; she freezes and looks up into the lens in sheer terror, eyes wide."}
+        ],
+        "sound": "ragged breath, the clink of the key on stone, footsteps echoing far below",
+        "constraints": ["One person only", "No text"]
+      }
+    },
+    {
+      "id": "beats-08-torn-photograph-orbit-8s",
+      "title": "Orbit: from his pleading face to her furious one over a torn photograph (8 s)",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "pleading grief against cold fury",
+        "traps": ["an orbit tempts profile and back views at the midpoint", "both performers must face the lens, one after the other", "the photograph must carry no text", "rig string names a camera maker"]
+      },
+      "input": {
+        "shot": {
+          "id": "S27",
+          "seconds": 8,
+          "text": "Kael and Mira stand a metre apart over the torn photograph on the console, neither moving; the camera orbits from Kael's pleading face to Mira's furious one. @CAST-01 @CAST-02 @PROP-06 @SET-01",
+          "optical_rig": "ARRI Alexa 65 / 35mm Anamorphic f/1.4",
+          "camera_motion": "Orbit 180"
+        },
+        "cast": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"},
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair, freckles and a dark green wool long coat"}
+        ],
+        "set": {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory at dawn, rain streaking the curved glass above a ring of brass consoles with amber instrument lights"},
+        "props": [
+          {"code": "@PROP-06", "name": "Torn photograph", "look": "a photograph torn in half, two small figures on the pieces, no writing on either side"}
+        ],
+        "previous_shot": {"id": "S26", "text": "Kael sets the torn photograph on the console between them. @CAST-01 @PROP-06 @SET-01"},
+        "next_shot": {"id": "S28", "text": "Mira sweeps the photograph off the console. @CAST-02 @PROP-06 @SET-01"}
+      },
+      "expect": {
+        "hard": {"beats": [3, 5]},
+        "soft": [
+          {"id": "face_to_camera", "weight": 2, "check": "contains", "scope": "all", "any": ["facing the camera", "faces the camera", "toward the camera", "toward us", "into the lens"], "desc": "the faces are toward the lens"},
+          {"id": "no_back_views", "weight": 2, "check": "forbids", "scope": "all", "none": ["silhouett", "from behind", "back of (?:his|her|their) head"], "desc": "no silhouette or rear view of a face"},
+          {"id": "orbit", "weight": 3, "check": "camera_move", "any": ["orbit"], "desc": "the camera orbits"},
+          {"id": "kael_then_mira", "weight": 3, "check": "ordered", "groups": [["plead", "anguish", "begging", "grief"], ["furi", "fury", "rage", "seeth", "glar"]], "desc": "Kael's pleading face first, Mira's fury second"},
+          {"id": "fury_timing", "weight": 2, "check": "event_time", "pattern": "furi|fury|rage|seeth|glar", "between": [3.5, 6.5], "desc": "Mira's fury arrives between 3.5 s and 6.5 s"},
+          {"id": "stillness", "weight": 1, "check": "contains", "scope": "actions", "any": ["neither (?:of them )?moves", "motionless", "frozen", "still"], "desc": "neither performer moves"},
+          {"id": "photograph", "weight": 1, "check": "contains", "scope": "all", "any": ["photograph", "photo"], "desc": "the photograph is in the picture"},
+          {"id": "no_dead_air", "weight": 1, "check": "beat_lengths", "min": 1.0, "max": 3.5, "desc": "every beat between 1 s and 3.5 s"},
+          {"id": "two_people", "weight": 2, "check": "contains", "scope": "constraints", "any": ["two people", "2 people", "only two"], "desc": "a two-people constraint"},
+          {"id": "no_text", "weight": 1, "check": "contains", "scope": "constraints", "any": ["no text", "no on-screen text", "no captions", "no lettering"], "desc": "a no-text constraint (the photograph has no writing)"},
+          {"id": "sound_room", "weight": 1, "check": "contains", "scope": "sound", "any": ["breath", "rain", "silence", "hum", "creak"], "desc": "the room is heard"},
+          {"id": "no_leakage", "weight": 1, "check": "forbids", "scope": "all", "none": ["seed\\s*\\d", "optical rig", "camera motion", "f/\\d"], "desc": "no seed numbers, field labels or f-stops leak into the prompt"}
+        ]
+      },
+      "reference": {
+        "setup": "One continuous 8-second 35mm shot in @SET-01: Kael (@CAST-01) and Mira (@CAST-02) stand a metre apart across the console, the torn photograph (@PROP-06) lying between them, rain on the glass behind. Neither moves.",
+        "beats": [
+          {"from": 0, "to": 2.6, "camera": "35mm medium two-shot from Kael's side, the orbit begins", "action": "Facing the camera, Kael's face is pleading and anguished, eyes wet, jaw working, as he stares at the torn photograph; Mira stands rigid beside the console, half turned away from us."},
+          {"from": 2.6, "to": 5.2, "camera": "the camera arcs across the console between them", "action": "Neither of them moves. The orbit passes the photograph, its two torn halves between their hands, and swings toward Mira."},
+          {"from": 5.2, "to": 8, "camera": "35mm medium close-up, the orbit settles facing Mira", "action": "Facing the camera now, Mira glares into the lens with cold fury, nostrils flaring, her jaw set, while Kael waits motionless, out of focus at her shoulder."}
+        ],
+        "sound": "rain on the glass, a held breath, the faint creak of the console",
+        "constraints": ["Two people only", "No text on the photograph or anywhere else"]
+      }
+    }
+  ]
+}

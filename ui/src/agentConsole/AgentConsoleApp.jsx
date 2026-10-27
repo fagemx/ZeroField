@@ -8,6 +8,7 @@ import { ConsoleQuickstart } from './ConsoleQuickstart.jsx';
 import { ConsolePlayground, ConsoleSkills } from './ConsoleBuildViews.jsx';
 import { ConsoleAgents, ConsoleDeployments, ConsoleEnvironments, ConsoleMemory, ConsoleProviders, ConsoleSessions } from './ConsoleManagedViews.jsx';
 import { Budget, ConsoleLimits, ConsoleUsage } from './ConsoleAnalyticsAdminViews.jsx';
+import { AutomationSwitch, GpuPanel, PausedBanner, QueuePanel } from './ConsoleOpsViews.jsx';
 import './agentConsole.css';
 import { Icon } from '../Icon.jsx';
 
@@ -71,7 +72,7 @@ function ConsoleShell({page,busy,error,projects,project,onReturn}) {
       <footer><Budget budget={overview?.budget}/><p>{me.name} · {roleLabel(me.role)}</p></footer>
     </aside>
     <div className="ac-stage"><header className="ac-header"><button disabled={busy} onClick={onReturn}>{t('console.returnProduction')}</button><span className="ac-production">{project.title}</span><button onClick={refresh} disabled={busy}>{t('console.refresh')}</button><LanguageSwitch/></header>
-      <main aria-busy={busy}><h1 tabIndex={-1} ref={heading}>{t('console.pages.'+page)}</h1>{error && <p className="ac-error" role="alert">{error}</p>}{!overview ? <p role="status">{t('console.loading')}</p> : <fieldset disabled={busy}><View key={page}/></fieldset>}</main>
+      <main aria-busy={busy}><PausedBanner/><h1 tabIndex={-1} ref={heading}>{t('console.pages.'+page)}</h1>{error && <p className="ac-error" role="alert">{error}</p>}{!overview ? <p role="status">{t('console.loading')}</p> : <fieldset disabled={busy}><View key={page}/></fieldset>}</main>
     </div>
     {search!==null && <div className="ac-search-backdrop" onClick={closeSearch}><section className="ac-search-dialog" role="dialog" aria-modal="true" aria-label={t('console.search')} onClick={e=>e.stopPropagation()} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();closeSearch();}if(event.key==='Tab'){const controls=event.currentTarget.querySelectorAll('input,button');const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}if(event.key==='ArrowDown' && document.activeElement===searchRef.current){event.preventDefault();event.currentTarget.querySelector('.ac-search-results button')?.focus();}}}>
       <label>{t('console.search')}<input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)}/></label><button onClick={closeSearch}>{t('console.close')}</button><div className="ac-search-results">{resourceSearch(catalog,search).map(item=><button key={item.page+item.key} onClick={()=>{navigate(item.page,item.resource);closeSearch();}}>{item.label}<small>{t('console.pages.'+item.page)}</small></button>)}</div>
@@ -80,5 +81,6 @@ function ConsoleShell({page,busy,error,projects,project,onReturn}) {
 }
 function ConsoleDashboard() {
   const {overview,navigate}=useConsole();
-  return <><p>{t('console.dashboardNotice')}</p><div className="ac-kpis">{['needs_you','working','done','idle'].map(key=><button key={key} onClick={()=>navigate('sessions')}><strong>{overview.counts?.[key] ?? '—'}</strong>{t('console.counts.'+key)}</button>)}</div><Budget budget={overview.budget}/><JsonView label="workerState" value={overview.builtin_worker}/><JsonView label="environmentStates" value={overview.environments}/><h2>{t('console.recentSessions')}</h2>{overview.recent_sessions?.length ? overview.recent_sessions.map(run=><button className="ac-recent" key={run.id} onClick={()=>navigate('sessions',run.id)}>{run.objective} · {statusLabel(run.status)}</button>):<Empty/>}<JsonView label="usage30" value={overview.usage_30_days}/></>;
+  return <><p>{t('console.dashboardNotice')}</p><div className="ac-kpis">{['needs_you','working','done','idle'].map(key=><button key={key} onClick={()=>navigate('sessions')}><strong>{overview.counts?.[key] ?? '—'}</strong>{t('console.counts.'+key)}</button>)}</div>
+    <div className="ac-ops"><div className="ac-ops-side"><AutomationSwitch/><GpuPanel/></div><QueuePanel/></div><Budget budget={overview.budget}/><JsonView label="workerState" value={overview.builtin_worker}/><JsonView label="environmentStates" value={overview.environments}/><h2>{t('console.recentSessions')}</h2>{overview.recent_sessions?.length ? overview.recent_sessions.map(run=><button className="ac-recent" key={run.id} onClick={()=>navigate('sessions',run.id)}>{run.objective} · {statusLabel(run.status)}</button>):<Empty/>}<JsonView label="usage30" value={overview.usage_30_days}/></>;
 }

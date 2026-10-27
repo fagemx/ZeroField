@@ -29,4 +29,4 @@ include-package-data = false
 
 [tool.setuptools.package-data]
 project_assistant = ["prompts/*.md"]
-openbench_data = ["db/*.sql", "static/projects/*", "static/projects/assets/*", "workflows/*.json", "workflows/*.md", "workflows/cards/*.json", "workflows/router/*.json", "samples/*.png", "samples/*.mp4", "samples/*.md", "samples/*.py"]
+openbench_data = ["db/*.sql", "static/projects/*", "static/projects/assets/*", "workflows/*.json", "workflows/*.md", "workflows/cards/*.json", "workflows/router/*.json", "samples/*.png", "samples/*.mp4", "samples/*.md", "samples/*.py", "skills/*.md", "skills/*/*.md"]

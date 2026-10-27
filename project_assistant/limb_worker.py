@@ -135,7 +135,8 @@ def acp_stdio(task, config, head):
     prompt=instructions+'\n'+json.dumps({'input':task['input'],'continuation':task.get('continuation',{})},ensure_ascii=False)
     with tempfile.TemporaryDirectory(prefix='openbench-acp-') as folder:
         result=acp_bridge.run_acp(command=config.get('command'),cwd=folder,env=configured,prompt=prompt,
-            tool_proxy=Proxy(),deadline_at=task['deadline_at'],cancel_event=Canceled())
+            tool_proxy=Proxy(),deadline_at=task['deadline_at'],cancel_event=Canceled(),
+            required_mode=config.get('required_mode'))
     if result['status']=='succeeded':
         try:
             output=json.loads(result['output'].get('text',''))
@@ -201,7 +202,10 @@ def process_one(head, config):
         if adapter['adapter']=='acp_stdio':
             outcome=output['status']
             if outcome not in ('succeeded','awaiting_gate'):
-                raise WorkerError('ACP '+outcome+'; no output delivered')
+                stopped_by=WorkerError(output.get('error') or 'ACP '+outcome+'; no output delivered')
+                if output.get('reason'):  # A lock-down rule stopped the turn (SPEC_20 R35): report why, never retry.
+                    stopped_by.lockdown_reason,stopped_by.no_retry=str(output['reason']),True
+                raise stopped_by
             output=output['output']
             if outcome=='awaiting_gate': stopped.set()
         if errors and outcome!='awaiting_gate':
@@ -217,7 +221,8 @@ def process_one(head, config):
         try:
             retryable = not (getattr(exc, 'no_retry', False) or head.paid_request_submitted) and (
                 isinstance(exc, TransientWorkerError) or any(isinstance(e, TransientWorkerError) for e in errors))
-            head.action(queue+"fail", dict(lease, error=message, retryable=retryable))
+            reason = getattr(exc, 'lockdown_reason', None) if isinstance(exc, WorkerError) else None
+            head.action(queue+"fail", dict(lease, error=message, retryable=retryable, **({'reason': reason} if reason else {})))
         except Exception:
             pass
         print(json.dumps({"task_id": task["id"], "error": message}), flush=True)
@@ -241,6 +246,8 @@ def main():
     if not token:
         parser.error("Set the worker token environment variable before starting")
     head = Head(config.get("head_url", "http://127.0.0.1:3020"), token)
+    from project_assistant import gpu_arbiter  # SPEC_20 R13; with OPENBENCH_DB_URI a separate worker shares the server's GPU lock
+    gpu_arbiter.enable_switching()  # for the life of this worker process
     while True:
         try:
             had_task = process_one(head, config)

@@ -97,12 +97,15 @@ def state(conn, me, slug):
     payload['open_gates']=db.many(conn,"SELECT jsonb_build_object('id',g.id,'run_id',g.run_id,'question',g.question,'gate_kind',g.gate_kind) FROM projectops.orchestration_gate g JOIN projectops.orchestration_run r ON r.id=g.run_id WHERE r.project_slug=%s AND r.created_by=%s AND g.status='open' ORDER BY g.created_at DESC LIMIT 20",(slug,me.actor_id))
     if payload["flags"]["manager"]:  # 負責人：大家私下轉給他、還沒回覆的問題數，頂列數字和側邊欄提示用
         payload["forwards_open"] = len(store.forwards(conn, slug, status="open"))
+    from project_assistant import shot_meta
     for proposal in payload["proposals"]:
         if proposal["action"] == "table_edit":
             target = proposal.get("target") or {}
             tab = repo.get_tab(conn, slug, target.get("tab_key"))
             proposal["review"] = target.get("review") or proposal_review.describe(target, tab, partial_allowed=proposal.get("message_id") is not None)
             proposal["review"] = {**proposal["review"], "version": proposal_review.version(target)}
+        elif proposal["action"] == shot_meta.ACTION:  # the stage reads the proposed value by shot (SPEC_20 R18)
+            proposal["target"] = shot_meta.card_target(proposal.get("target"))
     return 200, payload
 
 
@@ -284,6 +287,7 @@ def _write(conn, me, slug, proposal, content):
 
     ``table_edit`` pins the cells and rows it writes (``table_edits.apply``). Other actions run
     ``_check_sources`` first, then write through the matching service, which checks the target.
+    ``shot_meta`` (SPEC_20 R18) is pinned by the revision of the shot field it changes (``shot_meta.write``).
     """
     action, target = proposal["action"], proposal["target"] or {}
     if action == "table_edit":
@@ -291,6 +295,9 @@ def _write(conn, me, slug, proposal, content):
     problem = _check_sources(conn, slug, target)
     if problem:
         return problem
+    if action == "shot_meta":
+        from project_assistant import shot_meta
+        return shot_meta.write(conn, me, slug, target)
     if action == "私下轉給負責人":
         if not content:
             return _error(400, "The question for the owner is empty.")
@@ -319,6 +326,8 @@ def _write(conn, me, slug, proposal, content):
 
 
 def _summary(result: dict) -> dict:
+    if "shot_meta" in result:
+        return result["shot_meta"]
     if result.get("annotation"):
         return {"annotation_id": result["annotation"]["id"], "tab_key": result["annotation"].get("tab_key")}
     if "forward_id" in result:
@@ -353,6 +362,8 @@ def _own_pending(conn, me, slug, proposal_id):
         return None, _error(404, "Proposal not found.")
     if proposal["status"] != "pending":
         return None, _error(409, "This proposal has already been handled.")
+    if proposal["action"] == "shot_meta" and not me.can_write:  # SPEC_20 R18: a viewer sees it on the stage, read-only
+        return None, _error(403, "Read-only crew members cannot modify a production.")
     proposal["_flow_bound"] = bool(row)
     proposal['_orchestration_bound']=bool(bound)
     return proposal, None
@@ -381,6 +392,9 @@ def apply_proposal(conn, me, slug, proposal_id, body,*,_race_task_id=None):
         if edited != proposal["content"]:
             if proposal["action"] == "table_edit":
                 return _error(400, "Regenerate this table proposal; editing preview text alone is not supported.")
+            if proposal["action"] == "shot_meta":
+                from project_assistant import shot_meta
+                return _error(400, shot_meta.NOT_EDITABLE)
             content, notes = privacy.text(conn, slug, edited)
     remaining = None
     original = proposal
@@ -451,6 +465,15 @@ def dismiss_proposal(conn, me, slug, proposal_id):
     from project_assistant.orchestrator import on_proposal_decided
     on_proposal_decided(conn,proposal['id'],False)
     return 200, {"proposal": store.proposal(conn, proposal["id"]), "notes": []}
+
+
+def shot_proposals(conn, me, slug, shot_id):
+    """My pending shot_meta proposals for one shot, with the proposed values (SPEC_20 R18, decision 5)."""
+    problem = _gate(conn, me, slug)
+    if problem:
+        return problem
+    from project_assistant import shot_meta
+    return shot_meta.listing(conn, me, slug, shot_id)
 
 
 # ---------- 管理視角 ----------

@@ -505,6 +505,8 @@ def main(argv=None):
     shutdown = threading.Event()
     http_server = None
     registered, threads = {}, []
+    from project_assistant import gpu_arbiter
+    restore_gpu = gpu_arbiter.enable_switching()  # SPEC_20 R13: while serving, owner switches free ComfyUI or unload the model
     try:
         # Reserve the port before seeding or rotating any live worker credentials.
         http_server = server.OpenBenchHTTPServer((args.host, args.port), server.OpenBenchHandler)
@@ -569,6 +571,7 @@ def main(argv=None):
             http_server.server_close()
         if cleanup_pg:
             cleanup_pg()
+        restore_gpu()
     return 0
 
 

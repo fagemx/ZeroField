@@ -30,6 +30,8 @@ HISTORIC_GRANTS = {
     'qa_critic': READS + REPORTS + ['propose', 'studio_inspect_frames'],
 }
 EXTERNAL_ONLY = {'get_workflow', 'request_generation'}  # declared for zerofield-mcp; no built-in grant
+# SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
+CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
 
 
 class ToolSurfaceAuditTests(unittest.TestCase):
@@ -133,8 +135,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertFalse(any(tool_registry.get(name).grants for name in EXTERNAL_ONLY))
         for key, grants in HISTORIC_GRANTS.items():
             with self.subTest(key=key):
-                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'])
-                self.assertEqual(agent_registry.default_tools(key, False), grants)
+                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + CONTEXT)
+                self.assertEqual(agent_registry.default_tools(key, False), grants + CONTEXT)
         self.assertEqual(agent_registry.default_tools('custom_agent'), agent_registry.default_tools('qa_critic'))
 
     def test_ui_catalog_matches_console_model(self):

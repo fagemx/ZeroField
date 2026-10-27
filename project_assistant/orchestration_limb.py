@@ -155,9 +155,16 @@ def complete(conn,worker,body):
 
 
 def fail(conn,worker,body):
-    context(conn,worker,body)
+    dispatch,task,ctx=context(conn,worker,body)
+    output={'error':'Remote execution failed; reconcile accepted requests before retry.','retryable':False}
+    from project_assistant import acp_lockdown
+    reason=body.get('reason') if isinstance(body.get('reason'),str) else None
+    if acp_lockdown.failure_message(reason):  # SPEC_20 R35: a lock-down rule stopped the ACP turn; say which.
+        output={'error':acp_lockdown.failure_message(reason),'reason':reason,'retryable':False}
+    # Proposals the turn made before it failed are reported so the settlement can dismiss them.
+    proposals=db.many(conn,'SELECT id FROM projectops.assistant_proposal WHERE dispatch_id=%s ORDER BY id',(dispatch['id'],))
     return cp.complete_dispatch(conn,worker,body['dispatch_handle'],body['lease_token'],outcome='failed',
-        output={'error':'Remote execution failed; reconcile accepted requests before retry.','retryable':False},proposal_ids=[])
+        output=output,proposal_ids=proposals)
 
 
 def upload(conn,worker,body,raw,mime):
@@ -167,13 +174,19 @@ def upload(conn,worker,body,raw,mime):
     return {'asset_id':asset_id,'asset_url':f'/projects/api/{ctx.slug}/assets/{asset_id}','content_type':content_type}
 
 
+def remote_tool_specs(profile,frozen):
+    """What a remote turn (ACP or remote limb) may list: the agent's current tools within the dispatch's frozen grants."""
+    from project_assistant import agent_policy
+    return [spec for spec in agent_policy.tool_specs_for(profile) if spec['name'] in frozen]
+
+
 def tool_list(conn,worker,body):
-    from project_assistant import agent_policy,agent_registry
+    from project_assistant import agent_registry
     dispatch,task,ctx=context(conn,worker,body)
     profile=agent_registry.get_agent(conn,ctx.slug,ctx.agent_key)
     if not profile or not profile['enabled']:
         raise cp.OrchestrationError(403,"The agent is disabled.",'POLICY_DENIED')
-    return {'tools':[spec for spec in agent_policy.tool_specs_for(profile) if spec['name'] in ctx.allowed_tools]}
+    return {'tools':remote_tool_specs(profile,ctx.allowed_tools)}
 
 
 def tool(conn,worker,body,connection_factory):
