@@ -54,5 +54,18 @@
       "mcp": ["list_pages", "read_page", "search_pages", "report_list", "report_overview", "report_sheet", "report_cell", "report_find", "propose", "ask_decision_gate", "studio_inspect_frames", "read_episode", "read_scene", "read_shot", "read_cast", "list_takes"]
     }
   },
-  "ui_catalog": ["studio_ingest_script", "studio_manage_asset", "studio_plan_allocation", "studio_dispatch_shot", "studio_inspect_frames", "studio_edit_timeline", "consult_advisor", "read_episode", "read_scene", "read_shot", "read_cast", "list_takes"]
+  "ui_catalog": ["studio_ingest_script", "studio_manage_asset", "studio_plan_allocation", "studio_dispatch_shot", "studio_inspect_frames", "studio_edit_timeline", "consult_advisor", "read_episode", "read_scene", "read_shot", "read_cast", "list_takes"],
+  "acp": {
+    "ceiling": ["propose_table_edit", "list_pages", "read_page", "search_pages", "my_todo", "report_list", "report_overview", "report_sheet", "report_cell", "report_find", "offer_document", "propose", "list_agents", "spawn_agent", "check_delegation", "cancel_delegation", "ask_decision_gate", "trigger_flow_run", "studio_ingest_script", "studio_manage_asset", "studio_plan_allocation", "studio_dispatch_shot", "studio_inspect_frames", "studio_edit_timeline", "consult_advisor", "read_episode", "read_scene", "read_shot", "read_cast", "list_takes"],
+    "mcp_servers": ["openbench"],
+    "client_capabilities": {"fs": {"readTextFile": false, "writeTextFile": false}, "terminal": false},
+    "default_mode": "read-only",
+    "forbidden_modes": ["acceptEdits", "agent", "agent-full-access", "auto", "bypassPermissions", "danger-full-access", "dontAsk", "full-access", "workspace-write", "yolo"],
+    "agent_builtins": ["codex/list_mcp_resource_templates", "codex/list_mcp_resources", "codex/read_mcp_resource"],
+    "non_tool_kinds": ["think"],
+    "grant_kinds": ["allow_once"],
+    "env_keep": ["CODEX_PATH", "COMSPEC", "LANG", "LC_ALL", "MODEL_PROVIDER", "PATH", "PATHEXT", "SSL_CERT_FILE", "SYSTEMROOT", "TEMP", "TMP", "TZ", "WINDIR"],
+    "config_homes": ["APPDATA", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "HOME", "LOCALAPPDATA", "USERPROFILE", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"],
+    "codex_features_disabled": ["apps", "browser_annotation_api", "browser_use", "browser_use_external", "browser_use_full_cdp_access", "computer_use", "daemon_auto_start", "hooks", "image_generation", "in_app_browser", "in_app_local_automation", "in_app_voice", "multi_agent", "plugin_sharing", "plugins", "realtime_conversation", "remote_plugin", "shell_snapshot", "shell_tool", "skill_mcp_dependency_install", "skill_search", "sleep_tool", "tool_suggest", "unified_exec", "unified_exec_tty", "view_image", "workspace_dependencies", "worktrees", "write_stdin_approval"]
+  }
 }

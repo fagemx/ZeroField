@@ -106,7 +106,7 @@ def verify(path, source=None):
         expected.update('project_assistant/' + name + '.py' for name in
                         ('agent_registry','agent_policy','agent_runtime','orchestrator','orchestration_store',
                          'orchestration_service','orchestration_flow','orchestration_limb','comment_routing',
-                         'acp_bridge','mcp_stdio','tool_host'))
+                         'acp_bridge','acp_lockdown','mcp_stdio','tool_host'))
         expected.update("openbench_data/workflows/" + name + ".json" for name in
                         ("flux3_klein_soul_cast", "ltx25_cinema_shot", "ltx25_openjutsu_v2v"))
         expected.update("openbench_data/skills/" + name + "/SKILL.md" for name in

@@ -63,9 +63,23 @@ LLM 使用 [Chat Completions 官方協定](https://developers.openai.com/api/ref
 
 模型金鑰只從部署設定的 `api_key_env` 取用，映射為此 adapter 的 `OPENAI_API_KEY`，並透過已公告的 `api-key` 方法認證。其他環境中的模型金鑰、Head Bearer、DB URI、使用者 HOME／CODEX_HOME 不繼承。每回合使用新的 HOME／CODEX_HOME 與暫存 cwd，不沿用使用者 Codex 登入。
 
-橋接依序 initialize → authenticate（有明確金鑰時）→ session/new（掛載本次 MCP）→ session/prompt。MCP 子程序只持有單回合 loopback token；Head 憑證只留在 Worker parent。工具清單取目前權限與派發快照交集，每次工具呼叫在 Head 重查租約、角色、成員與固定範圍。問題 Gate 提交後終止此回合，回答後以新 admission 續跑並帶回 continuation。只顯示 agent_message_chunk，忽略 thought；不把 stderr／原始協定錯誤傳給使用者。
+橋接依序 initialize → authenticate（有明確金鑰時）→ session/new（掛載本次 MCP）→ 確認模式 → session/prompt。MCP 子程序只持有單回合 loopback token；Head 憑證只留在 Worker parent。工具清單取目前權限與派發快照交集，每次工具呼叫在 Head 重查租約、角色、成員與固定範圍。問題 Gate 提交後終止此回合，回答後以新 admission 續跑並帶回 continuation。只顯示 agent_message_chunk，忽略 thought；不把 stderr／原始協定錯誤傳給使用者。
 
-ACP 的檔案、終端、原生權限要求一律拒絕；Codex adapter 設為 read-only 並關閉既有禁止功能。逾時或 Worker 發現 lease loss 時中止子程序樹，Windows 使用 Job Object，POSIX 使用獨立 process group。Head 取消立即阻止工具和輸出；正在等待模型的遠端程序在下一次心跳察覺，正常租約心跳間隔為 40 秒。阻塞 stdin 也受獨立 watchdog 限制。
+ACP 的檔案、終端與權限要求依下節鎖權限處理；Codex adapter 設為 read-only 並關閉既有禁止功能。逾時或 Worker 發現 lease loss 時中止子程序樹，Windows 使用 Job Object，POSIX 使用獨立 process group。Head 取消立即阻止工具和輸出；正在等待模型的遠端程序在下一次心跳察覺，正常租約心跳間隔為 40 秒。阻塞 stdin 也受獨立 watchdog 限制。
+
+### 鎖權限（SPEC_20 R35）
+
+ACP 工人是選配，預設關閉：只有部署者在 Worker 設定 `acp_stdio` adapter、管理者建立綁定該手腳的 `runtime_kind=acp_stdio` 專家時才會執行。規則都在 `project_assistant/acp_lockdown.py`，橋接（`acp_bridge.py`）每回合套用，不依賴流程手冊或代理自己的設定：
+
+- **只開指定的 MCP**：session/new 只掛 `openbench`（`mcp_stdio.py`＋單回合工具主機）。HOME、USERPROFILE、APPDATA、LOCALAPPDATA、XDG_*、CODEX_HOME、CLAUDE_CONFIG_DIR 全指向本回合的空資料夾（不空就拒絕啟動），CODEX_CONFIG 只保留模型設定（`mcp_servers`、profiles、hooks、供應商標頭與 bearer token 一律丟棄），使用者設定裡的 MCP、外掛與擴充都載入不到。
+- **清除密鑰**：環境變數採白名單（PATH、SYSTEMROOT 等執行必要項），名稱像憑證的一律不傳；CODEX_CONFIG 若仍帶憑證（網址內帳密或環境中的密鑰值）就拒絕。唯一例外是 `api_key_env` 指定的金鑰，映射為 `OPENAI_API_KEY`。
+- **啟動後確認模式**：session/new 回報的模式（`modes.currentModeId` 或模式設定選項）必須等於 `required_mode`（預設 `read-only`；Claude Code 類 adapter 可設 `plan` 等詢問模式），代理提供該模式時橋接只切換一次，並要代理回報確認；不符就終止，不送出工作。`full-access`、`auto`、`bypassPermissions`、`acceptEdits` 等放權模式不能設定。回合中離開該模式即砍掉整棵程序。
+- **權限請求預設拒絕且一次性**：只有已公告、屬於 `openbench` 且在本回合工具清單內的工具呼叫才會被同意，而且只選 `allow_once`、每個工具呼叫一次；永遠不選 `allow_always`。
+- **意外工具呼叫砍整棵程序**：串流裡出現清單外的工具呼叫（原生 shell／檔案、其他 MCP 伺服器、清單外工具、`fs/*`、`terminal/*` 用戶端請求），立即以 Job Object（Windows）或 process group（POSIX）砍掉整棵程序樹，連孫程序與孤兒程序一起；回合記為失敗並寫明原因，Worker 以不可重試的失敗回報，Head 把派工結為 `failed`、釋放租約、撤下這回合已建立的提案。允許的例外只有 Codex 的 MCP 資源查詢（只看得到 `openbench`）與 `think`（壓縮情境，不執行工具）。
+- **擋斜線指令**：Prompt 開頭是 `/`（含全形與不可見字元之後），或任一行以 `/logout`、`/mcp:…` 這類指令開頭，就在啟動代理前拒絕。路徑行（`/usr/local/...`）與 JSON 字串裡的內容不受影響。
+- **離線列出工具清單**：`python -X utf8 scripts/audit_tool_surface.py` 的 `acp` 段落，以和代理相同的掛載方式啟動 `openbench` MCP（不啟動代理或模型）列出 ACP 回合最多看得到的工具，連同上述固定設定一起比對 `tests/fixtures/tool_surface.json`；多一個工具、伺服器、內建工具、授權種類或環境變數，或少一個禁用模式、設定目錄、關閉的功能，檢查就失敗。
+
+測試 `tests/test_acp_lockdown.py` 用假的 ACP 代理程式逐條驗證，從不啟動真的 Codex 或 Claude Code。Claude Code 的 ACP adapter 依其公開格式（`_meta.claudeCode.toolName`）辨識工具，尚未實機驗證。
 
 這些是工具與憑證邊界，**不是任意可執行檔的 OS 沙箱**。command 是可信部署設定，不能來自 Prompt 或 HTTP 工作內容；要執行不可信 adapter，需另用受限帳號／容器。其他 ACP CLI 尚未驗證。實際官方 adapter smoke 使用本機合成 Responses SSE，包含 MCP 讀頁、提案、介面核對；未呼叫外部付費模型。
 

@@ -43,7 +43,8 @@ class ACPBridgeTests(unittest.TestCase):
         self.assertEqual(result['status'], 'succeeded', result)
         self.assertEqual(proxy.calls, [('read_page', {'key': 'overview'})])
 
-    def test_native_files_terminal_permissions_and_unknown_requests_denied(self):
+    def test_toolless_permission_and_unknown_requests_denied(self):
+        # fs/* and terminal/* requests now stop the turn; see test_acp_lockdown (SPEC_20 R35).
         self.assertEqual(self.run_agent('deny')['status'], 'succeeded')
 
     def test_committed_mcp_question_stops_the_process_and_releases_turn(self):
