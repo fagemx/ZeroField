@@ -298,6 +298,10 @@ class FailureTests(unittest.TestCase):
         self.assertEqual((result.error_kind, result.failure), ('bad_response', 'output'))
         self.assertEqual(set(model_client.FAILURE_TEXT), set(model_client.FAILURE_CLASSES))
         self.assertEqual(model_client.failure_class('kind_removed'), 'provider')
+        # A local GPU that stays busy with a render has its own class (SPEC_20 R13); nothing was sent.
+        from project_assistant import gpu_arbiter
+        busy = turn(config('http://127.0.0.1:9/v1', 'm'), raising(gpu_arbiter.GpuBusy('The GPU stayed busy with another workload.')))
+        self.assertEqual((busy.status, busy.error_kind, busy.failure), ('error', 'gpu_busy', 'gpu_busy'))
 
     def test_chat_and_board_show_the_class_in_plain_language(self):
         for kind, failure in (('unavailable', ''), ('quota', 'quota'), ('configuration', 'provider')):
@@ -320,7 +324,8 @@ class FailureTests(unittest.TestCase):
             data = json.loads((root / name).read_text(encoding='utf-8'))
             keys = list(data)
             self.assertEqual(keys.index('providerFailures'), keys.index('crewReadiness') + 1, name)
-            self.assertEqual(set(data['providerFailures']), set(model_client.FAILURE_CLASSES), name)
+            camel = {c: ''.join(w.title() if i else w for i, w in enumerate(c.split('_'))) for c in model_client.FAILURE_CLASSES}
+            self.assertEqual(set(data['providerFailures']), set(camel.values()), name)
             self.assertTrue({'enableHostedOpen', 'useHybridPolicy'} <= set(data['crewReadiness']), name)
 
 

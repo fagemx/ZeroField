@@ -73,7 +73,7 @@
      3. **閉源模型只在混合模式明確開啟時可用。** 包括 OpenAI、Anthropic、Gemini 與 Comfy Router 的閉源卡；混合模式即 `hybrid_studio` 製作政策。
      4. **不使用 chatgpt.com 訂閱端點；所有模型呼叫都走治理。** 包括連戲評分與快速建立助手。
      5. **非本機呼叫一律要價格上限，並記錄實際用到的模型。**
-   - 目前的落實：`openai_compat` 介面相容任何 OpenAI 相容端點，但預設環境只放行本機（`localhost`、`127.0.0.1`、`::1`）。要接託管端點或閉源模型，管理者必須先在 Agent Console 的 Environments & Bridges 放行該主機，並在 Spend & Rate Limits 設定該模型的價格上限，否則治理會拒絕。用量分級（SPEC_20 R8、R9）：`project_assistant/provider_catalog.json` 依端點與模型判定 `local_open`／`hosted_open`／`closed`，目錄沒有的非本機端點一律算 `closed`；`open_weights_only` 只放行 `local_open`，`hosted_open` 還要管理者在中控台設定把 `provider_policy.hosted_open_enabled` 設為 true（預設關閉），`closed` 只在 `hybrid_studio` 可用，部署天花板 `OPENBENCH_PRODUCTION_POLICY` 一樣管代理模型。帳本記錄回應裡的實際模型（R12）。尚未完成（SPEC_20 R11）：連戲評分與快速建立助手走治理；在那之前，連戲評分與快速建立助手請只指向本機端點。
+   - 目前的落實：`openai_compat` 介面相容任何 OpenAI 相容端點，但預設環境只放行本機（`localhost`、`127.0.0.1`、`::1`）。要接託管端點或閉源模型，管理者必須先在 Agent Console 的 Environments & Bridges 放行該主機，並在 Spend & Rate Limits 設定該模型的價格上限，否則治理會拒絕。用量分級（SPEC_20 R8、R9）：`project_assistant/provider_catalog.json` 依端點與模型判定 `local_open`／`hosted_open`／`closed`，目錄沒有的非本機端點一律算 `closed`；`open_weights_only` 只放行 `local_open`，`hosted_open` 還要管理者在中控台設定把 `provider_policy.hosted_open_enabled` 設為 true（預設關閉），`closed` 只在 `hybrid_studio` 可用，部署天花板 `OPENBENCH_PRODUCTION_POLICY` 一樣管代理模型。帳本記錄回應裡的實際模型，失敗分成 local／quota／auth／provider／timeout／empty／output／gpu_busy 並以白話顯示（R12）。連戲評分與快速建立助手也走治理（R11），本機模型呼叫與 ComfyUI 算圖共用跨程序 GPU 仲裁（R13）。
    - 拆鏡（劇本到分鏡）預設由規則與範本產生，不呼叫模型（`project_docs/story_adaptation.py`；建立分鏡回傳 `"engine": "deterministic"`）。劇組產生拆鏡提案屬 SPEC_20 的規劃包（C 包），尚未實作。
 2. **SFW 與版權／肖像權合規（Official Rule: Legal, SFW, No Unauthorized IP/Likeness）**：
    - 預載於 `samples/` 與展示專案中的所有圖片、實拍原片（Driving Videos）、角色名稱與 Prompt：

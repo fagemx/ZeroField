@@ -347,7 +347,9 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
                     cause = 'connection refused' if isinstance(reason, ConnectionRefusedError) else 'host name lookup failed'
                     hint = ' Start the local model server (for example Ollama), then retry.' if local else ' Nothing was sent.'
                     raise model_client.ModelError("unavailable", f'{where} is not reachable ({cause}).{hint}') from None
-                pending ='' if local else '; the outcome is uncertain until an administrator reconciles it'
+                if isinstance(reason, gpu_arbiter.GpuBusy):  # the GPU never came free; nothing was sent
+                    raise model_client.ModelError("gpu_busy", str(reason), "gpu_busy") from None
+                pending = '' if local else '; the outcome is uncertain until an administrator reconciles it'
                 if isinstance(reason, TimeoutError):
                     raise model_client.ModelError("timeout", f'{where} did not answer in time{pending}.') from None
                 cause = type(reason).__name__ if isinstance(reason, BaseException) else type(exc).__name__

@@ -21,7 +21,8 @@ before(async () => {
 after(async () => {if (temporary) await rm(temporary, {recursive: true, force: true});});
 
 test('every failure class has a plain line; anything else falls back to the stored text', async () => {
-  assert.deepEqual(ui.PROVIDER_FAILURES, ['local', 'quota', 'auth', 'provider', 'timeout', 'empty', 'output']);
+  assert.deepEqual(ui.PROVIDER_FAILURES, ['local', 'quota', 'auth', 'provider', 'timeout', 'empty', 'output', 'gpu_busy']);
+  assert.equal(ui.providerFailureText('gpu_busy'), "The GPU is busy with a render, so the local model couldn't start. Try again shortly.");
   assert.equal(ui.providerFailureText('local'), "The local model isn't answering. Start Ollama (or the local model server) on the studio computer, then try again.");
   for (const kind of ui.PROVIDER_FAILURES) assert.ok(ui.providerFailureText(kind) && !ui.providerFailureText(kind).includes('providerFailures'), kind);
   assert.equal(ui.providerFailureText('unavailable'), '');

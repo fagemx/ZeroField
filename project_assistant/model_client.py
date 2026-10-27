@@ -6,7 +6,8 @@ goes through an OpenAI-compatible endpoint and ProviderAdmission.
 Failure classes (SPEC_20 R12) are what people see: local (the local model server is
 down or broken), quota, auth, provider (a hosted service or the request setup failed),
 timeout, empty (no answer and no tool calls) and output (the answer was malformed or
-looped on tools). `error_kind` keeps the transport detail for logs and tests.
+looped on tools), plus gpu_busy (the local GPU stayed busy with a render, SPEC_20 R13).
+`error_kind` keeps the transport detail for logs and tests.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from dataclasses import dataclass, field
 
 MAX_ROUNDS = 16  # 翻報表一題可能要查十幾次；最後一輪不給工具，只准用查到的回答
 LAST_ROUND_NOTE = "（系統附註：查資料的次數到上限了。請用目前查到的內容直接回答；還沒查到的照實說，不要再查。）"
-FAILURE_CLASSES = ('local', 'quota', 'auth', 'provider', 'timeout', 'empty', 'output')
+FAILURE_CLASSES = ('local', 'quota', 'auth', 'provider', 'timeout', 'empty', 'output', 'gpu_busy')
 # Plain-language fallbacks for surfaces without the UI dictionary (the UI uses providerFailures.*).
 FAILURE_TEXT = {
     'local': "The local model isn't answering. Start Ollama (or the local model server) on the studio computer, then try again.",
@@ -24,6 +25,7 @@ FAILURE_TEXT = {
     'timeout': 'The model took too long to answer. Try again, or ask for something smaller.',
     'empty': 'The model sent back an empty answer. Try again, or rephrase the request.',
     'output': "The model's answer couldn't be used (it was malformed or kept calling tools). Try again, or rephrase the request.",
+    'gpu_busy': 'The GPU is busy with a render, so the local model could not start. Try again shortly.',
 }
 
 
@@ -39,7 +41,7 @@ def failure_class(kind: str, *, local: bool = False) -> str:
 class ModelError(RuntimeError):
     def __init__(self, kind: str, message: str, failure: str | None = None):
         super().__init__(message)
-        self.kind = kind  # quota／auth／unavailable／timeout／bad_response／bad_request／empty／output
+        self.kind = kind  # quota／auth／unavailable／timeout／bad_response／bad_request／empty／output／gpu_busy
         self.failure = failure  # overrides failure_class(kind) when the evidence is more specific
 
 

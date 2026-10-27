@@ -309,7 +309,8 @@
     "provider": "The model service had a problem and didn't finish. Try again; if it keeps happening, the showrunner can check Agent Console.",
     "timeout": "The model took too long to answer. Try again, or ask for something smaller.",
     "empty": "The model sent back an empty answer. Try again, or rephrase your request.",
-    "output": "The model's answer couldn't be used (it was malformed or kept calling tools). Try again, or rephrase your request."
+    "output": "The model's answer couldn't be used (it was malformed or kept calling tools). Try again, or rephrase your request.",
+    "gpuBusy": "The GPU is busy with a render, so the local model couldn't start. Try again shortly."
   },
   "agentModel": {
     "noUniqueAgentFoundFor": "No unique agent found for @{{v0}}",
