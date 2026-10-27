@@ -2,6 +2,7 @@ import { defaultPlan } from './plan.js';
 import { dummiesOf } from './blocking.js';
 import { codesOnSet, samePlan } from './storyPlan.js';
 import { agentLabel } from '../format.js';
+import { buttonOfKind, SHOT_LOOK_KINDS } from '../composer/lookModel.js';
 
 // SPEC_20 R18 (decision 5): a crew proposal that changes a shot's stored 3D plan (action shot_meta, field previsPlan). It is
 // reviewed where it lands, on the 3D Stage: the proposed plan as a ghost over the current one, approved or rejected through the
@@ -40,12 +41,41 @@ export function opLines(ops, moveKeys = { static: 1, orbit: 3 }) {
 }
 
 // The assistant's list carries my proposals without their values; the ids pending for this shot tell the stage when to read
-// the shot's list again (a new proposal came in, or one was decided from a card).
-export function shotMetaKey(proposals, shotId) {
+// the shot's list again (a new proposal came in, or one was decided from a card). field: only proposals of that field (the shot
+// composer reads the look ones).
+export function shotMetaKey(proposals, shotId, field = null) {
   if (!shotId) return '';
   return (Array.isArray(proposals) ? proposals : [])
-    .filter(p => p?.action === SHOT_META && p.status === 'pending' && p.target?.shotId === shotId)
+    .filter(p => p?.action === SHOT_META && p.status === 'pending' && p.target?.shotId === shotId && (!field || p.target?.field === field))
     .map(p => p.id).sort((a, b) => a - b).join(',');
+}
+
+// ---- SPEC_20 R18 for SPEC_19 R11: a crew proposal of a shot's look overrides (field look, value {genre?, era?, tempo?, palette?,
+// light?}: an option id, or null for "back to the episode"). It is reviewed on the shot composer, in the wall of the look button it
+// touches, and applied or dismissed through the same proposal decisions as a 3D plan.
+export const LOOK_FIELD = 'look';
+const isLook = value => isPlan(value) && Object.keys(value).some(kind => SHOT_LOOK_KINDS.includes(kind));
+export async function loadLookProposals(get, slug, shotId) {
+  const data = await get(shotProposalsPath(slug, shotId));
+  return (Array.isArray(data?.proposals) ? data.proposals : []).filter(p => p?.action === SHOT_META && p.status === 'pending' && p.field === LOOK_FIELD && isLook(p.value));
+}
+// The review the composer shows: the shot's first pending look proposal (others wait their turn), or null.
+//   values: the kinds it sets ({palette: 'lamp-amber', light: null}); buttons: the look buttons they belong to (each gets a dot);
+//   revision: the shot's lookRevision as the composer holds it; writable: this person may edit.
+export function lookProposalReview(list, {revision = null, writable = false, error = ''} = {}) {
+  const pending = Array.isArray(list) ? list.filter(p => p?.status === 'pending' && isLook(p.value)) : [];
+  const first = pending[0];
+  if (!first) return null;
+  const values = Object.fromEntries(Object.entries(first.value).filter(([kind, value]) => SHOT_LOOK_KINDS.includes(kind) && (value === null || typeof value === 'string')));
+  const kinds = SHOT_LOOK_KINDS.filter(kind => kind in values);
+  const current = Math.max(Number.isInteger(first.currentRevision) ? first.currentRevision : 0, Number.isInteger(revision) ? revision : 0);
+  const canDecide = Boolean(writable && first.canDecide);
+  return {
+    id: first.id, proposal: first, values, kinds, buttons: [...new Set(kinds.map(buttonOfKind))],
+    author: authorLabel(first.author), summary: String(first.summary || ''), baseRevision: first.baseRevision, currentRevision: current,
+    stale: Number.isInteger(first.baseRevision) && first.baseRevision !== current,
+    canDecide, readOnly: !canDecide, more: pending.length - 1, error: error || '',
+  };
 }
 
 const SCALARS = [['set', 'set'], ['move', 'move'], ['lens', 'lens'], ['seconds', 'duration'], ['action', 'action'], ['facing', 'facing'], ['mood', 'light']];

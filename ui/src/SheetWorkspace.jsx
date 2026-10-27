@@ -402,6 +402,10 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
   // reloaded afterwards instead of patched here (SPEC_19 1.2 B); an applied pipeline proposal also reloads the proposal list.
   const storyWrite=(fn,{proposals:reloadProposals=false}={})=>{if(!writable||!guardDraft())return Promise.resolve(false);
     return run(async()=>{try{await fn();}finally{await refresh();if(reloadProposals)await onReloadProposals?.();}});};
+  // SPEC_19 R11: a shot's look (PUT /shots/{id}/look, or a look proposal applied) is not a cell: like the composer's Optical Rig write it
+  // leaves the composer's prompt draft open, and the shot view it answers with replaces the shot's entry (a 409 reads the shots again).
+  const lookWrite=fn=>{if(!writable)return Promise.resolve(false);if(editing&&editing.source!=='composer'){guardDraft();return Promise.resolve(false);}
+    return run(async()=>{try{const view=await fn();if(view?.rowId)setShotInfo(old=>({...old,[view.rowId]:{...old[view.rowId],...view}}));}catch(e){if(e?.status===409)setTakesNonce(n=>n+1);throw e;}});};
   const openInTable=(rid,c)=>{if(!guardDraft())return;const r=parsed.rows.findIndex(item=>item.rid===rid);setPreview(null);setView({mode:'grid'});if(r>=0)focus({r,c});};
   const stageKeys=e=>{
     if(!studioRails||!currentRow||editing||e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey||e.target.closest('input,textarea,select,video,[contenteditable=true]'))return;
@@ -468,7 +472,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
       proposals={proposals} version={`${tab.revision}:${takesNonce}`} inFlight={inFlight.has(currentRow.rid)} generating={storyRuns[currentRow.rid]||0}
       writable={writable} disabled={busy} canStatus={statusCol>=0} controlRef={composerControl}
       onWrite={storyWrite} onRetake={()=>retakeShot(currentRow)} onShowStage={hasStage?()=>pickView('stage'):undefined} onOpenWorld={onOpenWorld}
-      onGenerate={payload=>generateShot(currentRow,payload)}/>;
+      onGenerate={payload=>generateShot(currentRow,payload)} epId={epId} onLook={lookWrite} onApplyProposal={onApplyProposal} onDismissProposal={onDismissProposal}/>;
   })();
 
   return <section className="canvas sheet-canvas sheet-v2 sheet-workspace" onPaste={paste} onCopy={copy} onKeyDown={productionSheet?stageKeys:undefined}>

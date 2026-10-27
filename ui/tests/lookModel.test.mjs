@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {cameraGroups, cameraChoice, cameraText, withCamera, changedGroups, moveTokens, moveOrder, moveNumbers, insertMove, removeMove, removeMoves,
-  promptTokens, typingAt, replaceTyping, lookScope, withoutOverride, backToEpisodeBody, optionLabel, textureHue, LOOK_BUTTONS} from '../src/composer/lookModel.js';
+  promptTokens, typingAt, replaceTyping, lookScope, withoutOverride, backToEpisodeBody, optionLabel, textureHue, LOOK_BUTTONS,
+  BUTTON_KINDS, KIND_SELECTOR, SHOT_LOOK_KINDS, buttonOfKind, buttonScope, scopeBadge, overriddenKinds, setKinds, shotLookBody, resetLookBody, cameraScope,
+  labelKeyOf, isAutoId, idLabel, episodeDraft, episodeLookBody, sameDraft, overrideCount, swatchColors, swatchGradient, luminance, arrangeOptions,
+  carouselStart, carouselMove, eraScale} from '../src/composer/lookModel.js';
+import {LOOK_OPTIONS} from './lookOptionsFixture.mjs';
 
 // The packaged catalog the server serves at GET /catalog/looks (project_docs/look_catalog.json).
 const catalog = JSON.parse(await readFile(new URL('../../project_docs/look_catalog.json', import.meta.url), 'utf8')).items;
@@ -97,4 +101,101 @@ test('an option is labelled by its key, else its id; an option with no media get
   assert.equal(optionLabel({id: 'new-move', labelKey: 'lookCatalog.move.newMove'}, translate), 'new-move');
   assert.equal(textureHue('pan'), textureHue('pan'));
   assert.ok(textureHue('pan') >= 0 && textureHue('pan') < 360);
+});
+
+// ---------- Package C: film setup, palette and lighting (R11, R12) ----------
+const looks = LOOK_OPTIONS;
+
+test('C1: a shot follows the episode until it overrides a kind; an episode change reaches only the shots that follow it', () => {
+  const before = {genre: 'rain-mystery', palette: 'midnight-slate'}, after = {genre: 'quiet-drama', palette: 'lamp-amber'};
+  const follows = {}, overrides = {palette: 'dry-ochre'};
+  assert.deepEqual(lookScope('palette', after, follows), {value: 'lamp-amber', scope: 'episode'}, 'a shot without an override shows the new episode value');
+  assert.deepEqual(lookScope('palette', after, overrides), {value: 'dry-ochre', scope: 'shot'}, 'an overridden shot keeps its own');
+  assert.deepEqual(lookScope('genre', before, overrides), {value: 'rain-mystery', scope: 'episode'}, 'an override of one kind leaves the others with the episode');
+  const film = buttonScope(BUTTON_KINDS.filmSetup, after, {tempo: 'slow-drift'});
+  assert.equal(film.scope, 'shot', 'film setup says This shot as soon as one of its kinds is overridden');
+  assert.deepEqual(film.kinds.map(item => [item.kind, item.value, item.scope]), [['genre', 'quiet-drama', 'episode'], ['era', null, 'auto'], ['tempo', 'slow-drift', 'shot']]);
+  assert.equal(buttonScope(BUTTON_KINDS.filmSetup, after, {}).scope, 'episode');
+  assert.equal(buttonScope(BUTTON_KINDS.palette, null, null).scope, 'episode', 'nothing set anywhere: the shot follows the episode (Auto)');
+  assert.deepEqual(['shot', 'episode', 'auto', null].map(scopeBadge), ['shot', 'episode', 'episode', 'episode']);
+  assert.deepEqual(overriddenKinds(BUTTON_KINDS.filmSetup, {genre: 'auto', palette: 'lamp-amber', era: null}), ['genre'], 'an override to Auto is still an override');
+  assert.deepEqual(setKinds(BUTTON_KINDS.filmSetup, {genre: 'auto', era: 'tape-era', tempo: null}, looks), ['era'], 'the episode page dots what is not Auto');
+  assert.equal(overrideCount([{look: {palette: 'dry-ochre'}}, {look: {}}, {}, {look: {light: 'low-sun'}}], ['palette']), 1);
+});
+
+test('back to the episode, Reset all and a choice are PUT /shots/{id}/look bodies with the revision the shot was read at', () => {
+  assert.deepEqual(shotLookBody('palette', 'lamp-amber', 3), {palette: 'lamp-amber', baseRevision: 3});
+  assert.deepEqual(shotLookBody('genre', 'auto', null), {genre: 'auto'}, 'no revision read yet: none sent');
+  assert.deepEqual(resetLookBody(['palette'], {palette: 'dry-ochre', light: 'low-sun'}, 4), {palette: null, baseRevision: 4}, '"Back to the episode" for one kind');
+  assert.deepEqual(resetLookBody(BUTTON_KINDS.filmSetup, {genre: 'quiet-drama', tempo: 'still-hold', palette: 'dry-ochre'}, 7), {genre: null, tempo: null, baseRevision: 7},
+    'Reset all takes back every override of the wall, and only those');
+  assert.deepEqual(resetLookBody(['palette'], {}, 2), {baseRevision: 2}, 'nothing overridden: nothing to take back');
+  assert.deepEqual(backToEpisodeBody('light'), {light: null});
+});
+
+const HEX5 = ['#C98A3D', '#8A4B2A', '#3B2A24', '#E8C48A', '#1E1A1A'];
+test('a palette is a swatch strip from its hex, the main colour first and widest', () => {
+  assert.equal(swatchGradient(['#2E3A4A', '#5B6F86']), 'linear-gradient(90deg, #2E3A4A 0% 66.67%, #5B6F86 66.67% 100%)');
+  assert.equal(swatchGradient(HEX5), 'linear-gradient(90deg, #C98A3D 0% 33.33%, #8A4B2A 33.33% 50%, #3B2A24 50% 66.67%, #E8C48A 66.67% 83.33%, #1E1A1A 83.33% 100%)');
+  assert.deepEqual(swatchColors(['#123', 'red', '#12345', '#A1B2C3', null, 'url(x)']), ['#123', '#A1B2C3'], 'only #rgb and #rrggbb are colours');
+  assert.equal(swatchGradient([]), null); assert.equal(swatchGradient(undefined), null); assert.equal(swatchGradient(['nope']), null);
+  assert.ok(luminance('#000000') < luminance('#2E3A4A') && luminance('#2E3A4A') < luminance('#FFFFFF'));
+  assert.equal(luminance('#fff'), luminance('#FFFFFF'));
+});
+
+test('the camera button says Episode only while the Optical Rig cell is empty and the episode has a camera', () => {
+  const episode = {body: 'film-35mm', lens: 'anamorphic'};
+  assert.deepEqual(cameraScope('', episode, catalog), {scope: 'episode', choice: {body: 'film-35mm', lens: 'anamorphic', aperture: 'auto-aperture', custom: false}});
+  assert.equal(cameraScope('  ', episode, catalog).scope, 'episode', 'blank text is an empty cell');
+  const own = cameraText({body: 'film-16mm', lens: 'auto-lens', aperture: 'f4'}, catalog);
+  assert.deepEqual(cameraScope(own, episode, catalog), {scope: 'shot', choice: {body: 'film-16mm', lens: 'auto-lens', aperture: 'f4', custom: false}}, 'text in the cell is the shot\'s own');
+  assert.equal(cameraScope('', null, catalog).scope, 'shot', 'no episode camera: as before');
+  assert.equal(cameraScope('', {body: 'auto-body', lens: 'auto-lens', aperture: 'auto-aperture'}, catalog).scope, 'shot', 'an all-Auto episode camera is no camera');
+  assert.equal(cameraScope('', {body: 'film-35mm'}, []).scope, 'episode', 'before the catalog arrives an id other than auto-* still counts');
+});
+
+test('labels, Auto and selectors by data type', () => {
+  assert.equal(labelKeyOf('genre', 'rain-mystery'), 'lookCatalog.genre.rainMystery');
+  assert.equal(labelKeyOf('genre', 'instrument-room-sf'), 'lookCatalog.genre.instrumentRoomSf');
+  assert.equal(labelKeyOf('tempo', 'hold-then-burst'), 'lookCatalog.tempo.holdThenBurst');
+  assert.equal(labelKeyOf('palette', 'auto'), 'lookCatalog.palette.auto');
+  for (const [kind, list] of Object.entries(looks)) for (const item of list) assert.equal(labelKeyOf(kind, item.id), item.labelKey, item.id);
+  for (const id of [null, undefined, '', 'auto', 'auto-body']) assert.ok(isAutoId(id), String(id));
+  assert.ok(!isAutoId('auto-pilot', [{id: 'auto-pilot', promptText: 'x'}]), 'the catalog decides when it knows the option');
+  const translate = key => ({'look.auto': 'Auto', 'lookCatalog.palette.lampAmber': 'Lamp amber'})[key] || key;
+  assert.equal(idLabel('palette', 'lamp-amber', [], translate), 'Lamp amber', 'a proposal value before the catalog: its label key');
+  assert.equal(idLabel('palette', 'auto', looks.palette, translate), 'Auto');
+  assert.equal(idLabel('palette', 'neon-new', [], translate), 'neon-new', 'an id the interface does not know yet');
+  assert.deepEqual(SHOT_LOOK_KINDS, ['genre', 'era', 'tempo', 'palette', 'light']);
+  assert.deepEqual(BUTTON_KINDS.filmSetup, ['genre', 'era', 'tempo']);
+  assert.deepEqual(SHOT_LOOK_KINDS.map(buttonOfKind), ['filmSetup', 'filmSetup', 'filmSetup', 'palette', 'lighting']);
+  assert.deepEqual(KIND_SELECTOR, {genre: 'carousel', era: 'scale', tempo: 'carousel', palette: 'grid', light: 'grid'});
+});
+
+test('the episode page keeps a draft and sends {aspectRatio, stylePresetId, look} without Auto', () => {
+  const stored = {aspectRatio: '21:9', stylePresetId: '88124', breakdownMode: 'scene', look: {genre: 'rain-mystery', camera: {body: 'film-35mm'}, palette: 'midnight-slate'}};
+  const draft = episodeDraft(stored);
+  assert.deepEqual(draft, {aspectRatio: '21:9', stylePresetId: '88124', look: {genre: 'rain-mystery', era: null, tempo: null, palette: 'midnight-slate', light: null,
+    camera: {body: 'film-35mm', lens: null, aperture: null}}});
+  assert.deepEqual(episodeLookBody({...draft, look: {...draft.look, light: 'low-sun', era: 'auto', camera: {body: 'film-35mm', lens: 'auto-lens', aperture: 'f4'}}}, stored),
+    {aspectRatio: '21:9', stylePresetId: '88124', breakdownMode: 'scene', look: {genre: 'rain-mystery', palette: 'midnight-slate', light: 'low-sun', camera: {body: 'film-35mm', aperture: 'f4'}}});
+  assert.deepEqual(episodeLookBody(episodeDraft({})), {aspectRatio: '16:9', stylePresetId: '88123', look: {}}, 'all Auto clears the stored look');
+  assert.ok(sameDraft(draft, episodeDraft(stored)));
+  assert.ok(sameDraft({...draft, look: {...draft.look, era: 'auto'}}, draft), 'choosing Auto where nothing was set changes nothing');
+  assert.ok(!sameDraft({...draft, aspectRatio: '16:9'}, draft));
+});
+
+test('the card grids search and sort with Auto first; the carousel opens on the choice; the era scale keeps Auto apart', () => {
+  const label = item => item.id;
+  assert.deepEqual(arrangeOptions(looks.palette, {query: 'AMBER', label}).map(item => item.id), ['auto', 'lamp-amber']);
+  assert.deepEqual(arrangeOptions(looks.palette, {query: 'nothing like it', label}).map(item => item.id), ['auto']);
+  assert.deepEqual(arrangeOptions(looks.light, {sort: 'name', label}).map(item => item.id).slice(0, 3), ['auto', 'backlight-rim', 'hard-top']);
+  const tone = arrangeOptions(looks.palette, {sort: 'tone', label}).map(item => item.id);
+  assert.equal(tone[0], 'auto'); assert.equal(tone[1], 'wet-glass-neon', 'the darkest main colour first'); assert.equal(tone.at(-1), 'sea-bleached');
+  assert.deepEqual(arrangeOptions(looks.genre, {label}).map(item => item.id), looks.genre.map(item => item.id), 'catalog order');
+  assert.equal(carouselStart(9, 3, 0), 0); assert.equal(carouselStart(9, 3, 4), 3); assert.equal(carouselStart(9, 3, 8), 6); assert.equal(carouselStart(2, 3, 1), 0);
+  assert.equal(carouselMove(9, 3, 0, -1), 0); assert.equal(carouselMove(9, 3, 5, 1), 6); assert.equal(carouselMove(9, 3, 6, 1), 6);
+  const scale = eraScale(looks.era);
+  assert.equal(scale.auto.id, 'auto');
+  assert.deepEqual(scale.steps.map(item => item.id), ['early-lens', 'saturated-print', 'grain-film', 'tape-era', 'clean-digital'], 'oldest to newest, in table order');
 });

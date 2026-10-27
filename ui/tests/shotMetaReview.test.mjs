@@ -7,7 +7,8 @@ import {mkdtemp, writeFile, rm} from 'node:fs/promises';
 import {join, dirname, resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {defaultPlan} from '../src/previs/plan.js';
-import {ghostMarks, loadShotProposals, opLines, planChanges, shotMetaKey, shotMetaReview, shotProposalsPath, solutionPath} from '../src/previs/shotMetaModel.js';
+import {ghostMarks, loadShotProposals, opLines, planChanges, shotMetaKey, shotMetaReview, shotProposalsPath, solutionPath,
+  LOOK_FIELD, loadLookProposals, lookProposalReview} from '../src/previs/shotMetaModel.js';
 import {ACTION_LABEL} from '../src/format.js';
 import {setLocale as setModelLocale} from '../src/i18n/index.js';
 
@@ -188,4 +189,27 @@ test('a solved proposal shows its contact sheet, its operations, the solver\'s n
   assert.doesNotMatch(html, /Operations only/);
   assert.deepEqual(opLines([{op: 'camera', size: 'extreme_close', angle: 'low', lens: 85, move: 'static'}, {op: 'camera', size: 'wide', angle: 'high', lens: 24, move: 'orbit'}])
     .map(line => line.params.keys + '|' + line.params.size), ['|extreme close', ' K1→K3|wide']);
+});
+
+// SPEC_20 R18 for SPEC_19 R11: a crew proposal of a shot's look (field look) is reviewed on the shot composer, not the 3D Stage.
+test('look proposals are read by shot, kept apart from 3D plans, and dot the look buttons they touch', async () => {
+  const look = (id, value, extra = {}) => item(id, value, {field: 'look', baseRevision: 3, currentRevision: 3, summary: 'Warmer for the lamp scene.', ...extra});
+  const get = async () => ({proposals: [look(1, {palette: 'lamp-amber', light: 'practical-lamp'}), item(2, proposed), look(3, {}), look(4, ['lamp-amber']),
+    look(5, {camera: {body: 'film-35mm'}}), look(6, {genre: null}), {...look(7, {palette: 'bone-ink'}), status: 'applied'}]});
+  assert.deepEqual((await loadLookProposals(get, 'demo', 'sh_demo_b1')).map(p => p.id), [1, 6], 'only pending look proposals with a look kind');
+  assert.deepEqual((await loadShotProposals(get, 'demo', 'sh_demo_b1')).map(p => p.id), [2], 'the 3D Stage still reads only plans');
+  const list = [{id: 1, action: 'shot_meta', status: 'pending', target: {shotId: 'sh_demo_b1', field: 'look'}}, {id: 2, action: 'shot_meta', status: 'pending', target: {shotId: 'sh_demo_b1', field: 'previsPlan'}}];
+  assert.equal(shotMetaKey(list, 'sh_demo_b1', LOOK_FIELD), '1');
+  assert.equal(shotMetaKey(list, 'sh_demo_b1'), '1,2', 'without a field: every shot proposal, as before');
+
+  const review = lookProposalReview([look(1, {palette: 'lamp-amber', light: 'practical-lamp', camera: 'x'}), look(6, {genre: null})], {revision: 3, writable: true});
+  assert.deepEqual(review.values, {palette: 'lamp-amber', light: 'practical-lamp'}, 'only shot look kinds; the camera is the Optical Rig cell');
+  assert.deepEqual(review.kinds, ['palette', 'light']);
+  assert.deepEqual(review.buttons, ['palette', 'lighting']);
+  assert.deepEqual([review.id, review.author, review.summary, review.stale, review.canDecide, review.readOnly, review.more], [1, 'Cinematographer', 'Warmer for the lamp scene.', false, true, false, 1]);
+  assert.equal(lookProposalReview([look(1, {palette: 'lamp-amber'})], {revision: 5, writable: true}).stale, true, 'the shot\'s look moved on since');
+  assert.equal(lookProposalReview([look(1, {palette: 'lamp-amber'})], {writable: false}).readOnly, true, 'a reader sees it, read-only');
+  assert.equal(lookProposalReview([look(1, {palette: 'lamp-amber'}, {canDecide: false})], {writable: true}).canDecide, false, 'made for someone else');
+  assert.deepEqual(lookProposalReview([look(6, {genre: null, tempo: 'still-hold'})]).buttons, ['filmSetup'], 'genre and tempo share the film setup button');
+  assert.equal(lookProposalReview([]), null);
 });

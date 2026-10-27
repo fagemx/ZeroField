@@ -3,14 +3,14 @@ import { takeRefTokens } from '../takeRefs.js';
 
 // SPEC_19 3.3 / 4.3: the look catalog the shot composer offers, and the prompt's # move tags. Pure functions: no DOM, no requests.
 //
-// The catalog comes from GET /catalog/looks?kind=camera|move (project_docs/look_catalog.json): each option is
+// The catalog comes from GET /catalog/looks?kind=camera|move|genre|era|tempo|palette|light (project_docs/look_catalog.json): each option is
 //   {id, kind, group? ('body' | 'lens' | 'aperture' for camera), labelKey, promptText, preview: {poster, clip} | null, hex?}
 // and each group starts with its Auto option (empty promptText). A camera choice is written into the shot's Optical Rig column as the
 // options' descriptions; a move is a #id tag inside the prompt, where it stands (its position says when the move happens, 1.2 G).
 
 export const CAMERA_GROUPS = ['body', 'lens', 'aperture'];
-// The look buttons of the composer, in order. Package B draws references and camera; package C adds the other three by turning them on
-// here and giving each its wall (they read lookScope below).
+// The look buttons of the composer, in order: references and camera (package B), film setup, palette and lighting (package C, which
+// read lookScope below).
 export const LOOK_BUTTONS = ['references', 'filmSetup', 'camera', 'palette', 'lighting'];
 export const LOOK_KINDS = ['genre', 'era', 'tempo', 'camera', 'palette', 'light'];
 
@@ -172,4 +172,122 @@ export function textureHue(id) {
   let hash = 0;
   for (const char of String(id ?? '')) hash = (hash * 31 + char.codePointAt(0)) % 360;
   return hash;
+}
+
+// ---- Package C (R11, R12): film setup, palette and lighting. GET /catalog/looks?kind=genre|era|tempo|palette|light answers the
+// options of one kind, Auto first (empty promptText); a palette also has hex (its main colour first). Ids are what the episode
+// settings (look) and a shot's override (PUT /shots/{id}/look) store.
+export const SHOT_LOOK_KINDS = ['genre', 'era', 'tempo', 'palette', 'light'];
+// The kinds each look button opens, in the order its wall lists them. Film setup groups genre, image era and tempo (one Film: line).
+export const BUTTON_KINDS = {filmSetup: ['genre', 'era', 'tempo'], camera: ['camera'], palette: ['palette'], lighting: ['light']};
+export const buttonOfKind = kind => Object.keys(BUTTON_KINDS).find(button => BUTTON_KINDS[button].includes(kind)) || null;
+// The selector each kind is chosen with (3.3, the options draft): genre and tempo are left/right carousels, era a scale from old to
+// new (Auto its own cell beside it), palette and light card grids with search and sort.
+export const KIND_SELECTOR = {genre: 'carousel', era: 'scale', tempo: 'carousel', palette: 'grid', light: 'grid'};
+
+// An option's label key when only its id is known (a proposal's value before the catalog arrives): lookCatalog.<kind>.<camelCaseId>,
+// the convention the catalog's labelKeys follow (rain-mystery -> lookCatalog.genre.rainMystery).
+export const labelKeyOf = (kind, id) => `lookCatalog.${kind}.${String(id ?? '').replace(/-([a-z0-9])/g, (_, char) => char.toUpperCase())}`;
+// Whether an id is its kind's Auto: the catalog says so (no promptText); without the catalog, Auto ids are auto or auto-<group>.
+export function isAutoId(id, items = []) {
+  if (id === undefined || id === null || id === '') return true;
+  const item = listOf(items).find(option => option?.id === id);
+  return item ? !item.promptText : /^auto(-|$)/.test(String(id));
+}
+// The label of one id of one kind: its catalog option's, else its label key's, else the id.
+export function idLabel(kind, id, items, translate) {
+  if (isAutoId(id, items)) return translate('look.auto');
+  const item = listOf(items).find(option => option?.id === id);
+  return optionLabel(item || {id, labelKey: labelKeyOf(kind, id)}, translate);
+}
+
+// The look buttons say "Episode" when the shot follows the episode, set or Auto, and "This shot" when it overrides it.
+export const scopeBadge = scope => (scope === 'shot' ? 'shot' : 'episode');
+// A button over several kinds (film setup) is "This shot" as soon as one of them is overridden.
+export function buttonScope(kinds, episodeLook, shotLook) {
+  const scopes = kinds.map(kind => ({kind, ...lookScope(kind, episodeLook, shotLook)}));
+  return {scope: scopes.some(item => item.scope === 'shot') ? 'shot' : 'episode', kinds: scopes};
+}
+// The kinds a shot overrides (the wall marks their category with a dot; Reset all and "Back to the episode" take them away).
+export const overriddenKinds = (kinds, shotLook) => kinds.filter(kind => lookScope(kind, null, shotLook).scope === 'shot');
+// The kinds an episode draft sets to something other than Auto (the dots of the episode look page).
+export const setKinds = (kinds, look, catalog = {}) => kinds.filter(kind => !isAutoId(look?.[kind], catalog[kind]));
+
+// PUT /shots/{id}/look bodies: one kind set, one or more kinds back to the episode (null), with the revision the shot was read at.
+const withRevision = (body, revision) => (Number.isInteger(revision) ? {...body, baseRevision: revision} : body);
+export const shotLookBody = (kind, id, revision) => withRevision({[kind]: id}, revision);
+export const resetLookBody = (kinds, shotLook, revision) => withRevision(Object.fromEntries(overriddenKinds(kinds, shotLook).map(kind => [kind, null])), revision);
+
+// ---- The camera of a shot: its Optical Rig cell. The episode's camera ({body, lens, aperture}) is the default only while the cell is
+// empty; then the camera button says "Episode". Any text in the cell is the shot's own.
+export function cameraScope(rigText, episodeCamera, items = []) {
+  const own = String(rigText ?? '').trim() !== '';
+  const groups = cameraGroups(items);
+  const shared = CAMERA_GROUPS.some(group => !isAutoId(episodeCamera?.[group], groups[group]));
+  if (own || !shared) return {scope: 'shot', choice: cameraChoice(rigText, items)};
+  const choice = Object.fromEntries(CAMERA_GROUPS.map(group => [group, isAutoId(episodeCamera?.[group], groups[group]) ? autoOf(groups[group])?.id ?? null : episodeCamera[group]]));
+  return {scope: 'episode', choice: {...choice, custom: false}};
+}
+
+// ---- An episode look draft (the Episode look page) and the PUT /episodes/{id}/settings body. Auto is left out, so all Auto is
+// look: {} (which clears the stored look).
+export function episodeDraft(settings = {}) {
+  const look = settings?.look || {};
+  return {aspectRatio: settings?.aspectRatio || '16:9', stylePresetId: String(settings?.stylePresetId || '88123'),
+    look: {...Object.fromEntries(SHOT_LOOK_KINDS.map(kind => [kind, look[kind] ?? null])),
+      camera: Object.fromEntries(CAMERA_GROUPS.map(group => [group, look.camera?.[group] ?? null]))}};
+}
+export function episodeLookBody(draft, settings = {}) {
+  const look = {};
+  for (const kind of SHOT_LOOK_KINDS) if (!isAutoId(draft.look?.[kind])) look[kind] = draft.look[kind];
+  const camera = Object.fromEntries(CAMERA_GROUPS.filter(group => !isAutoId(draft.look?.camera?.[group])).map(group => [group, draft.look.camera[group]]));
+  if (Object.keys(camera).length) look.camera = camera;
+  return {aspectRatio: draft.aspectRatio, stylePresetId: draft.stylePresetId, ...(settings?.breakdownMode ? {breakdownMode: settings.breakdownMode} : {}), look};
+}
+export const sameDraft = (a, b) => JSON.stringify(episodeLookBody(a)) === JSON.stringify(episodeLookBody(b));
+// How many shots keep their own value of a kind (they do not follow the episode): the page says so beside the choice.
+export const overrideCount = (shots, kinds) => listOf(shots).filter(shot => overriddenKinds(kinds, shot?.look).length > 0).length;
+
+// ---- A palette's swatch strip: its colours left to right, the main colour (the first) twice as wide. Only #rgb / #rrggbb count.
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+export const swatchColors = hex => listOf(hex).filter(color => HEX.test(String(color)));
+export function swatchGradient(hex) {
+  const colors = swatchColors(hex);
+  if (!colors.length) return null;
+  const total = colors.length + 1, round = value => Math.round(value * 100) / 100;
+  let at = 0;
+  const stops = colors.map((color, index) => {
+    const from = at; at += (index === 0 ? 2 : 1) / total * 100;
+    return `${color} ${round(from)}% ${round(at)}%`;
+  });
+  return `linear-gradient(90deg, ${stops.join(', ')})`;
+}
+// How light a colour reads (relative luminance, 0 black to 1 white): the palette grid can sort dark to light by its main colour.
+export function luminance(color) {
+  if (!HEX.test(String(color))) return 1;
+  let hex = String(color).slice(1);
+  if (hex.length === 3) hex = [...hex].map(char => char + char).join('');
+  const [r, g, b] = [0, 2, 4].map(at => parseInt(hex.slice(at, at + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// The card grids' search and sort. Auto stays first whatever is typed; sort is 'catalog' (the catalog's order), 'name' (by label in
+// the interface language) or 'tone' (palettes, dark to light by the main colour).
+export function arrangeOptions(items, {query = '', sort = 'catalog', label = item => item?.id || ''} = {}) {
+  const list = listOf(items), auto = list.filter(isAuto), rest = list.filter(item => !isAuto(item));
+  const needle = String(query).trim().toLocaleLowerCase();
+  const found = needle ? rest.filter(item => [label(item), item.id, item.promptText].some(text => String(text || '').toLocaleLowerCase().includes(needle))) : rest;
+  const sorted = sort === 'name' ? [...found].sort((a, b) => label(a).localeCompare(label(b)))
+    : sort === 'tone' ? [...found].sort((a, b) => luminance(swatchColors(a.hex)[0]) - luminance(swatchColors(b.hex)[0])) : found;
+  return [...auto, ...sorted];
+}
+
+// A carousel shows size cards of count; start is the first. It opens with the chosen card in view, and steps one card at a time.
+const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+export const carouselStart = (count, size, index) => clamp(index - Math.floor((size - 1) / 2), 0, Math.max(0, count - size));
+export const carouselMove = (count, size, start, delta) => clamp(start + delta, 0, Math.max(0, count - size));
+// The era scale: Auto on its own, the rest in catalog order (oldest look first).
+export function eraScale(items) {
+  const list = listOf(items);
+  return {auto: list.find(isAuto) || null, steps: list.filter(item => !isAuto(item))};
 }
