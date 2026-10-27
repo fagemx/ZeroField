@@ -157,8 +157,10 @@ class GovernanceTests(OrchestrationFixture, unittest.TestCase):
     def test_compat_actual_usage_hook_no_ambiguous_retry_or_duplicate_charge(self):
         import http.client, io, json
         from project_assistant import agent_runtime
-        env=patch.dict(os.environ,{'OPENBENCH_AGENT_KEY_ENVS':'GOVERNANCE_FIXTURE_KEY','GOVERNANCE_FIXTURE_KEY':'synthetic-credential'})
+        env=patch.dict(os.environ,{'OPENBENCH_AGENT_KEY_ENVS':'GOVERNANCE_FIXTURE_KEY','GOVERNANCE_FIXTURE_KEY':'synthetic-credential','OPENBENCH_PRODUCTION_POLICY':'hybrid_studio'})
         env.start();self.addCleanup(env.stop)
+        from project_docs import story_openapi as story
+        story.store(self.conn,'policy_'+self.slug,'policy',{'productionPolicy':'hybrid_studio'},self.slug)  # unknown remote = closed (SPEC_20 R9)
         base='https://priced-provider.invalid/v1'
         profile=agent_registry.save_agent(self.conn,self.me,self.slug,{'agent_key':'coordinator',
             'provider_config':{'kind':'openai_compat','base_url':base,'model':'priced-fixture','api_key_env':'GOVERNANCE_FIXTURE_KEY'}})

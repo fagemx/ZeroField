@@ -211,6 +211,7 @@ POST_ROUTES = [
     (re.compile(rf"/projects/api/{SLUG}/orchestration/dispatches/([0-9a-f-]{{36}})/cancel"), "orchestration_cancel_dispatch"),
     (re.compile(rf"/projects/api/{SLUG}/orchestration/gates/([0-9a-f-]{{36}})/resolve"), "orchestration_resolve"),
     (re.compile(rf"/projects/api/{SLUG}/orchestration/tasks/([0-9a-f-]{{36}})/retry"), "orchestration_retry"),
+    (re.compile(rf"/projects/api/{SLUG}/orchestration/crew-jobs/(cj_[0-9a-f]{{32}})/cancel"), "orchestration_cancel_crew_job"),
     (re.compile(rf"/projects/api/{SLUG}/agents"), "save_agent"),
     (re.compile(rf"/projects/api/{SLUG}/agents/([a-z][a-z0-9_-]{{0,63}})/toggle"), "toggle_agent"),
     (re.compile(rf"/projects/api/{SLUG}/tabs/{KEY}/table-edit"), "table_edit"),
@@ -317,8 +318,10 @@ def _call(name, conn, me, args, query, body, raw):
             return control.run_detail(conn,me,*args,cursor=(query.get('cursor') or [None])[0])
         if name=='orchestration_create':
             return control.create_run_request(conn,me,args[0],body)
+        from project_assistant import crew_jobs  # SPEC_20 R7/R20: the crew board cancels a crew planning job
         actions={'orchestration_cancel_run':control.cancel_run_request,'orchestration_cancel_dispatch':control.cancel_dispatch_request,
-                 'orchestration_resolve':control.resolve_gate_request,'orchestration_retry':control.retry_task_request}
+                 'orchestration_resolve':control.resolve_gate_request,'orchestration_retry':control.retry_task_request,
+                 'orchestration_cancel_crew_job':crew_jobs.cancel_request}
         return actions[name](conn,me,*args,body)
     if name in ('agents','agents_readiness','save_agent','toggle_agent'):
         from project_assistant import agent_registry

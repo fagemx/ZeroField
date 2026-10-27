@@ -203,7 +203,7 @@ class ModelCheckTests(OperationsFixture):
         rows = self.reservations()
         self.assertEqual(len(rows), 5)
         self.assertEqual({(r['agent_key'], r['usage_kind'], r['state'], r['model_name'], r['tier']) for r in rows},
-                         {('coordinator', 'llm_turn', 'finalized', MODEL, 'open_weights')})
+                         {('coordinator', 'llm_turn', 'finalized', MODEL, 'local_open')})  # SPEC_20 R9 usage tier
         self.assertEqual({r['accounted_cost_usd'] for r in rows}, {None})
         ledger = db.one(self.conn, 'SELECT count(*) FROM projectops.agent_usage_ledger WHERE project_slug=%s', (self.slug,))
         self.assertEqual(ledger, 5)

@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, unquote
 from project_assistant import agent_console_service as app, agent_console_store as resources
 from project_assistant import console_deployments as deployments, console_connections as connections
 from project_assistant import agent_registry as agents
-from project_assistant import automation, console_model_check as model_check, console_ops as ops
+from project_assistant import automation, console_model_check as model_check, console_model_matrix as model_matrix, console_ops as ops
 from project_docs import service
 
 ROUTE = re.compile(r'^/projects/api/([a-z0-9][a-z0-9-]{0,40})/agent-console(?:/(.*))?$')
@@ -33,6 +33,8 @@ def dispatch(conn, me, slug, path, method, body, query):
             return ops.gpu_panel(conn, me, slug)
         if path == 'model-setup':
             return model_check.setup(conn, me, slug)
+        if path == 'model-matrix':  # SPEC_20 R37: role x model matrix; the showrunner's page, local endpoints probed only
+            return model_matrix.matrix(conn, me, slug, refresh=query.get('refresh') == '1')
         if path == 'quickstart':
             return app.templates(conn, me, slug)
         if path == 'agents':
@@ -87,6 +89,10 @@ def dispatch(conn, me, slug, path, method, body, query):
             return {'automation': automation.set_paused(conn, me, slug, body)}
         if path == 'model-setup' and method == 'POST':
             return model_check.apply_preset(conn, me, slug, body)
+        if path == 'model-matrix' and method == 'POST':
+            return model_matrix.apply(conn, me, slug, body)
+        if path == 'provider-policy' and method == 'POST':
+            return model_matrix.set_hosted_open(conn, me, slug, body)
         if path == 'playground' and method == 'POST':
             return app.playground(conn, me, slug, body)
         if path == 'sessions' and method == 'POST':

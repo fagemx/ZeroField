@@ -19,6 +19,9 @@ def handle(handler, parsed, method):
     from project_docs import console_http
     if console_http.handle(handler, parsed, method):
         return True
+    from project_docs import agent_http  # service accounts and the zerofield-mcp agent API (SPEC_20 R30, R31)
+    if agent_http.handle(handler, parsed, method):
+        return True
     if parsed.path == "/aivideo/open/v1" or parsed.path.startswith("/aivideo/open/v1/"):
         from project_docs import story_openapi
         return story_openapi.handle(handler, parsed, method)

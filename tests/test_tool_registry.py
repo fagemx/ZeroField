@@ -29,10 +29,13 @@ HISTORIC_GRANTS = {
                                     'studio_inspect_frames', 'studio_edit_timeline', 'consult_advisor'],
     'qa_critic': READS + REPORTS + ['propose', 'studio_inspect_frames'],
 }
+EXTERNAL_ONLY = {'get_workflow', 'request_generation'}  # declared for zerofield-mcp; no built-in grant
 # SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
 CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
 # SPEC_20 R27: the Cinematographer proposes 3D blocking as operations (declared before the context tools).
 PREVIS = {'sheet_ops': ['propose_previs_ops']}
+# SPEC_20 R7/R19/R20: the Cinematographer's proposal tools, after the context tools (the Showrunner has every tool).
+CREW = {'sheet_ops': ['propose_shot_prompt', 'propose_camera']}
 
 
 class ToolSurfaceAuditTests(unittest.TestCase):
@@ -59,6 +62,21 @@ class ToolSurfaceAuditTests(unittest.TestCase):
                 self.assertEqual(view['mcp'], [n for n in view['internal'] if n in tool_registry.MCP])
                 self.assertLessEqual(set(view['internal']), set(view['grants']))
 
+    def test_zerofield_token_view_is_exposure_then_write_mode(self):
+        views = audit.surface()['zerofield_mcp']
+        self.assertEqual(set(views), {'propose_only', 'generate'})
+        for mode, names in views.items():
+            with self.subTest(mode=mode):
+                self.assertEqual(names, [t.name for t in tool_registry.all_tools() if t.name in tool_registry.ZEROFIELD_MCP
+                                         and (mode == 'generate' or t.name not in tool_registry.GENERATION)])
+                self.assertFalse(set(names) & {'spawn_agent', 'trigger_flow_run', 'studio_dispatch_shot', 'search_pages', 'my_todo'})
+        self.assertIn('request_generation', views['generate'])
+        self.assertNotIn('request_generation', views['propose_only'])
+        actual = audit.surface()
+        expected = copy.deepcopy(actual)
+        actual['zerofield_mcp']['propose_only'].append('spawn_agent')
+        self.assertEqual(audit.differences(expected, actual)[:1], ['zerofield-mcp propose_only token: unexpected tool(s) spawn_agent'])
+
     def test_script_compares_without_writing(self):
         with patch('sys.stdout'), patch('sys.stderr'):
             self.assertEqual(audit.main([]), 0)
@@ -76,7 +94,9 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(tool_specs.DELEGATION_TOOLS, {'list_agents', 'spawn_agent', 'check_delegation', 'cancel_delegation',
                                                        'ask_decision_gate', 'trigger_flow_run'})
         self.assertEqual(tool_specs.MUTATING_TOOLS, {'propose', 'propose_table_edit', 'spawn_agent', 'cancel_delegation',
-                                                     'ask_decision_gate', 'trigger_flow_run', 'propose_previs_ops'} | set(tool_specs.STUDIO_SCHEMAS))
+                                                     'ask_decision_gate', 'trigger_flow_run', 'request_generation',
+                                                     'propose_shot_prompt', 'propose_camera', 'propose_previs_ops'}
+                         | set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual({n for n, p in tool_specs.DEFAULT_POLICIES.items() if p != 'auto'},
                          {'studio_ingest_script', 'studio_manage_asset', 'studio_dispatch_shot', 'studio_edit_timeline'})
         self.assertEqual(agent_console_store.STUDIO_TOOLS, set(tool_specs.STUDIO_SCHEMAS))
@@ -91,9 +111,11 @@ class RegistryDerivationTests(unittest.TestCase):
                                                       'check_delegation', 'list_agents'})
         self.assertEqual(tool_registry.ANALYSIS_ONLY_DENIED, {'propose', 'propose_table_edit', 'trigger_flow_run',
                                                               'studio_ingest_script', 'studio_manage_asset',
-                                                              'studio_dispatch_shot', 'studio_edit_timeline', 'propose_previs_ops'})
+                                                              'studio_dispatch_shot', 'studio_edit_timeline',
+                                                              'request_generation', 'propose_shot_prompt', 'propose_camera',
+                                                              'propose_previs_ops'})
         self.assertEqual(tool_registry.RACE_DENIED, {'studio_ingest_script', 'studio_manage_asset',
-                                                     'studio_dispatch_shot', 'studio_edit_timeline'})
+                                                     'studio_dispatch_shot', 'studio_edit_timeline', 'request_generation'})
         self.assertEqual(dict(tool_registry.REQUIRES), {'spawn_agent': ('allow_subagents',),
                                                         'trigger_flow_run': ('allow_workflows',),
                                                         'consult_advisor': ('advisor_agent_key',)})
@@ -112,12 +134,15 @@ class RegistryDerivationTests(unittest.TestCase):
     def test_default_grants_keep_the_historic_seed_lists(self):
         self.assertEqual(set(tool_registry.BUILTIN_ROLES), {row[0] for row in agent_registry.ROSTER})
         self.assertEqual(set(tool_registry.PRIMARY_ROLES), {row[0] for row in agent_registry.ROSTER if row[3] == 'primary'})
-        self.assertEqual(agent_registry.default_tools('coordinator'), sorted(tool_specs.TOOL_NAMES))
-        self.assertEqual(agent_registry.default_tools('coordinator', False), sorted(tool_specs.TOOL_NAMES - tool_specs.DELEGATION_TOOLS))
+        # The Showrunner receives every tool except the external-agent ones (SPEC_20 R30), which no role gets by default.
+        self.assertEqual(agent_registry.default_tools('coordinator'), sorted(tool_specs.TOOL_NAMES - EXTERNAL_ONLY))
+        self.assertEqual(agent_registry.default_tools('coordinator', False),
+                         sorted(tool_specs.TOOL_NAMES - tool_specs.DELEGATION_TOOLS - EXTERNAL_ONLY))
+        self.assertFalse(any(tool_registry.get(name).grants for name in EXTERNAL_ONLY))
         for key, grants in HISTORIC_GRANTS.items():
             with self.subTest(key=key):
-                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + PREVIS.get(key, []) + CONTEXT)
-                self.assertEqual(agent_registry.default_tools(key, False), grants + PREVIS.get(key, []) + CONTEXT)
+                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + PREVIS.get(key, []) + CONTEXT + CREW.get(key, []))
+                self.assertEqual(agent_registry.default_tools(key, False), grants + PREVIS.get(key, []) + CONTEXT + CREW.get(key, []))
         self.assertEqual(agent_registry.default_tools('custom_agent'), agent_registry.default_tools('qa_critic'))
 
     def test_ui_catalog_matches_console_model(self):
@@ -140,9 +165,23 @@ class RegistryDerivationTests(unittest.TestCase):
                        {'policy': 'sometimes'}, {'grants': ['intern']}, {'requires': ['allow_everything']},
                        {'handler': 'no-colon'}, {'name': 'Bad Name'}, {'description': ' '}, {'mutating': 1},
                        {'ui': True, 'console': False}, {'console': False},
-                       {'primary_only': True, 'grants': ['doc_writer']}):
+                       {'primary_only': True, 'grants': ['doc_writer']},
+                       {'zerofield_mcp': 1}, {'zerofield_mcp': True, 'mcp': False},
+                       {'zerofield_mcp': True, 'policy': 'always_ask'},
+                       {'zerofield_mcp': True, 'requires': ['allow_subagents']}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 tool_registry.declare({**good, **change})
+        # zerofield-mcp exposure: read-only tools of new categories appear, writes and legacy tools opt in.
+        exposed = lambda **change: tool_registry.zerofield_exposed(tool_registry.declare({**good, **change}))  # noqa: E731
+        self.assertTrue(exposed())
+        self.assertFalse(exposed(mutating=True))
+        self.assertTrue(exposed(mutating=True, zerofield_mcp=True))
+        self.assertFalse(exposed(category='legacy'))
+        self.assertFalse(exposed(category='delegation'))
+        self.assertFalse(exposed(external=True))
+        self.assertFalse(exposed(mcp=False))
+        self.assertFalse(exposed(policy='always_ask'))
+        self.assertFalse(exposed(zerofield_mcp=False))
         with self.assertRaises(RuntimeError):
             tool_registry.register(good)
         self.assertNotIn('fixture_tool', tool_specs.TOOL_NAMES)

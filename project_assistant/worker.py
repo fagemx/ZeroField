@@ -165,7 +165,7 @@ def _tool_caller(ctx, record):
 
 
 def _run_direct(connection_factory, claim, settings: Settings, worker_id: str, ctx, record, parts,
-                images=()) -> Outcome:
+                images=(), history=()) -> Outcome:
     instructions, turn_text = parts
     writer = _PartialWriter(connection_factory, claim["id"], worker_id)
 
@@ -175,9 +175,30 @@ def _run_direct(connection_factory, claim, settings: Settings, worker_id: str, c
 
     try:
         return agent_runtime.run_agent(profile=ctx.profile,ctx=ctx,instructions=instructions,turn_text=turn_text,
-            timeout=settings.timeout,on_text=writer.write,on_round=on_round,on_tool=record,images=images,settings=settings)
+            timeout=settings.timeout,on_text=writer.write,on_round=on_round,on_tool=record,images=images,settings=settings,
+            history=history)
     finally:
         writer.close()
+
+
+def history_messages(history, owner_name):
+    """Earlier turns as chat messages, oldest first, so the context budget can drop the oldest (SPEC_20 R10)."""
+    out = []
+    for item in history:
+        files = item.get("files") or []
+        body = item["body"] + (f" (attached: {', '.join(files)})" if files else "")
+        if item["role"] == "assistant":
+            out.append({"role": "assistant", "content": body})
+        else:
+            out.append({"role": "user", "content": (prompting.SPEAKER.get(item["role"], owner_name) + "：" + body)
+                        if item["role"] in prompting.SPEAKER else body})
+    return out
+
+
+def failure_reply(outcome) -> tuple[str, str]:
+    """(error_kind, body) for a failed turn: the failure class and its plain-language text (SPEC_20 R12)."""
+    kind = outcome.failure or model_client.failure_class(outcome.kind)
+    return kind, model_client.FAILURE_TEXT[kind]
 
 
 def _run_codex(settings: Settings, host, prompt: str) -> Outcome:
@@ -198,6 +219,9 @@ def _run_codex(settings: Settings, host, prompt: str) -> Outcome:
 def execute(connection_factory, claim: dict, settings: Settings, worker_id: str) -> str:
     if 'admission_no' in claim:
         return execute_dispatch(connection_factory,claim,settings,worker_id)
+    if 'crewJob' in claim:  # SPEC_20 R7/R19/R20: a crew planning job (one governed call, validated, proposals only)
+        from project_assistant import crew_jobs
+        return crew_jobs.execute(connection_factory, claim, worker_id)
     worker_id=claim.get('lease_owner',worker_id)
     started = time.monotonic()
     stop = threading.Event()
@@ -246,6 +270,9 @@ def execute(connection_factory, claim: dict, settings: Settings, worker_id: str)
                            attachments=[{"kind": f["kind"], "name": f["name"], "extracted": f["extracted"]}
                                         for f in files])
         prompt_args = privacy.sanitize(prompt_args, privacy_mode)
+        # Earlier turns travel as chat messages, not inside this turn's text, so the oldest can be trimmed first.
+        history_turns = history_messages(prompt_args["history"], me.name)
+        prompt_args["history"] = []
         # 圖片交給助理的是預覽那張（長邊 1500 內的 WebP），跟她的話放在同一則訊息裡
         images = ["data:image/webp;base64," + base64.b64encode(f["preview"]).decode("ascii")
                   for f in files if f["kind"] == "image" and f["preview"] and privacy_mode == "full_access"]
@@ -262,7 +289,9 @@ def execute(connection_factory, claim: dict, settings: Settings, worker_id: str)
             _with_conn(connection_factory, lambda c: store.append_tool(c, claim["id"], summary))
 
         outcome = _run_direct(connection_factory,claim,settings,worker_id,ctx,record,
-                              prompting.build_parts(**prompt_args),images=images)
+                              prompting.build_parts(**prompt_args),images=images,history=history_turns)
+        if outcome.trimmed:
+            _log(f"turn {claim['id']} context trimmed: {json.dumps(outcome.trimmed, sort_keys=True)}")
 
         def save(c):
             from project_assistant import execution_governance as governance
@@ -274,7 +303,8 @@ def execute(connection_factory, claim: dict, settings: Settings, worker_id: str)
                                     codex_version=outcome.version)
                 return "done" if done else "lost"
             if outcome.status == "quota":
-                return store.fail(c, claim["id"], worker_id, kind="quota", body=MESSAGES["quota"], retry=False)
+                kind, body = failure_reply(outcome)
+                return store.fail(c, claim["id"], worker_id, kind=kind, body=body, retry=False)
             if outcome.status == "lockdown":
                 from project_docs import repository as repo
 
@@ -282,8 +312,8 @@ def execute(connection_factory, claim: dict, settings: Settings, worker_id: str)
                                target=str(claim["id"]), detail={"blocked": outcome.blocked, "via": "assistant"})
                 return store.fail(c, claim["id"], worker_id, kind="lockdown", body=MESSAGES["lockdown"], retry=False)
             _log(f"turn {claim['id']} {outcome.kind}: {outcome.detail[-300:]}")
-            return store.fail(c, claim["id"], worker_id, kind=outcome.kind, body=MESSAGES["retry_exhausted"],
-                              retry=False)
+            kind, body = failure_reply(outcome)
+            return store.fail(c, claim["id"], worker_id, kind=kind, body=body, retry=False)
 
         return _with_conn(connection_factory, save)
     except Exception as exc:  # noqa: BLE001
@@ -324,6 +354,8 @@ def poll_once(connection_factory, settings: Settings, worker_id: str, submit, bu
         getters=[claim_background,lambda c:store.claim_next(c,worker_id,LEASE_SECONDS)]
         if not prefer_background:
             getters.reverse()
+        from project_assistant import crew_jobs  # crew planning jobs first: one bounded call each, asked for by hand
+        getters.insert(0,lambda c:crew_jobs.claim(c,worker_id))
         claim=None
         for getter in getters:
             claim=_with_conn(connection_factory,getter)
@@ -403,7 +435,8 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
                 current['input_snapshot']['console']['consumed_context']={
                     'instructions':instructions+'\n'+getattr(ctx,'mounted_context',''), 'turn_text':turn,
                     'tools':sorted(getattr(ctx,'allowed_tools',[])), 'media_asset_ids':console_context.get('media',[]),
-                    'model':outcome.model, 'usage':outcome.usage, 'scorecard':outcome.scorecard}
+                    'model':outcome.model, 'usage':outcome.usage, 'scorecard':outcome.scorecard,
+                    **({'context_trimmed':outcome.trimmed} if outcome.trimmed else {})}
                 db.execute(c,'UPDATE projectops.orchestration_task SET input_snapshot=%s::jsonb WHERE id=%s',
                     (json.dumps(current['input_snapshot'],ensure_ascii=False),task['id']))
             _with_conn(connection_factory,save_consumed)
@@ -420,6 +453,11 @@ def execute_dispatch(connection_factory,claim,settings,worker_id):
         state='succeeded' if outcome.status=='ok' else 'awaiting_gate' if outcome.status=='awaiting_gate' else 'failed'
         if state=='failed':
             output={'error':outcome.detail or outcome.answer or "Agent execution failed.",'retryable':False}
+            if outcome.status in ('error','quota'):
+                # The board shows the plain-language class; the detail stays for the run log (SPEC_20 R12).
+                output['failure']=failure_reply(outcome)[0]
+            if outcome.trimmed:
+                output['context_trimmed']=outcome.trimmed
         def complete(c):
             cp.leased_dispatch(c,worker_id,claim['handle'],claim['lease_token']) if state!='awaiting_gate' else None
             db.execute(c,'UPDATE projectops.orchestration_dispatch SET executed_model=%s,executed_provider=%s WHERE id=%s',

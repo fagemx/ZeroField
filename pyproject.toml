@@ -20,6 +20,7 @@ fidelity = ["opencv-python-headless>=4.8,<5", "numpy>=1.26"]
 zerofield-studio = "run_studio:main"
 openbench = "server:main"
 openbench-worker = "project_assistant.limb_worker:main"
+zerofield-mcp = "project_assistant.zerofield_mcp:main"
 
 [tool.setuptools]
 py-modules = ["server", "run_studio"]
@@ -27,5 +28,5 @@ packages = ["project_docs", "project_assistant", "project_assistant.studio", "op
 include-package-data = false
 
 [tool.setuptools.package-data]
-project_assistant = ["prompts/*.md"]
+project_assistant = ["prompts/*.md", "provider_catalog.json"]
 openbench_data = ["db/*.sql", "static/projects/*", "static/projects/assets/*", "workflows/*.json", "workflows/*.md", "workflows/cards/*.json", "workflows/router/*.json", "samples/*.png", "samples/*.mp4", "samples/*.md", "samples/*.py", "skills/*.md", "skills/*/*.md"]

@@ -6,8 +6,10 @@ and /queue, and Ollama /api/ps. Queue entries are counted, never returned, becau
 queue carries whole workflows and prompts. No transaction is held while it probes.
 
 The queue lists queued, running and failed chat turns, orchestration dispatches, pipeline tasks
-and take grades, plus uncertain spend reservations. Other members' turns and sessions stay
-private: they appear without their run, message or text, only as status and failure class.
+and take grades, plus uncertain spend reservations. A failed turn carries its SPEC_20 R12 failure class
+as errorKind; a failed dispatch carries it as `failure` (None when the stored value is not a class).
+Other members' turns and sessions stay private: they appear without their run, message or text,
+only as status and failure class.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ import urllib.request
 from urllib.parse import urlsplit
 
 from project_assistant import agent_console_store as resources, orchestration_store as db
+from project_assistant.model_client import FAILURE_CLASSES
 from project_assistant.providers import local_url
 
 PROBE_SECONDS, MAX_BODY, CACHE_SECONDS = 2, 1024 * 1024, 3
@@ -204,6 +207,7 @@ QUEUES = {
               "projectops.assistant_message m WHERE m.project_slug=%(slug)s AND m.role='assistant'",
               'm.status', ('queued', 'running'), ('failed',), 'COALESCE(m.finished_at,m.created_at)', 'm.id DESC'),
     'dispatches': ("""jsonb_build_object('id',d.id,'agentKey',d.agent_key,'status',d.status,'attempt',d.attempt_no,'error',d.error,
+                      'failure',CASE WHEN d.status='failed' THEN d.output_json->>'failure' END,
                       'createdAt',d.created_at,'finishedAt',d.finished_at,'mine',r.created_by::text=%(mine)s,
                       'runId',CASE WHEN r.created_by::text=%(mine)s THEN r.id::text END)""",
                    """projectops.orchestration_dispatch d JOIN projectops.orchestration_run r ON r.id=d.run_id AND r.project_slug=d.project_slug
@@ -248,6 +252,8 @@ def queue(conn, me, slug, *, days=7):
             for field in ('detail', 'error'):
                 if field in item:
                     item[field] = _clip(item[field]) or None
+            if 'failure' in item and item['failure'] not in FAILURE_CLASSES:
+                item['failure'] = None  # only the R12 classes the UI has words for
     hold = resources.get_settings(conn, me, slug)['rate_limits']['uncertain_hold_seconds']
     uncertain = db.many(conn, """SELECT jsonb_build_object('requestKey',request_key,'agentKey',agent_key,'usageKind',usage_kind,
             'category',category,'provider',provider_name,'model',model_name,'tier',tier,'ceilingUsd',ceiling_cost_usd,

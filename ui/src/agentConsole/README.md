@@ -40,7 +40,7 @@ Current actor, membership, scope, admin and version authority always remain serv
 | agents | GET/POST C/agents; GET /agents/{key}/history | Form/raw writable fields, skills/tool policies/multiagent/grader/memory/env; stored and effective provider kept separate; immutable studio:* descriptors |
 | sessions | GET C/sessions, /sessions/{id}/events?cursor&wait; POST /sessions/{id}/resume, /interrupt, /cancel | Existing private M8 messages/tasks/dispatches, consumed context, isolated grader scorecards; selection alone cannot confirm a gate |
 | deployments | GET/POST C/deployments; POST /deployments/{key}/trigger | Durable trigger/session receipt, manual or numeric cron/IANA timezone configuration; existing worker owns due execution |
-| environments | GET/POST C/environments | Versioned URL/reference/host/package metadata; local8188/proxy8189, Router/SDK/MCP/CLI supported states, no arbitrary launch |
+| environments | GET/POST C/environments; SPEC_20 R41 (admin) GET/POST /projects/api/{slug}/service-accounts, POST .../{key}/revoke, GET .../{key}/audit?limit | Versioned URL/reference/host/package metadata; local8188/proxy8189, Router/SDK/MCP/CLI supported states, no arbitrary launch; SPEC_20 R41 External agents section: issue a service-account token, ready-to-paste `zerofield-mcp` setup, accounts with scope/expiry/last use/calls, revoke, per-account audit |
 | memory_store | GET/POST C/memory-stores?episode_id; GET /{key}/entries; POST C/memory-entries, /memory-stores/consolidate; GET /memory-entries/{uuid}/history | Scoped versioned stores/entries/mounts, reviewed source-digest consolidation and history; foreign private stores remain unavailable |
 | usage_cost | GET C/usage-cost?days | Anonymous aggregates and owner-private ledger/cache/fingerprint/log diagnostics; estimate/report/unknown distinctions |
 | spend_rate_limits | GET/POST C/spend-rate-limits | Current versioned spend/rate/model-pricing controls, strict effective Judge10, explicit admin-only estimate-soft consent |
@@ -100,11 +100,29 @@ error-write log noise; this UI does not rewrite backend transport handling.
 Application controls are not an OS sandbox, calibrated hardware-cost guarantee,
 remote termination guarantee, model-quality assessment or overall acceptance.
 
-### SPEC_20 operations (R36, R38-R40)
+### SPEC_20 operations (R36, R38-R41)
 
-All four live inside the existing Dashboard and Providers & API Keys pages; no page or group is added.
+All five live inside existing pages (R41 in Environments & Bridges); no page or group is added.
 `/model-setup` and `/model-check` are showrunner-only; every model call in a check goes through
 `ProviderAdmission` (local endpoints unbilled). `/gpu` probes only loopback ComfyUI/Ollama with a 2 s
 timeout, no proxy and no redirects, and counts ComfyUI queue entries without returning them. `/queue`
 withholds other members' text, runs and sessions. `/automation` (setting `automation.paused`) stops
 automatic grading, crew pre-production and scheduled deployments; manual work is never blocked.
+
+**External agents (R41)** sit on Environments & Bridges, the page that already lists the MCP/SDK/CLI bridges, not on
+Providers & API Keys, which holds outbound model credentials and tells people never to paste tokens. The section is
+showrunner-only (`can_edit`); other members see one line saying so, and no request is made. It uses the
+service-account admin routes of `project_docs/agent_http.py` through `externalRequest`, not the Console base.
+Creating a token takes a name (the key follows it until edited), a write mode, the tools to allow and an expiry
+(1 to 365 days). The tool list comes from the server's `availableTools` (`name`, `label`, `category`, `writes`,
+`generation`), so it follows the registry exposure; `propose_only` never offers generation tools and `generate`
+says in words that it still cannot spend money (free local open-weights renders only, closed or paid plans refused).
+The token is shown once with a copy button and a setup snippet (a `claude mcp add` command or an MCP JSON config) that
+carries `ZEROFIELD_MCP_TOKEN`, `ZEROFIELD_PROJECT` and `ZEROFIELD_URL`; the URL is this page's own address when it is
+loopback, otherwise the default `http://127.0.0.1:3020`. The token is kept in page memory only (never in
+sessionStorage or a draft) so leaving the page and coming back does not lose it before it is hidden; a reload drops it.
+If the account list reports `connect.http.url`, the Streamable HTTP address and its Bearer header are added to the
+setup; without it the page shows stdio only. Each account lists status, scope, expiry, last use, call counts and
+render requests, and can be revoked after an inline confirmation. "Recent activity" reads
+`GET .../service-accounts/{key}/audit?limit=25..100` (admin only): each call (client, tool, result, reason code,
+proposal ids), the issue and the revoke; argument hashes are never returned.

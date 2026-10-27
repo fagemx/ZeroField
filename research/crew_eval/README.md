@@ -27,6 +27,11 @@ python -X utf8 scripts/crew_eval.py --canned research/crew_eval/runs/q27-v2 --re
 
 `--type beats`, `--case blocking-03` (an id prefix) select part of the set; `--fail-under 80` turns the total into an exit code.
 
+The real beats job (SPEC_20 R7, R19: one model call asking for the JSON schema, validation, one retry, rule fallback) has an adapter:
+`--job project_assistant.crew_planning:run_eval_job --type beats`. It calls the deployment's model from the `OPENBENCH_*`
+settings and refuses anything but a loopback endpoint (an evaluation has no production to govern a hosted call against).
+The camera job writes sheet text, not the blocking ops of this set, so `blocking` waits for R27's `propose_previs_ops`.
+
 ## When the model or the prompts change
 
 1. Run the self-check (`--reference`) so you know the harness itself is sound.
@@ -64,7 +69,8 @@ The vocabulary is the stage's own: `LENSES`, `MOVES`, `DURATIONS`, `SETS` and `F
 `{"setup", "beats": [{"from", "to", "camera", "action"}], "sound", "constraints": []}`.
 
 **blocking** (SPEC_20 4.6). Input: `shot`, `cast`, `set` {code, name, stage (`observatory`/`parallax`/`empty`), targets},
-`base_revision`, and `beats` when the instruction retimes one. Output:
+`base_revision`, and `beats` when the instruction retimes one: the stored plan's acting beats in the 3D Stage, in order,
+`{from, to, skill, action}` in seconds (see the assumptions below). Output:
 `{"shotId", "baseRevision", "ops": [place | camera | retime]}` with `place {cast, relativeTo, offset [x, z], facing}`,
 `camera {size, angle, lens, move, from?, to?}`, `retime {beat, at}`. Stage coordinates are station-local metres: `+z` toward the
 glass and the console, `-z` toward the camera side, `x` the actor's right. Facing the lens is `"camera"` (or `"room"`, the stage's
@@ -84,15 +90,16 @@ In JSON write a regex word boundary as `\\b`: a single `\b` is a backspace and `
 
 ## Assumptions to confirm when the real jobs land
 
-- The input shapes above are this set's; the later crew-job adapter maps its own job inputs onto them.
+- The input shapes above are this set's. The beats job builds its input in exactly this shape from a shot
+  (`project_assistant/crew_planning.py` `gather`), so the adapter hands a case input to the job unchanged.
 - 4.6 is final since R27 (`project_assistant/previs_ops.py`, `ui/src/previs/ops.js`) and keeps this set's choices: `size` (wide,
   full, medium, close, extreme_close), `angle` (low, eye, high, overhead), offsets in metres within ±8, at most 32 ops,
   `retime.beat` counted from 1 (`RETIME_BEAT_BASE`) and `retime.at` the fraction of the shot where the beat now starts
-  (`tests/test_previs_ops.py` checks the constants here against the solver). Two solver rules the scorer does not model: a
-  `retime` names one of the 3D Stage's **acting beats** (the skills of `plan.use`, or the Walk in action's walk), so a case's
-  `beats` stand for those, and a plan without acting beats refuses a retime (blocking-03's reference would be refused on a
-  plan with one acting beat); camera keys belong to the move (static K1, orbit K1-K3, the others K1-K2), so `to` beyond the
-  move is refused.
+  (`tests/test_previs_ops.py` checks these constants against the solver and every blocking reference against the server's
+  validator). A `retime` names one of the 3D Stage's **acting beats** (the plan's own actor's skills in `plan.use`, or the Walk
+  in action's walk), so a blocking case's `beats` are those acting beats (`skill` names each), and a plan without acting beats
+  refuses a retime. A retime keeps a beat between its neighbours, so a case leaves the beat room to move. Camera keys belong
+  to the move (static K1, orbit K1-K3, the others K1-K2).
 - "Camera within LENSES/MOVES" is checked on the blocking `camera` op and, for beats, on every lens named in the text; a beat's
   `camera` is free text, so its move is only scored softly.
 - Soft criteria are lexical. Spot-check a real run by eye, and add synonyms to a case's patterns when a good answer loses marks
