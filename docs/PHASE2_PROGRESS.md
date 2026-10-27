@@ -133,15 +133,15 @@ selected S03 take (6 s 3D Stage take). The grade showed *Waiting for the GPU* un
 wait for the render; the stored seconds now count model load and grading only. Grader notes are model text
 in English in both interface languages.
 
-## Open decision for the owner
+## Resolved decision: single-step proposals pinned the whole source page
 
-**Single-step proposals pin the whole source page.** Approving any change on that page bumps its
-revision, so other pending single-step proposals on it fail (reproduced again with three keyframes:
-only the first landed). This is the SPEC_08 contract, pinned by
-`test_source_changed_while_executing_or_waiting_for_approval_cannot_write`, which edits a *different*
-row and expects failure. It is not silent in the UI: `App.jsx` shows "Could not apply" with the error;
-only direct API callers see HTTP 200 with `status: failed`. Production avoids it by running Pipeline
-batches (workflow runs rebase per cell). Options: scope the pin to the sample row, or keep it.
+Approving any change on a page used to fail every other pending single-step proposal on it (three
+keyframes: only the first landed), the SPEC_08 contract. **SPEC_20 R17 resolved it (2026-10-27):** a
+waiting proposal now pins only the cells it writes and the rows it edits, so the three keyframes apply
+in sequence (`test_three_waiting_proposals_on_one_page_all_apply_in_sequence`). A changed target cell
+or a deleted target row still fails it, with an error that names the cell. Reference pages, a request's
+selected inputs, added rows and document passages keep their pins, and a step whose source page changes
+while it runs still discards its result.
 
 ## Next
 

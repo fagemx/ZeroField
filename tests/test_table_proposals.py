@@ -60,6 +60,58 @@ class TableProposalTests(unittest.TestCase):
         self.assertEqual([call.args[2] for call in locked.call_args_list], ["sheet", "source"])
         write.assert_not_called()
 
+    def apply_on(self, current, target, values=None):
+        from project_assistant.table_edits import apply
+        tab = {"doc": current, "revision": 7, "updated_at": "now", "title": "Sheet"}
+        result = blocks.OpsResult(doc=current, applied=1)
+        with mock.patch("project_assistant.table_edits.repo.get_tab_for_update", return_value=tab), mock.patch("project_assistant.table_edits.repo.tab_locks", return_value={}), \
+                mock.patch("project_assistant.table_edits.repo.field_values", return_value={"sheet": values or {}}), mock.patch("project_docs.service._run_ops", return_value=(result, current, 8, "now")) as write:
+            status, payload = apply(None, Identity("actor", "Alex", "admin"), "demo", target)
+        return status, payload, write
+
+    def test_own_page_revision_is_not_a_pin_but_each_written_cell_is(self):
+        from project_assistant.table_edits import prepare
+        doc = sample()
+        second = copy.deepcopy(doc["content"][0]["content"][1])
+        second["attrs"]["bid"] = "row00002"
+        doc["content"][0]["content"].append(second)
+        ops, fields, _ = prepare(doc, [{"row_id": "row00001", "cells": {"1": "mine"}}], [], {})
+        target = {"tab_key": "sheet", "ops": ops, "field_edits": fields, "source_revisions": {"sheet": 1}}
+        elsewhere = copy.deepcopy(doc)
+        elsewhere["content"][0]["content"][2]["content"][1]["content"][0]["content"][0]["text"] = "other row"
+        status, payload, write = self.apply_on(elsewhere, target)
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(write.call_args.args[5][0]["base"], elsewhere["content"][0]["content"][1])
+        same = copy.deepcopy(doc)
+        same["content"][0]["content"][1]["content"][1]["content"][0]["content"][0]["text"] = "theirs"
+        status, payload, write = self.apply_on(same, target)
+        self.assertEqual(status, 409)
+        self.assertEqual(payload["error"], "Prompt in row 1 “S01” changed after this proposal was made. Nothing was applied; generate a new proposal.")
+        self.assertEqual({k: payload["conflicts"][0][k] for k in ("row_id", "col_index", "before", "mine", "current")},
+                         {"row_id": "row00001", "col_index": 1, "before": "old", "mine": "mine", "current": "theirs"})
+        write.assert_not_called()
+
+    def test_changed_field_value_names_its_cell(self):
+        from project_assistant.table_edits import prepare
+        doc = sample()
+        doc["content"][0]["content"][1]["content"][1]["content"][0]["content"] = [{"type": "status", "attrs": {"fid": "f_status", "label": "Queued"}}]
+        ops, fields, _ = prepare(doc, [{"row_id": "row00001", "cells": {"1": "Approved"}}], [], {"f_status": {"value": "Queued"}})
+        status, payload, write = self.apply_on(doc, {"tab_key": "sheet", "ops": ops, "field_edits": fields}, {"f_status": {"value": "Retake"}})
+        self.assertEqual(status, 409)
+        self.assertTrue(payload["error"].startswith("Prompt in row 1 “S01” changed after this proposal was made."), payload)
+        write.assert_not_called()
+
+    def test_other_actions_pin_reference_pages_but_not_their_own(self):
+        from project_assistant import service
+        pages = {"sheet": {"revision": 9, "doc": {}}, "notes": {"revision": 3, "doc": {}}}
+        with mock.patch("project_assistant.service.repo.get_tab_for_update", side_effect=lambda conn, slug, key: pages.get(key)):
+            self.assertIsNone(service._check_sources(None, "demo", {"tab_key": "sheet", "source_revisions": {"sheet": 1, "notes": 3}}))
+            self.assertEqual(service._check_sources(None, "demo", {"tab_key": "sheet", "source_revisions": {"notes": 2}}),
+                             (409, {"error": "A reference source changed. Review it again."}))
+            self.assertIsNone(service._check_sources(None, "demo", {"source_revisions": {"notes": 3}}))
+            self.assertEqual(service._check_sources(None, "demo", {"tab_key": "gone", "source_revisions": {"notes": 3}}),
+                             (409, {"error": "The source page was deleted."}))
+
     def test_privacy_default_keeps_numbers(self):
         self.assertEqual(masking.guard_input("budget 128500 seed 48291", mask_numbers=False), ("budget 128500 seed 48291", []))
         self.assertNotIn("128500", masking.guard_input("budget 128500", mask_numbers=True)[0])
