@@ -112,7 +112,10 @@
 @media (min-width: 1600px) { .look-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 1100px) { .look-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile { display: grid; gap: 5px; align-content: start; height: auto; padding: 0; border: 0; border-radius: 8px;
-  background: transparent; color: var(--text); text-align: left; cursor: pointer; white-space: normal; }
+  background: transparent; color: var(--text); text-align: left; cursor: pointer; white-space: normal;
+  /* The app's generic button rule centres its content, which shrinks a grid's only column to its content: the 16:9 frame
+     then measured 24px. Stretch the column to the tile's width. */
+  grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: stretch; align-items: stretch; }
 .look-frame { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: var(--active); box-shadow: 0 0 0 1px var(--line); }
 .look-frame > img, .look-frame > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile:hover .look-frame { box-shadow: 0 0 0 1px var(--control); }
@@ -252,7 +255,16 @@
 .studio-shell .studio-rails .sheet-main-view > .shot-composer { flex: 1 1 auto; min-height: 0; }
 .shot-composer > :not(.composer-top) { flex: none; }
 .shot-composer > .composer-top { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.shot-composer > .composer-top > :not(.composer-view, .film-monitor) { flex: none; }
+.shot-composer > .composer-top > :not(.composer-view, .film-monitor, .example-wall) { flex: none; }
+/* An open wall takes the take's place and its height, never more: its options scroll inside it, so the look buttons and the
+   prompt below stay where they are (§3.3) and nothing is drawn over them at 1280×720. */
+.shot-composer > .composer-top > .example-wall { flex: 1 1 0; min-height: 160px; max-height: none; }
+/* On a short screen the prompt gives the open wall its spare lines (it scrolls, and it is all there again once the wall closes). */
+@media (max-height: 860px) {
+  .shot-composer:has(> .composer-top > .example-wall) .pc-editor { min-height: 0; max-height: 5.4em; }
+  /* smaller cards, so at least one whole row shows in the take's height */
+  .shot-composer .example-wall .look-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
 .shot-composer > .composer-top > .composer-view { flex: 1 1 0; height: auto; min-height: 120px; max-height: 520px; }
 .shot-composer > .composer-top > .film-monitor { flex: 1 1 0; min-height: 120px; max-height: 560px; grid-template-rows: minmax(0, 1fr) auto; }
 .shot-composer > .composer-top > .film-monitor video { height: 100%; min-height: 0; aspect-ratio: auto; }
