@@ -1,7 +1,7 @@
 # SPEC_19 附錄草稿 — 片型、年代、節奏、色調、燈光選項清單（待使用者確認）
 
-> **狀態**：草稿（2026-10-27），等使用者確認。對應 [`SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md`](./SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md) §7 待決第 5 項。
-> **確認前不做的事**：不產範例圖、不寫 `project_docs/look_catalog.json`、不加 i18n 鍵、不改任何程式。使用者回覆「刪／加／改名」後，才依定稿清單進包 C。
+> **狀態**：已定稿（2026-10-27，使用者確認全部照建議，決定見第 6 節）。下一步：名稱原創性的網路查核，查完才產範例與寫目錄。對應 [`SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md`](./SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md) §7 待決第 5 項。
+> **定稿時的變更**：加入 `close-warmth`（近身暖意）、`dry-ochre`（乾土赭黃）；`tape-era` 中文名改「錄影帶年代」；介面上 `era` 類別寫成「影像年代」；`Film:` 串接規則已寫進 SPEC_19 §4.3；新增「精簡版」實測約定。
 > **參考來源**：Higgsfield Cinema Studio 4.0 的 Genre／Era／Tempo／Color palette／Lighting 分頁（`docs/HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md` 只記錄分頁存在，沒有列出選項值）。本清單只借「分哪幾類」，選項與名稱全部自擬。
 
 這份清單是 SPEC_19 質感目錄（§4.3）的選項草案，使用者確認之後，才會依它自製範例圖（§4.4）與寫入目錄檔。命名規則有三條：一，名稱一律原創，不使用真實電影、導演、演員、攝影師、品牌或作品名稱（`docs/DESIGN_AND_DEV_GUIDELINES.md` §3.2、SPEC_19 固定決策 11），也避開會讓人直接聯想到某部作品的字眼；二，`id` 用小寫連字號，穩定不改（存進集數設定與 `meta_<shotId>`），中文名與英文標籤可以日後調整；三，每一類的第一個選項固定是 Auto。每個選項除了名稱，還帶一句 `promptText`，寫成「看得到的畫面」：光從哪來、影子多硬、顏色怎麼分布、鏡頭怎麼動，而不是「陰鬱」「緊張」這類形容詞，也不重複類型名稱本身。原因是 Higgsfield 的 A/B 實測顯示，只送「Noir」「Contre jour」這類標籤名稱，模型不會照做，只有色碼會生效（SPEC_19 固定決策 6）；所以我們送出的是描述句，色調再另外附色碼。
@@ -10,24 +10,25 @@
 
 | 種類 | `look` 欄位 | 含 Auto | 實際選項 | 選擇器（SPEC_19 §3.3） |
 |---|---|---|---|---|
-| 類型 | `genre` | 8 | 7 | 左右輪播 |
-| 年代 | `era` | 6 | 5 | 刻度（表格順序即刻度順序，舊到新） |
+| 類型 | `genre` | 9 | 8 | 左右輪播 |
+| 影像年代 | `era` | 6 | 5 | 刻度（表格順序即刻度順序，舊到新） |
 | 節奏 | `tempo` | 5 | 4 | 左右輪播（表格順序由靜到動） |
-| 色調 | `palette` | 12 | 11 | 圖卡格線加搜尋與排序 |
+| 色調 | `palette` | 13 | 12 | 圖卡格線加搜尋與排序 |
 | 燈光 | `light` | 8 | 7 | 圖卡格線加搜尋與排序 |
 
 ## 寫法約定（實作時照這幾條）
 
 - **Auto**：`promptText` 為空，編譯時不寫進提示詞，也沒有色碼；範例牆用抽象紋理圖表示（SPEC_19 §3.3）。
-- **類型、年代、節奏三類合成 `Film:` 一行**：三段 `promptText` 都寫成小寫開頭、不含句號的子句，編譯時用 `; ` 串接（`compile_look` 回傳的 `film` 欄位，§4.3）。這個串接規則是我為了讓三段能接在一起而提的假設，SPEC_19 沒有明寫，確認後要補進 §4.3。
+- **類型、年代、節奏三類合成 `Film:` 一行**：三段 `promptText` 都寫成小寫開頭、不含句號的子句，編譯時用 `; ` 串接（`compile_look` 回傳的 `film` 欄位，§4.3）。（已定案，寫進 SPEC_19 §4.3。）
 - **色調的 `promptText` 只寫顏色怎麼分布**；`hex` 由編譯器接在後面（`... palette #2E3A4A, #5B6F86 ...`）。`hex` 第一色是主色，指畫面中佔比最大的色，不一定最亮；最多 12 色，這份草稿每組 5–6 色。
 - **燈光只寫光源位置、硬度、陰影方向，不指定色相**。光的顏色交給色調，避免「檯燈」配上「冰川藍」時，兩段文字互相打架。
 - **年代只管影像質感**：只寫鏡頭與感光材料的外觀（顆粒、光暈、邊角、掃描線），不寫色相，也不寫時代物件（服裝、車輛、機器）；顏色交給色調，時代物件交給分鏡本身。
 - 每段 `promptText` 約 25–50 個英文字；五類全選時合計約 150–200 字（見最後的問題 7）。
+- **精簡版實測**：產範例時，每條另寫一版約 15 個英文字的精簡句，和完整版用同一個 seed 並排生成；依實測結果決定目錄裡的 `promptText` 用哪一版，結果記進 `look-samples/manifest.json`。
 
 ---
 
-## 1. `genre` 類型（含 Auto 共 8 個）
+## 1. `genre` 類型（含 Auto 共 9 個）
 
 類型管的是構圖習慣與鏡頭距離，不管劇情內容，所以每一條都不強迫畫面出現特定事件，只描述框怎麼取、光怎麼放、空間怎麼用。
 
@@ -41,8 +42,9 @@
 | `long-road` | 長途遠行 | Long road | wide landscapes with a small figure or vehicle crossing the frame, horizon placed very low or very high so sky or ground fills most of the image, a road or ridge line leading into the distance, camera tracking beside or behind the traveler, dust or mist in the air | 補外景與大空間；例如信使前往天文台的路上。 |
 | `field-record` | 田野紀錄 | Field record | camera held at shoulder height with a slight natural sway, only the light that already exists in the place, people going about a task while the frame follows a beat late, activity visible in the background, heads sometimes cut off at the frame edge | 手持、現場光的一端，和其他幾個穩定構圖形成對比；之後有人做紀錄式短片時也用得上。 |
 | `bright-caper` | 輕快鬧劇 | Bright caper | evenly lit sets in daylight, wide lens close to the subjects so edges stretch slightly, props and hand gestures large in the frame, centered or symmetrical compositions, quick small reactions held in tight shots, uncluttered backgrounds | 明亮、廣角、動作大的一端，避免整份清單都偏暗。 |
+| `close-warmth` | 近身暖意 | Close warmth | two people framed close together in tight shots, shallow depth of field melting the background into soft shapes, hands and faces filling most of the frame, one small lamp or window near them as the only bright area, slow small gestures, the camera staying at conversational distance | 定稿時加入；補上感情戲與家庭戲，是「近、淺景深、小動作」的一端。 |
 
-## 2. `era` 年代（含 Auto 共 6 個）
+## 2. `era` 影像年代（含 Auto 共 6 個）
 
 「年代」在這裡指**影像質感的年代**：鏡頭、感光材料與色彩呈現的樣子。表格順序即刻度順序（舊到新），Auto 不在刻度上，是獨立的一格。
 
@@ -52,7 +54,7 @@
 | `early-lens` | 老鏡頭年代 | Early-lens era | soft glow spreading from bright spots, corners darker than the center, low contrast with milky blacks, faint brightness flicker from frame to frame, small dust specks drifting across the image | 刻度最舊的一端；視覺上和「顆粒膠片」拉開距離，不依賴黑白（顏色交給色調）。 |
 | `saturated-print` | 彩印年代 | Saturated-print era | colors at very high saturation with strong contrast between hues, soft diffusion on highlights, skin glowing in even bright light, stage-like lighting with few deep shadows | 和暗調、低彩度的選項相反，是高彩度、均勻打光的一端；例如回憶片段。 |
 | `grain-film` | 顆粒膠片 | Grain-film era | fine film grain visible across dark areas, soft glow around bright lights, blacks slightly lifted to dark grey, gentle softening toward the frame corners, midtones leaning warm | 最多人會想要的「有質感的舊影像」，風險最低的中間選項。 |
-| `tape-era` | 磁帶年代 | Tape era | soft low-resolution detail, faint horizontal scan lines, color bleeding at the edges of bright objects, highlights blooming into their surroundings, a slight wobble along the top of the frame | 錄影帶式的畫面，例如監視畫面或舊錄像；刻意不用任何格式或品牌名。 |
+| `tape-era` | 錄影帶年代 | Tape era | soft low-resolution detail, faint horizontal scan lines, color bleeding at the edges of bright objects, highlights blooming into their surroundings, a slight wobble along the top of the frame | 錄影帶式的畫面，例如監視畫面或舊錄像；刻意不用任何格式或品牌名。 |
 | `clean-digital` | 當代清透 | Clean digital era | sharp detail from edge to edge, no visible grain, full range from deep shadow to bright highlight without clipping, skin tones as the eye sees them, no lens flare | 刻度最新的一端；等於「乾淨無濾鏡」，給想自己用色調與燈光堆質感的人。 |
 
 ## 3. `tempo` 節奏（含 Auto 共 5 個）
@@ -67,7 +69,7 @@
 | `hold-then-burst` | 靜待突發 | Hold, then burst | almost no movement for most of the shot, then a sudden fast push of the camera or a quick movement by the subject in the last second | 單鏡內前靜後動的選項，適合 4–8 秒的短鏡頭；模型會不會照做不確定，要靠範例實測才知道。 |
 | `rush` | 急促連動 | Rush | camera moving fast with quick pans and push-ins, people acting at a fast pace, a new action starting about every second, tight framing with abrupt changes of direction | 最動的一端；追逐、爭執、混亂場面。 |
 
-## 4. `palette` 色調（含 Auto 共 12 個）
+## 4. `palette` 色調（含 Auto 共 13 個）
 
 `hex` 欄第一色是主色。`promptText` 只描述顏色在畫面上的分布，色碼由編譯器附在後面。
 
@@ -85,6 +87,7 @@
 | `glacier-blue` | 冰川藍白 | Glacier blue | bright pale blue and white across most of the frame, shadows in clear mid blue rather than grey, snow-white highlights, deep navy only in small dark objects, skin slightly cool | `#BFD9E8` `#6FA3C7` `#2E5C85` `#F2F7FA` `#0F2A43` | 冷色但明亮，和午夜石板（冷色但暗）對照；雪地、醫療、空曠室內。 |
 | `plum-twilight` | 梅紫暮色 | Plum twilight | sky and background in dusty purple, shadows in dark violet, highlights in pale pink, a thin band of peach near the horizon or around lamps, no pure black anywhere | `#5A3E6B` `#2A1F3A` `#A78BB8` `#E6C9D9` `#F0A58A` | 黃昏到夜之間的過渡色；例如從日落進到雨夜的轉場鏡頭。 |
 | `sugar-paper` | 糖紙日光 | Sugar-paper daylight | bright daylight with pastel pink, sky blue, butter yellow and mint in broad even areas, white highlights, soft thin shadows in pale lilac, no black areas | `#F4B6C2` `#A8D8EA` `#FFE9A8` `#FFFFFF` `#7FB7A4` | 輕快、粉彩的一格，對應輕快鬧劇；避免整份色調都偏暗偏重。 |
+| `dry-ochre` | 乾土赭黃 | Dry ochre | ground, walls and dust in ochre and earthy yellow-brown, shadows in burnt umber, sky bleached to a pale dusty cream, skin sun-darkened with orange tones, no green and almost no blue | `#C68E3F` `#8A5A2B` `#4A3020` `#E6D3A8` `#A86B3C` | 定稿時加入；補上沙漠與荒地的顏色，`moss-fog`、`salt-washed` 原本只能勉強頂替。 |
 
 ## 5. `light` 燈光（含 Auto 共 8 個）
 
@@ -103,7 +106,22 @@
 
 ---
 
-## 6. 要使用者決定的問題
+## 6. 使用者的決定（2026-10-27：全部照建議）
+
+| # | 決定 |
+|---|---|
+| 1 | 數量照留，不砍；加上第 2 項的兩個，共 36 個選項（類型 8、年代 5、節奏 4、色調 12、燈光 7），另有 5 張 Auto 抽象紋理圖 |
+| 2 | 加 `close-warmth`（近身暖意）與 `dry-ochre`（乾土赭黃）；`sign-spill`、`steady-walk` 不加 |
+| 3 | 通用類型詞（科幻、鬧劇）接受；「磁帶年代」改「錄影帶年代」；「彩印年代」「機房科幻」等範例圖出來後與縮圖一起再看 |
+| 4 | 年代只管影像質感，介面寫「影像年代」；故事設定年代留第二版 |
+| 5 | 燈光不寫色相，光的顏色交給色調 |
+| 6 | 第一色是畫面佔比最大的色，每組 5–6 色；範例圖出來後依實際畫面微調色碼 |
+| 7 | 另寫約 15 字的精簡版，和完整版並排實測後決定 |
+| 8 | `Film:` 一行用 `; ` 串接，已寫進 SPEC_19 §4.3 |
+| 9 | 定稿後用網路搜尋查核全部名稱，特別是「苔霧」「糖紙日光」「梅紫暮色」；查到撞名就改名，結果記在這份文件 |
+
+以下是當時提給使用者的原始問題，保留作紀錄。
+
 
 1. **每類數量合適嗎？** 目前（不含 Auto）類型 7、年代 5、節奏 4、色調 11、燈光 7，合計 34 個選項，要做 34 張範例圖，另有 5 個 Auto 的抽象紋理圖（§3.3）。範例圖由 FLUX 3 Klein 自製（§4.4），張數會直接決定包 C 的工時；想少做，優先砍色調與燈光各兩個。
 2. **有沒有想刪、想加、想換名字的？** 我備了幾個沒放進去的候選，要的話直接說名字，我補 `promptText` 與色碼：
