@@ -88,8 +88,8 @@
 |---|---|---|---|---|---|
 | D1 | 指南 §3.1 第 70 行 | 「LLM 拆鏡預設支援本地開源權重模型（Ollama／vLLM），同時相容任何 OpenAI 相容端點」，舉例 qwen3／llama-3.3／deepseek | 拆鏡完全不呼叫模型（`story_adaptation.py:1`；建立分鏡回傳 `"engine": "deterministic"`，`story_openapi.py:1413`）；供應商預設 api.openai.com＋gpt-4.1（`providers.py:40-42`）；預設環境只放行本機（`agent_console_store.py:574`），接其他端點要管理者另開白名單環境並設價格上限 | 改寫成五條供應商原則；拆鏡寫明「預設由規則拆鏡，劇組產生拆鏡提案（C 包）」；範例模型改為 `qwen3.8:27b`，拿掉授權有限制的 llama | R2、R5 |
 | D2 | 指南 §3.1 第 68 行 | 「`workflows/` 目錄下的所有 ComfyUI API JSON 嚴禁包含任何閉源付費節點」 | 工作流圖本身沒有夥伴節點 ✓（逐檔掃過）。但 `workflows/cards/` 有閉源卡：`kling-v2-master`、`seedance-20-pro`（vendor_api、closed_hero）、`rh-cloud-h3-burst`（runninghub_cloud）、`router-*.json`（Comfy Router）；`workflows/router/` 另有 7 個 Router 模型定義。這些由製作政策擋住（預設 `open_weights_only`，`studio/model_router.py` 的 `effective_production_policy`） | 補一句：「圖檔 100% 開放權重；閉源卡片與 Router 定義只在混合模式可用，預設政策擋住」 | R5 |
-| D3 | AGENTS.md 第 45 行（`docs/ZEROFIELD_SPEC.md` 第 77 行同） | 「比賽規定必須建構於 Comfy Developer Platform（Comfy Router 和／或 Comfy SDK）之上，不可只依賴裸打本機 `127.0.0.1:8188/prompt`」 | 官方頁（2026-10-27 逐句核對）沒有這條，反而寫 "Create your favorite app and more with ComfyUI, running it wherever you like."；"Developer Platform" 只出現在導覽列。程式方面，啟動器預設 `--platform local`（`run_studio.py:486`），也就是直接打 `127.0.0.1:8188`（`card_engine.py:1111-1112`） | 先確認出處（R6）。確認前改寫成建議，並寫明預設是本機 ComfyUI；若確認是規定，展示啟動改用 `--platform comfy_sdk` | R5、R6 |
-| D4 | AGENTS.md 第 46 行 | 「`--platform comfy_sdk` 在未設 `COMFY_API_KEY` 時預設接 comfy-api-proxy」；「Open Weights Only 組只能走這條，Router 是閉源模型的轉接」 | 前半句正確，但只在明確帶 `--platform comfy_sdk` 時成立（`card_engine.py:1105-1113`），讀者容易誤以為是預設。後半句的依據就是 D3，官方頁沒有；Open Weights Only 只禁止夥伴節點與閉源 API，本機 ComfyUI 跑開放權重同樣符合 | 改寫成「預設 local；要走 Developer Platform 才帶 comfy_sdk」；「只能走這條」刪除或標為待確認 | R5、R6 |
+| D3 | AGENTS.md 第 45 行（`docs/ZEROFIELD_SPEC.md` 第 77 行同） | 「比賽規定必須建構於 Comfy Developer Platform（Comfy Router 和／或 Comfy SDK）之上，不可只依賴裸打本機 `127.0.0.1:8188/prompt`」 | 官方頁（2026-10-27 逐句核對）沒有這條，反而寫 "Create your favorite app and more with ComfyUI, running it wherever you like."；"Developer Platform" 只出現在導覽列。程式方面，啟動器預設 `--platform local`（`run_studio.py:486`），也就是直接打 `127.0.0.1:8188`（`card_engine.py:1111-1112`） | R6 已確認不是規定（「App requirements」第 1 條明列完全本機可行）：刪除「規定」寫法，寫明預設是本機 ComfyUI、Developer Platform 是選項之一 | R5、R6 |
+| D4 | AGENTS.md 第 46 行 | 「`--platform comfy_sdk` 在未設 `COMFY_API_KEY` 時預設接 comfy-api-proxy」；「Open Weights Only 組只能走這條，Router 是閉源模型的轉接」 | 前半句正確，但只在明確帶 `--platform comfy_sdk` 時成立（`card_engine.py:1105-1113`），讀者容易誤以為是預設。後半句的依據就是 D3，官方頁沒有；Open Weights Only 只禁止夥伴節點與閉源 API，本機 ComfyUI 跑開放權重同樣符合 | 改寫成「預設 local；要走 Developer Platform 才帶 comfy_sdk」；「只能走這條」刪除 | R5、R6 |
 | D5 | AGENTS.md 第 11 行 | "Open weights remain the default; hybrid requires an explicit authorized choice." | 媒體生成成立（`docs/SPEC07_STUDIO_ROUTING.md:7-9`）；但代理模型預設是 OpenAI（`providers.py:40-42`），還有 chatgpt.com 路徑 | R2、R3 做完後成立；文件註明範圍包含代理與評分模型 | R2、R3、R5 |
 | D6 | AGENTS.md 第 48 行 | 「預設工作流採用 100% 開放權重……同時符合 Best Overall 與 Open Weights Only 參賽條件」 | 預設工作流 ✓；但 Open Weights Only 也要看代理與評分模型，目前的預設不符合 | 補一句「代理與評分模型也須為開放權重（SPEC_20 供應商原則 1）」 | R5 |
 | D7 | AGENTS.md 第 22–27 行 | 給接手代理的閱讀清單把 SPEC_08 列為「主規格／最新範圍優先」 | 之後已有 SPEC_09～SPEC_19 與本規格 | 改成指向 `docs/specs/` 的最新規格與 SPEC_20 | R5 |
@@ -116,7 +116,7 @@
 | R3 | 移除 chatgpt.com | `model_client.py` 只保留 `ModelError`、`TurnResult`、`MAX_ROUNDS`、`LAST_ROUND_NOTE`，刪除 chatgpt.com 傳輸與權杖讀取（`URL`、`USER_AGENT`、`credentials`、`_default_bearer_token`、`_jwt_account_id`、`forget_credentials`、`request_body`、`stream_once`、`_stream_with_retry`、`run_turn` 及其輔助函式）。`responses`（含 `OPENBENCH_PROVIDER=direct` 別名）從允許的類型移除（`agent_registry.py:152`、`:174`；`agent_console_store.py:417`；`execution_governance.py:239-242`、`:662`；`providers.py:37-39`）。已存的 `responses` 設定在讀取時回報 `kind_removed`，不發出任何連線。`agent_runtime.py:166-171` 與 `outcome_grader.py:67-70` 的非 `openai_compat` 分支改成回傳設定錯誤。介面文案 `configureOPENBENCHAPIKEYOPENAIAPIKEYOrLocalCLI`（`en.json`、`zh-TW.json` 第 1680 行，中文版寫著 `~/.codex/auth.json`）一併改寫或移除。改寫依賴這條路的測試（§5）。 |
 | R4 | Ollama 相容 | 不再送 `tool_choice`。第 16 輪不帶 `tools`，改附 `LAST_ROUND_NOTE`（「用已查到的內容回答」）。README 寫明以 `OLLAMA_CONTEXT_LENGTH=16384`（或更高）啟動 Ollama。劇組對話預設 `reasoning_effort=medium`，評分維持 `low`。 |
 | R5 | 文件對齊 | 依 §1.3 修正 D1–D12。README 新增「Models」一節，照五條原則寫：本機預設、託管開放權重選配且不在展示路徑、閉源需混合模式。 |
-| R6 | 確認平台規定（決策，不改程式） | 確認「必須建在 Comfy Developer Platform 上」的出處（報名表、官方 Discord 或頁面舊版）。若是規定：展示啟動改用 `--platform comfy_sdk`（經 comfy-api-proxy，10/21 已實測通過），並更新 README。若不是：文件改寫成建議。 |
+| R6 | 確認平台規定（已確認，不改程式） | 2026-10-27 確認不是規定：官方頁「App requirements」第 1 條要求用 ComfyUI 建構，執行方式不限（完全本機、Comfy Cloud、Developer Platform、Comfy Router、Comfy SDK 或混用）。條文由前端元件從網站翻譯檔載入，只看頁面 HTML 找不到。展示啟動維持 `--platform local`；文件不再寫成規定。第 3 條要求在示範影片說明另外結合的工具與模型，示範影片要交代劇組用的本機語言模型。 |
 | R7 | 分拍提示詞提案 | 與 R19 合併實作（§7 決定 10）。新增 `POST /aivideo/open/v1/shots/{id}/beat-proposals`：由攝影指導依 §4.4 的格式寫分拍，編譯成 Phase 2 的提示詞格式，產生「Action & Audio Prompt」欄的 `table_edit` 提案，在既有的 ShotProposals 審核；沒有模型時回 409，不做任何寫入。 |
 
 ### 2.2 P1／P2
@@ -315,12 +315,12 @@
 | 4 | 描述、造型、出場、拆鏡與改編（R21、R22、R23）；前製流程與觸發點（R24、R25）；Streamable HTTP 與 MCP Apps（R33、R34）；外部代理連線頁（R41） | 第 3 波 |
 | 5 | 整合驗收、README 能力敘述更新、收據；GPU 實機驗收（A14、A15、A17、R42 實跑、R44），等使用者確認 GPU 空檔 | 第 4 波 |
 
-R6 是使用者的決策，不阻擋任何一波；在確認前，文件一律寫成「待確認」。
+R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 
 ## 7. 待決與已決
 使用者 2026-10-27 指示完整實作；以下技術決策由執行者先定，理由寫在各條，使用者可以推翻。
 
-1. **平台規定出處（R6）：待使用者確認。** 「必須建在 Comfy Developer Platform 上」出自哪裡。確認前文件寫「待確認」。
+1. **平台規定（R6）：已確認不是規定（2026-10-27）。** 官方頁「App requirements」第 1 條把 Developer Platform 列為執行方式之一，完全本機同樣符合。`docs/HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md` 的「built using the Comfy Developer Platform」與現行條文不符。展示啟動維持 `--platform local`。
 2. **託管開放權重是否符合 Open Weights Only：待使用者決定要不要問主辦。** 在得到答覆前，`hosted_open` 預設關閉，展示路徑只用本機（原則 1、2）。
 3. **`uncertain` 保留時間：決定 600 秒。** 可在花費上限頁調整。
 4. **提案只鎖目標格（R17）：決定實作。** 理由：劇組一次替多鏡提案是 C 包的前提，整頁鎖會讓同頁第二個提案必然失敗。單步提案改成只鎖目標列與目標格；其他待審提案若目標沒被動到就自動對齊新版本；同一格被改過仍然失敗並說明原因。`test_source_changed_while_executing_or_waiting_for_approval_cannot_write` 改成「改到別列可以套用、改到同一格會失敗」，另補測試。
@@ -352,7 +352,7 @@ R6 是使用者的決策，不阻擋任何一波；在確認前，文件一律�
 | A13 | R4 | 送出的請求不含 `tool_choice`；第 16 輪不帶 `tools`，並附 `LAST_ROUND_NOTE`。 | 假伺服器檢查請求內容 |
 | A14 | R4 | 實機（GPU 空檔時）：Ollama 以 `OLLAMA_CONTEXT_LENGTH=16384` 啟動，對 `qwen3.8:27b` 送一則超過 6k token 的提示，回答能引用提示開頭的內容；`ollama ps` 的 PROCESSOR 為 100% GPU。 | 實機收據 |
 | A15 | R2、R4 | 實機：預設設定下，連戲評分跑通一次（沿用 Phase 2 流程）。 | 實機收據 |
-| A16 | R5 | §1.3 的 D1–D12 都已修正；除非 R6 確認，文件不再把「必須建在 Comfy Developer Platform 上」寫成比賽規定。 | 人工核對 |
+| A16 | R5 | §1.3 的 D1–D12 都已修正；文件不再把「必須建在 Comfy Developer Platform 上」寫成比賽規定（R6 已確認不是）。 | 人工核對 |
 | A17 | R5 | 照 README 的「Models」一節，在乾淨環境只裝 Ollama 與模型，劇組看板顯示就緒。 | 實機收據 |
 | A18 | R7 | 一鏡產生分拍提案：通過 §4.4 的驗證、`@` 標籤保留、在 ShotProposals 採用後寫入；沒有模型時回 409 且沒有任何寫入。 | DB 測試＋實機 |
 

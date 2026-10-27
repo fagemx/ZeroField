@@ -35,8 +35,10 @@ Exactly four groups/twelve page IDs (no separate enterprise Files/Batches/cache/
 
 1. Quickstart is agent-assisted: describe the agent (or preview one of the exact12 templates,
    or start blank) and the builder conversation drafts the configuration with the project's
-   default model (`POST quickstart/converse`, admin only; local default `qwen3.8:27b-16k` via Ollama's
-   OpenAI-compatible endpoint, set by `OPENBENCH_API_BASE`/`OPENBENCH_MODEL`). The model may only edit
+   default model (`POST quickstart/converse`, admin only; local default `qwen3.8:27b` via Ollama's
+   OpenAI-compatible endpoint `http://127.0.0.1:11434/v1`, overridden by `OPENBENCH_API_BASE`/`OPENBENCH_MODEL`;
+   start Ollama with `OLLAMA_CONTEXT_LENGTH=16384` or higher, because its default context is 4k tokens on GPUs
+   with under 24 GiB of VRAM, see the README's Models section). The model may only edit
    name, description, instructions, catalog skills/tools, grader criteria and effort; unknown tools/skills
    are dropped, every production-changing tool is forced to `always_ask`, and providers, credentials,
    budgets and memory scope are never model-editable. The result is an unsaved draft. Without a reachable
