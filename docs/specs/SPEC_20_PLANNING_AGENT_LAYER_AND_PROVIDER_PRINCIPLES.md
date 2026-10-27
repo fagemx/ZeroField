@@ -249,7 +249,7 @@
  "capabilities": {"tools": true, "tool_choice": false, "json_schema": true, "vision": true, "image_url": false},
  "context_tokens": 16384, "default_effort": "medium"}
 ```
-另有 `openrouter-qwen3.8-27b`（`hosted_open`，需要 `api_key_env` 與價格）。閉源預設只在 `hybrid_studio` 下列出。
+另有 `openrouter-qwen3.8-27b` 與 `openrouter-deepseek-v4.1-flash-1017`（`hosted_open`，需要 `api_key_env` 與價格）。DeepSeek 那筆是使用者 2026-10-27 指定的開發用模型（開放權重 `deepseek-ai/DeepSeek-V4.1-Flash-1017`，可看圖、工具、JSON schema），讓開發與實走不必和 ComfyUI 搶 GPU；`context_tokens` 設 131072 是我們允許的預算，不是模型上限（1M）。產品預設仍是本機 Ollama。閉源預設只在 `hybrid_studio` 下列出。
 
 ### 4.4 分拍提示詞格式（R7／R19）
 模型輸出：

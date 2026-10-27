@@ -35,6 +35,20 @@
       "price": {"reference": "https://openrouter.ai/qwen/qwen3.8-27b", "image_tokens_max": 16384}
     },
     {
+      "id": "openrouter-deepseek-v4.1-flash-1017",
+      "label": "DeepSeek V4.1 Flash 1017 (hosted open weights, OpenRouter)",
+      "kind": "openai_compat",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "deepseek/deepseek-v4.1-flash-1017",
+      "tier": "hosted_open",
+      "capabilities": {"tools": true, "tool_choice": true, "json_schema": true, "vision": true, "image_url": true},
+      "context_tokens": 131072,
+      "image_tokens": 1536,
+      "default_effort": "medium",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "price": {"reference": "https://openrouter.ai/deepseek/deepseek-v4.1-flash-1017", "image_tokens_max": 16384}
+    },
+    {
       "id": "openai-gpt-4.1",
       "label": "GPT-4.1 (closed, OpenAI)",
       "kind": "openai_compat",
