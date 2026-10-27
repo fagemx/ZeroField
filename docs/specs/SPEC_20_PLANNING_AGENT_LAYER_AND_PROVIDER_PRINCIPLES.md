@@ -160,7 +160,7 @@
 
 | R | 名稱 | 內容 |
 |---|---|---|
-| R26 | 3D 計畫存後端 | 新增 `GET`／`PUT /aivideo/open/v1/shots/{id}/previs-plan`，存在 `meta_<shotId>.previsPlan`，帶 `planRevision`。寫入要帶 `If-Match` 版本，版本不符回 409。瀏覽器暫存降級成未存檔的草稿；預演 WebM 裡的計畫只當備份。 |
+| R26 | 3D 計畫存後端 | 新增 `GET`／`PUT /aivideo/open/v1/shots/{id}/previs-plan`，存在 `meta_<shotId>.previsPlanFull`（`{plan, planRevision, updatedAt, updatedBy}`；`previsPlan` 是分鏡種子，重建分鏡會覆寫，所以另開欄位）。寫入要帶 `If-Match` 或 `baseRevision` 版本，版本不符回 409。瀏覽器暫存降級成未存檔的草稿；預演 WebM 裡的計畫只當備份。 |
 | R27 | 結構化操作與求解 | 操作格式見 §4.6。求解共用前端既有的計畫程式（`plan.js`、`blocking.js`），不在 Python 重寫一份。 |
 | R28 | 無頭算圖與看圖驗證 | 伺服器端以無頭瀏覽器跑同一套預演程式，輸出接觸表或 WebM（待決 6）。提案附預覽圖；可選擇交給視覺模型檢查，並由人確認。 |
 | R29 | 3D 與文字同步、角色代碼 | 存 3D 計畫時，用 `describePlan` 一併提議更新 Optical Rig 與 Camera Motion 欄。`plan.cast` 改帶 `@CAST` 代碼。 |
