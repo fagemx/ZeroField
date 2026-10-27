@@ -47,10 +47,10 @@ class SyntaxTests(unittest.TestCase):
         # Asset tags either never match (no .start/.end) or are skipped by their prefix (SPEC_19 4.5): no 400, no shot.
         for text in ('@CAST-01:night walks.', '@CAST-01#night walks.', '@SET-01 at dusk.', '@PROP-07 glints.', '@CAST-01.end',
                      '@cast-01.end', '@SET-01.start', '@LOC-02.end', '@PROP-07.start', '@STYLE-01.end', '@LOC-02:rain', '@STYLE-01',
-                     '@CAST-01:night.end', '@CAST-01#night.end'):
+                     '@CAST-01:night.end', '@CAST-01#night.end', '@CHAR-01.end', '@scene-02.start'):
             with self.subTest(text=text):
                 self.assertEqual(self.codes(text), [])
-        self.assertEqual(take_refs.ASSET_PREFIXES, ('CAST-', 'SET-', 'LOC-', 'PROP-', 'STYLE-'))
+        self.assertEqual(take_refs.ASSET_PREFIXES, ('CAST-', 'SET-', 'LOC-', 'PROP-', 'CHAR-', 'SCENE-', 'STYLE-'))
         # A shot label that only looks like an asset word is still a shot.
         self.assertEqual(self.codes('@CASTLE-01.end @SETUP.start'), [('CASTLE-01', 'end'), ('SETUP', 'start')])
 

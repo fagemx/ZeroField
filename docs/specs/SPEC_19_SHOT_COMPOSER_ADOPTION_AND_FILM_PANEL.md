@@ -349,7 +349,7 @@ shotState({status, adoption, takes, inFlight}) →
 
 ### 4.5 引用的解析與凍結（包 D）
 
-- 語法：`(?<![\w@:#-])@([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\.(start|end)\b`（ASCII 語意），代碼不分大小寫比對同一集的 `shotIndex`，例如 `@SC01-S02.end`、`@SC01-W03.start`。代碼以 `CAST-`、`SET-`、`LOC-`、`PROP-`、`STYLE-` 開頭的是素材代碼，不算鏡頭引用，直接略過（不回 400）；`@CAST-01:night`、`@CAST-01#night`、`@SET-01` 本來就比對不到。前後端共用這條規則（`project_docs/story_take_refs.py` 的 `TAKE_REF_PATTERN` 與 `ASSET_PREFIXES`）。找不到的鏡號畫成警示標籤，送出時回 400 `DRAMA_VALIDATION_FAILED` 並列出找不到的代號。
+- 語法：`(?<![\w@:#-])@([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\.(start|end)\b`（ASCII 語意），代碼不分大小寫比對同一集的 `shotIndex`，例如 `@SC01-S02.end`、`@SC01-W03.start`。代碼以 `CAST-`、`SET-`、`LOC-`、`PROP-`、`CHAR-`、`SCENE-`、`STYLE-` 開頭的是素材代碼（與 `context_compiler` 認得的前綴相同），不算鏡頭引用，直接略過（不回 400）；`@CAST-01:night`、`@CAST-01#night`、`@SET-01` 本來就比對不到。前後端共用這條規則（`project_docs/story_take_refs.py` 的 `TAKE_REF_PATTERN` 與 `ASSET_PREFIXES`）。找不到的鏡號畫成警示標籤，送出時回 400 `DRAMA_VALIDATION_FAILED` 並列出找不到的代號。
 - 解析：被引用的鏡頭有採用時用採用中的 Take；沒有採用時用格子裡最新的 Take，快照標 `adopted: false`；兩者都沒有就回 409 `DRAMA_STAGE_PRECONDITION`。秒數：`.end` 是剪裁出點（沒有剪裁時是片長減一格）、`.start` 是剪裁入點。
 - 抽格：用 `media_prep` 的 `extract_frame`，新增 `source_url`（只接受本專案 `/projects/api/{slug}/assets/pa_…` 資產）。抽出的圖存成資產，並記在快照裡，所以縮圖與實際送進模型的是同一張。
 - 用法：`first_frame` 時，抽出的圖成為這次生成的 `first_frame` 角色（覆蓋首幀欄）；`reference` 時加進參考圖，排在角色與場景之後。`context_compiler` 在提示詞裡把標籤換成一句描述（例：`Continue directly from the final frame of shot S02.`／`Match the setting and lighting of shot S02.`）。

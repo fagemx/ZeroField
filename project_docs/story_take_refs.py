@@ -10,7 +10,7 @@ what they mean in JavaScript and a tag glued to CJK text still counts)::
     (?<![\\w@:#-])@([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\\.(start|end)\\b
 
 then a match whose code starts with an asset prefix (``ASSET_PREFIXES``: ``CAST-``, ``SET-``, ``LOC-``, ``PROP-``,
-``STYLE-``, any case) is an asset tag, not a take reference, and is skipped (never a 400). So ``@CAST-01.end`` is not a
+``CHAR-``, ``SCENE-``, ``STYLE-``, any case) is an asset tag, not a take reference, and is skipped (never a 400). So ``@CAST-01.end`` is not a
 reference, and ``@CAST-01:night``, ``@CAST-01#night`` and ``@SET-01`` never match at all.
 
 On submit each tag is frozen into a snapshot (SPEC_19 1.2 L, 4.5)::
@@ -42,7 +42,7 @@ import tempfile
 TAKE_REF_PATTERN = r"(?<![\w@:#-])@([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\.(start|end)\b"
 TAKE_REF = re.compile(TAKE_REF_PATTERN, re.ASCII)
 # A matched code with one of these prefixes (any case) is an asset code, never a shot: skipped, not refused.
-ASSET_PREFIXES = ("CAST-", "SET-", "LOC-", "PROP-", "STYLE-")
+ASSET_PREFIXES = ("CAST-", "SET-", "LOC-", "PROP-", "CHAR-", "SCENE-", "STYLE-")  # every prefix context_compiler reads
 USE_KEY = re.compile(r"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\.(start|end)", re.ASCII)
 EDGES = ("start", "end")
 USES = ("first_frame", "reference")
