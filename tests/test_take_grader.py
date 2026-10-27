@@ -1,8 +1,10 @@
-"""Continuity grading of sheet-row takes: rubric, GPU hand-off and the one-click retake prompt.
+"""Continuity grading of sheet-row takes: rubric, GPU hand-off and the one-click retake prompt; cut checks between shots.
 
 The vision model, Ollama and ComfyUI are one local fake HTTP server; FFmpeg and PostgreSQL are real.
 """
+import base64
 import functools
+import io
 import json
 import os
 import subprocess
@@ -18,6 +20,30 @@ from project_assistant import providers, take_grader as grader
 
 ANSWER = json.dumps({"score": 58, "passed": False, "issues": ["Hand leaves the dial late (2.8s)."],
                      "feedback": "Push-in lands; the hand withdraws early.", "retake_prompt": "Kael keeps his hand on the dial to the final frame."})
+CUT_ANSWER = json.dumps({"score": 62, "passed": False, "feedback": "Light flips sides across the cut.",
+                         "issues": ["S01 ends with the recorder in the left hand; S02 starts with it in the right hand."]})
+
+
+def two_tone(first, second, folder, name):
+    """A 1 s, 12 fps MP4 whose first half is one colour and second half another, so each cut point has its own colour."""
+    path = Path(folder) / name
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-filter_complex",
+                    f"color=c={first}:s=64x48:r=12:d=0.5[a];color=c={second}:s=64x48:r=12:d=0.5[b];[a][b]concat=n=2:v=1:a=0",
+                    "-pix_fmt", "yuv420p", str(path)], check=True)
+    return path.read_bytes()
+
+
+def panels(png):
+    """(left, right) centre pixels of a cut sheet."""
+    from PIL import Image
+    image = Image.open(io.BytesIO(png)).convert("RGB")
+    width, height = grader.CUT_PANEL
+    return image.size, image.getpixel((width // 2, 24 + height // 2)), image.getpixel((width + 8 + width // 2, 24 + height // 2))
+
+
+def colour(pixel):
+    names = {"red": (255, 0, 0), "green": (0, 128, 0), "blue": (0, 0, 255), "yellow": (255, 255, 0)}
+    return min(names, key=lambda n: sum((a - b) ** 2 for a, b in zip(pixel, names[n])))
 
 
 def fake_gpu(answer=ANSWER, busy_polls=0):
@@ -122,6 +148,35 @@ class GraderUnitTests(unittest.TestCase):
         self.assertNotIn("tools", body)
         self.assertEqual((body["model"], body["reasoning_effort"]), ("qwen-test", "low"))
 
+    def test_cut_sheet_puts_the_out_frame_left_and_the_in_frame_right(self):
+        with tempfile.TemporaryDirectory() as folder:
+            outgoing, incoming = two_tone("red", "green", folder, "a.mp4"), two_tone("blue", "yellow", folder, "b.mp4")
+            # Untrimmed: the outgoing take's own last frame, the incoming take's first.
+            png, frames = grader.cut_sheet(outgoing, None, incoming, 0.0, ("S01", "S02"))
+            size, left, right = panels(png)
+            self.assertEqual((size, colour(left), colour(right)), ((2 * 640 + 8, 24 + 360), "green", "blue"))
+            self.assertEqual(frames, {"outSeconds": 0.917, "inSeconds": 0.0})
+            # Trimmed: the last frame before the out point, the first frame at the in point; an out past the end is the end.
+            for out_at, in_at, expected in ((0.5, 0.5, ("red", "yellow")), (5.0, 0.0, ("green", "blue"))):
+                png, _ = grader.cut_sheet(outgoing, out_at, incoming, in_at, ("S01", "S02"))
+                self.assertEqual(tuple(colour(p) for p in panels(png)[1:]), expected, (out_at, in_at))
+
+    def test_cut_question_has_its_own_rubric_and_no_retake_prompt(self):
+        server, base, calls = fake_gpu(answer=CUT_ANSWER)
+        try:
+            config = providers.ProviderConfig("openai_compat", base + "/v1", "", "qwen-test", "high")
+            answer = grader.cut_vision(config, "Cut from S01 to S02.", b"png")
+        finally:
+            server.shutdown(); server.server_close()
+        body = calls[0][2]
+        self.assertEqual((body["messages"][0]["content"], body["messages"][1]["content"][0]["text"]), (grader.CUT_RUBRIC, "Cut from S01 to S02."))
+        self.assertNotIn("tools", body)
+        self.assertEqual(grader.cut_scorecard(answer), {"score": 62, "passed": False, "feedback": "Light flips sides across the cut.",
+                                                        "issues": ["S01 ends with the recorder in the left hand; S02 starts with it in the right hand."]})
+        self.assertNotIn("retakePrompt", grader.cut_scorecard(ANSWER))
+        with self.assertRaises(grader.GradeError):
+            grader.cut_scorecard('{"score": 62}')
+
 
 @unittest.skipUnless(os.environ.get("OPENBENCH_TEST_DB_URI"), "set OPENBENCH_TEST_DB_URI for grading HTTP tests")
 class GradeHTTPTests(unittest.TestCase):
@@ -220,6 +275,131 @@ class GradeHTTPTests(unittest.TestCase):
         self.assertEqual((queued["status"], queued["auto"], queued["shotId"]), ("queued", True, self.shot))
         self.assertIsNone(grader.on_take(self.conn, self.slug, "soul-cast", rid, {"asset_url": self.take}, self.actor))
         self.assertEqual(self.ok(f"/projects/pj_{self.slug}/grading"), {"autoGrade": True})
+
+
+@unittest.skipUnless(os.environ.get("OPENBENCH_TEST_DB_URI"), "set OPENBENCH_TEST_DB_URI for cut check tests")
+class CutCheckTests(unittest.TestCase):
+    """SPEC_19 R17: the out frame of S01's adopted take and the in frame of S02's, checked through the grader's queue."""
+    from test_story_openapi import StoryHTTPTests as fixture
+    request, call, ok = fixture.request, fixture.call, fixture.ok
+    run_grader = GradeHTTPTests.run_grader
+
+    def setUp(self):
+        self.fixture.setUp(self)
+        from project_docs import repository as repo, story_cuts, story_openapi as story
+        self.repo, self.story, self.story_cuts = repo, story, story_cuts
+        with tempfile.TemporaryDirectory() as folder:
+            self.takes = {code: self.asset(two_tone(*tones, folder, code + ".mp4"))
+                          for code, tones in (("S01", ("red", "green")), ("S02", ("blue", "yellow")), ("S02b", ("yellow", "red")))}
+        self.patches = [patch.object(grader, "kick", lambda: None)]
+        for p in self.patches:
+            p.start()
+        self.adopt("S01", self.takes["S01"])
+        self.adopt("S02", self.takes["S02"])
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.fixture.tearDown(self)
+
+    def asset(self, data):
+        url = f"/projects/api/{self.slug}/assets/" + self.repo.put_asset(self.conn, self.slug, data=data, content_type="video/mp4", actor_id=self.actor)
+        self.conn.commit()
+        return url
+
+    def shot(self, code):
+        self.conn.rollback()
+        return self.story.shot_id(self.slug, next(r for r in self.story.table_rows(self.conn, self.slug, "cinema-studio") if r["cells"][0] == code))
+
+    def adopt(self, code, url):
+        """A Story candidate adopted with POST /shots/{id}/adoptions, as the shot panel's check mark does."""
+        import uuid
+        shot = self.shot(code)
+        self.story.store(self.conn, "ca_" + uuid.uuid4().hex, "candidate", {"entityId": shot, "kind": "video", "url": url, "createdAt": self.story.now()}, self.slug)
+        self.conn.commit()
+        video = next(v["videoId"] for v in self.ok(f"/shots/{shot}/videos?limit=100")["items"] if v["url"] == url)
+        self.assertEqual(self.ok(f"/shots/{shot}/adoptions", "POST", {"videoId": video})["reviewStatus"], "Approved")
+
+    def cuts(self):
+        self.conn.rollback()
+        return self.story_cuts.list_cuts(self.conn, self.slug, f"ep_{self.slug}_01")["items"]
+
+    def queue(self):
+        result = self.story_cuts.queue_cut_checks(self.conn, self.me, self.slug, f"ep_{self.slug}_01")
+        self.conn.commit()
+        return result["queued"]
+
+    def test_a_cut_check_sends_both_frames_side_by_side_after_the_renders_and_keeps_the_result(self):
+        self.assertEqual(self.queue(), 1)  # S01 -> S02; S02 -> S03 has no adopted take on S03
+        self.assertEqual(self.cuts()[0]["check"]["state"], "queued")
+        ran, calls = self.run_grader(answer=CUT_ANSWER, busy_polls=1)
+        self.assertEqual(ran, 1)
+        paths = [c[1] for c in calls]
+        self.assertNotIn("/interrupt", paths)
+        order = [paths.index(p) for p in ("/queue", "/free", "/v1/chat/completions", "/api/generate")]
+        self.assertEqual(order, sorted(order))  # wait for the renders, free ComfyUI, ask, then unload the vision model
+        self.assertEqual(paths.count("/queue"), 2)  # busy once: waited, never interrupted
+        self.assertEqual(calls[paths.index("/api/generate")][2], {"model": "qwen-test", "keep_alive": 0})
+
+        chat = calls[paths.index("/v1/chat/completions")][2]
+        self.assertEqual(chat["messages"][0]["content"], grader.CUT_RUBRIC)
+        text, image = chat["messages"][1]["content"][0]["text"], chat["messages"][1]["content"][1]["image_url"]["url"]
+        self.assertIn("Cut from S01 to S02.", text)
+        self.assertIn("Kael notices the pulsing recorder", text)  # the incoming shot's prompt, so intended changes are not issues
+        sent = base64.b64decode(image.split(",", 1)[1])
+        size, left, right = panels(sent)
+        self.assertEqual((size, colour(left), colour(right)), ((1288, 384), "green", "blue"))  # S01's last frame | S02's first
+
+        check = self.cuts()[0]["check"]
+        self.assertEqual((check["state"], check["score"], check["passed"], check["error"]), ("done", 62, False, None))
+        self.assertEqual(check["issues"], ["S01 ends with the recorder in the left hand; S02 starts with it in the right hand."])
+        self.assertEqual((check["frames"], check["auto"]), ({"outSeconds": 0.917, "inSeconds": 0.0}, False))
+        sheet = self.repo.get_asset(self.conn, self.slug, check["frameSheetUrl"].rsplit("/", 1)[1])
+        self.assertEqual((sheet[0], bytes(sheet[1])), ("image/png", sent))  # the saved sheet is what the model saw
+        [record] = self.story.records(self.conn, grader.CUT_KIND, self.slug)
+        self.assertEqual((record["checkId"], record["status"], record["model"]), (check["checkId"], "graded", "qwen-test"))
+        self.assertTrue(record["gpu"]["comfyFreed"] and record["gpu"]["waitedForRenders"] and record["gpu"]["visionUnloaded"])
+        self.assertNotIn("retakePrompt", record)
+        self.assertEqual(self.story.records(self.conn, grader.KIND, self.slug), [])  # a cut check is not a take grade
+
+        # S02 adopts another take: the result no longer describes the cut, and nothing is re-checked by itself.
+        self.adopt("S02", self.takes["S02b"])
+        self.assertEqual(self.cuts()[0]["check"]["state"], "none")
+        self.assertEqual([r["status"] for r in self.story.records(self.conn, grader.CUT_KIND, self.slug)], ["graded"])
+        self.assertEqual(self.queue(), 1)
+        self.run_grader(answer=CUT_ANSWER)
+        check = self.cuts()[0]["check"]
+        self.assertEqual(check["state"], "done")
+        sheet = bytes(self.repo.get_asset(self.conn, self.slug, check["frameSheetUrl"].rsplit("/", 1)[1])[1])
+        self.assertEqual(colour(panels(sheet)[2]), "yellow")  # the new take's first frame
+        self.assertEqual(len(self.story.records(self.conn, grader.CUT_KIND, self.slug)), 2)
+
+    def test_cut_checks_and_take_grades_share_one_queue_with_a_gpu_hand_off_each(self):
+        s01 = self.shot("S01")
+        self.ok(f"/shots/{s01}/trim", "PUT", {"in": 0, "out": 0.5})
+        self.assertEqual(self.ok(f"/shots/{s01}/grades", "POST", {"assetUrl": self.takes["S01"]})["status"], "queued")
+        self.assertEqual(self.queue(), 1)
+        ran, calls = self.run_grader(answer=CUT_ANSWER)
+        self.assertEqual(ran, 2)
+        marks = [c[1] for c in calls if c[1] in ("/free", "/v1/chat/completions", "/api/generate")]
+        self.assertEqual(marks, ["/free", "/v1/chat/completions", "/api/generate"] * 2)
+        chats = [c[2] for c in calls if c[1] == "/v1/chat/completions"]
+        self.assertEqual({c["messages"][0]["content"] for c in chats}, {grader.RUBRIC, grader.CUT_RUBRIC})
+        cut = next(c for c in chats if c["messages"][0]["content"] == grader.CUT_RUBRIC)
+        left = panels(base64.b64decode(cut["messages"][1]["content"][1]["image_url"]["url"].split(",", 1)[1]))[1]
+        self.assertEqual(colour(left), "red")  # the trimmed out point: the last frame before 0.5 s
+        self.assertEqual(self.ok(f"/shots/{s01}/grades")["items"][0]["status"], "graded")
+        self.assertEqual((self.cuts()[0]["outAt"], self.cuts()[0]["check"]["state"]), (0.5, "done"))
+
+        # A check that cannot run fails visibly on the cut and leaves the GPU alone.
+        self.adopt("S02", self.takes["S02b"])
+        self.assertEqual(self.queue(), 1)
+        self.repo.update_project_meta(self.conn, self.slug, privacy_mode="mask_numbers")
+        self.conn.commit()
+        ran, calls = self.run_grader(answer=CUT_ANSWER)
+        self.assertEqual((ran, calls), (1, []))
+        check = self.cuts()[0]["check"]
+        self.assertEqual((check["state"], check["error"], check["score"]), ("failed", grader.MASKED, None))
 
 
 @unittest.skipUnless(os.environ.get("OPENBENCH_TEST_DB_URI"), "set OPENBENCH_TEST_DB_URI")

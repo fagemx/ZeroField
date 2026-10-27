@@ -1,14 +1,22 @@
-"""Continuity grading of sheet-row takes.
+"""Continuity grading of sheet-row takes, and checks of the cuts between adopted takes.
 
 The Continuity Supervisor's vision model grades the product's 8-frame contact sheet of a take with the rubric the
 Phase 2 hand grading used. LTX-2.5 and a local vision model do not fit on one 24 GB GPU together, so a grade waits for
 ComfyUI to go idle (it never interrupts a render), frees ComfyUI's models, grades, then unloads the vision model.
 A failing grade carries the grader's rewritten prompt; Retake with it in shot review applies it and re-shoots in one click.
+
+A cut check (SPEC_19 R17) is the second question the same supervisor answers: two frames side by side, the outgoing
+shot's out point and the incoming shot's in point, judged for positions, wardrobe, props, light direction and eyeline.
+It rides the same queue and the same GPU hand-off. Its record (kind ``cut_check``) is keyed by both shots, both take URLs
+and both cut points, so a new take or a new trim on either side simply has no result yet; ``story_cuts`` lists them.
+Like a grade, a cut check is information only: it never blocks adoption or export.
 """
 from __future__ import annotations
 
 import base64
 import dataclasses
+import hashlib
+import io
 import json
 import re
 import tempfile
@@ -25,7 +33,16 @@ RUBRIC = ("You are the continuity grader. The image is an 8-frame timestamped co
           '{"score": int, "passed": bool, "issues": [str], "feedback": str, "retake_prompt": str}. '
           'When the take fails, retake_prompt is the shot prompt rewritten to fix the issues, keeping its @asset tags; '
           'otherwise "".')
+CUT_RUBRIC = ("You are the continuity supervisor checking a cut. The image shows two frames side by side: LEFT is the last "
+              "frame of the outgoing shot, RIGHT is the first frame of the incoming shot that plays right after it. Judge "
+              "whether the incoming shot can follow directly: character positions and screen direction, wardrobe, props "
+              "(present or missing, which hand holds them), lighting direction, and eyeline (where each character looks). "
+              "A change the shot prompts call for is not an issue. Score 0-100 and list concrete issues that name both "
+              "shots and the detail (for example: \"S02 ends with the recorder in the left hand; S03 starts with it in the "
+              "right hand.\"). Reply JSON only: "
+              '{"score": int, "passed": bool, "issues": [str], "feedback": str}.')
 KIND = 'take_grade'
+CUT_KIND = 'cut_check'
 SETTING = 'auto_grade_takes'
 SHOT_TABS = ('cinema-studio', 'openjutsu-lab')
 ACTIVE = ('queued', 'waiting_gpu', 'grading')
@@ -35,6 +52,8 @@ VISION_TIMEOUT = 600
 # covered by the ComfyUI queue check below.
 GPU_LOCK = threading.Lock()
 FREE_TARGET = 0.75  # wait until this share of VRAM is free after /free (calibrate per card)
+MASKED = 'Numeric masking does not permit sending frames to the vision model.'
+CUT_PANEL = (640, 360)  # each frame of a cut sheet is fitted into this box
 
 _wake = threading.Event()
 _guard = threading.Lock()
@@ -51,6 +70,28 @@ def now():
 
 def record_id(shot_id, asset_id):
     return f'grade_{shot_id}_{asset_id}'
+
+
+def cut_record_id(cut):
+    """One record per (both shots, both take URLs, out point, in point): any change on either side is a new key."""
+    key = [cut['fromShotId'], cut['toShotId'], cut['fromTakeUrl'], cut['toTakeUrl'],
+           None if cut['outAt'] is None else float(cut['outAt']), float(cut['inAt'] or 0)]
+    return 'cut_' + hashlib.sha256(json.dumps(key, separators=(',', ':')).encode()).hexdigest()[:40]
+
+
+def in_flight(record):
+    """Queued, waiting for the GPU or being graded, and not abandoned by a grader that died."""
+    return (bool(record) and record.get('status') in ACTIVE
+            and time.time() - datetime.fromisoformat(record['requestedAt']).timestamp() < STALE_SECONDS)
+
+
+def _take_asset(conn, slug, url):
+    """The pa_ id of a video asset of this production within the media cap, or None."""
+    from project_docs import repository as repo
+    from project_assistant.studio.runtime import MAX_MEDIA
+    match = re.fullmatch(r'/projects/api/' + re.escape(slug) + r'/assets/(pa_[0-9a-f]{32})', url or '')
+    meta = repo.get_asset_meta(conn, slug, match[1]) if match else None
+    return match[1] if meta and meta[0].startswith('video/') and 0 < meta[1] <= MAX_MEDIA else None
 
 
 def auto_enabled(conn, slug):
@@ -71,21 +112,62 @@ def grades(conn, slug, shot_id):
 
 def enqueue(conn, slug, shot_id, asset_url, owner_id, *, auto=False):
     """Queue (or return the in-flight) grade of one take; the caller commits, then calls kick()."""
-    from project_docs import repository as repo, story_openapi as story
+    from project_docs import story_openapi as story
     from project_assistant import privacy
-    from project_assistant.studio.runtime import MAX_MEDIA
-    match = re.fullmatch(r'/projects/api/' + re.escape(slug) + r'/assets/(pa_[0-9a-f]{32})', asset_url or '')
-    meta = repo.get_asset_meta(conn, slug, match[1]) if match else None
-    if not meta or not meta[0].startswith('video/') or not 0 < meta[1] <= MAX_MEDIA:
+    asset_id = _take_asset(conn, slug, asset_url)
+    if not asset_id:
         raise GradeError('Choose a video take from this production to grade.')
     if privacy.mode(conn, slug) != 'full_access':
-        raise GradeError('Numeric masking does not permit sending frames to the vision model.')
-    key = record_id(shot_id, match[1])
+        raise GradeError(MASKED)
+    key = record_id(shot_id, asset_id)
     current = story.record(conn, key, required=False, lock=True)
-    if current and current['status'] in ACTIVE and time.time() - datetime.fromisoformat(current['requestedAt']).timestamp() < STALE_SECONDS:
+    if in_flight(current):
         return current
-    return story.store(conn, key, KIND, {'gradeId': key, 'shotId': shot_id, 'assetId': match[1], 'assetUrl': asset_url,
+    return story.store(conn, key, KIND, {'gradeId': key, 'shotId': shot_id, 'assetId': asset_id, 'assetUrl': asset_url,
                                          'status': 'queued', 'auto': auto, 'requestedBy': owner_id, 'requestedAt': now()}, slug)
+
+
+def enqueue_cut(conn, slug, episode_id, cut, owner_id, *, auto=False):
+    """Queue (or return the in-flight) check of one cut, a ``story_cuts`` item whose two sides are adopted takes.
+
+    The caller commits, then calls kick(). Raises GradeError when either side is not a video of this production or the
+    production masks numbers.
+    """
+    from project_docs import story_openapi as story
+    from project_assistant import privacy
+    assets = [_take_asset(conn, slug, cut[key]) for key in ('fromTakeUrl', 'toTakeUrl')]
+    if not all(assets):
+        raise GradeError('Both sides of a cut must be adopted video takes from this production.')
+    if privacy.mode(conn, slug) != 'full_access':
+        raise GradeError(MASKED)
+    key = cut_record_id(cut)
+    current = story.record(conn, key, required=False, lock=True)
+    if in_flight(current):
+        return current
+    return story.store(conn, key, CUT_KIND, {
+        'checkId': key, 'episodeId': episode_id, 'fromShotId': cut['fromShotId'], 'toShotId': cut['toShotId'],
+        'fromShotIndex': cut.get('fromShotIndex'), 'toShotIndex': cut.get('toShotIndex'),
+        'fromTakeUrl': cut['fromTakeUrl'], 'toTakeUrl': cut['toTakeUrl'], 'fromAssetId': assets[0], 'toAssetId': assets[1],
+        'outAt': None if cut['outAt'] is None else float(cut['outAt']), 'inAt': float(cut['inAt'] or 0),
+        'status': 'queued', 'auto': auto, 'requestedBy': owner_id, 'requestedAt': now()}, slug)
+
+
+def cut_check_view(record):
+    """The ``check`` of a cut: state none (no result for these takes and points), queued, done or failed.
+
+    The shape is always the same; fields that do not apply are None (issues: []). An in-flight record a dead grader
+    abandoned (older than STALE_SECONDS) reads as none, so it can be queued again.
+    """
+    status = (record or {}).get('status')
+    state = {'graded': 'done', 'failed': 'failed'}.get(status) or ('queued' if in_flight(record) else 'none')
+    if state == 'none':
+        record = {}
+    done = state == 'done'
+    return {'state': state, 'checkId': record.get('checkId'), 'score': record.get('score') if done else None,
+            'passed': record.get('passed') if done else None, 'issues': list(record.get('issues') or []) if done else [],
+            'feedback': record.get('feedback') if done else None, 'frameSheetUrl': record.get('sheetUrl') if done else None,
+            'frames': record.get('frames') if done else None, 'error': record.get('error') if state == 'failed' else None,
+            'auto': record.get('auto'), 'requestedAt': record.get('requestedAt'), 'checkedAt': record.get('gradedAt') if done else None}
 
 
 def on_take(conn, slug, tab_key, row_id, output, owner_id):
@@ -121,7 +203,7 @@ def _loop():
 
 
 def drain(connect):
-    """Grade every queued take, oldest first. Returns how many ran."""
+    """Grade every queued take and check every queued cut, oldest first, one queue. Returns how many ran."""
     count = 0
     while True:
         conn = connect()
@@ -129,12 +211,14 @@ def drain(connect):
             job = _claim(conn)
             if not job:
                 return count
+            cut = 'checkId' in job
             try:
-                _grade(conn, job)
+                (_check_cut if cut else _grade)(conn, job)
             except Exception as exc:
                 conn.rollback()
                 _save(conn, job, status='failed', error=str(exc)[:500] if isinstance(exc, GradeError) else
-                      'Grading failed; check the Continuity Supervisor model endpoint and retry.')
+                      ('The cut check failed' if cut else 'Grading failed') +
+                      '; check the Continuity Supervisor model endpoint and retry.')
             count += 1
         finally:
             conn.close()
@@ -142,8 +226,8 @@ def drain(connect):
 
 def _claim(conn):
     with conn.cursor() as cur:
-        cur.execute("""SELECT data, project_slug FROM projectops.story_record WHERE kind=%s AND data->>'status'='queued'
-                       ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED""", (KIND,))
+        cur.execute("""SELECT data, project_slug FROM projectops.story_record WHERE kind IN (%s, %s) AND data->>'status'='queued'
+                       ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED""", (KIND, CUT_KIND))
         row = cur.fetchone()
     if not row:
         conn.rollback()
@@ -156,30 +240,28 @@ def _claim(conn):
 def _save(conn, job, **changes):
     from project_docs import story_openapi as story
     job.update(changes)
-    story.store(conn, job['gradeId'], KIND, {k: v for k, v in job.items() if k != 'slug'}, job['slug'])
+    key, kind = (job['checkId'], CUT_KIND) if 'checkId' in job else (job['gradeId'], KIND)
+    story.store(conn, key, kind, {k: v for k, v in job.items() if k != 'slug'}, job['slug'])
     conn.commit()
 
 
-def _grade(conn, job):
-    from project_docs import repository as repo, story_openapi as story
+def _supervisor(conn, slug):
+    """The Continuity Supervisor's vision endpoint, once the production allows frames to leave."""
     from project_assistant import agent_registry, agent_runtime, privacy
-    slug = job['slug']
-    _, row = story.find_row(conn, job['shotId'], 'shot')
     if privacy.mode(conn, slug) != 'full_access':
-        raise GradeError('Numeric masking does not permit sending frames to the vision model.')
+        raise GradeError(MASKED)
     profile = agent_registry.get_agent(conn, slug, 'qa_critic') or {}
     if profile and not profile.get('enabled', True):
         raise GradeError('The Continuity Supervisor is disabled for this production.')
     config = agent_runtime.provider_for(profile)
     if config.kind != 'openai_compat':
         raise GradeError('Continuity grading needs an OpenAI-compatible vision endpoint for the Continuity Supervisor.')
-    found = repo.get_asset(conn, slug, job['assetId'])
-    if not found:
-        raise GradeError('The take is no longer in this production.')
-    comfy = comfy_url(conn, slug)
-    view = story.shot_view(conn, slug, row)
-    conn.commit()  # no transaction across FFmpeg, the GPU wait or inference
-    sheet, timing = frame_sheet(bytes(found[1]))
+    return config
+
+
+def _on_gpu(conn, job, config, comfy, ask):
+    """Run ask() on the GPU: behind this process's renders, after ComfyUI's queue empties and its models are freed;
+    the vision model is unloaded afterwards whatever happens. Returns (answer, gpu facts, monotonic start of ask)."""
     gpu = {}
     if not GPU_LOCK.acquire(blocking=False):
         _save(conn, job, status='waiting_gpu')
@@ -188,12 +270,28 @@ def _grade(conn, job):
         gpu = hand_off(comfy, on_wait=lambda: _save(conn, job, status='waiting_gpu'))
         _save(conn, job, status='grading')
         started = time.monotonic()  # seconds = model load + grading, not the wait for renders
-        answer = vision(config, brief(view), view['description'], sheet)
+        answer = ask()
     finally:
         try:
             gpu['visionUnloaded'] = unload(config)
         finally:
             GPU_LOCK.release()
+    return answer, gpu, started
+
+
+def _grade(conn, job):
+    from project_docs import repository as repo, story_openapi as story
+    slug = job['slug']
+    _, row = story.find_row(conn, job['shotId'], 'shot')
+    config = _supervisor(conn, slug)
+    found = repo.get_asset(conn, slug, job['assetId'])
+    if not found:
+        raise GradeError('The take is no longer in this production.')
+    comfy = comfy_url(conn, slug)
+    view = story.shot_view(conn, slug, row)
+    conn.commit()  # no transaction across FFmpeg, the GPU wait or inference
+    sheet, timing = frame_sheet(bytes(found[1]))
+    answer, gpu, started = _on_gpu(conn, job, config, comfy, lambda: vision(config, brief(view), view['description'], sheet))
     card = scorecard(answer, view['description'])
     sheet_id = repo.put_asset(conn, slug, data=sheet, content_type='image/png', actor_id=job['requestedBy'])
     _save(conn, job, status='graded', **card, gradedAt=now(),
@@ -201,8 +299,40 @@ def _grade(conn, job):
           seconds=round(time.monotonic() - started, 1), gpu=gpu)
 
 
+def _check_cut(conn, job):
+    """Check one queued cut: both frames, side by side, through the same GPU hand-off as a grade."""
+    from project_docs import repository as repo, story_openapi as story
+    slug = job['slug']
+    try:
+        views = [story.shot_view(conn, slug, story.find_row(conn, job[key], 'shot')[1]) for key in ('fromShotId', 'toShotId')]
+    except story.StoryError:
+        raise GradeError('A shot of this cut is no longer in this production.') from None
+    config = _supervisor(conn, slug)
+    found = [repo.get_asset(conn, slug, job[key]) for key in ('fromAssetId', 'toAssetId')]
+    if not all(found):
+        raise GradeError('A take of this cut is no longer in this production.')
+    comfy = comfy_url(conn, slug)
+    conn.commit()  # no transaction across FFmpeg, the GPU wait or inference
+    labels = [job.get(key) or view['shotIndex'] for key, view in zip(('fromShotIndex', 'toShotIndex'), views)]
+    sheet, frames = cut_sheet(bytes(found[0][1]), job['outAt'], bytes(found[1][1]), job['inAt'], labels)
+    text = cut_brief(labels, views, frames)
+    answer, gpu, started = _on_gpu(conn, job, config, comfy, lambda: cut_vision(config, text, sheet))
+    card = cut_scorecard(answer)
+    sheet_id = repo.put_asset(conn, slug, data=sheet, content_type='image/png', actor_id=job['requestedBy'])
+    _save(conn, job, status='graded', **card, gradedAt=now(),
+          sheetUrl=f'/projects/api/{slug}/assets/{sheet_id}', frames=frames, model=config.model,
+          seconds=round(time.monotonic() - started, 1), gpu=gpu)
+
+
 def brief(view):
     return ', '.join(v for v in (view['shotIndex'], view['cameraMotion'], view['opticalRig']) if v) + '. ' + view['description']
+
+
+def cut_brief(labels, views, frames):
+    out, into = labels
+    return (f"Cut from {out} to {into}. LEFT: last frame of {out} at {frames['outSeconds']:.3f}s. "
+            f"RIGHT: first frame of {into} at {frames['inSeconds']:.3f}s.\n"
+            f"{out} prompt: {views[0]['description']}\n{into} prompt: {views[1]['description']}")
 
 
 def frame_sheet(raw):
@@ -214,6 +344,64 @@ def frame_sheet(raw):
         media = limb_worker._probe_video(path, {'probe_timeout': 60})
         image, timing = build_video_frame_sheet(path, media['duration'], Path(folder), {'timeout': 120})
         return image.read_bytes(), timing
+
+
+def _edge_frame(path, at, edge, folder):
+    """(PNG path, seconds) of the outgoing take's last played frame (edge "out") or the incoming take's first (edge "in").
+
+    out: the frame before ``at`` (the trim's out point), or the take's own last frame when it is untrimmed (``at`` None)
+    or trimmed past its end. in: the first frame at or after ``at`` (the trim's in point, 0 untrimmed), as the film
+    export cuts it.
+    """
+    from project_assistant import limb_worker
+    media = limb_worker._probe_video(path, {'probe_timeout': 60})
+    step = 1 / media['fps']
+    image = folder / f'{edge}.png'
+    if edge == 'out' and (at is None or at >= media['duration'] - 1e-6):
+        seconds = max(0.0, media['duration'] - step)
+        # Seeking near the end can land past the last decodable frame; keep overwriting one image to the end instead.
+        args = ['-sseof', f'-{max(4 * step, 0.25):.6f}', '-i', str(path), '-an', '-update', '1', str(image)]
+    else:
+        seconds = max(0.0, (at - step) if edge == 'out' else min(at or 0.0, media['duration'] - step))
+        args = ['-ss', f'{max(0.0, seconds - 1e-4):.6f}', '-i', str(path), '-an', '-frames:v', '1', str(image)]
+    limb_worker._run_preparation(args, {'timeout': 120})
+    if not image.is_file():
+        raise GradeError(f'FFmpeg could not read the frame at {seconds:.3f}s of a take in this cut.')
+    return image, round(seconds, 3)
+
+
+def cut_sheet(out_raw, out_at, in_raw, in_at, labels=('', '')):
+    """A cut check's input: the outgoing take's out frame (left) and the incoming take's in frame (right), side by side.
+
+    Each frame is fitted into a CUT_PANEL box under a one-line label. Returns (PNG bytes, {'outSeconds', 'inSeconds'}),
+    the moments of the two frames inside their takes.
+    """
+    from PIL import Image, ImageDraw
+    width, height = CUT_PANEL
+    top, gap = 24, 8
+    with tempfile.TemporaryDirectory(prefix='cut-check-') as folder:
+        folder = Path(folder)
+        frames = []
+        for edge, raw, at in (('out', out_raw, out_at), ('in', in_raw, in_at)):
+            path = folder / f'{edge}.mp4'
+            path.write_bytes(raw)
+            frames.append(_edge_frame(path, at, edge, folder))
+        sheet = Image.new('RGB', (2 * width + gap, top + height), 'white')
+        draw = ImageDraw.Draw(sheet)
+        for i, ((image, seconds), title) in enumerate(zip(frames, (f'OUT  {labels[0]}  last frame', f'IN  {labels[1]}  first frame'))):
+            x = i * (width + gap)
+            with Image.open(image) as frame:
+                frame = frame.convert('RGB')
+                scale = min(width / frame.width, height / frame.height)
+                size = (max(1, round(frame.width * scale)), max(1, round(frame.height * scale)))
+                panel = Image.new('RGB', (width, height), 'black')
+                panel.paste(frame.resize(size, Image.Resampling.LANCZOS), ((width - size[0]) // 2, (height - size[1]) // 2))
+            sheet.paste(panel, (x, top))
+            label = f'{title} @ {seconds:.3f}s'.encode('ascii', 'replace').decode('ascii')  # the bitmap font is ASCII
+            draw.text((x + 6, 5), label, fill='black')
+        buffer = io.BytesIO()
+        sheet.save(buffer, format='PNG')
+    return buffer.getvalue(), {'outSeconds': frames[0][1], 'inSeconds': frames[1][1]}
 
 
 def comfy_url(conn, slug):
@@ -263,11 +451,19 @@ def hand_off(comfy, *, on_wait=None, timeout=3600, poll=5, opener=_http, sleep=t
 
 
 def vision(config, brief_text, prompt, sheet, *, opener=None):
+    return _ask(config, RUBRIC, 'Brief: ' + brief_text + '\nShot prompt: ' + prompt, sheet, opener)
+
+
+def cut_vision(config, text, sheet, *, opener=None):
+    """The cut question: CUT_RUBRIC with the two-frame sheet."""
+    return _ask(config, CUT_RUBRIC, text, sheet, opener)
+
+
+def _ask(config, instructions, text, sheet, opener=None):
     from project_assistant import providers
     config = dataclasses.replace(config, effort='low')
-    text = 'Brief: ' + brief_text + '\nShot prompt: ' + prompt
     result = providers.run_openai_compat_turn(
-        config=config, instructions=RUBRIC, turn_text=text, timeout=VISION_TIMEOUT, tool_specs=[],
+        config=config, instructions=instructions, turn_text=text, timeout=VISION_TIMEOUT, tool_specs=[],
         call_tool=lambda *_: (_ for _ in ()).throw(ValueError('The grader cannot call tools.')),
         images=['data:image/png;base64,' + base64.b64encode(sheet).decode('ascii')],
         **({'opener': opener} if opener else {}))
@@ -305,3 +501,9 @@ def scorecard(answer, prompt):
         retake = ' '.join([retake, *tags])
     return {'score': value['score'], 'passed': value['passed'], 'issues': issues,
             'feedback': str(value.get('feedback') or '')[:3000], 'retakePrompt': retake}
+
+
+def cut_scorecard(answer):
+    """{score, passed, issues, feedback} of a cut; a cut has no retake prompt (which side to re-shoot is the director's call)."""
+    card = scorecard(answer, '')
+    return {key: card[key] for key in ('score', 'passed', 'issues', 'feedback')}
