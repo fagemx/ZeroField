@@ -1,7 +1,19 @@
-"""SPEC_19 R15/R16: a shot quoting another shot's take, ``@S02.end`` / ``@S02.start``.
+"""SPEC_19 R15/R16: a shot quoting another shot's take, ``@SC01-S02.end`` / ``@SC01-S02.start``.
 
 A tag names a moment of another shot in the same episode: ``.end`` its cut's out point (the take's last frame when it is
-not trimmed), ``.start`` its in point. On submit each tag is frozen into a snapshot (SPEC_19 1.2 L, 4.5)::
+not trimmed), ``.start`` its in point. The code before the dot is the quoted shot's ``shotIndex`` as the sheet writes it
+(``SC01-S02`` from a storyboard build, ``SC01-W03``, a hand-written ``S02`` or ``12``), matched without case.
+
+The rule, shared word for word with the prompt editor (``TAKE_REF_PATTERN``, ASCII semantics, so ``\\w`` and ``\\b`` mean
+what they mean in JavaScript and a tag glued to CJK text still counts)::
+
+    (?<![\\w@:#-])@([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\\.(start|end)\\b
+
+then a match whose code starts with an asset prefix (``ASSET_PREFIXES``: ``CAST-``, ``SET-``, ``LOC-``, ``PROP-``,
+``STYLE-``, any case) is an asset tag, not a take reference, and is skipped (never a 400). So ``@CAST-01.end`` is not a
+reference, and ``@CAST-01:night``, ``@CAST-01#night`` and ``@SET-01`` never match at all.
+
+On submit each tag is frozen into a snapshot (SPEC_19 1.2 L, 4.5)::
 
     {shotId, shotIndex, edge, takeUrl, at, frameUrl, use, adopted, lastFrameAt}
 
@@ -19,16 +31,19 @@ worker runtime are imported inside the functions that need them.
 """
 from __future__ import annotations
 
+import copy
 import math
 from pathlib import Path
 import re
 import tempfile
 
-# SPEC_19 4.5. ASCII: \w and \b mean what they mean in JavaScript, so the editor and the server agree on a tag that is
-# followed or preceded by CJK text ("接續@S02.end的動作"). Asset codes always have a hyphen and never .start/.end, so
-# @CAST-01:night, @CAST-01#night and @SET-01 are never take references.
-TAKE_REF = re.compile(r"(?<![\w@:#-])@([A-Za-z]?\d{1,3}[A-Za-z]?)\.(start|end)\b", re.ASCII)
-USE_KEY = re.compile(r"([A-Za-z]?\d{1,3}[A-Za-z]?)\.(start|end)", re.ASCII)
+# SPEC_19 4.5, the one rule the server and the prompt editor share (see the module docstring). ASCII: \w and \b mean what
+# they mean in JavaScript, so both agree on a tag that is followed or preceded by CJK text ("接續@SC01-S02.end的動作").
+TAKE_REF_PATTERN = r"(?<![\w@:#-])@([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\.(start|end)\b"
+TAKE_REF = re.compile(TAKE_REF_PATTERN, re.ASCII)
+# A matched code with one of these prefixes (any case) is an asset code, never a shot: skipped, not refused.
+ASSET_PREFIXES = ("CAST-", "SET-", "LOC-", "PROP-", "STYLE-")
+USE_KEY = re.compile(r"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\.(start|end)", re.ASCII)
 EDGES = ("start", "end")
 USES = ("first_frame", "reference")
 MAX_REFS = 6
@@ -38,13 +53,19 @@ _CLOSING = set(".,;:!?)]}…。，、；：！？）」』】")
 _OPENING = set("([{（「『【")
 
 
+def is_asset_code(code):
+    """True for a code an asset tag uses (``CAST-01``), which is never a shot label."""
+    return str(code).upper().startswith(ASSET_PREFIXES)
+
+
 def tokens(text):
-    """[(start, end, code, edge)] of every take reference in text, in order."""
-    return [(match.start(), match.end(), match[1], match[2]) for match in TAKE_REF.finditer(str(text or ""))]
+    """[(start, end, code, edge)] of every take reference in text, in order; asset codes are skipped."""
+    return [(match.start(), match.end(), match[1], match[2]) for match in TAKE_REF.finditer(str(text or ""))
+            if not is_asset_code(match[1])]
 
 
 def ref_key(code, edge):
-    """The ``takeRefUses`` key of a tag: ``S02.end``."""
+    """The ``takeRefUses`` key of a tag: ``SC01-S02.end``."""
     return f"{str(code).strip().upper()}.{edge}"
 
 
@@ -111,17 +132,17 @@ def default_use(edge, shot, quoted):
 
 
 def parse_uses(value):
-    """{``S02.end``: use} of a request's ``takeRefUses``."""
+    """{``SC01-S02.end``: use} of a request's ``takeRefUses`` (keys may start with ``@``; the code is upper-cased)."""
     from project_docs import story_openapi as story
     if value is None:
         return {}
     if not isinstance(value, dict) or len(value) > MAX_REFS:
-        story.invalid(f'takeRefUses must map at most {MAX_REFS} tags such as "S02.end" to first_frame or reference.')
+        story.invalid(f'takeRefUses must map at most {MAX_REFS} tags such as "SC01-S02.end" to first_frame or reference.')
     uses = {}
     for key, use in value.items():
         match = USE_KEY.fullmatch(key[1:] if isinstance(key, str) and key.startswith("@") else key) if isinstance(key, str) else None
         if not match or use not in USES:
-            story.invalid('takeRefUses must map tags such as "S02.end" to first_frame or reference.')
+            story.invalid('takeRefUses must map tags such as "SC01-S02.end" to first_frame or reference.')
         name = ref_key(*match.groups())
         if name in uses:
             story.invalid(f"takeRefUses names {name} twice.")
@@ -300,6 +321,15 @@ def _receipts(conn, takes):
     return takes._take_ref_receipts
 
 
+def take_snapshots(conn, identifier, url, takes):
+    """The take reference snapshots one video take of a shot froze when it was rendered (its ``storyProvenance.takeRefs``,
+    from its candidate records and media receipts): ``[]`` when it quoted nothing or its history is not one known history."""
+    from project_docs import writing_impact
+    evidence = writing_impact.candidate_evidence([r for r in takes.records(identifier) if r.get("url") == url] +
+                                                 [r for r in _receipts(conn, takes) if r.get("entityId") == identifier and r.get("url") == url], url)
+    return copy.deepcopy((evidence or {}).get("takeRefs") or [])
+
+
 def view_refs(conn, slug, identifier, adoption, takes):
     """``takeRefs`` of a shot view: the references of its adopted take, each compared with what its tag resolves to now.
 
@@ -309,11 +339,8 @@ def view_refs(conn, slug, identifier, adoption, takes):
     """
     if not adoption or not adoption.get("adopted") or not adoption.get("url"):
         return []
-    from project_docs import story_openapi as story, story_trim, writing_impact
-    url = adoption["url"]
-    evidence = writing_impact.candidate_evidence([r for r in takes.records(identifier) if r.get("url") == url] +
-                                                 [r for r in _receipts(conn, takes) if r.get("entityId") == identifier and r.get("url") == url], url)
-    refs = (evidence or {}).get("takeRefs") or []
+    from project_docs import story_openapi as story, story_trim
+    refs = take_snapshots(conn, identifier, adoption["url"], takes)
     now = {}
     result = []
     for ref in refs:
