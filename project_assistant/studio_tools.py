@@ -324,6 +324,6 @@ def cached_frame_images(ctx, conn, args, result):
     return ['data:image/png;base64,' + base64.b64encode(image[1]).decode('ascii')]
 
 
-HANDLERS = {fn.__name__: fn for fn in (studio_ingest_script, studio_manage_asset, studio_plan_allocation,
-            studio_dispatch_shot, studio_inspect_frames, studio_edit_timeline, consult_advisor)}
-EXTERNAL_TOOLS = {'studio_plan_allocation', 'studio_inspect_frames', 'consult_advisor'}
+from project_assistant import tool_registry  # noqa: E402  (registration lives in the declarative registry)
+HANDLERS = tool_registry.handlers(__name__, globals())
+EXTERNAL_TOOLS = set(tool_registry.EXTERNAL)

@@ -11,7 +11,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from project_assistant.tool_specs import TOOL_NAMES, TOOLS  # noqa: E402
+from project_assistant.tool_specs import MCP_TOOLS  # noqa: E402  (registry tools exposed over MCP)
 
 PROTOCOL = "2025-06-18"
 
@@ -62,10 +62,10 @@ def handle(message: dict):
     if method == "ping":
         return {}
     if method == "tools/list":
-        return {"tools": _host_tools()}
+        return {"tools": [s for s in _host_tools() if s.get('name') in MCP_TOOLS]}
     if method == "tools/call":
         name = params.get("name")
-        if name not in {s['name'] for s in _host_tools()}:
+        if name not in MCP_TOOLS or name not in {s['name'] for s in _host_tools()}:
             raise LookupError(f"Tool {name} does not exist.")
         text, is_error = _call_tool(name, params.get("arguments") or {})
         content = [{'type': 'text', 'text': str(text)}]

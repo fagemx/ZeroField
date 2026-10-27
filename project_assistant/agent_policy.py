@@ -1,5 +1,5 @@
 """Authoritative per-call authorization, shared by every model transport."""
-from project_assistant import agent_registry, tool_specs
+from project_assistant import agent_registry, tool_registry, tool_specs
 
 
 def tool_specs_for(profile):
@@ -7,13 +7,12 @@ def tool_specs_for(profile):
     if profile.get('role_kind') == 'observer':
         return []
     if profile.get('role_kind') != 'primary':
-        allowed -= {'spawn_agent','cancel_delegation','trigger_flow_run','check_delegation','list_agents'}
+        allowed -= tool_registry.PRIMARY_ONLY
     policies = profile.get('tool_policies') or {}
     multi = profile.get('multiagent_config') or {}
-    if not multi.get('allow_subagents'): allowed.discard('spawn_agent')
-    if not multi.get('allow_workflows'): allowed.discard('trigger_flow_run')
-    if not multi.get('advisor_agent_key'): allowed.discard('consult_advisor')
-    return [s for s in tool_specs.TOOLS if s['name'] in allowed and policies.get(s['name']) != 'disabled']
+    allowed -= {name for name, switches in tool_registry.REQUIRES.items() if not all(multi.get(s) for s in switches)}
+    defaults = tool_specs.DEFAULT_POLICIES  # a declared default of 'disabled' hides a tool until an agent enables it
+    return [s for s in tool_specs.TOOLS if s['name'] in allowed and policies.get(s['name'], defaults.get(s['name'], 'auto')) != 'disabled']
 
 
 def can_propose_output(profile,target):
@@ -60,7 +59,7 @@ def authorize_tool(ctx, conn, name, args):
     mutating = name in tool_specs.MUTATING_TOOLS
     if mutating and current['role']=='viewer':
         raise ToolError("POLICY_DENIED: Read-only crew members cannot perform this operation.")
-    if (name in ('propose','propose_table_edit','trigger_flow_run','studio_ingest_script','studio_manage_asset','studio_dispatch_shot','studio_edit_timeline')) and getattr(ctx,'write_mode',None)=='analysis_only':
+    if name in tool_registry.ANALYSIS_ONLY_DENIED and getattr(ctx,'write_mode',None)=='analysis_only':
         raise ToolError("POLICY_DENIED: This task allows read-only analysis.")
     if getattr(ctx,'dispatch_id',None):
         from project_assistant import orchestrator
@@ -71,7 +70,7 @@ def authorize_tool(ctx, conn, name, args):
             raise ToolError(exc.code+'：'+str(exc)) from exc
         if dispatch['agent_key']!=ctx.agent_key:
             raise ToolError("POLICY_DENIED: Dispatch role mismatch.")
-        if name in {'studio_ingest_script','studio_manage_asset','studio_dispatch_shot','studio_edit_timeline'}:
+        if name in tool_registry.RACE_DENIED:
             from project_assistant import orchestration_store as db
             task = db.get_task(conn, ctx.slug, dispatch['task_id'])
             if task['strategy'] == 'race':
@@ -80,6 +79,11 @@ def authorize_tool(ctx, conn, name, args):
                 orchestrator._task_source_matches(task, key, orchestrator.freeze_tab(conn, ctx.slug, key))
     if profile['agent_key']=='qa_critic' and name=='propose' and args.get('action') not in agent_registry.QA_ACTIONS:
         raise ToolError("POLICY_DENIED: Review agents can only propose annotations or discussions.")
+    # Every tool's arguments match its declared schema; policy and lease errors above keep precedence.
+    try:
+        tool_registry.validate_args(name, args)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from None
 
 
 def repo_members(conn):

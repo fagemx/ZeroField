@@ -12,14 +12,18 @@ import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from project_assistant import tools
+from project_assistant import tool_registry, tools
 
 MAX_BODY = 64 * 1024
-LABELS = {"list_pages": "Production Pages", "read_page": "Production Page", "search_pages": "Search Pages", "my_todo": "Tasks",
-          "report_list": "Workbooks", "report_overview": "Workbook Overview", "report_sheet": "Worksheet", "report_cell": "Worksheet Cell",
-          "report_find": "Search Workbooks", "propose": "Propose Changes", "propose_table_edit": "Propose Slate Changes",
-          "offer_document": "Prepare Document Download", "list_agents": "Agents & Workers", "spawn_agent": "Assign Task",
-          "check_delegation": "Task Progress", "cancel_delegation": "Cancel Task", "ask_decision_gate": "Decision Required", "trigger_flow_run": "Run Pipeline"}
+LABELS = dict(tool_registry.LABELS)  # crew-facing activity labels, declared per tool in the registry
+
+
+def mcp_specs_for(profile, frozen=None):
+    """What one agent can list and call through this host (mcp_stdio tools/list): its granted tools that the
+    registry exposes over MCP, narrowed to the turn's frozen grants."""
+    from project_assistant import agent_policy
+    specs = agent_policy.tool_specs_for(profile) if profile and profile['enabled'] else []
+    return [s for s in specs if s['name'] in tool_registry.MCP and (frozen is None or s['name'] in frozen)]
 
 
 def summarize(name: str, args: dict) -> dict:
@@ -76,13 +80,11 @@ class ToolHost:
     def specs(self):
         if self.list_tools:
             return self.list_tools()
-        from project_assistant import agent_policy, agent_registry
+        from project_assistant import agent_registry
         conn = self.ctx.connection_factory()
         try:
             profile = agent_registry.get_agent(conn, self.ctx.slug, getattr(self.ctx, 'agent_key', 'coordinator'))
-            specs = agent_policy.tool_specs_for(profile) if profile and profile['enabled'] else []
-            frozen = getattr(self.ctx, 'allowed_tools', None)
-            return [s for s in specs if frozen is None or s['name'] in frozen]
+            return mcp_specs_for(profile, getattr(self.ctx, 'allowed_tools', None))
         finally:
             conn.close()
 
