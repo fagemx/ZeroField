@@ -112,7 +112,7 @@
 | R | 名稱 | 內容 |
 |---|---|---|
 | R1 | 修鎖死 | 依 §4.1 結算失敗的一輪：本機端點的任何失敗、非本機但請求沒送出或被拒（連線被拒、DNS 失敗、HTTP 400／401／403／404／413／422／429），都結算為已終止，不留 `uncertain`。只有請求已送出、結果不明的情況（逾時、連線中斷、5xx、回應過大）才留 `uncertain`。`uncertain` 超過保留時間（新設定 `rate_limits.uncertain_hold_seconds`，預設 600 秒）就不再佔並行名額，但照樣計入花費，直到管理者對帳。新增對帳 API（§4.1）。 |
-| R2 | 預設本機模型與劇組就緒 | `provider_from_env` 預設改為 `http://127.0.0.1:11434/v1`＋`qwen3.8:27b`，新增 `OPENBENCH_REASONING_EFFORT`（預設 `medium`）。免金鑰判斷改成和 `execution_governance.local_url()` 相同的規則（只看主機名，含 `::1`）。新增就緒 API（§4.2）。劇組名單的狀態改成「背景程式有心跳且沒有阻擋」才算 `online`，否則顯示新的 `needs_setup`。劇組看板加一條橫幅，逐條列出劇組不能做事的原因與修正方法。 |
+| R2 | 預設本機模型與劇組就緒 | `provider_from_env` 預設改為 `http://127.0.0.1:11434/v1`＋`qwen3.8:27b`。沒設任何 `OPENBENCH_*` 時整組套用本機預設，含 effort `medium`；自訂了端點或模型時不自動帶 effort，除非另設新增的 `OPENBENCH_REASONING_EFFORT`（避免把 `reasoning_effort` 送給不支援的模型）。免金鑰判斷改成和 `execution_governance.local_url()` 相同的規則（只看主機名，含 `::1`）。新增就緒 API（§4.2）。劇組名單的狀態改成「背景程式有心跳且沒有阻擋」才算 `online`，否則顯示新的 `needs_setup`。劇組看板加一條橫幅，逐條列出劇組不能做事的原因與修正方法。 |
 | R3 | 移除 chatgpt.com | `model_client.py` 只保留 `ModelError`、`TurnResult`、`MAX_ROUNDS`、`LAST_ROUND_NOTE`，刪除 chatgpt.com 傳輸與權杖讀取（`URL`、`USER_AGENT`、`credentials`、`_default_bearer_token`、`_jwt_account_id`、`forget_credentials`、`request_body`、`stream_once`、`_stream_with_retry`、`run_turn` 及其輔助函式）。`responses`（含 `OPENBENCH_PROVIDER=direct` 別名）從允許的類型移除（`agent_registry.py:152`、`:174`；`agent_console_store.py:417`；`execution_governance.py:239-242`、`:662`；`providers.py:37-39`）。已存的 `responses` 設定在讀取時回報 `kind_removed`，不發出任何連線。`agent_runtime.py:166-171` 與 `outcome_grader.py:67-70` 的非 `openai_compat` 分支改成回傳設定錯誤。介面文案 `configureOPENBENCHAPIKEYOPENAIAPIKEYOrLocalCLI`（`en.json`、`zh-TW.json` 第 1680 行，中文版寫著 `~/.codex/auth.json`）一併改寫或移除。改寫依賴這條路的測試（§5）。 |
 | R4 | Ollama 相容 | 不再送 `tool_choice`。第 16 輪不帶 `tools`，改附 `LAST_ROUND_NOTE`（「用已查到的內容回答」）。README 寫明以 `OLLAMA_CONTEXT_LENGTH=16384`（或更高）啟動 Ollama。劇組對話預設 `reasoning_effort=medium`，評分維持 `low`。 |
 | R5 | 文件對齊 | 依 §1.3 修正 D1–D12。README 新增「Models」一節，照五條原則寫：本機預設、託管開放權重選配且不在展示路徑、閉源需混合模式。 |
@@ -341,7 +341,7 @@ R6 是使用者的決策，不阻擋任何一波；在確認前，文件一律�
 | A2 | R1 | 非本機端點回 401、429：預留結算為 `finalized`、成本 0，不佔並行名額。 | DB 測試 |
 | A3 | R1 | 非本機端點逾時：預留維持 `uncertain` 並計入花費；超過保留時間後不再佔並行名額。 | DB 測試（固定時鐘） |
 | A4 | R1 | 管理者對帳後 `uncertain` 變成 `finalized`，帳本多一筆調整；非管理者 403；目標不是 `uncertain` 時 409。 | API 測試 |
-| A5 | R2 | 沒設任何 `OPENBENCH_*` 時，`provider_from_env()` 指向 `http://127.0.0.1:11434/v1`、`qwen3.8:27b`、effort `medium`。 | 單元測試 |
+| A5 | R2 | 沒設任何 `OPENBENCH_*` 時，`provider_from_env()` 指向 `http://127.0.0.1:11434/v1`、`qwen3.8:27b`、effort `medium`；只設了 `OPENBENCH_API_BASE` 或 `OPENBENCH_MODEL` 時 effort 為空；設了 `OPENBENCH_REASONING_EFFORT` 時照設定。 | 單元測試 |
 | A6 | R2 | `::1` 與 `localhost` 免金鑰；`https://example.com/localhost` 不算本機。 | 單元測試 |
 | A7 | R2 | 背景程式沒開：就緒 API 回 `worker_not_running`；名單狀態是 `needs_setup`，不是 `online`；看板顯示修正方法。 | DB＋前端測試 |
 | A8 | R2 | 本機端點連不上回 `provider_unreachable`；模型不在清單回 `model_missing`，附 `ollama pull` 指令。 | 假伺服器測試 |
