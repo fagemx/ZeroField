@@ -37,24 +37,37 @@ class SyntaxTests(unittest.TestCase):
     def codes(self, text):
         return [(code, edge) for _, _, code, edge in take_refs.tokens(text)]
 
-    def test_shot_tags_match_and_asset_codes_never_do(self):
-        self.assertEqual(self.codes('[0-1s] @S02.end then @s3.start, @12.end and @3A.end.'),
-                         [('S02', 'end'), ('s3', 'start'), ('12', 'end'), ('3A', 'end')])
-        # Asset codes always have a hyphen and never .start/.end (SPEC_19 4.5).
+    def test_real_shot_labels_match(self):
+        # The labels a storyboard build writes (SC01-S02, SC01-W03) and hand-written ones are all shot codes.
+        self.assertEqual(self.codes('[0-1s] @SC01-S02.end then @sc01-w03.start, @S02.end, @12.end, @3A.end and @S1234.end.'),
+                         [('SC01-S02', 'end'), ('sc01-w03', 'start'), ('S02', 'end'), ('12', 'end'), ('3A', 'end'), ('S1234', 'end')])
+        self.assertEqual(self.codes('@SC01-S02A.end @A-B-C.start'), [('SC01-S02A', 'end'), ('A-B-C', 'start')])
+
+    def test_asset_codes_are_never_shot_references(self):
+        # Asset tags either never match (no .start/.end) or are skipped by their prefix (SPEC_19 4.5): no 400, no shot.
         for text in ('@CAST-01:night walks.', '@CAST-01#night walks.', '@SET-01 at dusk.', '@PROP-07 glints.', '@CAST-01.end',
-                     '@SET-01.start', '@LOC-02:rain', '@STYLE-01'):
+                     '@cast-01.end', '@SET-01.start', '@LOC-02.end', '@PROP-07.start', '@STYLE-01.end', '@LOC-02:rain', '@STYLE-01',
+                     '@CAST-01:night.end', '@CAST-01#night.end'):
+            with self.subTest(text=text):
+                self.assertEqual(self.codes(text), [])
+        self.assertEqual(take_refs.ASSET_PREFIXES, ('CAST-', 'SET-', 'LOC-', 'PROP-', 'STYLE-'))
+        # A shot label that only looks like an asset word is still a shot.
+        self.assertEqual(self.codes('@CASTLE-01.end @SETUP.start'), [('CASTLE-01', 'end'), ('SETUP', 'start')])
+
+    def test_glued_wrong_case_and_malformed_forms_are_not_tags(self):
+        for text in ('mail@S02.end', 'x-@S02.end', '!-@S02.end', ':@S02.end', '#@S02.end', '@@S02.end', '_@S02.end',
+                     '@S02.endgame', '@S02.END', '@S02.Start', '@S02end', '@S02.', '@.end', '@SC01-.end', '@-S02.end',
+                     '@SC01--S02.end', '@SC01_S02.end', 'a@SC01-S02.end'):
             with self.subTest(text=text):
                 self.assertEqual(self.codes(text), [])
 
-    def test_glued_wrong_case_and_overlong_forms_are_not_tags(self):
-        for text in ('mail@S02.end', 'x-@S02.end', '!-@S02.end', ':@S02.end', '#@S02.end', '@@S02.end', '_@S02.end',
-                     '@S02.endgame', '@S02.END', '@S02.Start', '@S1234.end', '@SC01-S02.end', '@S02end', '@S02.', '@.end'):
-            with self.subTest(text=text):
-                self.assertEqual(self.codes(text), [])
+    def test_the_pattern_is_the_shared_ascii_rule(self):
+        self.assertEqual(take_refs.TAKE_REF_PATTERN, r'(?<![\w@:#-])@([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\.(start|end)\b')
+        self.assertTrue(take_refs.TAKE_REF.flags & __import__('re').ASCII)
 
     def test_cjk_neighbours_follow_the_editors_ascii_rule(self):
         # \w and \b are ASCII, as in JavaScript: the server and the prompt editor agree on these tags.
-        self.assertEqual(self.codes('接續@S02.end的動作，參考@S03.start。'), [('S02', 'end'), ('S03', 'start')])
+        self.assertEqual(self.codes('接續@SC01-S02.end的動作，參考@S03.start。'), [('SC01-S02', 'end'), ('S03', 'start')])
 
 
 class ResolveTests(unittest.TestCase):
@@ -88,6 +101,23 @@ class ResolveTests(unittest.TestCase):
 
     def test_asset_codes_need_no_shot(self):
         self.assertEqual(take_refs.resolve('@CAST-01:night walks into @SET-01. @CAST-01#night turns.', [], self.s03), [])
+        # An asset code with .start/.end is skipped too, never refused as an unknown shot.
+        self.assertEqual(take_refs.resolve('@CAST-01.end walks into @SET-01.start.', [], self.s03), [])
+
+    def test_storyboard_labels_resolve_without_case(self):
+        built = shot('SC01-S02', video=URL(7), rid='sc0102')
+        wide = shot('SC01-W03', video=URL(8), status='Approved', rid='sc01w03')
+        found = take_refs.resolve('接續@sc01-s02.end，@CAST-01.end 看向 @SC01-W03.start。', [built, wide, self.s03], self.s03,
+                                  {'@SC01-S02.end': 'first_frame'})
+        self.assertEqual([(r['shotId'], r['shotIndex'], r['edge'], r['takeUrl'], r['use'], r['adopted']) for r in found],
+                         [(built['shotId'], 'SC01-S02', 'end', URL(7), 'first_frame', False),
+                          (wide['shotId'], 'SC01-W03', 'start', URL(8), 'reference', True)])
+        self.assertEqual(take_refs.expand('接續@sc01-s02.end，看', found),
+                         '接續 Continue directly from the final frame of shot SC01-S02，看')
+        # takeRefUses cannot name an asset tag: it is not a reference of the prompt.
+        self.assertEqual(self.error('@CAST-01.end @SC01-S02.end', shots=[built, self.s03], uses={'CAST-01.end': 'reference'}).status, 422)
+        error = self.error('@SC01-S09.end @SET-01.end', shots=[built, self.s03])
+        self.assertEqual((error.status, error.details), (400, {'unknownTakeRefs': ['@SC01-S09.end']}))
 
     def test_unknown_tags_are_400_and_listed(self):
         error = self.error('@S99.end then @S01.end and @s98.start')

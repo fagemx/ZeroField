@@ -129,6 +129,7 @@ class MoveTagContextTests(unittest.TestCase):
         self.assertNotIn('Camera Movement:', ctx['compiled_prompt'])
         self.assertNotIn('Slow dolly', ctx['compiled_prompt'])
         self.assertEqual((ctx['action_prompt'], ctx['camera_motion'], ctx['optical_rig']), (expanded, '', 'ARRI / 35mm'))
+        self.assertEqual(ctx['camera_moves'], ['push-in', 'static'])  # the prompt preview's look.moves, in prompt order
         # The H3 path reads the same expanded action and no longer prefixes the column's move.
         self.assertIn('[Shot 1] At 00:00.000, ARRI / 35mm: [0-2s] <Subject 1> (Kael) enters <Subject 2> (Observatory). '
                       + self.PUSH, ctx['h3_context_ir_prompt'])
@@ -146,7 +147,7 @@ class MoveTagContextTests(unittest.TestCase):
         ctx = worker.resolve_studio_context(self.task(action))
         self.assertEqual(ctx['compiled_prompt'], 'Optical Rig: ARRI / 35mm.\nCamera Movement: Slow dolly.\n'
                          'References: CAST-01:NIGHT (Kael): original courier; SET-01 (Observatory): rain on glass.\n' + action)
-        self.assertEqual((ctx['action_prompt'], ctx['camera_motion']), (action, 'Slow dolly'))
+        self.assertEqual((ctx['action_prompt'], ctx['camera_motion'], ctx['camera_moves']), (action, 'Slow dolly', []))
 
     def test_a_still_gets_no_camera_move_from_tags_or_the_column(self):
         action = '#push-in @CAST-01 enters @SET-01. #whip-pan CAST-01 pauses. #foo'
@@ -156,6 +157,7 @@ class MoveTagContextTests(unittest.TestCase):
                          f'{self.REFERENCES}\n@CAST-01 enters @SET-01. CAST-01 pauses. #foo')
         moves = [story_look.option('move', key)['promptText'] for key in ('push-in', 'whip-pan')]
         self.assertFalse(any(move in ctx['compiled_prompt'] for move in moves))
+        self.assertEqual(ctx['camera_moves'], ['push-in', 'whip-pan'])  # read, though a still sends none of them
         self.assertEqual(worker.resolve_studio_context(self.task('#push-in', 'video_gen'))['action_prompt'], self.PUSH)
 
     def test_catalog_optical_rig_text_reaches_video_and_still_whole_and_brand_free(self):
@@ -230,6 +232,14 @@ class TakeRefContextTests(unittest.TestCase):
                       '<Subject 1> (Kael) turns', ctx['h3_context_ir_prompt'])
         # Asset codes stay asset codes next to a quoted take.
         self.assertEqual([a['asset_id'] for a in ctx['resolved_assets']], ['CAST-01', 'SET-01', 'S03.START'])
+
+    def test_storyboard_labels_are_quoted_and_asset_codes_with_an_edge_stay_asset_codes(self):
+        built = {'shotIndex': 'SC01-S02', 'edge': 'end', 'use': 'first_frame', 'frameUrl': ASSET(50)}
+        ctx = worker.resolve_studio_context(self.task('@sc01-s02.end @CAST-01 turns in @SET-01. @CAST-01.end stays.', [built]))
+        self.assertEqual(ctx['action_prompt'],
+                         'Continue directly from the final frame of shot SC01-S02. @CAST-01 turns in @SET-01. @CAST-01.end stays.')
+        self.assertEqual((ctx['first_frame'], ctx['anchor_keyframe']), (ASSET(50), ASSET(50)))
+        self.assertEqual([a['asset_id'] for a in ctx['resolved_assets']], ['CAST-01', 'SET-01'])
 
     def test_take_refs_must_be_prepared_frames_of_this_kind(self):
         for refs in ([{**self.FIRST, 'frameUrl': 'https://example.com/frame.png'}], [{**self.FIRST, 'use': 'driving_video'}],

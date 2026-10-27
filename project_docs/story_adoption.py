@@ -4,7 +4,8 @@ One action replaces "pick, approve, check the film". A video take goes into the 
 becomes ``Approved`` in a single ``mutate_row`` (one tab lock, one revision); the trim starts over and ``meta_<shotId>``
 records ``adoption: {url, at, by}``. A pipeline take still waiting for review is adopted through ``apply_proposal`` (the
 M8 gate) and never through the candidate pick (SPEC_19 1.2 K); its status write follows in the same transaction. A
-first-frame candidate only changes the keyframe cell and never the status (1.2 J).
+first-frame candidate only changes the keyframe cell and never the status (1.2 J); choosing one may queue the shot's
+video on a local open-weights card (``follow_first_frame``, SPEC_19 §7 decision 1), never on a Router or paid card.
 
 Nothing here commits: the Story HTTP handler commits once or rolls the whole adoption back, so a failure anywhere leaves
 neither the take, the status, the proposal decision nor the record behind (1.2 A).
@@ -240,6 +241,88 @@ def adopt(conn, me, identifier, body):
     story_trim.reset(conn, slug, identifier)
     _record(conn, me, slug, identifier, url)
     return view(conn, slug, identifier)
+
+
+# SPEC_19 §7 decision 1: choosing a first frame through the Story API renders the shot's video next, as the pipeline does
+# after a first-frame proposal is applied. A production setting (assistant_setting, on unless set to "off"), read and
+# written as ``autoVideoAfterFirstFrame`` on GET / PATCH /projects/{id}.
+AUTO_VIDEO_SETTING = "auto_video_after_first_frame"
+LAST_VIDEO_JOB = """SELECT data->'_job'->'card'->>'card_id', data->'_job'->'values' FROM projectops.story_record
+                     WHERE kind='task' AND project_slug=%s AND data->>'type'='SHOT_VIDEO_GENERATE'
+                       AND data->'_job'->>'entityId'=%s AND data->'_job'->'allocation' IS NULL
+                     ORDER BY data->>'createdAt' DESC LIMIT 1"""
+
+
+def auto_video_enabled(conn, slug):
+    from project_assistant import store
+    return store.get_setting(conn, slug, AUTO_VIDEO_SETTING, "on") != "off"
+
+
+def set_auto_video(conn, slug, enabled):
+    from project_assistant import store
+    store.set_setting(conn, slug, AUTO_VIDEO_SETTING, "on" if enabled else "off")
+
+
+def shot_video_request(conn, slug, identifier, row):
+    """(card, modelParams) of the video this shot renders next, or (None, {}).
+
+    The card of the shot's latest video generation through the Story API, with the frame settings it was sent with (the
+    ratio and resolution inputs of that card, never its prompt or media); a shot that never rendered a video uses the
+    production's default video card (``GET /shots/{id}/generation-options`` ``defaultAppCode``) as it stands."""
+    from project_assistant import limb_worker as worker
+    from project_docs import story_generation_options as options
+    with conn.cursor() as cur:
+        cur.execute(LAST_VIDEO_JOB, (slug, identifier))
+        last = cur.fetchone()
+    cards = {card["card_id"]: card for card in worker.openapi_list_cards() if card["output_mode"] == "video"}
+    if last and last[0] in cards:
+        card, sent = cards[last[0]], repo._loads(last[1])
+        sent = sent if isinstance(sent, dict) else {}
+        keys = {spec["key"] for spec in options.slot_params(card).values()}
+        return card, {key: value for key, value in sent.items() if key in keys}
+    code = options.describe(conn, slug, identifier, "shot", row, {})["defaultAppCode"]
+    entry = next((card for card, item in story.catalog_entries() if item["appCode"] == code), None) if code else None
+    return entry, {}
+
+
+def follow_first_frame(conn, me, identifier, before_url, actions):
+    """After ``{imageId}`` chose a shot's first frame: queue the shot's video when the production allows it and its card is
+    a local open-weights card (fixed decision 8: a Router or other paid card is never sent by a chained action).
+
+    Returns the ``autoVideo`` of the adoption response, always with every key::
+
+        {queued: bool, task: task | null, appCode: str | null,
+         reason: null | "disabled" | "unchanged" | "no_card" | "router_card" | "closed_card" | "not_ready",
+         message: str | null}   # why a not_ready video could not be queued (the generation request's own error)
+
+    "unchanged": the chosen frame was already the shot's first frame, so nothing new would be rendered. The generation runs
+    in a savepoint with its own launch list: when it is refused, the adoption still stands and nothing of the video is left.
+    """
+    from project_docs import story_generation_options as options
+    slug, row = story.find_row(conn, identifier, "shot")
+    result = {"queued": False, "task": None, "appCode": None, "reason": None, "message": None}
+    if not auto_video_enabled(conn, slug):
+        return result | {"reason": "disabled"}
+    if story.media_url(row["cells"][story.media_column(row, "image")]) == before_url:
+        return result | {"reason": "unchanged"}
+    card, params = shot_video_request(conn, slug, identifier, row)
+    if card is None:
+        return result | {"reason": "no_card"}
+    result["appCode"] = story.app_code(card)
+    tier = options.tier_of(card)
+    if tier != "open_weights":
+        return result | {"reason": "router_card" if tier == "router" else "closed_card"}
+    launches = []
+    try:
+        with conn.transaction():
+            task = story.generation(conn, me, identifier, "video",
+                                    {"appCode": card["card_id"], **({"modelParams": params} if params else {})}, launches)
+    except Exception as exc:  # the adoption is the action asked for; a video that cannot start only says why
+        from project_assistant.studio.runtime import WorkerError
+        known = isinstance(exc, (ValueError, WorkerError))  # StoryError, AdmissionError, a card or policy refusal
+        return result | {"reason": "not_ready", "message": str(exc)[:500] if known else "The video could not be queued."}
+    actions.extend(launches)
+    return result | {"queued": True, "task": task}
 
 
 def unadopt(conn, me, identifier):

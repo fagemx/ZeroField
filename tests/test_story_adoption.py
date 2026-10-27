@@ -269,7 +269,9 @@ class AdoptionHTTPTests(unittest.TestCase):
         first, second = self.image("first"), self.image("second")
         self.put(shot, "image", first)
         self.put(shot, "image", second)
-        view = self.ok(f"/shots/{shot['shotId']}/adoptions", "POST", {"imageId": self.take_id(shot, first, "image")})
+        # The video it may queue (§7 decision 1, test_a_first_frame_starts_the_shots_video...) never runs here.
+        with patch.object(story._POOL, "submit"):
+            view = self.ok(f"/shots/{shot['shotId']}/adoptions", "POST", {"imageId": self.take_id(shot, first, "image")})
         self.assertEqual((view["selectedImageUrl"], view["reviewStatus"], view["adoption"]), (first, "Queued", None))
         self.assertEqual(self.status(shot), "Queued")
         self.assertNotIn("adoption", self.meta(shot))
@@ -411,7 +413,114 @@ class AdoptionHTTPTests(unittest.TestCase):
         with patch.object(story._POOL, "submit"):
             task = self.ok(f"/episodes/{self.ep}/films", "POST", {"selection": "adopted"})
         job = story.record(self.conn, task["taskId"])["_job"]
-        self.assertEqual((job["urls"], job["segments"]), ([take], [{"shotId": shot["shotId"], "source": "adopted"}]))
+        segments = [{k: s[k] for k in ("shotId", "source")} for s in job["segments"]]  # SPEC_19 D10 adds more per segment
+        self.assertEqual((job["urls"], segments), ([take], [{"shotId": shot["shotId"], "source": "adopted"}]))
+
+    # ---------- §7 decision 1: a first frame starts the shot's video ----------
+
+    def generations(self, shot):
+        """The Story video generations queued for a shot: (task id, card id, first-frame URL in the frozen row). The earlier
+        generations a test writes by hand (no frozen row) are not queued work."""
+        self.conn.rollback()
+        found = []
+        for task in story.records(self.conn, "task", self.slug):
+            job = task.get("_job") or {}
+            if task["type"] == "SHOT_VIDEO_GENERATE" and job.get("entityId") == shot["shotId"] and "row" in job:
+                row = job["row"]
+                found.append((task["taskId"], job["card"]["card_id"], story.media_url(row["cells"][story.media_column(row, "image")])))
+        return found
+
+    def choose_frame(self, shot, url):
+        with patch.object(story._POOL, "submit") as submit:
+            view = self.ok(f"/shots/{shot['shotId']}/adoptions", "POST", {"imageId": self.take_id(shot, url, "image")})
+        return view, submit.call_count
+
+    def test_a_first_frame_starts_the_shots_video_on_a_local_open_weights_card(self):
+        shot = self.prepare()[0]
+        first, second = self.image("first"), self.image("second")
+        self.put(shot, "image", first)
+        self.put(shot, "image", second)
+        project = self.ok(f"/projects/pj_{self.slug}")
+        self.assertIs(project["autoVideoAfterFirstFrame"], True)  # on unless the production turns it off
+        view, launched = self.choose_frame(shot, first)
+        auto = view["autoVideo"]
+        self.assertEqual({k: auto[k] for k in ("queued", "reason", "appCode", "message")},
+                         {"queued": True, "reason": None, "appCode": "LTX25_CINEMA_SHOT", "message": None})
+        self.assertEqual((auto["task"]["type"], auto["task"]["status"], launched), ("SHOT_VIDEO_GENERATE", "QUEUED", 1))
+        # One video, on the production's default local card, rendered from the frame just chosen; the shot is not adopted.
+        self.assertEqual(self.generations(shot), [(auto["task"]["taskId"], "ltx25-cinema", first)])
+        self.assertEqual((view["selectedImageUrl"], view["reviewStatus"], view["adoption"]), (first, "Queued", None))
+        # Choosing the frame the shot already has renders nothing new.
+        again, launched = self.choose_frame(shot, first)
+        self.assertEqual((again["autoVideo"]["queued"], again["autoVideo"]["reason"], launched), (False, "unchanged", 0))
+        self.assertEqual(len(self.generations(shot)), 1)
+        # Another frame renders again, now on the card the shot's last video used.
+        view, launched = self.choose_frame(shot, second)
+        self.assertEqual((view["autoVideo"]["queued"], launched), (True, 1))
+        self.assertEqual(sorted(g[1:] for g in self.generations(shot)), sorted([("ltx25-cinema", first), ("ltx25-cinema", second)]))
+
+    def test_the_production_switch_router_cards_and_video_adoptions_never_start_a_video(self):
+        shot = self.prepare()[0]
+        first, second = self.image("first"), self.image("second")
+        self.put(shot, "image", first)
+        self.put(shot, "image", second)
+        # Off: the frame is chosen and nothing is queued.
+        self.assertIs(self.ok(f"/projects/pj_{self.slug}", "PATCH", {"autoVideoAfterFirstFrame": False})["autoVideoAfterFirstFrame"], False)
+        self.assertIs(self.ok(f"/projects/pj_{self.slug}")["autoVideoAfterFirstFrame"], False)
+        view, launched = self.choose_frame(shot, first)
+        self.assertEqual((view["selectedImageUrl"], view["autoVideo"]["queued"], view["autoVideo"]["reason"], launched), (first, False, "disabled", 0))
+        self.assertEqual(self.generations(shot), [])
+        for bad in ("yes", 1, None):
+            code, payload = self.call(f"/projects/pj_{self.slug}", "PATCH", {"autoVideoAfterFirstFrame": bad})
+            self.assertEqual((code, payload["code"]), (422, "DRAMA_VALIDATION_FAILED"), bad)
+        self.assertIs(self.ok(f"/projects/pj_{self.slug}", "PATCH", {"autoVideoAfterFirstFrame": True})["autoVideoAfterFirstFrame"], True)
+        # A shot whose video card is an official Router card: never sent by a chained action (fixed decision 8).
+        story.store(self.conn, "tk_" + uuid.uuid4().hex, "task", {"taskId": "tk_router", "type": "SHOT_VIDEO_GENERATE", "status": "FAILED",
+                    "createdAt": story.now(), "_job": {"entityId": shot["shotId"], "kind": "video", "card": {"card_id": "router-ltx-2-5-pro"},
+                    "values": {}}}, self.slug, self.actor)
+        self.conn.commit()
+        view, launched = self.choose_frame(shot, second)
+        self.assertEqual({k: view["autoVideo"][k] for k in ("queued", "reason", "appCode", "task")},
+                         {"queued": False, "reason": "router_card", "appCode": "router-ltx-2-5-pro", "task": None})
+        self.assertEqual((view["selectedImageUrl"], launched), (second, 0))
+        # A closed (paid) card is not sent either.
+        story.store(self.conn, "tk_" + uuid.uuid4().hex, "task", {"taskId": "tk_closed", "type": "SHOT_VIDEO_GENERATE", "status": "FAILED",
+                    "createdAt": story.now(), "_job": {"entityId": shot["shotId"], "kind": "video", "card": {"card_id": "seedance-20-pro"},
+                    "values": {}}}, self.slug, self.actor)
+        self.conn.commit()
+        view, launched = self.choose_frame(shot, first)
+        self.assertEqual((view["autoVideo"]["reason"], view["autoVideo"]["appCode"], launched), ("closed_card", "SEEDANCE_2_FAST_MULTIMODAL_VIDEO", 0))
+        self.assertEqual(self.generations(shot), [])
+        # Adopting a video never starts one.
+        take = self.video("take")
+        self.put(shot, "video", take)
+        with patch.object(story._POOL, "submit") as submit:
+            adopted = self.ok(f"/shots/{shot['shotId']}/adoptions", "POST", {"videoId": self.take_id(shot, take)})
+        self.assertEqual((adopted["reviewStatus"], "autoVideo" in adopted, submit.call_count), ("Approved", False, 0))
+        self.assertEqual(self.generations(shot), [])
+
+    def test_a_video_that_cannot_start_leaves_the_first_frame_chosen(self):
+        shot = self.prepare()[0]
+        first, second = self.image("first"), self.image("second")
+        self.put(shot, "image", first)
+        self.put(shot, "image", second)
+        refused = story.StoryError(409, "DRAMA_STAGE_PRECONDITION", "Resolve required generation inputs before batch admission: x")
+        with patch.object(story, "generation_job", side_effect=refused):
+            view, launched = self.choose_frame(shot, first)
+        self.assertEqual({k: view["autoVideo"][k] for k in ("queued", "reason", "message", "appCode")},
+                         {"queued": False, "reason": "not_ready", "message": str(refused), "appCode": "LTX25_CINEMA_SHOT"})
+        self.assertEqual((view["selectedImageUrl"], launched, self.cell(shot, "image")), (first, 0, first))
+        self.assertEqual(self.generations(shot), [])
+        # A video sent from the shot's own last generation keeps that card and its frame settings, never its prompt or media.
+        story.store(self.conn, "tk_" + uuid.uuid4().hex, "task", {"taskId": "tk_last", "type": "SHOT_VIDEO_GENERATE", "status": "SUCCEEDED",
+                    "createdAt": story.now(), "_job": {"entityId": shot["shotId"], "kind": "video", "card": {"card_id": "h3-reference"},
+                    "values": {"252.aspect_ratio": "9:16 (Portrait Widescreen)", "263.text": "old words", "27.video": "/old.mp4"}}},
+                    self.slug, self.actor)
+        self.conn.commit()
+        self.conn.rollback()
+        _, row = story.find_row(self.conn, shot["shotId"], "shot")
+        card, params = adoption.shot_video_request(self.conn, self.slug, shot["shotId"], row)
+        self.assertEqual((card["card_id"], params), ("h3-reference", {"252.aspect_ratio": "9:16 (Portrait Widescreen)"}))
 
 
 if __name__ == "__main__":

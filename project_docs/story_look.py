@@ -20,6 +20,9 @@ CATALOG_PATH = Path(__file__).with_name("look_catalog.json")
 # Kinds this catalog accepts, with the groups a kind is split into (one choice per group). SPEC_19 package C adds
 # genre, era, tempo, palette and light together with their own rules.
 KINDS = {"camera": ("body", "lens", "aperture"), "move": ()}
+# Every kind SPEC_19 §4.3 names: what GET /catalog/looks?kind= accepts. A kind the packaged catalog has no options for
+# yet lists nothing; any other kind is an error.
+API_KINDS = ("camera", "move", "genre", "era", "tempo", "palette", "light")
 ITEM_KEYS = {"id", "kind", "group", "labelKey", "promptText", "preview"}
 ID_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 LABEL_KEY_PATTERN = re.compile(r"[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+")
@@ -114,6 +117,35 @@ def catalog():
 def option(kind, item_id):
     """The catalog option for kind:id, or None."""
     return _index().get((kind, item_id))
+
+
+def api_item(item):
+    """One option as GET /catalog/looks lists it.
+
+    ``{id, kind, group?, labelKey, promptText, preview: {poster, clip} | null, hex?}``: ``group`` only for a kind split
+    into groups (camera: body, lens, aperture), ``hex`` only for an option that has colours (palette), ``preview`` null
+    until the option has sample media (``clip`` null for a still sample).
+    """
+    preview = item.get("preview") if isinstance(item.get("preview"), dict) else None
+    result = {"id": item["id"], "kind": item["kind"]}
+    if "group" in item:
+        result["group"] = item["group"]
+    result |= {"labelKey": item["labelKey"], "promptText": item["promptText"],
+               "preview": {"poster": preview.get("poster"), "clip": preview.get("clip")}
+               if preview and (preview.get("poster") or preview.get("clip")) else None}
+    if "hex" in item:
+        result["hex"] = list(item["hex"])
+    return result
+
+
+def api_items(kind=None):
+    """The options of GET /catalog/looks in catalog order: every kind, or one kind of API_KINDS.
+
+    Raises LookCatalogError for a kind outside API_KINDS; a known kind without options yet is an empty list.
+    """
+    if kind is not None and kind not in API_KINDS:
+        raise LookCatalogError(f"Unknown look kind: {kind!r}.")
+    return [api_item(item) for item in _index().values() if kind is None or item["kind"] == kind]
 
 
 def camera_text(body=None, lens=None, aperture=None):
