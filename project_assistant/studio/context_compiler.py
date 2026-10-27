@@ -6,6 +6,8 @@ import json
 import math
 import re
 
+from project_docs import story_look
+
 from . import runtime
 from .runtime import MAX_MATERIALS
 
@@ -344,6 +346,10 @@ def resolve_studio_context(task: dict) -> dict:
     mode = column(r"jutsu\s*mode|^mode$")
     action = column(r"action.*prompt|swap\s*prompt|prompt|appearance")
     still = task.get("capability") == "image_gen"
+    # SPEC_19 R10: catalog #move tags become their sentences where they stand (a still drops them); once a prompt has
+    # one, the tags are the shot's camera movement and the Camera Motion column no longer applies.
+    if story_look.move_tokens(action):
+        action, motion = story_look.expand_moves(action, still=still), ""
     # Text-to-image encoders read "Optical Rig: RED ..." / "Static Tripod" as props to draw; a still has no camera move.
     parts = [f"{label}: {value.rstrip('.')}." for label, value in
              (("Optical Rig", "" if still else optical), ("Camera Movement", "" if still else motion), ("Mode", mode)) if value]

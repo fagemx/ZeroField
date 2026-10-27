@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from project_assistant import limb_worker as worker
+from project_docs import story_look
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSET = lambda n: '/projects/api/demo/assets/pa_' + format(n, '032x')
@@ -103,6 +104,69 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(ctx['seed'], 48291)
         task['input']['rows'][0]['cells'] = ['SET-01', 'Observatory', 'rain on glass', ASSET(2)]
         self.assertEqual(worker.resolve_studio_context(task)['compiled_prompt'], 'rain on glass. Environment reference, wide, no people.')
+
+
+class MoveTagContextTests(unittest.TestCase):
+    """SPEC_19 R10: catalog #move tags expand where they stand and replace the Camera Motion column."""
+    REFERENCES = 'References: CAST-01 (Kael): original courier; SET-01 (Observatory): rain on glass.'
+    PUSH, STATIC = (story_look.option('move', key)['promptText'] for key in ('push-in', 'static'))
+
+    def task(self, action, capability=None, optical=None):
+        task = studio_task()
+        cells = task['input']['rows'][1]['cells']
+        cells[3] = action
+        if optical is not None:
+            cells[1] = optical
+        if capability:
+            task['capability'] = capability
+        return task
+
+    def test_tagged_prompt_expands_in_place_and_drops_the_camera_movement_line(self):
+        action = '[0-2s] @CAST-01 enters @SET-01. #push-in\n[2-4s] CAST-01 pauses at the dial. #static'
+        ctx = worker.resolve_studio_context(self.task(action))
+        expanded = f'[0-2s] @CAST-01 enters @SET-01. {self.PUSH}\n[2-4s] CAST-01 pauses at the dial. {self.STATIC}'
+        self.assertEqual(ctx['compiled_prompt'], f'Optical Rig: ARRI / 35mm.\n{self.REFERENCES}\n{expanded}')
+        self.assertNotIn('Camera Movement:', ctx['compiled_prompt'])
+        self.assertNotIn('Slow dolly', ctx['compiled_prompt'])
+        self.assertEqual((ctx['action_prompt'], ctx['camera_motion'], ctx['optical_rig']), (expanded, '', 'ARRI / 35mm'))
+        # The H3 path reads the same expanded action and no longer prefixes the column's move.
+        self.assertIn('[Shot 1] At 00:00.000, ARRI / 35mm: [0-2s] <Subject 1> (Kael) enters <Subject 2> (Observatory). '
+                      + self.PUSH, ctx['h3_context_ir_prompt'])
+        self.assertNotIn('Slow dolly', ctx['h3_context_ir_prompt'])
+        self.assertNotIn('#', ctx['h3_context_ir_prompt'] + ctx['ltx_ingredients_prompt'])
+        self.assertEqual([a['asset_id'] for a in ctx['resolved_assets']], ['CAST-01', 'SET-01'])
+
+    def test_untagged_prompts_keep_the_camera_motion_column_word_for_word(self):
+        ctx = worker.resolve_studio_context(studio_task())
+        self.assertEqual(ctx['compiled_prompt'], 'Optical Rig: ARRI / 35mm.\nCamera Movement: Slow dolly.\n'
+                         f'{self.REFERENCES}\n@CAST-01 enters @SET-01. CAST-01 pauses.')
+        self.assertEqual(ctx['camera_motion'], 'Slow dolly')
+        # Wardrobe variants, unknown #words and tags glued to text are not moves: kept as written.
+        action = '@CAST-01#night enters @SET-01. 他轉身#push-in #foo'
+        ctx = worker.resolve_studio_context(self.task(action))
+        self.assertEqual(ctx['compiled_prompt'], 'Optical Rig: ARRI / 35mm.\nCamera Movement: Slow dolly.\n'
+                         'References: CAST-01:NIGHT (Kael): original courier; SET-01 (Observatory): rain on glass.\n' + action)
+        self.assertEqual((ctx['action_prompt'], ctx['camera_motion']), (action, 'Slow dolly'))
+
+    def test_a_still_gets_no_camera_move_from_tags_or_the_column(self):
+        action = '#push-in @CAST-01 enters @SET-01. #whip-pan CAST-01 pauses. #foo'
+        ctx = worker.resolve_studio_context(self.task(action, 'image_gen'))
+        self.assertEqual(ctx['compiled_prompt'],
+                         'Cinematic film still, 35mm lens look; no camera equipment or brand text in frame.\n'
+                         f'{self.REFERENCES}\n@CAST-01 enters @SET-01. CAST-01 pauses. #foo')
+        moves = [story_look.option('move', key)['promptText'] for key in ('push-in', 'whip-pan')]
+        self.assertFalse(any(move in ctx['compiled_prompt'] for move in moves))
+        self.assertEqual(worker.resolve_studio_context(self.task('#push-in', 'video_gen'))['action_prompt'], self.PUSH)
+
+    def test_catalog_optical_rig_text_reaches_video_and_still_whole_and_brand_free(self):
+        rig = story_look.camera_text('film-16mm', 'vintage-anamorphic', 'f1-4')
+        cast = 'References: CAST-01 (Kael): original courier.'
+        video = worker.resolve_studio_context(self.task('#static @CAST-01 waits.', optical=rig))['compiled_prompt']
+        self.assertEqual(video, f'Optical Rig: {rig}\n{cast}\n{self.STATIC} @CAST-01 waits.')
+        still = worker.resolve_studio_context(self.task('#static @CAST-01 waits.', 'image_gen', optical=rig))['compiled_prompt']
+        # No "/" in catalog text, so the still keeps the whole description, never a fragment of it.
+        self.assertEqual(still, f'Cinematic film still, {rig.rstrip(".")} lens look; no camera equipment or brand text in frame.\n'
+                                f'{cast}\n@CAST-01 waits.')
 
 
 class ComfyTests(unittest.TestCase):
