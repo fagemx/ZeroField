@@ -41,6 +41,51 @@ class LocaleTests(unittest.TestCase):
         self.assertEqual(expired['code'], 'projects_login')
         self.assertEqual(expired['message_key'], 'access.login')
 
+    @staticmethod
+    def dictionaries():
+        import json
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1] / 'ui' / 'src' / 'i18n' / 'locales'
+        return [json.loads((root / name).read_text(encoding='utf-8'))['errors'] for name in ('en.json', 'zh-TW.json')]
+
+    def test_every_catalogue_pattern_has_matching_parameters_in_both_dictionaries(self):
+        import re
+        from project_docs.error_messages import MESSAGES
+        for text, key, pattern in MESSAGES:
+            for errors in self.dictionaries():
+                self.assertIn(key, errors)
+                if pattern:
+                    self.assertEqual(set(re.findall(r'\{\{(\w+)\}\}', errors[key])), set(re.compile(pattern).groupindex), key)
+
+    def test_proposal_conflict_messages_are_localized(self):
+        import re
+        from project_assistant.table_edits import _target_name, conflict_message
+        cell = lambda text, kind='tableCell': {'type': kind, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': text}] if text else []}]}
+        row = lambda rid, label: {'type': 'tableRow', 'attrs': {'bid': rid}, 'content': [cell(label), cell('old')]}
+        header = {'type': 'tableRow', 'attrs': {'bid': 'h'}, 'content': [cell('Shot', 'tableHeader'), cell('Output', 'tableHeader')]}
+        table = {'type': 'table', 'content': [header, row('r1', 'Shot 1'), row('r2', 'Shot 2'), row('r3', '')]}
+        gone = {'type': 'table', 'content': [header]}
+        shapes = [('value_changed', _target_name(table, row('r2', 'Shot 2'), 'r2', 1), 'proposalCellChanged'),
+                  ('value_changed', _target_name(table, row('r3', ''), 'r3', 1), 'proposalCellChangedUnlabeledRow'),
+                  ('row_changed', _target_name(table, row('r2', 'Shot 2'), 'r2'), 'proposalRowRestructured'),
+                  ('row_changed', _target_name(table, row('r3', ''), 'r3'), 'proposalUnlabeledRowRestructured'),
+                  ('row_deleted', _target_name(gone, row('r2', 'Shot 2'), 'r2'), 'proposalRowDeleted'),
+                  ('row_deleted', _target_name(gone, row('r3', ''), 'r3'), 'proposalRowDeleted')]
+        en, zh = self.dictionaries()
+        fill = lambda template, params: re.sub(r'\{\{(\w+)\}\}', lambda m: params[m[1]], template)
+        rendered = {}
+        for reason, target, key in shapes:
+            for count, suffix in ((1, ''), (3, 'More')):
+                message = conflict_message([{'reason': reason, 'target': target}] * count)
+                result = locale.error_details({'error': message})
+                self.assertEqual(result['message_key'], 'errors.' + key + suffix, message)
+                self.assertEqual(fill(en[key + suffix], result['message_params']), message)
+                rendered[message] = fill(zh[key + suffix], result['message_params'])
+        self.assertEqual(rendered['Output in row 2 “Shot 2” changed after this proposal was made. Nothing was applied; generate a new proposal.'],
+                         '第 2 列「Shot 2」的 Output 在提案建立後已被修改；未套用任何變更，請重新產生提案。')
+        self.assertEqual(rendered['The row “r3” was deleted after this proposal was made (and 2 more). Nothing was applied; generate a new proposal.'],
+                         '「r3」這一列在提案建立後已被刪除（另有 2 處）；未套用任何變更，請重新產生提案。')
+
     def test_unauthenticated_api_still_returns_a_response_after_page_localization(self):
         from urllib.parse import urlparse
         from project_docs import http

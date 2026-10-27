@@ -129,7 +129,7 @@ def _target_name(table, row, rid, index=None):
     data = [r for r in table.get("content", []) if not _is_header(r)]
     number = next((n + 1 for n, r in enumerate(data) if r.get("attrs", {}).get("bid") == rid), None)
     label = _label((row.get("content") or [{}])[0])[:60]
-    where = (f"row {number}" if number else "the row") + (f" “{label}”" if label else "" if number else f" {rid}")
+    where = (f"row {number}" if number else "the row") + (f" “{label}”" if label else "" if number else f" “{rid}”")
     if index is None:
         return where
     header = next((r for r in table.get("content", []) if _is_header(r)), {}).get("content", [])
@@ -179,13 +179,15 @@ def rebase_ops(doc, ops):
 
 
 def conflict_message(conflicts):
-    """One sentence naming the first changed target, for the proposal's failure note."""
+    """One sentence naming the first changed target, for the proposal's failure note.
+
+    Every shape this can return has a pattern in ``project_docs.error_messages`` (localized UI text).
+    """
     first = conflicts[0]
     verb = {"row_deleted": "was deleted", "row_changed": "was restructured"}.get(first["reason"], "changed")
     more = len(conflicts) - 1
     return (first["target"][:1].upper() + first["target"][1:] + f" {verb} after this proposal was made"
-            + (f"; {more} more target{'s' if more > 1 else ''} also changed" if more else "")
-            + ". Nothing was applied; generate a new proposal.")
+            + (f" (and {more} more)" if more else "") + ". Nothing was applied; generate a new proposal.")
 
 
 def prepare(doc, row_edits, new_rows, values, table_id=None):
