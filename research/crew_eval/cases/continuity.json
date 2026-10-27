@@ -1,0 +1,427 @@
+{
+  "schema": "zerofield.crew_eval.cases/1",
+  "type": "continuity",
+  "description": "Job: adjacent shots -> seam findings (the seam check of SPEC_19 R17, given the frame captions a vision pass writes). Each case plants errors (and, in two cases, none) between a shot's last frame and the next shot's first frame, and lists the differences that are justified by the shot text so that flagging them counts as invented.",
+  "cases": [
+    {
+      "id": "continuity-01-tears-and-zipper",
+      "title": "Tears vanish and the jacket opens between two continuous close-ups",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a man crying through the seam",
+        "traps": ["heavier rain is justified by the next shot's text", "the dry cheeks contradict the text that says he keeps crying"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket zipped to the chest over a dark henley"},
+          {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory at dawn, rain on the curved glass, brass consoles with amber instrument lights"}
+        ],
+        "shots": [
+          {
+            "id": "S08", "take": "T2", "seconds": 6, "transition": "scene_change", "cast": ["@CAST-01"], "set": "@SET-01",
+            "text": "Kael breaks down against the console, tears running down his face. @CAST-01 @SET-01",
+            "first_frame": "Close-up, eye level. Kael faces the camera, jaw clenched, eyes red and glistening, cheeks still dry. Charcoal field jacket zipped to the chest over a dark henley. Warm amber console light from frame left. Light rain on the glass behind him.",
+            "last_frame": "Close-up, eye level. Kael faces the camera, face crumpled, tears running down both cheeks, eyes red. Charcoal field jacket zipped to the chest over a dark henley. Warm amber console light from frame left. Light rain on the glass behind him."
+          },
+          {
+            "id": "S09", "take": "T1", "seconds": 6, "transition": "continuous", "cast": ["@CAST-01"], "set": "@SET-01",
+            "text": "Without a cut in time, Kael keeps crying and lifts his head toward the lens as the storm builds outside. @CAST-01 @SET-01",
+            "first_frame": "Close-up, eye level. Kael faces the camera, calm, dry cheeks, eyes clear. Charcoal field jacket open at the chest, dark henley visible. Warm amber console light from frame left. Heavy rain streaming down the glass behind him.",
+            "last_frame": "Close-up, eye level. Kael faces the camera, head lifted, tears on his cheeks again, mouth trembling. Charcoal field jacket open at the chest. Warm amber console light from frame left. Heavy rain on the glass."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [
+          {"id": "E1", "kind": "body_state", "subject": "@CAST-01", "shots": ["S08", "S09"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["tear", "cry", "cheek", "dry", "wet"]},
+          {"id": "E2", "kind": "wardrobe", "subject": "@CAST-01", "shots": ["S08", "S09"], "severity": "minor", "critical": false, "weight": 2, "evidence_any": ["zip", "jacket", "open", "henley"]}
+        ],
+        "tolerated": [],
+        "justified": [
+          {"kind": "weather", "subject": "@SET-01", "shots": ["S08", "S09"], "why": "S09 text: the storm builds outside, so the rain is heavier"}
+        ],
+        "soft": [
+          {"id": "score_band", "weight": 2, "check": "score_between", "between": [0, 60], "desc": "a seam with a major error scores 60 or lower"}
+        ]
+      },
+      "reference": {
+        "score": 35,
+        "findings": [
+          {"kind": "body_state", "shots": ["S08", "S09"], "subject": "@CAST-01", "severity": "major", "detail": "S08 ends on tears running down both cheeks; S09 opens with dry cheeks and clear eyes although its text says he keeps crying."},
+          {"kind": "wardrobe", "shots": ["S08", "S09"], "subject": "@CAST-01", "severity": "minor", "detail": "The charcoal field jacket is zipped to the chest at the end of S08 and open at the start of S09 with no action to open it."}
+        ]
+      }
+    },
+    {
+      "id": "continuity-02-reverse-eyeline",
+      "title": "The reverse shot looks the same way as the first: the eyeline is wrong",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a locked stare across a standoff",
+        "traps": ["Kael is absent from the reverse by design", "the eyeline error is subtler than a costume change", "a small hair detail rides along"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"},
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair worn loose, freckles and a dark green wool long coat"},
+          {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory at dawn, rain on the curved glass, brass consoles with amber instrument lights"}
+        ],
+        "shots": [
+          {
+            "id": "S12", "take": "T1", "seconds": 4, "transition": "scene_change", "cast": ["@CAST-01", "@CAST-02"], "set": "@SET-01",
+            "text": "Kael, frame left, glares across at Mira in a tight standoff. @CAST-01 @CAST-02 @SET-01",
+            "first_frame": "Medium close-up. Kael on the left of frame, face turned three-quarters toward the camera, eyes fixed on frame right where Mira stands. Mira's shoulder and loose auburn hair soft in the foreground at the frame's right edge. Jaw tight. Cold blue window light on his face.",
+            "last_frame": "Medium close-up. Kael on the left of frame, three-quarters to the camera, eyes still locked on frame right, nostrils flared. Mira's loose auburn hair soft at the right edge. Cold blue window light on his face."
+          },
+          {
+            "id": "S13", "take": "T3", "seconds": 4, "transition": "continuous", "cast": ["@CAST-02"], "set": "@SET-01",
+            "text": "Reverse on Mira, who answers him without breaking the look. @CAST-02 @SET-01",
+            "first_frame": "Medium close-up. Mira on the left of frame, face turned three-quarters toward the camera, eyes fixed on frame right, lips pressed. Her auburn hair is tucked behind her ear. Cold blue window light on her face.",
+            "last_frame": "Medium close-up. Mira on the left of frame, eyes still fixed on frame right, lips parted as she speaks. Cold blue window light on her face."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [
+          {"id": "E1", "kind": "screen_direction", "subject": "@CAST-02", "shots": ["S12", "S13"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["right", "left", "same direction", "eyeline", "eye line", "180", "reverse", "both"]},
+          {"id": "E2", "kind": "hair_makeup", "subject": "@CAST-02", "shots": ["S12", "S13"], "severity": "minor", "critical": false, "weight": 1, "evidence_any": ["hair", "ear", "tuck", "loose"]}
+        ],
+        "tolerated": [],
+        "justified": [
+          {"kind": "position", "subject": "@CAST-01", "shots": ["S12", "S13"], "why": "S13 is the reverse on Mira; Kael is out of frame by design"}
+        ],
+        "soft": [
+          {"id": "score_band", "weight": 2, "check": "score_between", "between": [0, 65], "desc": "a seam with a major error scores 65 or lower"}
+        ]
+      },
+      "reference": {
+        "score": 40,
+        "findings": [
+          {"kind": "screen_direction", "shots": ["S12", "S13"], "subject": "@CAST-02", "severity": "major", "detail": "In S12 Kael is on the left looking toward frame right at Mira; the reverse S13 puts Mira on the left looking right as well, so both characters look the same direction and the eyeline reverses wrongly (180-degree rule)."},
+          {"kind": "hair_makeup", "shots": ["S12", "S13"], "subject": "@CAST-02", "severity": "minor", "detail": "Mira's loose auburn hair in S12 is tucked behind her ear at the start of S13."}
+        ]
+      }
+    },
+    {
+      "id": "continuity-03-key-vanishes-in-a-hand-swap",
+      "title": "The brass key changes hands, then vanishes from the table",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "an old woman's contained fury",
+        "traps": ["three shots, two seams, the same prop", "the glasses go on at the seam but the text says so", "the hand swap is minor, the vanished key is major"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-03", "name": "Odile", "look": "an elderly woman in her late sixties with silver hair in a bun, round wire glasses on a chain, a navy cardigan buttoned to the neck"},
+          {"code": "@PROP-01", "name": "Brass key", "look": "a heavy brass lighthouse key on a leather thong"},
+          {"code": "@SET-03", "name": "Lighthouse kitchen", "look": "a lighthouse keeper's kitchen at night: a scrubbed pine table, a coal stove, a rain-lashed window, an oil lamp"}
+        ],
+        "shots": [
+          {
+            "id": "S14", "take": "T2", "seconds": 4, "transition": "scene_change", "cast": ["@CAST-03"], "set": "@SET-03",
+            "text": "Odile holds up the brass key in her right fist and glares at Tomas. @CAST-03 @PROP-01 @SET-03",
+            "first_frame": "Close-up. Odile faces the camera, the brass key on its leather thong gripped in her right fist at chest height, eyes blazing. Round glasses hang on the chain at her chest.",
+            "last_frame": "Close-up. Odile faces the camera, the brass key gripped in her right fist, knuckles white, lips pressed. Round glasses hang on the chain."
+          },
+          {
+            "id": "S15", "take": "T1", "seconds": 4, "transition": "continuous", "cast": ["@CAST-03"], "set": "@SET-03",
+            "text": "She slams the key down on the table between them. @CAST-03 @PROP-01 @SET-03",
+            "first_frame": "Medium close-up. Odile faces the camera, the brass key held in her left hand at chest height, glaring. Round glasses hang on the chain.",
+            "last_frame": "Medium close-up. Odile faces the camera, both hands flat on the pine table, the brass key lying on the table in front of her, eyes wet with fury. Round glasses hang on the chain."
+          },
+          {
+            "id": "S16", "take": "T1", "seconds": 4, "transition": "continuous", "cast": ["@CAST-03"], "set": "@SET-03",
+            "text": "Odile puts her glasses on and stares Tomas down across the table. @CAST-03 @SET-03",
+            "first_frame": "Medium close-up. Odile faces the camera, round glasses now on her nose, both hands flat on the table. The pine table in front of her is bare.",
+            "last_frame": "Medium close-up. Odile faces the camera, glasses on her nose, hands flat on the table, the table still bare, eyes hard."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [
+          {"id": "E1", "kind": "prop", "subject": "@PROP-01", "shots": ["S14", "S15"], "severity": "minor", "critical": false, "weight": 1, "evidence_any": ["left", "right", "hand", "fist"]},
+          {"id": "E2", "kind": "prop", "subject": "@PROP-01", "shots": ["S15", "S16"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["key", "table", "vanish", "missing", "gone", "bare"]}
+        ],
+        "tolerated": [],
+        "justified": [
+          {"kind": "wardrobe", "subject": "@CAST-03", "shots": ["S15", "S16"], "why": "S16 text: she puts her glasses on"}
+        ],
+        "soft": [
+          {"id": "score_band", "weight": 2, "check": "score_between", "between": [0, 60], "desc": "a run with a vanished prop scores 60 or lower"}
+        ]
+      },
+      "reference": {
+        "score": 42,
+        "findings": [
+          {"kind": "prop", "shots": ["S14", "S15"], "subject": "@PROP-01", "severity": "minor", "detail": "The brass key is gripped in Odile's right fist at the end of S14 and held in her left hand at the start of S15."},
+          {"kind": "prop", "shots": ["S15", "S16"], "subject": "@PROP-01", "severity": "major", "detail": "The brass key lies on the table at the end of S15, but the table is bare at the start of S16: the key has vanished."}
+        ]
+      }
+    },
+    {
+      "id": "continuity-04-night-becomes-daylight",
+      "title": "Night turns to daylight mid-conversation and the lantern goes out",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a long silence about to break",
+        "traps": ["wide to close-up reframing is not a position error", "the lighting break has no time cut in the text", "the lantern is a smaller dressing error beside it"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-03", "name": "Odile", "look": "an elderly woman in her late sixties with silver hair in a bun, round wire glasses on a chain, a navy cardigan buttoned to the neck"},
+          {"code": "@PROP-02", "name": "Oil lantern", "look": "a brass oil lantern with a smoked glass chimney"},
+          {"code": "@SET-03", "name": "Lighthouse kitchen", "look": "a lighthouse keeper's kitchen at night: a scrubbed pine table, a coal stove, a rain-lashed window"}
+        ],
+        "shots": [
+          {
+            "id": "S17", "take": "T1", "seconds": 6, "transition": "scene_change", "cast": ["@CAST-03"], "set": "@SET-03",
+            "text": "Night in the lighthouse kitchen. Odile waits for Tomas's answer, the lantern burning on the table. @CAST-03 @PROP-02 @SET-03",
+            "first_frame": "Wide, eye level. Odile faces the camera across the pine table, the oil lantern lit and glowing amber on the table, black night in the window behind her.",
+            "last_frame": "Wide, eye level. Odile, left of centre, faces the camera, lips trembling, the lantern lit and glowing amber, the window behind her black."
+          },
+          {
+            "id": "S18", "take": "T2", "seconds": 4, "transition": "continuous", "cast": ["@CAST-03"], "set": "@SET-03",
+            "text": "Close on Odile as she finally breaks the silence. @CAST-03 @SET-03",
+            "first_frame": "Close-up, eye level. Odile, centred in frame, faces the camera, lips trembling. Cold grey daylight pours through the window behind her; the oil lantern on the table is unlit.",
+            "last_frame": "Close-up, eye level. Odile faces the camera, eyes brimming, the window behind her bright grey with daylight."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [
+          {"id": "E1", "kind": "lighting", "subject": "@SET-03", "shots": ["S17", "S18"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["night", "day", "light", "dark", "window", "grey", "amber"]},
+          {"id": "E2", "kind": "set_dressing", "subject": "@PROP-02", "shots": ["S17", "S18"], "severity": "minor", "critical": false, "weight": 1, "evidence_any": ["lantern", "\\blit\\b", "unlit", "\\bout\\b"]}
+        ],
+        "tolerated": [],
+        "justified": [
+          {"kind": "position", "subject": "@CAST-03", "shots": ["S17", "S18"], "why": "S18 is a close-up of the same moment; the apparent shift is the reframing"}
+        ],
+        "soft": [
+          {"id": "score_band", "weight": 2, "check": "score_between", "between": [0, 60], "desc": "a seam that jumps from night to day scores 60 or lower"}
+        ]
+      },
+      "reference": {
+        "score": 38,
+        "findings": [
+          {"kind": "lighting", "shots": ["S17", "S18"], "subject": "@SET-03", "severity": "major", "detail": "S17 ends in warm lantern light with black night in the window; S18 opens in cold grey daylight, and the text has no time cut."},
+          {"kind": "set_dressing", "shots": ["S17", "S18"], "subject": "@PROP-02", "severity": "minor", "detail": "The oil lantern is lit and glowing at the end of S17 and unlit at the start of S18."}
+        ]
+      }
+    },
+    {
+      "id": "continuity-05-doorway-to-table",
+      "title": "He is dripping in the doorway, then dry and seated at the table",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a soaked man who cannot speak",
+        "traps": ["three separate errors share one seam", "the text says he is still in the doorway", "no justified differences: everything flagged here is real"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-06", "name": "Tomas", "look": "a weathered sailor in his fifties with a grey beard and a cable-knit sweater under a black oilskin coat"},
+          {"code": "@SET-03", "name": "Lighthouse kitchen", "look": "a lighthouse keeper's kitchen at night: a scrubbed pine table, a coal stove, a rain-lashed window"}
+        ],
+        "shots": [
+          {
+            "id": "S19", "take": "T1", "seconds": 4, "transition": "scene_change", "cast": ["@CAST-06"], "set": "@SET-03",
+            "text": "Tomas stands dripping in the doorway, facing the lens, and says nothing. @CAST-06 @SET-03",
+            "first_frame": "Medium shot, eye level, centred. Tomas stands in the doorway facing the camera, oilskin coat streaming with water, wet grey hair plastered to his forehead, red-rimmed eyes.",
+            "last_frame": "Medium shot, eye level. Tomas still in the doorway facing the camera, water dripping from his sleeves onto the floorboards, jaw working, eyes wet."
+          },
+          {
+            "id": "S20", "take": "T3", "seconds": 4, "transition": "continuous", "cast": ["@CAST-06"], "set": "@SET-03",
+            "text": "Still in the doorway, Tomas finally speaks. @CAST-06 @SET-03",
+            "first_frame": "Medium close-up. Tomas sits at the pine table facing the camera, oilskin coat off, grey hair dry and combed back, hands folded.",
+            "last_frame": "Medium close-up. Tomas seated at the table, facing the camera, lips parting as he speaks, hands folded."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [
+          {"id": "E1", "kind": "position", "subject": "@CAST-06", "shots": ["S19", "S20"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["door", "seated", "sits", "table", "stand"]},
+          {"id": "E2", "kind": "body_state", "subject": "@CAST-06", "shots": ["S19", "S20"], "severity": "major", "critical": false, "weight": 2, "evidence_any": ["wet", "dry", "drip", "hair", "soaked"]},
+          {"id": "E3", "kind": "wardrobe", "subject": "@CAST-06", "shots": ["S19", "S20"], "severity": "minor", "critical": false, "weight": 1, "evidence_any": ["coat", "oilskin"]}
+        ],
+        "tolerated": [],
+        "justified": [],
+        "soft": [
+          {"id": "score_band", "weight": 2, "check": "score_between", "between": [0, 45], "desc": "a seam with three errors scores 45 or lower"}
+        ]
+      },
+      "reference": {
+        "score": 25,
+        "findings": [
+          {"kind": "position", "shots": ["S19", "S20"], "subject": "@CAST-06", "severity": "major", "detail": "Tomas stands in the doorway at the end of S19 but sits at the table at the start of S20, although the text says he is still in the doorway."},
+          {"kind": "body_state", "shots": ["S19", "S20"], "subject": "@CAST-06", "severity": "major", "detail": "He is dripping wet with plastered hair at the end of S19 and his hair is dry and combed back at the start of S20."},
+          {"kind": "wardrobe", "shots": ["S19", "S20"], "subject": "@CAST-06", "severity": "minor", "detail": "The oilskin coat is on and streaming in S19 and off in S20."}
+        ]
+      }
+    },
+    {
+      "id": "continuity-06-two-hours-later-dye-job",
+      "title": "A time jump excuses almost everything except her hair colour",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a woman who waited all night",
+        "traps": ["light, coat, tears all legitimately change across the time jump: flagging them is a false alarm", "only the hair colour is an error"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair worn loose, freckles, a cream sweater and a dark green wool long coat belted at the waist"},
+          {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory, rain on the curved glass, brass consoles with amber instrument lights"}
+        ],
+        "shots": [
+          {
+            "id": "S21", "take": "T1", "seconds": 6, "transition": "scene_change", "cast": ["@CAST-02"], "set": "@SET-01",
+            "text": "Night. Mira waits at the console, shaking with held-back rage, her coat belted tight. @CAST-02 @SET-01",
+            "first_frame": "Medium close-up, eye level. Mira faces the camera at the console, shoulder-length auburn hair loose, freckles, dark green wool coat belted at the waist, jaw set, eyes red from crying. Black night in the dome glass, amber console light.",
+            "last_frame": "Medium close-up, eye level. Mira faces the camera, auburn hair loose, tears drying on her freckled cheeks, coat belted, chin lifted. Black night in the dome glass, amber console light."
+          },
+          {
+            "id": "S22", "take": "T2", "seconds": 6, "transition": "time_jump", "cast": ["@CAST-02"], "set": "@SET-01",
+            "text": "Two hours later, dawn. Mira sits at the console where she waited all night, the coat draped over the chair, still staring at the lens. @CAST-02 @SET-01",
+            "first_frame": "Medium close-up, eye level. Mira faces the camera at the console, shoulder-length black hair loose, cream sweater, the dark green coat draped over the chair behind her, eyes puffy and dry, pale grey dawn light in the dome glass.",
+            "last_frame": "Medium close-up, eye level. Mira faces the camera, black hair loose, hollow-eyed, pale dawn light in the dome glass."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [
+          {"id": "E1", "kind": "hair_makeup", "subject": "@CAST-02", "shots": ["S21", "S22"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["hair", "auburn", "black", "colou?r"]}
+        ],
+        "tolerated": [],
+        "justified": [
+          {"kind": "lighting", "subject": "@SET-01", "shots": ["S21", "S22"], "why": "time jump: night to dawn"},
+          {"kind": "wardrobe", "subject": "@CAST-02", "shots": ["S21", "S22"], "why": "S22 text: the coat is draped over the chair"},
+          {"kind": "body_state", "subject": "@CAST-02", "shots": ["S21", "S22"], "why": "two hours later: the tears have dried and her eyes are puffy"}
+        ],
+        "soft": [
+          {"id": "score_band", "weight": 2, "check": "score_between", "between": [0, 70], "desc": "a run with a major error scores 70 or lower"}
+        ]
+      },
+      "reference": {
+        "score": 55,
+        "findings": [
+          {"kind": "hair_makeup", "shots": ["S21", "S22"], "subject": "@CAST-02", "severity": "major", "detail": "Mira's hair is auburn in S21 and black in S22; a two-hour time jump does not change her hair colour."}
+        ]
+      }
+    },
+    {
+      "id": "continuity-07-clean-match-cut",
+      "title": "A clean seam: the close-up matches the wide, nothing to report",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a frozen mid-word shock",
+        "traps": ["no planted error: any finding is invented", "the lamp flicker, the closer framing and the new visible whistle are all explained"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-05", "name": "Ines", "look": "a woman in her early forties with a black bob, tired dark eyes, a navy knit sweater and a brass whistle on a cord, headphones around her neck"},
+          {"code": "@PROP-03", "name": "Shortwave radio", "look": "a battered shortwave radio with a glowing green dial"},
+          {"code": "@SET-04", "name": "Harbour office", "look": "a harbour radio office at night: a cluttered desk, a bank of dials, a storm lamp, rain on a small window"}
+        ],
+        "shots": [
+          {
+            "id": "S23", "take": "T1", "seconds": 4, "transition": "scene_change", "cast": ["@CAST-05"], "set": "@SET-04",
+            "text": "Ines hears the name on the radio and freezes mid-word. @CAST-05 @PROP-03 @SET-04",
+            "first_frame": "Medium shot, eye level. Ines faces the camera at the desk, black bob, navy knit sweater, headphones around her neck, one hand on the radio dial, eyes bright with hope. Storm lamp steady on the desk, green radio glow.",
+            "last_frame": "Medium shot, eye level. Ines faces the camera, mouth open mid-word, eyes wide, one hand on the radio dial, headphones around her neck. Storm lamp steady, green radio glow."
+          },
+          {
+            "id": "S24", "take": "T2", "seconds": 4, "transition": "continuous", "cast": ["@CAST-05"], "set": "@SET-04",
+            "text": "Closer on her face as the storm lamp flickers. @CAST-05 @SET-04",
+            "first_frame": "Close-up, eye level. Ines faces the camera, eyes wide, lips pressed, her hand on the radio dial at the edge of frame, headphones around her neck, the brass whistle on its cord at her collar. The storm lamp flickers, the light on her face jumping warm and dim.",
+            "last_frame": "Close-up, eye level. Ines faces the camera, eyes wide, lips trembling, the brass whistle on its cord at her collar. The storm lamp still flickering."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [],
+        "tolerated": [],
+        "justified": [
+          {"kind": "lighting", "subject": "@SET-04", "shots": ["S23", "S24"], "why": "S24 text: the storm lamp flickers"},
+          {"kind": "position", "subject": "@CAST-05", "shots": ["S23", "S24"], "why": "S24 is a close-up of the same moment; the wider frame showed the desk and the radio"},
+          {"kind": "wardrobe", "subject": "@CAST-05", "shots": ["S23", "S24"], "why": "the whistle is only visible because the frame is closer"}
+        ],
+        "soft": [
+          {"id": "score_band", "weight": 3, "check": "score_between", "between": [85, 100], "desc": "a clean seam scores 85 or higher"}
+        ]
+      },
+      "reference": {
+        "score": 94,
+        "findings": []
+      }
+    },
+    {
+      "id": "continuity-08-torn-photograph-three-shots",
+      "title": "Three shots, two seams, four planted errors, three explained differences",
+      "difficulty": {
+        "face": "front",
+        "tension": "high",
+        "emotion": "a plea and a glare across a torn photograph",
+        "traps": ["the photograph leaves Kael's hand with no action in the text", "the two actors swap sides of the frame at the second seam", "his gaze drops although the text says he keeps looking at her", "stepping toward him and wiping his face are justified by the text"]
+      },
+      "input": {
+        "bible": [
+          {"code": "@CAST-01", "name": "Kael", "look": "a man in his mid thirties with short dark hair, light stubble and a charcoal field jacket"},
+          {"code": "@CAST-02", "name": "Mira", "look": "a woman in her early thirties with shoulder-length auburn hair and a dark green wool long coat belted at the waist"},
+          {"code": "@PROP-06", "name": "Torn photograph", "look": "a photograph torn in half, two small figures on the pieces"},
+          {"code": "@SET-01", "name": "Observatory", "look": "a circular glass-dome observatory at dawn, rain on the curved glass, brass consoles with amber instrument lights"}
+        ],
+        "shots": [
+          {
+            "id": "S28", "take": "T2", "seconds": 4, "transition": "scene_change", "cast": ["@CAST-01", "@CAST-02"], "set": "@SET-01",
+            "text": "Kael holds out the torn photograph, pleading. Mira stands at the console, belted coat, arms crossed. @CAST-01 @CAST-02 @PROP-06 @SET-01",
+            "first_frame": "Two-shot, eye level. Kael on the left holding the torn photograph in his right hand, Mira on the right at the console, dark green coat belted at the waist, arms crossed. Kael looks at Mira. Amber console light.",
+            "last_frame": "Two-shot. Kael on the left still holding the torn photograph in his right hand, eyes wet, looking at Mira; Mira on the right, coat belted, arms crossed, glaring back."
+          },
+          {
+            "id": "S29", "take": "T1", "seconds": 4, "transition": "continuous", "cast": ["@CAST-01", "@CAST-02"], "set": "@SET-01",
+            "text": "Mira uncrosses her arms and steps toward him; he keeps the photograph out between them. @CAST-01 @CAST-02 @PROP-06 @SET-01",
+            "first_frame": "Two-shot. Kael on the left, his right hand empty at his side; the torn photograph lies on the console. Mira on the right, coat belt hanging loose, arms uncrossed, stepping toward him. Kael looks at Mira.",
+            "last_frame": "Two-shot. Kael on the left looking at Mira, eyes wet, Mira on the right a step closer, coat belt hanging loose, her hand reaching toward the photograph on the console."
+          },
+          {
+            "id": "S30", "take": "T1", "seconds": 4, "transition": "continuous", "cast": ["@CAST-01", "@CAST-02"], "set": "@SET-01",
+            "text": "Kael wipes his face with his sleeve, still looking at her. @CAST-01 @CAST-02 @SET-01",
+            "first_frame": "Two-shot. Kael now on the right of frame, Mira on the left, closer together. Kael is looking down at the floor, not at Mira, wiping his cheek with his sleeve, the tears smeared across his skin. Mira's coat belt hangs loose.",
+            "last_frame": "Two-shot. Kael on the right, eyes lowered, Mira on the left, glaring at him, coat belt hanging loose."
+          }
+        ]
+      },
+      "expect": {
+        "planted": [
+          {"id": "E1", "kind": "prop", "subject": "@PROP-06", "shots": ["S28", "S29"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["photograph", "photo", "hand", "console"]},
+          {"id": "E2", "kind": "wardrobe", "subject": "@CAST-02", "shots": ["S28", "S29"], "severity": "minor", "critical": false, "weight": 1, "evidence_any": ["belt", "coat", "loose"]},
+          {"id": "E3", "kind": "position", "subject": ["@CAST-01", "@CAST-02", "scene"], "shots": ["S29", "S30"], "severity": "major", "critical": true, "weight": 3, "evidence_any": ["left", "right", "swap", "side", "flip"]},
+          {"id": "E4", "kind": "gaze", "subject": "@CAST-01", "shots": ["S29", "S30"], "severity": "major", "critical": false, "weight": 2, "evidence_any": ["look", "eye", "gaze", "floor", "down"]}
+        ],
+        "tolerated": [
+          {"kind": "position", "subject": "@CAST-02", "shots": ["S28", "S29"]}
+        ],
+        "justified": [
+          {"kind": "body_state", "subject": "@CAST-01", "shots": ["S29", "S30"], "why": "S30 text: he wipes his face with his sleeve, so the tears smear"}
+        ],
+        "soft": [
+          {"id": "score_band", "weight": 2, "check": "score_between", "between": [0, 40], "desc": "two seams with four errors score 40 or lower"}
+        ]
+      },
+      "reference": {
+        "score": 20,
+        "findings": [
+          {"kind": "prop", "shots": ["S28", "S29"], "subject": "@PROP-06", "severity": "major", "detail": "Kael holds the torn photograph in his right hand at the end of S28; at the start of S29 his hand is empty and the photograph lies on the console, although the text says he keeps it out."},
+          {"kind": "wardrobe", "shots": ["S28", "S29"], "subject": "@CAST-02", "severity": "minor", "detail": "Mira's coat is belted at the waist in S28 and the belt hangs loose in S29 with nothing in the action to undo it."},
+          {"kind": "position", "shots": ["S29", "S30"], "subject": "@CAST-01", "severity": "major", "detail": "Kael is on the left of frame and Mira on the right at the end of S29; in S30 they have swapped sides, Kael right and Mira left."},
+          {"kind": "gaze", "shots": ["S29", "S30"], "subject": "@CAST-01", "severity": "major", "detail": "Kael looks at Mira at the end of S29 but looks down at the floor at the start of S30, although the text says he is still looking at her."}
+        ]
+      }
+    }
+  ]
+}
