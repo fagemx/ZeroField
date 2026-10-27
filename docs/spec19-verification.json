@@ -1,6 +1,6 @@
 {
   "date": "2026-10-27",
-  "stage": "SPEC_19 packages A, B and D: adoption is the film, the shot composer, cross-shot references and cut checks; package C (film / colour / lighting looks) is decided but not built",
+  "stage": "SPEC_19 packages A, B and D, and the code of package C (film setup, colour and lighting looks, the episode look); package C's sample media and OpenJutsu in the composer are not built",
   "base_commit": "3b8ca651f67ec518c3dc81a6ca06944db274f2bc",
   "branch": "feat/spec19-integration",
   "commit": "0a6782572a72c47995611d5a74ea67f4d930b6f2 is the tree every check below ran against (the backend suite ran at 2478e6f; nothing under project_docs, project_assistant or tests changed after it). The commit that adds this receipt, the README line and the screenshots sits on top of it.",
@@ -17,8 +17,10 @@
     "Film segments carry take, in / out, reference snapshots and the cut result (D10)"
   ],
   "not_done": [
-    "Package C: film setup, colour and lighting looks, the episode look, OpenJutsu in the composer and all sample media (the option list and names are final in docs/specs/SPEC_19_LOOK_OPTIONS_DRAFT.md)",
-    "Sample media for camera and move options (B10): the walls show placeholder textures",
+    "Package C sample media (R13, C5): every camera, move, genre, era, tempo, palette and light option shows a texture or a swatch; the walls switch to a picture once a catalog option has a preview. Needs the GPU, which another session's acceptance run is using",
+    "OpenJutsu in the composer (R14, C6), held until the fix/spec20-r44 branch (pipeline default steps) is on main",
+    "First-frame workflow choice in the composer is not filtered by production policy, held for the same reason",
+    "No crew or MCP tool proposes a shot look yet: the shot_meta look field (SPEC_20 R18) and its review in the walls are built, but only tests create such proposals. crew_art.LOOK_HOOK is left unset: it hangs on a costume variant (CAST-01:night), which has no catalog look to map to",
     "D7: a human-labelled comparison of cut checks on the Phase 2 six-shot film (needs a real GPU run)",
     "Cross-shot references on the M8 pipeline path (story_media_adapter.enqueue / receipts)"
   ],
@@ -29,17 +31,53 @@
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "shards": [{"tests": 250, "seconds": 255.5}, {"tests": 217, "seconds": 385.1}, {"tests": 244, "seconds": 274.4}, {"tests": 216, "seconds": 540.8}],
+    "shards": [
+      {
+        "tests": 250,
+        "seconds": 255.5
+      },
+      {
+        "tests": 217,
+        "seconds": 385.1
+      },
+      {
+        "tests": 244,
+        "seconds": 274.4
+      },
+      {
+        "tests": 216,
+        "seconds": 540.8
+      }
+    ],
     "wall_seconds": 544,
     "note": "An earlier single-process run of the same branch reported one error that did not reproduce on a rerun (869/869); another agent was running its own suite against the same database at the time."
   },
-  "frontend": {"command": "npm test --prefix ui", "passed": 582, "failed": 0, "skipped": 0},
-  "build": {"command": "npm run build --prefix ui", "status": "passed", "committed": "0a67825"},
+  "frontend": {
+    "command": "npm test --prefix ui",
+    "passed": 582,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": {
+    "command": "npm run build --prefix ui",
+    "status": "passed",
+    "committed": "0a67825"
+  },
   "browser_journeys": {
     "tool": "Python Playwright, headless Chromium, over real HTTP and PostgreSQL (zf_w4_browser on the throwaway cluster)",
     "results": [
-      {"file": "ui/tests/shotReview.browser.py", "tests": 3, "passed": 3, "covers": "adopt with ✓, Mark as blocked / Unblock through the … menu, the same review component stays mounted, an unsent override survives, the hand-off uses the adopted video, R opens the composer prompt, a late older candidate response is ignored"},
-      {"file": "ui/tests/agentConsole.browser.py", "tests": 4, "passed": 4, "covers": "console navigation, templates, keyboard, locale and returning to the production on the same shot"}
+      {
+        "file": "ui/tests/shotReview.browser.py",
+        "tests": 3,
+        "passed": 3,
+        "covers": "adopt with ✓, Mark as blocked / Unblock through the … menu, the same review component stays mounted, an unsent override survives, the hand-off uses the adopted video, R opens the composer prompt, a late older candidate response is ignored"
+      },
+      {
+        "file": "ui/tests/agentConsole.browser.py",
+        "tests": 4,
+        "passed": 4,
+        "covers": "console navigation, templates, keyboard, locale and returning to the production on the same shot"
+      }
     ],
     "fixed_on_the_way": "Two shotReview tests still assumed the removed status menu and that R stays in Review; they now follow SPEC_19. The agentConsole failure also failed on main (3b8ca65): after a reload the shell's shot focus was not restored, so the Shot Stage fell back to the first shot; App.jsx now restores it."
   },
@@ -47,12 +85,21 @@
     "command": "pip wheel --no-deps --no-build-isolation . then python scripts/verify_wheel.py <wheel>",
     "wheel_sha256": "f0c2e2f35f8cea450f052b19d94e8a5a9fcef03a095fd402a5ff1ae49cf809a3",
     "verified": "SQL, prompts, workflows, samples, frontend and CLI entry points",
-    "new_resources_included": ["project_docs/look_catalog.json", "project_docs/story_adoption.py", "project_docs/story_look.py", "project_docs/story_take_refs.py", "project_docs/story_cuts.py"]
+    "new_resources_included": [
+      "project_docs/look_catalog.json",
+      "project_docs/story_adoption.py",
+      "project_docs/story_look.py",
+      "project_docs/story_take_refs.py",
+      "project_docs/story_cuts.py"
+    ]
   },
   "ui_verification": {
     "tool": "Headless Edge driven over the DevTools protocol, screenshots read back from disk",
     "environment": "A file copy of the stopped showcase cluster started on 127.0.0.1:55463, served by run_studio.py --no-worker from an export of the branch; the user's .openbench_pg was never started or written",
-    "viewports": ["1920x1080", "1280x720"],
+    "viewports": [
+      "1920x1080",
+      "1280x720"
+    ],
     "locale": "zh-TW",
     "screenshots": [
       "docs/research/screenshots/spec19-composer-zh-1920.png",
@@ -84,8 +131,98 @@
   ],
   "limits": "Camera and move options have no sample media yet; film / colour / lighting looks are not built; the M8 pipeline path does not resolve cross-shot references; Router cards are limited to one take per request; preexisting oddities left as they were: crew proposals show raw image markdown, and the film window's 'open in timeline' button renders as a grey block. No live provider, GPU or billing acceptance is claimed.",
   "follow_up": [
-    "App.jsx sets sheet focus without the shell's shot focus in three more places (annotations, proposals, flow sources); on a mounted Shot Stage they may snap back to the previous shot.",
-    "Timeline.jsx still swaps takes through PUT selected-video instead of the adoption endpoint.",
     "Shot generation-options list only video cards: the composer's first-frame workflows come from /catalog/apps without policy filtering or estimates."
-  ]
+  ],
+  "package_c": {
+    "date": "2026-10-28",
+    "base_commit": "35f4b98 (main with SPEC_19 A/B/D, SPEC_20 and its GPU acceptance batch)",
+    "branch": "feat/spec19-c-integration",
+    "commit": "9fed50f872f59912fc3457ef6cba930df5bd5388 is the tree every check below ran against except where noted; the commit that adds this receipt, the README line and the screenshots sits on top of it",
+    "scope": [
+      "Catalog: genre 9, era 6, tempo 5, palette 13, light 8 options (Auto first in each), checked one by one against docs/specs/SPEC_19_LOOK_OPTIONS_DRAFT.md; every promptText is a clause (lowercase, no full stop, no ';'); hex only on palette, 1-12 colours, main colour first",
+      "Episode look in the episode settings ({genre, era, tempo, camera: {body, lens, aperture}, palette, light}); a settings PUT without look keeps it. Shot overrides through PUT /shots/{id}/look (id sets, null goes back to the episode, 'auto' is an override of its own) with lookRevision and 409 DRAMA_LOOK_REVISION_CONFLICT on a stale baseRevision; the shot view carries look and lookRevision",
+      "Compiler: Film (genre; era; tempo, tempo dropped for a still), Color (the palette clause plus its hex codes) and Lighting lines after Optical Rig / Camera Movement; the episode camera stands in for an empty Optical Rig cell; asset rows stay neutral. The Story API (snapshot) and the M8 pipeline (flow_runner) take the same compiled text from story_openapi.source_look (C3)",
+      "Composer: film setup (genre and tempo carousels, era scale), palette and lighting buttons with walls (search, sort, Reset all, change dots, Back to episode); 本集 / 本鏡 on every button; prompt preview shows the three lines",
+      "Episode look page (R12) opened from the Story & World rail's ratio and style tile: ratio, style samples and the episode defaults for film setup, camera, palette and lighting; one primary button, Apply to episode; the storyboard dialog no longer asks for a style",
+      "SPEC_20 R18: shot_meta look field (revision, validator and writer shared with the PUT) and the proposal's dot and Apply / Dismiss strip in the walls",
+      "Receipt follow-ups: annotation, proposal and flow-source links also move the shell's shot focus to a stage row; the timeline swaps a take by adopting it (POST /adoptions)"
+    ],
+    "backend": {
+      "command": "python -X utf8 shard_suite.py <repo> <shard> 6, six processes in parallel, one fresh database each (zf_cshard0-5) on the throwaway cluster 127.0.0.1:55461",
+      "tests": 1381,
+      "passed": 1379,
+      "failed": 2,
+      "skipped": 0,
+      "failures": "test_spec16a_host_browser (1) and test_writing_product_browser (1): both browser tests waited on the writing page while the frontend was being rebuilt in the same worktree; rerun alone afterwards on a fresh database: test_spec16a_host_browser 8/8, test_writing_product_browser 7/7",
+      "first_attempt": "an earlier run was void: a PostgreSQL backend of the test cluster ended with Windows exception 0xC0000409 and the cluster went through crash recovery mid-run; every error was a refused connection",
+      "ran_at": "c1b19a2 for the shards (only CSS and static changed after it); the two reruns at 9fed50f"
+    },
+    "frontend": {
+      "command": "npm test --prefix ui",
+      "passed": 696,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build": {
+      "command": "npm run build --prefix ui",
+      "status": "passed",
+      "committed": "9fed50f",
+      "includes": "static/projects/previs-solver.html"
+    },
+    "browser_journeys": [
+      {
+        "file": "ui/tests/shotReview.browser.py",
+        "tests": 3,
+        "passed": 3
+      },
+      {
+        "file": "ui/tests/storyImport.browser.py",
+        "tests": 1,
+        "passed": 1
+      },
+      {
+        "file": "ui/tests/agentConsole.browser.py",
+        "tests": 4,
+        "passed": 3,
+        "failure": "test_navigation_templates_keyboard_locale_and_production_context expects the Quickstart builder to find no model; local Ollama was running (another session's acceptance run) and the builder drafted with qwen3.8:27b instead. Unrelated to package C files; the test depends on no model being reachable on 127.0.0.1:11434. The model was unloaded right after"
+      }
+    ],
+    "ui_verification": {
+      "tool": "Headless Edge over the DevTools protocol, screenshots read back from disk",
+      "environment": "the file copy of the stopped showcase cluster on 127.0.0.1:55463, served by run_studio.py --no-worker from the integration worktree; the user's .openbench_pg was never started or written",
+      "viewports": [
+        "1280x720",
+        "1920x1080"
+      ],
+      "locale": "zh-TW",
+      "screenshots": [
+        "docs/research/screenshots/spec19-c-composer-1280.png",
+        "docs/research/screenshots/spec19-c-film-wall-1280.png",
+        "docs/research/screenshots/spec19-c-light-wall-1280.png",
+        "docs/research/screenshots/spec19-c-palette-wall-1920.png",
+        "docs/research/screenshots/spec19-c-camera-wall-1280.png",
+        "docs/research/screenshots/spec19-c-camera-wall-1920.png",
+        "docs/research/screenshots/spec19-c-episode-look-1280.png",
+        "docs/research/screenshots/spec19-c-prompt-preview-1920.png"
+      ],
+      "checks": [
+        "1280x720: five look buttons in one row; take, buttons, prompt and parameter row on the first screen; no horizontal scroll; an open wall stays in the take's place and the buttons and prompt do not move",
+        "Choosing 燈下琥珀 on S03 turns the palette button to 本鏡 燈下琥珀 while the others stay 本集",
+        "The compiled prompt preview of S03 shows 'Color: lit areas in amber and honey ...; palette #C98A3D, #8A4B2A, #3B2A24, #E8C48A, #1E1A1A.' between Camera Movement and References",
+        "Episode look page: ratio, four style samples, four look buttons with their walls and one primary button (disabled until something changes); no horizontal scroll at either size",
+        "No page exceptions"
+      ],
+      "fixed_on_the_way": [
+        "Wall cards measured 24 px wide: the app's generic button rule centres content, which shrinks a grid's only column; package B's camera wall on main had the same fault",
+        "At 1280x720 an open wall grew past the take and was drawn over the look buttons and the prompt",
+        "The camera's three columns became full-width 16:9 cards once stretched; small tiles are now a thumbnail beside the name"
+      ]
+    },
+    "unverified": [
+      "No take was generated with a look: the lines were checked as compiled text (prompt preview, worker compiler, and the C3 test that compares the Story API and pipeline paths), not as pictures",
+      "The long-form promptText was used everywhere; the short-versus-long comparison is part of the sample media run",
+      "Look proposals were only created by tests",
+      "A look write racing another member's write was tested at the API (409) but not driven in two browsers"
+    ]
+  }
 }
