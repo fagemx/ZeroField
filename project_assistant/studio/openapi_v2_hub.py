@@ -237,7 +237,7 @@ def _resolve_openapi_card_and_workflow(webapp_id: str) -> tuple[dict, dict | Non
 
 def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                           node_info: list[dict], base_url: str) -> None:
-    client, authority, accounting = None, None, None
+    client, authority, accounting, gpu = None, None, None, None
     try:
         with _OPENAPI_LOCK:
             record = _OPENAPI_TASKS[task_id]
@@ -337,6 +337,9 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                     checkpoint()
                     wf_to_send[nid]["inputs"][fname] = client.upload_media(*stored, "openapi")
         checkpoint()
+        from project_assistant import gpu_arbiter  # SPEC_20 R13: renders on an owned GPU take the cross-process arbiter
+        gpu = gpu_arbiter.render(card_engine.comfy_base_url(ecfg, card_engine.comfy_platform(ecfg)), label="render:" + task_id,
+                                 timeout=float(ecfg.get("timeout", 600)))
         prompt_id = client.submit_workflow(wf_to_send, task_id)
         deadline = time.monotonic() + float(ecfg.get("timeout", 600))
         poll = float(ecfg.get("poll_interval", 0.5))
@@ -405,6 +408,8 @@ def _execute_openapi_task(task_id: str, card: dict, compiled_workflow: dict,
                     "failedReason": {"exception_message": message},
                 })
     finally:
+        if gpu is not None:
+            gpu.release()
         if accounting is not None:
             from project_assistant import execution_governance as governance
             with _OPENAPI_LOCK:

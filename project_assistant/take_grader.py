@@ -1,8 +1,11 @@
 """Continuity grading of sheet-row takes.
 
 The Continuity Supervisor's vision model grades the product's 8-frame contact sheet of a take with the rubric the
-Phase 2 hand grading used. LTX-2.5 and a local vision model do not fit on one 24 GB GPU together, so a grade waits for
-ComfyUI to go idle (it never interrupts a render), frees ComfyUI's models, grades, then unloads the vision model.
+Phase 2 hand grading used. LTX-2.5 and a local vision model do not fit on one 24 GB GPU together, so a grade takes the
+cross-process GPU arbiter (SPEC_20 R13): when ComfyUI held the GPU last, it waits for ComfyUI to go idle (it never
+interrupts a render) and frees ComfyUI's models; takes of one shot are graded together in one hold, and the vision model
+stays loaded until a render needs the GPU. The vision call is governed like an agent turn (SPEC_20 R11): a loopback
+endpoint is unbilled, any other must pass the environment, credential and price checks before frames leave.
 A failing grade carries the grader's rewritten prompt; Retake with it in shot review applies it and re-shoots in one click.
 """
 from __future__ import annotations
@@ -14,10 +17,10 @@ import re
 import tempfile
 import threading
 import time
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
+
+from project_assistant import gpu_arbiter
 
 RUBRIC = ("You are the continuity grader. The image is an 8-frame timestamped contact sheet of one generated shot. "
           "Score 0-100 against the brief and list concrete issues (identity drift, wardrobe, set, lighting direction, "
@@ -31,10 +34,10 @@ SHOT_TABS = ('cinema-studio', 'openjutsu-lab')
 ACTIVE = ('queued', 'waiting_gpu', 'grading')
 STALE_SECONDS = 15 * 60
 VISION_TIMEOUT = 600
-# ponytail: one renderer and one grader per process share this lock; a worker in another process is only
-# covered by the ComfyUI queue check below.
-GPU_LOCK = threading.Lock()
-FREE_TARGET = 0.75  # wait until this share of VRAM is free after /free (calibrate per card)
+GPU_WAIT = 3600  # longest a grade waits for renders holding the GPU
+# Compatibility name: the cross-process arbiter replaced this process-local lock (SPEC_20 R13).
+GPU_LOCK = gpu_arbiter.CompatLock()
+FREE_TARGET = gpu_arbiter.FREE_TARGET
 
 _wake = threading.Event()
 _guard = threading.Lock()
@@ -121,7 +124,8 @@ def _loop():
 
 
 def drain(connect):
-    """Grade every queued take, oldest first. Returns how many ran."""
+    """Grade every queued take, oldest first; the queued takes of one shot are graded together in one GPU hold
+    (SPEC_20 R13), and the GPU is released between shots so waiting renders get their turn. Returns how many ran."""
     count = 0
     while True:
         conn = connect()
@@ -129,21 +133,65 @@ def drain(connect):
             job = _claim(conn)
             if not job:
                 return count
-            try:
-                _grade(conn, job)
-            except Exception as exc:
-                conn.rollback()
-                _save(conn, job, status='failed', error=str(exc)[:500] if isinstance(exc, GradeError) else
-                      'Grading failed; check the Continuity Supervisor model endpoint and retry.')
-            count += 1
+            with _Phase() as phase:
+                while job:
+                    try:
+                        _grade(conn, job, connect=connect, phase=phase)
+                    except Exception as exc:
+                        conn.rollback()
+                        _save(conn, job, status='failed', error=str(exc)[:500] if isinstance(exc, GradeError) else
+                              'Grading failed; check the Continuity Supervisor model endpoint and retry.')
+                    count += 1
+                    job = _claim(conn, shot_id=job['shotId'])
         finally:
             conn.close()
 
 
-def _claim(conn):
+class _Phase:
+    """One GPU hold for consecutive grades; the first grade that needs the GPU takes it."""
+
+    def __init__(self):
+        self.grant = None
+
+    def hold(self, config, comfy, *, on_wait):
+        """GPU facts for the scorecard: what was freed, whether the grade waited, whether it joined a running phase."""
+        key = gpu_arbiter.gpu_key(config.base_url)
+        if key != gpu_arbiter.LOCAL_KEY:
+            return {}  # a hosted endpoint does not use this machine's GPU
+        if self.grant is not None and self.grant.key == key:
+            return {'comfyFreed': False, 'batched': True}
+        self.release()
+        freed = {}
+
+        def switch(previous):
+            # ComfyUI (or nothing known) held the GPU last: free the ComfyUI on this machine; never interrupt a render.
+            if gpu_arbiter.gpu_key(comfy) == key:
+                freed.update(hand_off(comfy, on_wait=on_wait))
+            return freed
+        try:
+            self.grant = gpu_arbiter.acquire(gpu_arbiter.LLM, config.base_url, model=config.model, label='grade',
+                                             timeout=GPU_WAIT, on_wait=on_wait, on_switch=switch)
+        except gpu_arbiter.GpuBusy as exc:
+            raise GradeError(str(exc)) from None
+        return {'comfyFreed': False, **freed, 'waitedForGpu': self.grant.waited, 'batched': not self.grant.switched}
+
+    def release(self):
+        if self.grant is not None:
+            grant, self.grant = self.grant, None
+            grant.release()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.release()
+
+
+def _claim(conn, shot_id=None):
     with conn.cursor() as cur:
         cur.execute("""SELECT data, project_slug FROM projectops.story_record WHERE kind=%s AND data->>'status'='queued'
-                       ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED""", (KIND,))
+                       AND (%s::text IS NULL OR data->>'shotId'=%s)
+                       ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED""", (KIND, shot_id, shot_id))
         row = cur.fetchone()
     if not row:
         conn.rollback()
@@ -160,15 +208,18 @@ def _save(conn, job, **changes):
     conn.commit()
 
 
-def _grade(conn, job):
+def _grade(conn, job, *, connect=None, phase=None):
     from project_docs import repository as repo, story_openapi as story
     from project_assistant import agent_registry, agent_runtime, privacy
+    from project_assistant import execution_governance as governance
     slug = job['slug']
     _, row = story.find_row(conn, job['shotId'], 'shot')
     if privacy.mode(conn, slug) != 'full_access':
         raise GradeError('Numeric masking does not permit sending frames to the vision model.')
-    profile = agent_registry.get_agent(conn, slug, 'qa_critic') or {}
-    if profile and not profile.get('enabled', True):
+    profile = agent_registry.get_agent(conn, slug, 'qa_critic')
+    if not profile:
+        raise GradeError('This production has no Continuity Supervisor.')
+    if not profile.get('enabled', True):
         raise GradeError('The Continuity Supervisor is disabled for this production.')
     config = agent_runtime.provider_for(profile)
     if config.kind != 'openai_compat':
@@ -180,25 +231,38 @@ def _grade(conn, job):
     view = story.shot_view(conn, slug, row)
     conn.commit()  # no transaction across FFmpeg, the GPU wait or inference
     sheet, timing = frame_sheet(bytes(found[1]))
-    gpu = {}
-    if not GPU_LOCK.acquire(blocking=False):
-        _save(conn, job, status='waiting_gpu')
-        GPU_LOCK.acquire()
+    # Governed like an agent turn (SPEC_20 R11): reserved, attributed to the Continuity Supervisor, settled per §4.1.
+    admission = governance.ProviderAdmission(grading_context(job, connect), profile, config, 'grader_check', purpose='continuity_grade')
+    own = phase is None
+    phase = phase or _Phase()
     try:
-        gpu = hand_off(comfy, on_wait=lambda: _save(conn, job, status='waiting_gpu'))
+        gpu = phase.hold(config, comfy, on_wait=lambda: _save(conn, job, status='waiting_gpu'))
         _save(conn, job, status='grading')
         started = time.monotonic()  # seconds = model load + grading, not the wait for renders
-        answer = vision(config, brief(view), view['description'], sheet)
+        answer = vision(config, brief(view), view['description'], sheet, admission=admission)
     finally:
-        try:
-            gpu['visionUnloaded'] = unload(config)
-        finally:
-            GPU_LOCK.release()
+        if own:
+            phase.release()
     card = scorecard(answer, view['description'])
     sheet_id = repo.put_asset(conn, slug, data=sheet, content_type='image/png', actor_id=job['requestedBy'])
     _save(conn, job, status='graded', **card, gradedAt=now(),
           sheetUrl=f'/projects/api/{slug}/assets/{sheet_id}', timing=timing, model=config.model,
           seconds=round(time.monotonic() - started, 1), gpu=gpu)
+
+
+def grading_context(job, connect=None):
+    """Admission context for one grading attempt: the requester's authority, the Continuity Supervisor's environment,
+    and a session key the console groups grading spend by."""
+    from project_docs import service
+    from project_assistant import execution_governance as governance
+    session = 'grade:' + job['gradeId']
+    ctx = governance.media_context(service.Identity(job['requestedBy'], 'Continuity grader', 'member'), job['slug'],
+                                   agent_key='qa_critic', accounting_session_key=session if len(session) <= 160 else
+                                   'grade:' + governance.cp.digest(job['gradeId']),
+                                   execution_key='grade:%s:%s' % (job['gradeId'], job.get('startedAt') or now()))
+    if connect is not None:
+        ctx.connection_factory = connect
+    return ctx
 
 
 def brief(view):
@@ -223,54 +287,31 @@ def comfy_url(conn, slug):
     return ((config or {}).get('comfy_url') or 'http://127.0.0.1:8188').rstrip('/')
 
 
-def _http(url, body=None, timeout=10):
-    request = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(),
-                                     headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        raw = response.read()
-    return json.loads(raw) if raw.strip() else {}
+_http = gpu_arbiter._http
 
 
 def hand_off(comfy, *, on_wait=None, timeout=3600, poll=5, opener=_http, sleep=time.sleep):
     """Wait for ComfyUI's queue to empty (never interrupt a render), then POST /free and wait for the VRAM."""
-    deadline, waited = time.monotonic() + timeout, False
-    while True:
-        try:
-            queue = opener(comfy + '/queue')
-        except OSError:
-            return {'comfyFreed': False, 'comfyOnline': False}  # nothing of ComfyUI's holds the GPU
-        if not queue.get('queue_running') and not queue.get('queue_pending'):
-            break
-        if time.monotonic() > deadline:
-            raise GradeError('ComfyUI stayed busy; grade again once the renders finish.')
-        if not waited and on_wait:
-            on_wait()
-        waited = True
-        sleep(poll)
-    opener(comfy + '/free', {'unload_models': True, 'free_memory': True})
-    free = None
-    for _ in range(20):
-        try:
-            device = opener(comfy + '/system_stats')['devices'][0]
-            free = device['vram_free'] / max(device['vram_total'], 1)
-        except (OSError, KeyError, IndexError, TypeError, ValueError):
-            break
-        if free >= FREE_TARGET:
-            break
-        sleep(1)
-    return {'comfyFreed': True, 'comfyOnline': True, 'waitedForRenders': waited,
-            **({'vramFree': round(free, 2)} if free is not None else {})}
+    try:
+        return gpu_arbiter.free_comfy(comfy, on_wait=on_wait, timeout=timeout, poll=poll, opener=opener, sleep=sleep)
+    except gpu_arbiter.GpuBusy:
+        raise GradeError('ComfyUI stayed busy; grade again once the renders finish.') from None
 
 
-def vision(config, brief_text, prompt, sheet, *, opener=None):
-    from project_assistant import providers
-    config = dataclasses.replace(config, effort='low')
+def vision(config, brief_text, prompt, sheet, *, opener=None, admission=None):
+    """One governed vision call. The admission binds the Continuity Supervisor's configured endpoint; the grader's
+    own low effort is a request setting, not a different provider."""
+    from project_assistant import agent_registry, providers
+    from project_assistant.execution_governance import AdmissionError
     text = 'Brief: ' + brief_text + '\nShot prompt: ' + prompt
-    result = providers.run_openai_compat_turn(
-        config=config, instructions=RUBRIC, turn_text=text, timeout=VISION_TIMEOUT, tool_specs=[],
-        call_tool=lambda *_: (_ for _ in ()).throw(ValueError('The grader cannot call tools.')),
-        images=['data:image/png;base64,' + base64.b64encode(sheet).decode('ascii')],
-        **({'opener': opener} if opener else {}))
+    try:
+        result = providers.run_openai_compat_turn(
+            config=dataclasses.replace(config, effort='low'), instructions=RUBRIC, turn_text=text, timeout=VISION_TIMEOUT,
+            tool_specs=[], call_tool=lambda *_: (_ for _ in ()).throw(ValueError('The grader cannot call tools.')),
+            images=['data:image/png;base64,' + base64.b64encode(sheet).decode('ascii')],
+            **({'opener': opener} if opener else {}), **({'admission': admission} if admission else {}))
+    except (AdmissionError, agent_registry.AgentError) as exc:
+        raise GradeError('Model governance refused the grading call: ' + str(exc)) from None
     if result.status != 'ok':
         raise GradeError('The vision model did not answer: ' + (result.error or result.status))
     return result.answer
@@ -278,14 +319,7 @@ def vision(config, brief_text, prompt, sheet, *, opener=None):
 
 def unload(config, opener=_http):
     """keep_alive 0 on an Ollama-style local endpoint; other endpoints manage their own memory."""
-    if urlsplit(config.base_url).hostname not in ('127.0.0.1', 'localhost', '::1'):
-        return False
-    root = re.sub(r'/v1/?$', '', config.base_url.rstrip('/'))
-    try:
-        opener(root + '/api/generate', {'model': config.model, 'keep_alive': 0}, 30)
-        return True
-    except (OSError, ValueError):
-        return False
+    return gpu_arbiter.unload_model(config.base_url, config.model, opener)
 
 
 def scorecard(answer, prompt):

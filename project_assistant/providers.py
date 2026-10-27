@@ -98,6 +98,8 @@ def run_openai_compat_turn(*, config: ProviderConfig, instructions: str, turn_te
 
     if admission and opener is urllib.request.urlopen:
         opener = urllib.request.build_opener(_NoRedirect()).open
+    from project_assistant import gpu_arbiter  # SPEC_20 R13: a loopback model call holds the GPU for each request
+    opener = gpu_arbiter.gate(opener, config)
     started = now()
     deadline = started + timeout
     result = model_client.TurnResult(status="error")

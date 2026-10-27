@@ -241,6 +241,8 @@ def main():
     if not token:
         parser.error("Set the worker token environment variable before starting")
     head = Head(config.get("head_url", "http://127.0.0.1:3020"), token)
+    from project_assistant import gpu_arbiter  # SPEC_20 R13; with OPENBENCH_DB_URI a separate worker shares the server's GPU lock
+    gpu_arbiter.enable_switching()  # for the life of this worker process
     while True:
         try:
             had_task = process_one(head, config)
