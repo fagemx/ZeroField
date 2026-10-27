@@ -218,7 +218,6 @@ MESSAGES = (
     ('The worker token is invalid or disabled.', 'theWorkerTokenIsInvalidOrDisabled', None),
     ('Only the showrunner can disable workers.', 'onlyTheShowrunnerCanDisableWorkers', None),
     ('Worker not found.', 'workerNotFound', None),
-    ('Configure OPENBENCH_API_KEY / OPENAI_API_KEY or local CLI authentication.', 'configureOPENBENCHAPIKEYOPENAIAPIKEYOrLocalCLI', None),
     ('Invalid cursor.', 'invalidCursor', None),
     ('Invalid task identity.', 'invalidTaskIdentity', None),
     ('The task is missing its output page snapshot. Retry it.', 'theTaskIsMissingItsOutputPageSnapshotRetryIt', None),

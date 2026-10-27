@@ -532,10 +532,13 @@ class ConsoleHTTPTests(unittest.TestCase):
         third = self.api('/sessions/' + run + '/events?cursor=' + second['cursor'])
         self.assertFalse(third['changed']); self.assertEqual(third['messages'], [])
 
-    def test_effort_controls_actual_compat_and_responses_payloads_and_legacy_constructor(self):
-        from project_assistant import providers, agent_runtime, model_client
+    def test_effort_controls_actual_compat_payloads_removed_kind_and_legacy_constructor(self):
+        from project_assistant import providers, agent_runtime
         self.assertIsNone(providers.ProviderConfig('openai_compat', 'http://127.0.0.1/v1', '', 'legacy').effort)
-        self.assertIsNone(agent_runtime.provider_for({'provider_config': {}}).effort)
+        # Only the complete local default carries an effort; a custom model may reject it.
+        self.assertEqual(agent_runtime.provider_for({'provider_config': {}}, env={}).effort, 'medium')
+        self.assertIsNone(agent_runtime.provider_for({'provider_config': {}}, env={'OPENBENCH_MODEL': 'custom'}).effort)
+        self.assertIsNone(agent_runtime.provider_for({'provider_config': self.config}, env={}).effort)
         with self.assertRaises(ValueError):
             providers.ProviderConfig('openai_compat', 'http://127.0.0.1/v1', '', 'legacy', 'unbounded')
         for effort, override, expected in [('low', None, 'low'), ('high', None, 'high'), ('low', 'high', 'high')]:
@@ -547,16 +550,11 @@ class ConsoleHTTPTests(unittest.TestCase):
         config = providers.ProviderConfig('openai_compat', self.config['base_url'], '', 'legacy')
         result = providers.run_openai_compat_turn(config=config, instructions='', turn_text='Legacy', call_tool=lambda *_: '', timeout=5, tool_specs=[])
         self.assertEqual(result.status, 'ok'); self.assertNotIn('reasoning_effort', self.captured[-1])
-        original = model_client.run_turn
-        def fixture_credentials(**kwargs):
-            return original(**kwargs, credentials_fn=lambda: ('synthetic-loopback-only', 'fixture-account'))
-        with patch.object(model_client, 'URL', f'http://127.0.0.1:{self.model.server_port}/responses'), patch.object(model_client, 'run_turn', side_effect=fixture_credentials):
-            for effort in ('low', 'high'):
-                cfg = self.draft(effort=effort, provider_config={'kind': 'responses', 'model': 'response-fixture'})
-                key = self.api('/agents', 'POST', cfg)['agent']['agent_key']
-                self.api('/sessions', 'POST', {'agent_key': key, 'objective': 'Responses effort', 'client_request_id': key})
-                self.assertEqual(self.claim_execute(key), 'succeeded')
-                self.assertEqual(self.captured[-1]['reasoning']['effort'], effort)
+        self.assertTrue(all('tool_choice' not in body for body in self.captured))
+        sent = len(self.captured)
+        removed = self.api('/agents', 'POST', self.draft(provider_config={'kind': 'responses', 'model': 'response-fixture'}), status=400)
+        self.assertEqual(removed['code'], 'kind_removed')
+        self.assertEqual(len(self.captured), sent)
 
 
 class ConsoleRouterHTTPTests(unittest.TestCase):

@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 
 from project_assistant import agent_console_store as resources, orchestration_store as db
 from project_assistant import orchestrator as cp, privacy, store
+from project_assistant.providers import local_url
 
 
 class AdmissionError(ValueError):
@@ -75,13 +76,17 @@ def live(conn, ctx, agent_key=None, destination=None):
     return binding
 
 
-def local_url(url):
-    return urlsplit(url).hostname in ('127.0.0.1', 'localhost', '::1')
-
-
 def session_key(ctx):
     return getattr(ctx, 'accounting_session_key', None) or ('run:' + str(ctx.run_id) if getattr(ctx, 'run_id', None) else
         'message:' + str(ctx.message_id) if getattr(ctx, 'message_id', None) else 'turn:' + str(id(ctx)))
+
+
+# Uncertain spend stays accounted until reconciled; only its concurrency slot expires.
+HELD = "(state<>'uncertain' OR COALESCE(started_at,created_at)>NOW()-%s*INTERVAL '1 second')"
+
+
+def hold_seconds(settings):
+    return settings['rate_limits'].get('uncertain_hold_seconds', resources.SETTINGS['rate_limits']['uncertain_hold_seconds'])
 
 
 def reserve(conn, ctx, *, request_key, agent_key, usage_kind, provider_name, model_name,
@@ -110,8 +115,9 @@ def reserve(conn, ctx, *, request_key, agent_key, usage_kind, provider_name, mod
     settings = resources.get_settings(conn, ctx.me, ctx.slug)
     limits = settings['rate_limits']
     category = 'render' if usage_kind in ('image_gen', 'video_gen', 'frame_prep') else 'llm'
-    active = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category=%s AND state IN ('reserved','dispatched','uncertain')", (ctx.slug, category))
-    per_agent = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('reserved','dispatched','uncertain')", (ctx.slug,agent_key))
+    hold = hold_seconds(settings)
+    active = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category=%s AND state IN ('reserved','dispatched','uncertain') AND " + HELD, (ctx.slug, category, hold))
+    per_agent = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('reserved','dispatched','uncertain') AND " + HELD, (ctx.slug, agent_key, hold))
     if not queued and per_agent >= binding['profile']['max_concurrency']:
         raise AdmissionError('Agent concurrency limit reached.')
     if not queued and active >= limits['max_concurrent_renders' if category == 'render' else 'max_concurrent_llm']:
@@ -197,6 +203,33 @@ def finalize(conn, slug, request_key, *, outcome, usage=None, estimated_cost=Non
     return db.one(conn, 'SELECT to_jsonb(r) FROM projectops.agent_usage_reservation r WHERE project_slug=%s AND request_key=%s', (slug, request_key))
 
 
+def reconcile(conn, me, slug, request_key, *, observed_cost):
+    """Showrunner settles an uncertain reservation from provider evidence (SPEC_20 R1).
+
+    The immutable unknown-outcome event stays; an adjustment event records the
+    observation. Its estimate delta is zero: the original row keeps the estimate.
+    """
+    resources.authorize(conn, me, slug, admin=True)
+    resources.text(request_key, 160, required=True)
+    observed = resources.money(observed_cost)
+    cp.lock_project(conn, slug)
+    row = db.one(conn, 'SELECT to_jsonb(r) FROM projectops.agent_usage_reservation r WHERE project_slug=%s AND request_key=%s FOR UPDATE', (slug, request_key))
+    if not row:
+        raise resources.AgentError(404, 'Reservation not found.', 'NOT_FOUND')
+    if row['state'] != 'uncertain':
+        raise resources.AgentError(409, 'Only an uncertain reservation can be reconciled.', 'NOT_UNCERTAIN')
+    db.execute(conn, "UPDATE projectops.agent_usage_reservation SET state='finalized',accounted_cost_usd=%s WHERE project_slug=%s AND request_key=%s", (observed, slug, request_key))
+    event_key = 'reconcile:' + (request_key if len(request_key) <= 150 else cp.digest(request_key))
+    db.execute(conn, '''INSERT INTO projectops.agent_usage_ledger
+        (project_slug,event_key,session_key,episode_id,run_id,owner_id,agent_key,usage_kind,provider_name,model_name,tier,
+         input_tokens,output_tokens,cached_tokens,estimated_cost_usd,observed_cost_usd,pricing_provenance,meta)
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,0,0,0,%s,'operator_reconciled',%s::jsonb) ON CONFLICT(project_slug,event_key) DO NOTHING''',
+        (slug, event_key, row['session_key'], row['episode_id'], row['run_id'], row['owner_id'], row['agent_key'], row['usage_kind'], row['provider_name'], row['model_name'], row['tier'],
+         observed, json.dumps({'estimated': False, 'reservation_key': request_key, 'outcome': 'reconciled', 'adjustment': 'reconcile',
+                               'previous_accounted_cost_usd': str(row['accounted_cost_usd']) if row['accounted_cost_usd'] is not None else None, 'reported_cost_is_invoice': False})))
+    return db.one(conn, 'SELECT to_jsonb(r) FROM projectops.agent_usage_reservation r WHERE project_slug=%s AND request_key=%s', (slug, request_key))
+
+
 def normalized_usage(raw):
     raw = raw or {}
     values = {}
@@ -237,9 +270,6 @@ def price_bound(settings, config, payload):
 
 
 def model_destination(config):
-    if config.kind == 'responses':
-        from project_assistant import model_client
-        return model_client.URL
     return config.base_url
 
 
@@ -271,7 +301,7 @@ class ProviderAdmission:
                 raise AdmissionError('Provider or credential changed; start a new authorized turn.')
             ceiling, self.price = price_bound(resources.get_settings(conn, self.ctx.me, self.ctx.slug), self.config, payload)
             if self.price:
-                payload['max_completion_tokens' if self.config.kind == 'openai_compat' else 'max_output_tokens'] = self.price['max_output_tokens']
+                payload['max_completion_tokens'] = self.price['max_output_tokens']
             self.ordinal += 1
             origin = getattr(self.ctx, 'governance_origin', self.ctx)
             execution_key = getattr(origin,'execution_key',None) or (None if getattr(origin,'dispatch_id',None) or getattr(origin,'message_id',None) else 'turn:' + str(id(origin)))
@@ -285,14 +315,15 @@ class ProviderAdmission:
             return request_key
         self.active = transaction(self.ctx, admit)
 
-    def after(self, usage, outcome='succeeded'):
+    def after(self, usage, outcome='succeeded', *, known_terminated=False, observed_cost=None):
         if self.active is None:
             return
         usage = normalized_usage(usage)
         cost = None
         if self.price and usage and 'input_tokens' in usage and 'output_tokens' in usage:
             cost = ((Decimal(usage['input_tokens']) * Decimal(str(self.price['input_usd_per_million'])) + Decimal(usage['output_tokens']) * Decimal(str(self.price['output_usd_per_million']))) / 1000000).quantize(Decimal('.0001'), rounding=ROUND_CEILING)
-        transaction(self.ctx, lambda conn: finalize(conn, self.ctx.slug, self.active, outcome=outcome, usage=usage, estimated_cost=cost))
+        transaction(self.ctx, lambda conn: finalize(conn, self.ctx.slug, self.active, outcome=outcome, usage=usage, estimated_cost=cost,
+                                                    known_terminated=known_terminated, observed_cost=observed_cost))
         self.active = None
         if outcome == 'succeeded':
             def revalidate(conn):
@@ -508,8 +539,9 @@ def begin_operation(conn, ctx, request_key, *, card=None):
         cap = min(Decimal(str(row['session_cap_usd'])),resources.money(getattr(ctx,'budget_cap_usd',row['session_cap_usd'])))
         if total > cap:
             raise AdmissionError('Session/deployment currency cap reached.')
-    active = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category=%s AND state IN ('dispatched','uncertain')", (ctx.slug,row['category']))
-    per_agent = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('dispatched','uncertain')", (ctx.slug,row['agent_key']))
+    hold = hold_seconds(settings)
+    active = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category=%s AND state IN ('dispatched','uncertain') AND " + HELD, (ctx.slug,row['category'],hold))
+    per_agent = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('dispatched','uncertain') AND " + HELD, (ctx.slug,row['agent_key'],hold))
     if per_agent >= live(conn,ctx)['profile']['max_concurrency']:
         raise CapacityUnavailable('Agent concurrency limit reached.')
     if active >= settings['rate_limits']['max_concurrent_renders' if row['category']=='render' else 'max_concurrent_llm']:
@@ -541,8 +573,9 @@ def router_submission(conn, ctx, request_key, card, payload_digest):
         total=db.one(conn,"SELECT COALESCE(sum(accounted_cost_usd),0) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND state<>'released' AND "+clause,[ctx.slug]+params)
         if Decimal(str(total))>Decimal(str(cap)):
             raise AdmissionError('Current currency cap denies Router submission; soft estimates are not billing guarantees.')
-    active=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category='render' AND state IN ('dispatched','uncertain')",(ctx.slug,))
-    per_agent=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('dispatched','uncertain')",(ctx.slug,row['agent_key']))
+    hold=hold_seconds(settings)
+    active=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND category='render' AND state IN ('dispatched','uncertain') AND "+HELD,(ctx.slug,hold))
+    per_agent=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND state IN ('dispatched','uncertain') AND "+HELD,(ctx.slug,row['agent_key'],hold))
     recent=db.one(conn,"SELECT count(*) FROM projectops.agent_usage_reservation WHERE project_slug=%s AND agent_key=%s AND started_at>NOW()-INTERVAL '1 minute'",(ctx.slug,row['agent_key']))
     if active>settings['rate_limits']['max_concurrent_renders'] or per_agent>binding['profile']['max_concurrency'] or recent>settings['rate_limits']['rpm_per_agent']:
         raise AdmissionError('Current render concurrency/rate denies Router submission.')
@@ -659,7 +692,7 @@ def lease_ended(ctx):
 
 
 def credential_binding(conn, ctx, profile, config, environment):
-    if 'vault_keys' not in environment['config'] or (not config.api_key and config.kind != 'responses'):
+    if 'vault_keys' not in environment['config'] or not config.api_key:
         return
     reference_name = profile.get('provider_config',{}).get('api_key_env')
     if not reference_name:

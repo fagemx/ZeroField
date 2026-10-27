@@ -1677,7 +1677,6 @@
     "theWorkerTokenIsInvalidOrDisabled": "Worker token 無效或已停用",
     "onlyTheShowrunnerCanDisableWorkers": "只有製片總監可停用手腳",
     "workerNotFound": "找不到手腳",
-    "configureOPENBENCHAPIKEYOPENAIAPIKEYOrLocalCLI": "尚未設定 OPENBENCH_API_KEY / OPENAI_API_KEY 或 ~/.codex/auth.json",
     "invalidCursor": "游標不正確",
     "invalidTaskIdentity": "任務識別資料格式不正確",
     "theTaskIsMissingItsOutputPageSnapshotRetryIt": "任務缺少輸出分頁快照，請重試",

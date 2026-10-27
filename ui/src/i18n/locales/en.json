@@ -1677,7 +1677,6 @@
     "theWorkerTokenIsInvalidOrDisabled": "The worker token is invalid or disabled.",
     "onlyTheShowrunnerCanDisableWorkers": "Only the showrunner can disable workers.",
     "workerNotFound": "Worker not found.",
-    "configureOPENBENCHAPIKEYOPENAIAPIKEYOrLocalCLI": "Configure OPENBENCH_API_KEY / OPENAI_API_KEY or local CLI authentication.",
     "invalidCursor": "Invalid cursor.",
     "invalidTaskIdentity": "Invalid task identity.",
     "theTaskIsMissingItsOutputPageSnapshotRetryIt": "The task is missing its output page snapshot. Retry it.",
