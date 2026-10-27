@@ -799,6 +799,113 @@ class StoryHTTPTests(unittest.TestCase):
         self.assertTrue(third['selected'])
         self.assertEqual(self.ok('/shots/' + identifier)['selectedVideoUrl'], third['videoUrl'])
 
+    def quoting_shots(self):
+        """S71 with a take in its cell (not adopted) and S72 whose prompt quotes its last frame: (S71, S72, S71's take, S72's source)."""
+        one, two = self.prepare()
+        self.ok('/shots/' + one['shotId'], 'PATCH', {'shotIndex': 'S71'})
+        self.ok('/shots/' + two['shotId'], 'PATCH', {'shotIndex': 'S72', 'description': '@S71.end @CAST-01 leaves.'})
+        upstream = self.generation_inputs(one['shotId'], self.render_bytes('red'))
+        source = self.generation_inputs(two['shotId'], self.render_bytes('blue'))
+        return one, two, upstream, source
+
+    def generate_quoting(self, identifier, source, body=None):
+        """Queue S72's render without running it, then run the worker here: (frozen job, worker task, finished task)."""
+        import copy
+        seen, raw = [], self.render_bytes('green')
+        def render(task, card, values, head):
+            ctx = worker.resolve_studio_context(task)
+            seen.append((copy.deepcopy(task), ctx, worker._build_card_form_values(card, ctx, dict(card['engine_config'], card_values=values), task, None)))
+            return head.upload(task, raw, 'video/mp4')
+        with patch.object(story._POOL, 'submit'):
+            queued = self.ok(f'/shots/{identifier}/video-generations', 'POST', {'appCode': '2109942725885075458', 'modelParams': {'driving_video': source}, **(body or {})})
+        job = story.record(self.conn, queued['taskId'])['_job']
+        self.conn.rollback()
+        with patch.object(worker, 'execute_story_card', side_effect=render):
+            story.execute_task(queued['taskId'])
+        done = self.ok('/tasks/' + queued['taskId'])
+        self.assertEqual(done['status'], 'SUCCEEDED', done)
+        return job, seen[0], done
+
+    def test_a_generation_freezes_its_quoted_takes_and_the_worker_cuts_their_frames(self):
+        """SPEC_19 R15 (D2, D3, D11): the tags of the prompt are frozen on submit; the worker cuts each frame from the quoted
+        take with extract_frame's source_url, stores it and binds that same picture; the new take's provenance keeps it all."""
+        from PIL import Image
+        one, two, upstream, source = self.quoting_shots()
+        job, (task, ctx, form), done = self.generate_quoting(two['shotId'], source, {'takeRefUses': {'S71.end': 'first_frame'}})
+        # Frozen on submit: which take and how it is used; an untrimmed out point waits for the take's length.
+        frozen = {'shotId': one['shotId'], 'shotIndex': 'S71', 'edge': 'end', 'takeUrl': upstream, 'at': None, 'frameUrl': None,
+                  'use': 'first_frame', 'adopted': False, 'lastFrameAt': None}
+        self.assertEqual(job['storyProvenance']['takeRefs'], [frozen])
+        # The worker task names its production, so extract_frame can check the quoted take belongs to it.
+        self.assertEqual(task['project_slug'], self.slug)
+        [ref] = done['result']['storyProvenance']['takeRefs']
+        self.assertEqual(ref, frozen | {'at': 0.375, 'lastFrameAt': 0.375, 'frameUrl': ref['frameUrl']})  # 4 frames at 8 fps
+        self.assertRegex(ref['frameUrl'], rf'^/projects/api/{self.slug}/assets/pa_[0-9a-f]{{32}}$')
+        with Image.open(io.BytesIO(self.request(ref['frameUrl'])[1])) as frame:
+            self.assertEqual(frame.format, 'PNG')
+            self.assertGreater(frame.convert('RGB').getpixel((32, 32))[0], 150)  # S71's red take
+        # The frame sent to the model is the frame in the snapshot.
+        self.assertEqual(task['input']['take_refs'], [{'shotIndex': 'S71', 'edge': 'end', 'use': 'first_frame', 'frameUrl': ref['frameUrl']}])
+        self.assertEqual((ctx['first_frame'], ctx['anchor_keyframe'], form['1.image']), (ref['frameUrl'],) * 3)
+        self.assertIn('Continue directly from the final frame of shot S71. @CAST-01 leaves.', ctx['compiled_prompt'])
+        # The task and the new take keep the completed snapshot.
+        self.assertEqual(story.record(self.conn, done['taskId'])['_job']['storyProvenance']['takeRefs'], [ref])
+        self.conn.rollback()
+        take = next(t for t in self.ok(f"/shots/{two['shotId']}/videos")['items'] if t['url'] == done['result']['videoUrl'])
+        self.assertEqual(take['storyProvenance']['takeRefs'], [ref])
+        # Without a quoted take, nothing is added to the provenance.
+        self.ok('/shots/' + two['shotId'], 'PATCH', {'description': '@CAST-01 leaves.'})
+        plain = self.generate_quoting(two['shotId'], source)[2]
+        self.assertNotIn('takeRefs', plain['result']['storyProvenance'])
+        # An unknown shot is refused with the tags named; a quoted shot without a take cannot be quoted.
+        self.ok('/shots/' + two['shotId'], 'PATCH', {'description': '@S71.end then @S99.end'})
+        code, payload = self.call(f"/shots/{two['shotId']}/video-generations", 'POST', {'appCode': '2109942725885075458', 'modelParams': {'driving_video': source}})
+        self.assertEqual((code, payload['code'], payload['details']), (400, 'DRAMA_VALIDATION_FAILED', {'unknownTakeRefs': ['@S99.end']}))
+        story.mutate_row(self.conn, self.me, self.slug, 'cinema-studio', one['rowId'], {5: ''})
+        self.conn.commit()
+        self.ok('/shots/' + two['shotId'], 'PATCH', {'description': '@S71.end'})
+        code, payload = self.call(f"/shots/{two['shotId']}/video-generations", 'POST', {'appCode': '2109942725885075458', 'modelParams': {'driving_video': source}})
+        self.assertEqual((code, payload['code']), (409, 'DRAMA_STAGE_PRECONDITION'))
+
+    def test_the_shot_view_tells_when_a_quoted_take_changed(self):
+        """SPEC_19 R16 (D4): takeRefs of the adopted take turn stale when the quoted shot adopts another take or moves its
+        out point, and clear again once it is back."""
+        one, two, upstream, source = self.quoting_shots()
+        done = self.generate_quoting(two['shotId'], source)[2]
+        ref = done['result']['storyProvenance']['takeRefs'][0]
+        self.assertEqual(ref['use'], 'reference')  # no evidence of one continuous action: the default
+        takes = lambda identifier: {t['url']: t['videoId'] for t in self.ok(f'/shots/{identifier}/videos?limit=100')['items']}
+        self.assertEqual(self.ok('/shots/' + two['shotId'])['takeRefs'], [])  # nothing adopted yet
+        self.ok(f"/shots/{two['shotId']}/adoptions", 'POST', {'videoId': takes(two['shotId'])[done['result']['videoUrl']]})
+        refs = lambda: self.ok('/shots/' + two['shotId'])['takeRefs']
+        current = {'shotId': one['shotId'], 'shotIndex': 'S71', 'edge': 'end', 'takeUrl': upstream, 'at': 0.375, 'use': 'reference',
+                   'stale': False, 'nowTakeUrl': upstream, 'frameUrl': ref['frameUrl'], 'adopted': False}
+        self.assertEqual(refs(), [current])
+        listed = next(s for s in self.ok(f'/episodes/{self.ep}/shots')['items'] if s['shotId'] == two['shotId'])
+        self.assertEqual(listed['takeRefs'], [current])
+        # Adopting the very take that was quoted changes nothing.
+        self.ok(f"/shots/{one['shotId']}/adoptions", 'POST', {'videoId': takes(one['shotId'])[upstream]})
+        self.assertEqual(refs(), [current])
+        # S71 adopts another take: stale, with the take it holds now.
+        other = f"/projects/api/{self.slug}/assets/" + repo.put_asset(self.conn, self.slug, data=self.render_bytes('yellow'), content_type='video/mp4', actor_id=self.actor)
+        story.mutate_row(self.conn, self.me, self.slug, 'cinema-studio', one['rowId'], {5: f'[Video]({other})'})
+        self.conn.commit()
+        self.ok(f"/shots/{one['shotId']}/adoptions", 'POST', {'videoId': takes(one['shotId'])[other]})
+        self.assertEqual(refs(), [current | {'stale': True, 'nowTakeUrl': other}])
+        # Back to the quoted take: no longer stale.
+        self.ok(f"/shots/{one['shotId']}/adoptions", 'POST', {'videoId': takes(one['shotId'])[upstream]})
+        self.assertEqual(refs(), [current])
+        # The quoted out point moves: stale; the cut is undone: not stale.
+        self.ok(f"/shots/{one['shotId']}/trim", 'PUT', {'in': 0, 'out': 0.25})
+        self.assertEqual(refs(), [current | {'stale': True}])
+        self.ok(f"/shots/{one['shotId']}/trim", 'PUT', {})
+        self.assertEqual(refs(), [current])
+        # The quoted shot is relabelled: the reference follows the shot, under its new label.
+        self.ok('/shots/' + one['shotId'], 'PATCH', {'shotIndex': 'S71A'})
+        self.assertEqual(refs(), [current | {'shotIndex': 'S71A'}])
+        self.ok(f"/shots/{two['shotId']}/adoption", 'DELETE')
+        self.assertEqual(refs(), [])
+
     def test_film_selection_and_fill_extend_the_rh_request_without_changing_it(self):
         from project_docs import story_trim
         one, two = self.prepare()

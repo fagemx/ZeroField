@@ -433,7 +433,10 @@ def shot_view(conn, slug, row, *, takes=None):
             "trim": story_trim.view(meta, output("video"))}
     view["adoption"] = story_adoption.adoption_view(meta, status, output("video"))
     if takes is not None:
+        from project_docs import story_take_refs
         view["takeSummary"] = story_adoption.take_summary(takes, row, view["adoption"])
+        # SPEC_19 R16: the shots the adopted take quoted, and whether each tag still resolves to the quoted frame.
+        view["takeRefs"] = story_take_refs.view_refs(conn, slug, identifier, view["adoption"], takes)
     return view
 
 
@@ -840,6 +843,34 @@ def queue_task(conn, me, slug, kind, job, actions):
     return public_task(task)
 
 
+def take_refs(conn, shot, episode_id, prompt, uses):
+    """SPEC_19 R15: snapshots of the @S02.end / @S02.start tags in a shot's prompt (story_take_refs.resolve)."""
+    from project_docs import story_take_refs
+    if not story_take_refs.tokens(prompt):
+        return story_take_refs.resolve(prompt, [], shot, uses)  # no tag: only takeRefUses is checked
+    return story_take_refs.resolve(prompt, shots(conn, episode(conn, episode_id)), shot, uses)
+
+
+def prepare_take_refs(identifier, slug, job, head):
+    """SPEC_19 R15 worker preparation: cut each quoted frame from its take (extract_frame with source_url) before the
+    generation, and freeze frameUrl/at into the task's job; a retry keeps the frames it already has."""
+    from project_docs import http, story_take_refs, writing_impact
+    refs = story_take_refs.frozen(job)
+    if not refs or all(ref.get('frameUrl') for ref in refs):
+        return refs
+    from project_assistant import execution_governance as governance
+    refs = story_take_refs.prepare_frames(identifier, slug, refs, head,
+        operation=lambda key, action: governance.run_operation(head.accounting_context, identifier + ':' + key, action))
+    with http.open_connection() as conn:
+        current = record(conn, identifier, lock=True)
+        if current['status'] != 'RUNNING':
+            raise worker.WorkerError('Story operation ended before generation.')
+        current['_job']['storyProvenance'] = writing_impact.with_take_refs(current['_job'].get('storyProvenance'), refs)
+        store(conn, identifier, 'task', current)
+    job['storyProvenance'] = writing_impact.with_take_refs(job.get('storyProvenance'), refs)
+    return refs
+
+
 def generation_job(conn, me, identifier, kind, body):
     slug, row = find_row(conn, identifier, "shot" if identifier.startswith("sh_") else "asset")
     authorize(conn, me, slug, write=True)
@@ -877,13 +908,24 @@ def generation_job(conn, me, identifier, kind, body):
         values.update({f"{n['nodeId']}.{n['fieldName']}": chosen["url"] for n in card["nodes"] if n.get("slot") == "driving_video"})
     column = media_column(row, kind)
     workflow = frozen[1] if frozen else worker._resolve_openapi_card_and_workflow(card["card_id"])[1]
-    episode_id = shot_view(conn, slug, row).get('episodeId', 'ep_' + slug + '_01') if identifier.startswith('sh_') else None
+    shot = shot_view(conn, slug, row) if identifier.startswith('sh_') else None
+    episode_id = shot.get('episodeId', 'ep_' + slug + '_01') if shot else None
     job = {"episodeId": episode_id, "entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
            "card": card, "workflow": workflow, "values": values, "column": column, "production_policy": policy}
+    refs = []
     if identifier.startswith('sh_'):
-        from project_docs import writing_impact
+        from project_docs import writing_impact, story_take_refs
         job['storyProvenance'] = writing_impact.freeze_for_shot(conn, me, identifier)
         writing_impact.validate_frozen_row(job['storyProvenance'], job['row']['cells'])
+        # SPEC_19 R15: @S02.end / @S02.start in the prompt sent are frozen now, into the job and the new take's provenance.
+        refs = take_refs(conn, shot, episode_id, prompt or shot['description'], body.get('takeRefUses'))
+        if refs:
+            job['storyProvenance'] = writing_impact.with_take_refs(job['storyProvenance'], refs)
+            if prompt:
+                # An override replaces the compiled prompt, so its tags become their sentences here (the same function).
+                values.update({f"{n['nodeId']}.{n['fieldName']}": story_take_refs.expand(prompt, refs) for n in card["nodes"] if n.get("slot") == "prompt"})
+    elif body.get('takeRefUses') is not None:
+        invalid('takeRefUses applies to shot generations only.')
     if body.get("_allocation"):
         job["allocation"] = copy.deepcopy(body["_allocation"])
         job['_accounting_prefix'] = body.get('_accountingPrefix') or 'generation:' + uuid.uuid4().hex
@@ -892,11 +934,20 @@ def generation_job(conn, me, identifier, kind, body):
         for step in job["allocation"]["stages"]:
             if step["kind"] == "generate":
                 step["card"], step["workflow"] = (card, workflow) if step["card_id"] == card["card_id"] else worker._resolve_openapi_card_and_workflow(step["card_id"])
+    if refs and any(c["engine_config"]["driver"] == "comfy_router" for c in
+                    [card] + [s["card"] for s in job.get("allocation", {}).get("stages", []) if s["kind"] == "generate"]):
+        # Like any future generated Router reference: the quoted frame is cut after admission and cannot be quoted before.
+        raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "A quoted take's frame is cut after admission, so an official Router card cannot quote it in advance; use a local card for this shot.")
     if identifier.startswith('sh_') and not job.get('allocation'):
         from project_docs import story_allocation
         step={'step_id':'generate','kind':'generate','card_id':card['card_id'],'depends_on':[],'inputs':{},'output_role':'output_'+kind}
+        sources = None
+        if any(ref['use'] == 'first_frame' for ref in refs):
+            # The worker cuts the quoted frame; until then it is a planned image in the shot's first-frame roles.
+            step['inputs'] = {role: {'approved_source_id': 'take-ref'} for role in ('first_frame', 'anchor_keyframe')}
+            sources = {'approved:take-ref': {'planned_output': True, 'content_type': 'image/png', 'output_role': 'first_frame'}}
         readiness={'stages':[step],'configuration_blockers':[]}
-        story_allocation.preflight_inputs(conn,slug,identifier,readiness,{card['card_id']:(card,workflow)},card_values=values)
+        story_allocation.preflight_inputs(conn,slug,identifier,readiness,{card['card_id']:(card,workflow)},sources,card_values=values)
         if not readiness['ready']:
             raise StoryError(409,'DRAMA_STAGE_PRECONDITION','Resolve required generation inputs before batch admission: ' + ', '.join(readiness['input_blockers']))
     return slug,job
@@ -1075,14 +1126,18 @@ def execute_task(identifier):
         elif task["type"] == "FILM_EXPORT":
             from project_assistant import execution_governance as governance
             from project_docs import story_trim
-            output = governance.run_operation(head.accounting_context, identifier + ':export', lambda: worker.ffmpeg({"id": identifier, "input": {"rows": story_trim.film_rows(job)}},
+            output = governance.run_operation(head.accounting_context, identifier + ':export', lambda: worker.ffmpeg({"id": identifier, "project_slug": slug, "input": {"rows": story_trim.film_rows(job)}},
                                    dict(job["config"], timeout=head.outbound_timeout(job['config'].get('timeout',1800)),
                                         probe_timeout=head.outbound_timeout(job['config'].get('probe_timeout',60))), head))
         else:
             with http.open_connection() as conn:
                 authorize(conn, me, slug, write=True)
                 authorize_card(conn, slug, job["card"])
-            execution = {"id": identifier, "capability": job["kind"] + "_gen", "input": job["input"],
+            from project_docs import story_take_refs
+            refs = prepare_take_refs(identifier, slug, job, head)
+            # project_slug lets the worker check that media it is pointed at (extract_frame source_url) is this production's.
+            execution = {"id": identifier, "project_slug": slug, "capability": job["kind"] + "_gen",
+                         "input": story_take_refs.worker_input(job["input"], refs),
                          "workflow": job["workflow"], "production_policy": job.get("production_policy")}
             if job.get("allocation"):
                 from project_docs import story_allocation

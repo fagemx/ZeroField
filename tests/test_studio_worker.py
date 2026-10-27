@@ -169,6 +169,75 @@ class MoveTagContextTests(unittest.TestCase):
                                 f'{cast}\n@CAST-01 waits.')
 
 
+class TakeRefContextTests(unittest.TestCase):
+    """SPEC_19 R15 (D3): a quoted take's frame is this render's first frame or its last reference picture, and its tag
+    becomes a sentence where it stands."""
+    FIRST = {'shotIndex': 'S01', 'edge': 'end', 'use': 'first_frame', 'frameUrl': ASSET(50)}
+    MATCH = {'shotIndex': 'S03', 'edge': 'start', 'use': 'reference', 'frameUrl': ASSET(51)}
+    REFERENCES = 'References: CAST-01 (Kael): original courier; SET-01 (Observatory): rain on glass.'
+
+    def task(self, action, refs, keyframe=ASSET(3)):
+        task = studio_task()
+        cells = task['input']['rows'][1]['cells']
+        cells[3], cells[4] = action, keyframe
+        task['input']['take_refs'] = refs
+        return task
+
+    def card(self, card_id):
+        return worker.load_studio_card(ROOT / 'workflows' / 'cards' / (card_id + '.json'))
+
+    def test_a_first_frame_take_replaces_the_shots_first_frame_and_keyframe(self):
+        task = self.task('@S01.end @CAST-01 turns to the window in @SET-01.', [self.FIRST])
+        task['input']['predecessor_tasks'].append({'row_id': 'shot-2', 'output': {'asset_url': ASSET(7), 'reference_role': 'first_frame'}})
+        ctx = worker.resolve_studio_context(task)
+        self.assertEqual((ctx['first_frame'], ctx['anchor_keyframe'], ctx['primary_image_url']), (ASSET(50),) * 3)
+        # The cast and set references are unchanged; the frame is not a reference picture.
+        self.assertEqual(ctx['asset_images'], [ASSET(1), ASSET(2)])
+        self.assertEqual([a['asset_id'] for a in ctx['resolved_assets']], ['CAST-01', 'SET-01'])
+        # The image-to-video card's picture input is the quoted frame, not the row's keyframe (ASSET 3).
+        card = self.card('ltx25-cinema')
+        values = worker._build_card_form_values(card, ctx, dict(card['engine_config']), task, None)
+        self.assertEqual(values['2.image'], ASSET(50))
+        # Without a quoted take the row's own keyframe stays the picture.
+        plain = worker.resolve_studio_context(self.task('@CAST-01 turns.', []))
+        self.assertEqual(plain['anchor_keyframe'], ASSET(3))
+
+    def test_a_reference_take_comes_after_the_cast_and_sets(self):
+        task = self.task('@CAST-01 enters @SET-01. @S03.start', [self.MATCH], keyframe='')
+        ctx = worker.resolve_studio_context(task)
+        self.assertEqual(ctx['asset_images'], [ASSET(1), ASSET(2), ASSET(51)])
+        self.assertEqual(ctx['reference_image_urls'], ctx['asset_images'])
+        self.assertIsNone(ctx['first_frame'])
+        self.assertEqual([a and a['asset_id'] for a in ctx['slot_plan']], ['CAST-01', 'SET-01', 'S03.START', None, None, None])
+        self.assertEqual(ctx['resolved_assets'][-1]['reference_urls'], [ASSET(51)])
+        # It fills the next reference slot of a multi-reference card, after the subjects.
+        card = self.card('h3-reference')
+        values = worker._build_card_form_values(card, ctx, dict(card['engine_config']), task, None)
+        refs = [values[f"{n['nodeId']}.{n['fieldName']}"] for n in card['nodes'] if n.get('slot') == 'ref']
+        self.assertEqual(refs, [ASSET(1), ASSET(2), ASSET(51), 'None', 'None', 'None'])
+        # The frame is not a subject: the compiled texts never name it.
+        self.assertNotIn('S03.START', ctx['compiled_prompt'] + ctx['h3_context_ir_prompt'] + ctx['ltx_ingredients_prompt'])
+        self.assertIn('References: CAST-01 (Kael)', ctx['compiled_prompt'])
+
+    def test_the_sentence_takes_the_tags_place(self):
+        action = '[0-1s] @S01.end @CAST-01 turns to the window of @SET-01.\n[1-3s] @s03.start. CAST-01 walks to the dial. @S09.end stays.'
+        ctx = worker.resolve_studio_context(self.task(action, [self.FIRST, self.MATCH]))
+        expanded = ('[0-1s] Continue directly from the final frame of shot S01. @CAST-01 turns to the window of @SET-01.\n'
+                    '[1-3s] Match the setting and lighting of shot S03. CAST-01 walks to the dial. @S09.end stays.')
+        self.assertEqual(ctx['action_prompt'], expanded)
+        self.assertEqual(ctx['compiled_prompt'], f'Optical Rig: ARRI / 35mm.\nCamera Movement: Slow dolly.\n{self.REFERENCES}\n{expanded}')
+        self.assertIn('[Shot 1] At 00:00.000, ARRI / 35mm Slow dolly: [0-1s] Continue directly from the final frame of shot S01. '
+                      '<Subject 1> (Kael) turns', ctx['h3_context_ir_prompt'])
+        # Asset codes stay asset codes next to a quoted take.
+        self.assertEqual([a['asset_id'] for a in ctx['resolved_assets']], ['CAST-01', 'SET-01', 'S03.START'])
+
+    def test_take_refs_must_be_prepared_frames_of_this_kind(self):
+        for refs in ([{**self.FIRST, 'frameUrl': 'https://example.com/frame.png'}], [{**self.FIRST, 'use': 'driving_video'}],
+                     [self.FIRST, {**self.FIRST, 'frameUrl': ASSET(52)}]):
+            with self.subTest(refs=refs), self.assertRaises(worker.WorkerError):
+                worker.resolve_studio_context(self.task('@S01.end', refs))
+
+
 class ComfyTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

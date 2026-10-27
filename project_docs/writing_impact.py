@@ -560,10 +560,29 @@ def allocation_source_guard(conn, shot):
             'settings': ep.get('settings', {}), 'breakdownMode': ep.get('breakdownMode')}
 
 
+def with_take_refs(provenance, refs):
+    """storyProvenance plus ``takeRefs``: the take reference snapshots (SPEC_19 4.5) a render quoted, frozen at submit.
+
+    Only a render that quoted takes carries the key, so every other provenance stays exactly as it was."""
+    result = {k: v for k, v in (provenance or {}).items() if k != 'takeRefs'}
+    if refs:
+        result['takeRefs'] = copy.deepcopy(list(refs))
+    return result if (provenance is not None or refs) else provenance
+
+
+def _evidence_identity(evidence):
+    # takeRefs are part of where a take came from: equal bytes that quoted different takes (or moments) are different
+    # histories. A provenance written before take references quoted nothing, the same as an empty list.
+    if isinstance(evidence, dict) and not evidence.get('takeRefs'):
+        return {k: v for k, v in evidence.items() if k != 'takeRefs'}
+    return evidence
+
+
 def candidate_evidence(records, url):
     matching = [r.get('storyProvenance') for r in records if r['url'] == url]
+    identities = [_evidence_identity(v) for v in matching]
     # Content-addressed equal bytes can have different histories; do not guess one.
-    return matching[0] if matching and all(v == matching[0] for v in matching) else None
+    return matching[0] if matching and all(v == identities[0] for v in identities) else None
 
 
 def record_candidate_receipt(conn, slug, identifier, output, evidence, receipt_id):
