@@ -788,8 +788,15 @@ class StoryHTTPTests(unittest.TestCase):
         from project_assistant import providers
         self.prepare()
         path = '/episodes/' + self.ep + '/script-refinements'
-        with patch.dict(os.environ, {'OPENBENCH_MODEL': '', 'OPENBENCH_API_BASE': ''}):
-            self.assertEqual(self.call(path, 'POST', {'instruction': 'Improve pacing'})[0], 409)
+        seen = []
+
+        def turn(**kwargs):
+            seen.append((kwargs['config'].base_url, kwargs['config'].model))
+            return SimpleNamespace(status='ok', answer='Scene 01: Draft\\n@CAST-01 waits.')
+        # SPEC_20 R2: with no OPENBENCH_* variables the refinement runs on the local default model.
+        with patch.dict(os.environ, {'OPENBENCH_MODEL': '', 'OPENBENCH_API_BASE': ''}), patch.object(providers, 'run_openai_compat_turn', side_effect=turn):
+            done = self.await_task(self.ok(path, 'POST', {'instruction': 'Improve pacing'}))
+        self.assertEqual((done['status'], seen), ('SUCCEEDED', [(providers.DEFAULT_BASE_URL, providers.DEFAULT_MODEL)]), done)
         with patch.dict(os.environ, {'OPENBENCH_PROVIDER': 'openai_compat', 'OPENBENCH_MODEL': 'local-test', 'OPENBENCH_API_BASE': 'http://127.0.0.1:11434/v1'}), patch.object(providers, 'run_openai_compat_turn', return_value=SimpleNamespace(status='ok', answer='Scene 01: Revised\\n@CAST-01 pauses.')):
             done = self.await_task(self.ok(path, 'POST', {'instruction': 'Improve pacing'}))
         self.assertEqual(done['status'], 'SUCCEEDED', done)

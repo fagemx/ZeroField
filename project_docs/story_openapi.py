@@ -1438,8 +1438,6 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             instruction = text(body, "instruction").strip()
             if not instruction:
                 invalid("A script refinement instruction is required.")
-            if not os.environ.get("OPENBENCH_MODEL") or not os.environ.get("OPENBENCH_API_BASE"):
-                raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Configure OPENBENCH_MODEL and OPENBENCH_API_BASE for script refinement.")
             return queue_task(conn, me, slug, "SCRIPT_REFINE", {"episodeId": ep["episodeId"], "instruction": instruction, "script": script(conn, ep)}, actions)
         if tail == "settings":
             if method == "PUT":
