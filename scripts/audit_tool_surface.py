@@ -1,8 +1,10 @@
 """Offline audit of the tool surface agents can see (SPEC_20 R43).
 
 Lists every tool each built-in crew role sees with its seeded defaults (the internal model transports)
-and through the MCP server (mcp_stdio tools/list against a loopback tool host), plus the registry
-catalog, and compares them with tests/fixtures/tool_surface.json. One unexpected tool fails the audit.
+and through the MCP server (mcp_stdio tools/list against a loopback tool host), what zerofield-mcp lists
+to an external service-account token granted every exposed tool in each write mode (SPEC_20 R30), plus
+the registry catalog, and compares them with tests/fixtures/tool_surface.json. One unexpected tool fails
+the audit.
 
     python -X utf8 scripts/audit_tool_surface.py          # compare; exit 1 with a diff on any change
     python -X utf8 scripts/audit_tool_surface.py --write  # accept the current surface deliberately
@@ -55,6 +57,29 @@ def mcp_listing(profile):
                 os.environ[key] = value
 
 
+def zerofield_listing(write_mode):
+    """Tool names zerofield-mcp lists to a token in this write mode whose scope names every exposed tool.
+
+    The stdio server answers a 2026-07-28 tools/list from the server-side token view (visible_specs), so a
+    propose_only token shows that generation tools stay hidden even when its scope names them."""
+    from project_assistant import service_accounts, zerofield_mcp
+
+    account = {'project': 'audit', 'accountKey': 'audit', 'writeMode': write_mode,
+               'tools': service_accounts.exposed_tools()}
+
+    class Backend:
+        def list_tools(self):
+            return service_accounts.visible_specs(account)
+
+        def call_tool(self, *args, **kwargs):
+            raise AssertionError('The audit never calls a tool.')
+
+    meta = {zerofield_mcp.META_VERSION: zerofield_mcp.MODERN_VERSIONS[0], zerofield_mcp.META_CAPABILITIES: {}}
+    reply = zerofield_mcp.Server(Backend()).handle({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list',
+                                                    'params': {'_meta': meta}})
+    return [tool['name'] for tool in reply['result']['tools']]
+
+
 def spec_digest(tool):
     """Short hash of what clients are told (name, description, schema, annotations)."""
     text = json.dumps(tool.spec(), ensure_ascii=False, sort_keys=True)
@@ -68,6 +93,7 @@ def surface():
         'ui': tool.ui, 'mcp': tool.mcp, 'analysis_only': tool.analysis_only, 'race_candidate': tool.race_candidate,
         'primary_only': tool.primary_only, 'external': tool.external, 'requires': list(tool.requires),
         'grants': list(tool.grants), 'handler': tool.handler, 'spec_sha256': spec_digest(tool),
+        'zerofield_mcp': tool_registry.zerofield_exposed(tool),
     } for tool in tool_registry.all_tools()}
     roles = {}
     for key in tool_registry.BUILTIN_ROLES:
@@ -75,7 +101,8 @@ def surface():
         roles[key] = {'grants': list(profile['allowed_tools']),
                       'internal': [spec['name'] for spec in agent_policy.tool_specs_for(profile)],
                       'mcp': mcp_listing(profile)}
-    return {'catalog': catalog, 'roles': roles, 'ui_catalog': list(tool_registry.UI)}
+    zerofield = {mode: zerofield_listing(mode) for mode in ('propose_only', 'generate')}
+    return {'catalog': catalog, 'roles': roles, 'zerofield_mcp': zerofield, 'ui_catalog': list(tool_registry.UI)}
 
 
 def differences(expected, actual):
@@ -94,6 +121,17 @@ def differences(expected, actual):
                 other.append(f'{role} {view}: no longer listed {", ".join(missing)}')
             if not extra and not missing and before != after:
                 other.append(f'{role} {view}: order changed to {", ".join(after)}')
+    old_tokens, new_tokens = expected.get('zerofield_mcp', {}), actual.get('zerofield_mcp', {})
+    for mode in sorted(set(old_tokens) | set(new_tokens)):
+        before, after = old_tokens.get(mode, []), new_tokens.get(mode, [])
+        extra = [name for name in after if name not in before]
+        missing = [name for name in before if name not in after]
+        if extra:
+            unexpected.append(f'zerofield-mcp {mode} token: unexpected tool(s) {", ".join(extra)}')
+        if missing:
+            other.append(f'zerofield-mcp {mode} token: no longer listed {", ".join(missing)}')
+        if not extra and not missing and before != after:
+            other.append(f'zerofield-mcp {mode} token: order changed to {", ".join(after)}')
     old_catalog, new_catalog = expected.get('catalog', {}), actual.get('catalog', {})
     for name in [n for n in new_catalog if n not in old_catalog]:
         unexpected.append(f'catalog: unexpected tool {name} ({json.dumps(new_catalog[name], sort_keys=True)})')
@@ -122,8 +160,9 @@ def render(snapshot):
     catalog = ',\n'.join(f'    {line(name)}: {line(entry)}' for name, entry in snapshot['catalog'].items())
     roles = ',\n'.join(f'    {line(role)}: {{\n' + ',\n'.join(f'      {line(view)}: {line(names)}' for view, names in views.items())
                        + '\n    }' for role, views in snapshot['roles'].items())
+    tokens = ',\n'.join(f'    {line(mode)}: {line(names)}' for mode, names in snapshot['zerofield_mcp'].items())
     return ('{\n  "_note": ' + line(NOTE) + ',\n  "catalog": {\n' + catalog + '\n  },\n  "roles": {\n' + roles +
-            '\n  },\n  "ui_catalog": ' + line(snapshot['ui_catalog']) + '\n}\n')
+            '\n  },\n  "zerofield_mcp": {\n' + tokens + '\n  },\n  "ui_catalog": ' + line(snapshot['ui_catalog']) + '\n}\n')
 
 
 def main(argv=None):
@@ -144,7 +183,9 @@ def main(argv=None):
         print(report(lines), file=sys.stderr)
         return 1
     seen = ', '.join(f'{role} {len(view["internal"])}/{len(view["mcp"])}' for role, view in actual['roles'].items())
-    print(f'Tool surface matches the snapshot: {len(actual["catalog"])} tools; internal/MCP per role: {seen}.')
+    tokens = ', '.join(f'{mode} {len(names)}' for mode, names in actual['zerofield_mcp'].items())
+    print(f'Tool surface matches the snapshot: {len(actual["catalog"])} tools; internal/MCP per role: {seen}; '
+          f'zerofield-mcp per token: {tokens}.')
     return 0
 
 

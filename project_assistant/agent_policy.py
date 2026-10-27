@@ -24,10 +24,18 @@ def can_propose_output(profile,target):
     return required in profile.get('allowed_tools',[]) and profile.get('tool_policies', {}).get(required) != 'disabled'
 
 
+def _profile(ctx, conn):
+    """The policy profile of a call: the stored agent, or a service account's live token scope (SPEC_20 R31)."""
+    if getattr(ctx, 'service_account', None) is not None:
+        from project_assistant import service_accounts
+        return service_accounts.policy_profile(conn, ctx)
+    return agent_registry.get_agent(conn, ctx.slug, getattr(ctx, 'agent_key', 'coordinator'))
+
+
 def authorize_tool(ctx, conn, name, args):
     from project_assistant.tools import ToolError
     from project_assistant import store
-    profile = agent_registry.get_agent(conn, ctx.slug, getattr(ctx,'agent_key','coordinator'))
+    profile = _profile(ctx, conn)
     if not profile or not profile['enabled'] or name not in {s['name'] for s in tool_specs_for(profile)}:
         raise ToolError("POLICY_DENIED: This agent cannot use this tool.")
     origin_profile = getattr(ctx, 'profile', None)
@@ -92,7 +100,7 @@ def repo_members(conn):
 
 
 def permission_mode(ctx, conn, name, args):
-    profile = agent_registry.get_agent(conn, ctx.slug, ctx.agent_key)
+    profile = _profile(ctx, conn)
     mode = (profile.get('tool_policies') or {}).get(name, tool_specs.DEFAULT_POLICIES.get(name, 'auto'))
     if name == 'studio_dispatch_shot' and mode == 'auto':
         from project_docs import story_openapi as story

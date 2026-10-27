@@ -611,6 +611,8 @@ from project_assistant import delegation_tools
 HANDLERS.update(delegation_tools.HANDLERS)
 from project_assistant import studio_tools
 HANDLERS.update(studio_tools.HANDLERS)
+from project_assistant import external_tools
+HANDLERS.update(external_tools.HANDLERS)
 
 
 class ToolResult(str):
