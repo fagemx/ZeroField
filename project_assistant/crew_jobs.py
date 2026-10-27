@@ -7,7 +7,7 @@ candidates). Every job has the four things of fixed decision 12: a JSON output s
 one retry, and a rule fallback. A job declares them once (:class:`CrewJob`, registered in ``JOBS``):
 
     kind          'beats' | 'camera' (crew_planning); 'description' | 'look' | 'appearances' (crew_art);
-                  'adaptation' | 'breakdown' (crew_writing)
+                  'adaptation' | 'breakdown' (crew_writing); 'continuity' (crew_continuity)
     role          the built-in crew agent that does it (agent_registry.ROSTER key)
     targets       the target kinds it is asked on: ('shot',) by default; see TARGETS
     schema        the JSON Schema the model answers with (``response_format`` on a tool-free round, else in the prompt)
@@ -28,11 +28,12 @@ Targets (one API; the pre-production flow, R24, drives it)::
     {'kind': 'scene',   'id': 'sc_<slug>_<NN>_S<NN>'}  a scene of an episode's working script
     {'kind': 'episode', 'id': 'ep_<slug>_<NN>'}        an episode
 
-    request(conn, me, slug, kind, target, body, *, automatic=False) -> the public job record
+    request(conn, me, slug, kind, target, body, *, automatic=False, flow=None) -> the public job record
         target is a {kind, id} dict, or a bare shot id (the shot routes' form, kept). 422 when the job is not asked
         on that kind of target or the target cannot take it; 404 for a target of another production; 409
         DRAMA_CREW_NOT_READY / DRAMA_AUTOMATION_PAUSED as below. The same member's active job of one kind for one
-        target is returned instead of a second one.
+        target is returned instead of a second one. flow ({flowId, stage}) marks a job of the pre-production flow
+        (crew_preproduction, R24), which checked the role's readiness itself before writing anything.
     listing(conn, me, slug, target_id) -> this member's jobs for one target, newest first.
 
 A job record carries ``target`` ({kind, id}), ``targetId`` and ``targetLabel``; a shot job also keeps ``shotId`` and
@@ -46,6 +47,11 @@ output. A missing model is not invalid output: when the crew cannot work (a read
 no worker, model unreachable or missing, policy, pricing, credentials) :func:`request` answers 409
 ``DRAMA_CREW_NOT_READY`` and writes nothing (R7); when the model goes away mid-job the job fails with its failure
 class (SPEC_20 R12) and proposes nothing. The rule fallback stands in for bad output only.
+
+Pre-production (R24, crew_preproduction): a flow's stage jobs are ordinary jobs asked with ``automatic=True`` and
+marked with the flow (``flowId``, ``flowStage``). The worker asks the flow before a flow job calls its model and again
+before it proposes; a flow that ended, or whose locked content changed, cancels the job and nothing is proposed. While
+the production's automatic work is paused (R40) no automatic job is claimed: queued ones wait, running ones finish.
 
 States of a job record (``projectops.story_record`` kind ``crew_job``)::
 
@@ -81,7 +87,8 @@ JOB_ID = re.compile(r'cj_[0-9a-f]{32}')
 BOARD_LIMIT = 100
 TARGETS = ('shot', 'asset', 'scene', 'episode')
 TARGET_NOUN = {'shot': 'the shot', 'asset': 'the asset card', 'scene': "the scene's shots", 'episode': 'the episode'}
-JOB_MODULES = ('crew_planning', 'crew_art', 'crew_writing')  # the modules that declare the built-in jobs
+JOB_MODULES = ('crew_planning', 'crew_art', 'crew_writing', 'crew_continuity')  # the modules that declare the built-in jobs
+PAUSED_SETTING = r'"paused"\s*:\s*true'  # automation.KEY's JSON value while paused (read in SQL by claim)
 RETRY_NOTE = ('Your answer did not pass validation:\n{errors}\n'
               'Fix exactly these problems and answer again with the whole JSON object, nothing else.')
 # Readiness blockers in words, for the 409 sentence (the UI shows its own text for each fix hint).
@@ -350,7 +357,7 @@ def _save(conn, record):
 
 def public(record):
     keys = ('jobId', 'kind', 'role', 'shotId', 'shotLabel', 'status', 'source', 'requestedBy', 'requestedAt', 'startedAt',
-            'finishedAt', 'request', 'result', 'error', 'failure', 'attempts', 'model', 'usage')
+            'finishedAt', 'request', 'result', 'error', 'failure', 'attempts', 'model', 'usage', 'automatic', 'flowId', 'flowStage')
     target = target_of(record)
     return {**{k: record.get(k) for k in keys}, 'target': target, 'targetId': target['id'],
             'targetLabel': record.get('targetLabel') or record.get('shotLabel')}
@@ -404,14 +411,15 @@ def _relock(conn, slug):
         cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ('story-write:' + slug,))
 
 
-def request(conn, me, slug, kind, target, body, *, automatic=False):
+def request(conn, me, slug, kind, target, body, *, automatic=False, flow=None):
     """Queue one crew job for a target (manual unless automatic), or explain with 409 why the crew cannot work.
 
     target is {'kind': 'shot'|'asset'|'scene'|'episode', 'id'} or a bare shot id. Raises story_openapi.StoryError:
     422 for a bad request or a target the job does not take, 404 for an unknown target or one of another production,
     409 DRAMA_CREW_NOT_READY (nothing written) when a readiness blocker stops the role, 409 DRAMA_AUTOMATION_PAUSED
     for an automatic request while paused. The same member's active job of the same kind for the same target is
-    returned instead of a second one."""
+    returned instead of a second one. flow: {'flowId', 'stage'} of the pre-production flow asking; it has checked the
+    role's readiness before writing anything (a readiness probe ends the transaction), so it is not checked here."""
     from project_assistant import agent_registry, automation
     from project_docs import repository as repo, story_openapi as story
     crew_job = job(kind)
@@ -433,12 +441,13 @@ def request(conn, me, slug, kind, target, body, *, automatic=False):
     problem = problem or (crew_job.check(conn, me, resolved) if crew_job.check else None)
     if problem:
         story.invalid(problem)
-    blockers = readiness_blockers(conn, me, slug, crew_job.role)  # may end the transaction: lock again below
-    _relock(conn, slug)
-    if blockers:
-        name = next((r[1] for r in agent_registry.ROSTER if r[0] == crew_job.role), crew_job.role)
-        raise story.StoryError(409, NOT_READY, not_ready_message(blockers, name),
-                               details={'agentKey': crew_job.role, 'blockers': blockers})
+    if flow is None:
+        blockers = readiness_blockers(conn, me, slug, crew_job.role)  # may end the transaction: lock again below
+        _relock(conn, slug)
+        if blockers:
+            name = next((r[1] for r in agent_registry.ROSTER if r[0] == crew_job.role), crew_job.role)
+            raise story.StoryError(409, NOT_READY, not_ready_message(blockers, name),
+                                   details={'agentKey': crew_job.role, 'blockers': blockers})
     for record in _records(conn, slug, owner=me.actor_id, target_id=resolved.id, limit=20):
         if record['kind'] == kind and record['status'] in ACTIVE and target_of(record) == resolved.ref():
             return public(record)
@@ -448,6 +457,9 @@ def request(conn, me, slug, kind, target, body, *, automatic=False):
               'requestedBy': me.actor_id, 'requestedAt': now(), 'request': options, 'automatic': bool(automatic),
               'attempts': [], 'usage': {}, 'slug': slug}
     detail = {'kind': kind, 'role': crew_job.role, 'target': resolved.ref(), 'request': options}
+    if flow is not None:
+        record.update(flowId=flow['flowId'], flowStage=flow['stage'])
+        detail.update(flowId=flow['flowId'], flowStage=flow['stage'])
     if resolved.kind == 'shot':
         record.update(shotId=resolved.id, shotLabel=resolved.label)
         detail['shotId'] = resolved.id
@@ -472,6 +484,23 @@ def cancel(conn, me, slug, job_id):
     repo.add_audit(conn, slug, action='crew_job_canceled', actor_id=me.actor_id, tab_key=record.get('tabKey'),
                    target=job_id, detail={'kind': record['kind'], 'target': target_of(record)})
     return public(record)
+
+
+def cancel_jobs(conn, slug, job_ids, *, by=None, reason=''):
+    """Cancel the flow's jobs among these that are still queued or running (the pre-production flow's stop and
+    cancel, R24); a member's own job the flow reused stays theirs. Returns the ids canceled."""
+    from project_docs import repository as repo
+    canceled = []
+    for job_id in dict.fromkeys(job_ids):
+        record = _load(conn, job_id, lock=True)
+        if not record or record['slug'] != slug or record['status'] not in ACTIVE or not record.get('flowId'):
+            continue
+        record.update(status='canceled', finishedAt=now(), canceledBy=by, cancelReason=(reason or '')[:300])
+        _save(conn, record)
+        repo.add_audit(conn, slug, action='crew_job_canceled', actor_id=by, tab_key=record.get('tabKey'), target=job_id,
+                       detail={'kind': record['kind'], 'target': target_of(record), 'flowId': record['flowId'], 'reason': (reason or '')[:300]})
+        canceled.append(job_id)
+    return canceled
 
 
 def cancel_request(conn, me, slug, job_id, body):
@@ -499,12 +528,17 @@ def _expire(conn):
 
 def claim(conn, worker_id, *, slug=None):
     """The oldest queued crew job (of one production when slug is given), leased to this worker; None when there is
-    none. The caller commits."""
+    none. An automatic job (the pre-production flow's) waits while its production's automatic work is paused (R40).
+    The caller commits."""
+    from project_assistant import automation
     _expire(conn)
     with conn.cursor() as cur:
-        cur.execute("""SELECT id FROM projectops.story_record WHERE kind=%s AND data->>'status'='queued'
+        cur.execute("""SELECT id FROM projectops.story_record r WHERE kind=%s AND data->>'status'='queued'
                        AND (%s::text IS NULL OR project_slug=%s)
-                       ORDER BY data->>'requestedAt', id LIMIT 1 FOR UPDATE SKIP LOCKED""", (KIND, slug, slug))
+                       AND NOT (COALESCE(data->>'automatic', 'false') = 'true' AND EXISTS (
+                           SELECT 1 FROM projectops.assistant_setting s WHERE s.project_slug=r.project_slug
+                           AND s.key=%s AND s.value ~ %s))
+                       ORDER BY data->>'requestedAt', id LIMIT 1 FOR UPDATE SKIP LOCKED""", (KIND, slug, slug, automation.KEY, PAUSED_SETTING))
         row = cur.fetchone()
     if not row:
         return None
@@ -546,6 +580,15 @@ def _finish(conn, job_id, worker_id, **changes):
     return record
 
 
+def _flow_ended(conn, record):
+    """A pre-production flow job whose flow ended or whose locked content changed: canceled now (crew_preproduction
+    stops the flow and cancels its jobs); True means nothing more happens for this job."""
+    if not record.get('flowId'):
+        return False
+    from project_assistant import crew_preproduction
+    return crew_preproduction.guard(conn, record)
+
+
 def _usage(attempts):
     total = {}
     for attempt in attempts:
@@ -572,6 +615,9 @@ def execute(connection_factory, claimed, worker_id, *, opener=None):
             conn.rollback()
             return 'canceled' if record and record['status'] == 'canceled' else 'skipped'
         slug, crew_job = record['slug'], job(record['kind'])
+        if _flow_ended(conn, record):  # R24: the flow stopped or was canceled, or a lock it depends on changed
+            conn.commit()
+            return 'canceled'
         me = _identity(conn, record['requestedBy'])
         if me is None:
             _finish(conn, job_id, worker_id, status='failed', error='The member who asked is no longer on this production.')
@@ -600,6 +646,9 @@ def execute(connection_factory, claimed, worker_id, *, opener=None):
                                cancelled=lambda: _status(connection_factory, job_id) != 'running')
         attempts = outcome.attempts
         conn.rollback()
+        if _flow_ended(conn, record):  # checked again: the locks may have changed while the model answered
+            conn.commit()
+            return 'canceled'
         record = _load(conn, job_id, lock=True)
         if not record or record['status'] != 'running' or record.get('leaseOwner') != worker_id:
             conn.rollback()
@@ -676,19 +725,23 @@ def board_item(record):
 
 
 def board(conn, me, slug):
-    """(working, done) board items of this member's crew jobs."""
+    """(working, done) board items of this member's crew jobs, and the production's pre-production flows (R24)."""
+    from project_assistant import crew_preproduction
     records = _records(conn, slug, owner=me.actor_id)
-    return ([board_item(r) for r in records if r['status'] in ACTIVE],
-            [board_item(r) for r in records if r['status'] in FINISHED])
+    flows_working, flows_done = crew_preproduction.board_items(conn, me, slug)
+    return (flows_working + [board_item(r) for r in records if r['status'] in ACTIVE],
+            flows_done + [board_item(r) for r in records if r['status'] in FINISHED])
 
 
 def counts(conn, me, slug):
+    from project_assistant import crew_preproduction
     with conn.cursor() as cur:
         cur.execute("""SELECT count(*) FILTER (WHERE data->>'status' IN ('queued','running')),
                               count(*) FILTER (WHERE data->>'status' IN ('succeeded','failed','canceled'))
                        FROM projectops.story_record WHERE kind=%s AND project_slug=%s AND owner_id=%s::uuid""",
                     (KIND, slug, me.actor_id))
         working, done = cur.fetchone()
-    return working, min(done, BOARD_LIMIT)
+    flows_working, flows_done = crew_preproduction.counts(conn, slug)
+    return working + flows_working, min(done, BOARD_LIMIT) + flows_done
 
 

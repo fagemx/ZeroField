@@ -52,6 +52,7 @@ Read the episode first, then ask only what is missing, at most five questions wi
 5. **Classify.** Per finding: plan or take, what differs, severity (breaks the cut, noticeable, minor), certainty, cheapest fix. Fix ladder: change text (prompt, description, look binding), then camera or 3D, then retake, then accept.
 6. **Propose.** One proposal per fixable finding, with the matching `propose_*` tool; the rest are info only. If a fix upstream makes later joins stale, list them.
 7. **Report.** One row per join: pair, verdict (clean, check, break), findings, proposals. Breaks first. End with a "not checked" list.
+- Inside ZeroField the Continuity Supervisor's built-in check (on a scene or an episode, and Stage 4 of the pre-production flow) runs steps 1 to 3 and 5 to 7 on the plans: each finding names its shots, the fields it rests on and how sure it is (confirmed, likely, check); a fix that is a field change (the prompt, Optical Rig or Camera Motion of one shot) becomes a proposal on that shot. It compares no frames and lists the take-level check under "not checked".
 
 ## Validation
 
