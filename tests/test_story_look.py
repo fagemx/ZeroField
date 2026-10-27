@@ -71,7 +71,10 @@ class CatalogTests(unittest.TestCase):
                 # labelKey: lookCatalog.<kind>.<camelCaseId>, "auto" for Auto
                 self.assertEqual([i["labelKey"] for i in options],
                                  [f"lookCatalog.{kind}." + re.sub(r"-([a-z0-9])", lambda m: m[1].upper(), i) for i in ids])
-                self.assertTrue(all("group" not in i and "preview" not in i for i in options))
+                self.assertTrue(all("group" not in i for i in options))
+                # §4.4: every option but Auto (a texture) shows its sample still (tests/test_look_samples.py checks the files).
+                self.assertEqual([i.get("preview") for i in options],
+                                 [{"poster": f"/projects/assets/look-samples/{kind}/{i}.webp"} if i != "auto" else None for i in ids])
         self.assertEqual(sum(len(ids) - 1 for ids in PACKAGE_C.values()), 36)  # SPEC_19 §7 decision 5
         self.assertEqual(look.option("palette", "midnight-slate")["hex"][:2], ["#2E3A4A", "#5B6F86"])  # SPEC_19 §4.3
 
@@ -214,7 +217,8 @@ class ApiItemTests(unittest.TestCase):
                 self.assertEqual(["hex" in i for i in listed], [kind == "palette" and i["id"] != "auto" for i in listed])
         slate = look.api_items("palette")[1]
         self.assertEqual(slate, {"id": "midnight-slate", "kind": "palette", "labelKey": "lookCatalog.palette.midnightSlate",
-                                 "promptText": text("palette", "midnight-slate"), "preview": None,
+                                 "promptText": text("palette", "midnight-slate"),
+                                 "preview": {"poster": "/projects/assets/look-samples/palette/midnight-slate.webp", "clip": None},
                                  "hex": ["#2E3A4A", "#5B6F86", "#1B2330", "#8FA3B8", "#D8E0E8", "#C9953F"]})
         self.assertEqual(look.API_KINDS, ("camera", "move", "genre", "era", "tempo", "palette", "light"))
         for kind in ("colour", "Camera", "", "body"):

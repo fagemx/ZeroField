@@ -996,7 +996,8 @@ class StoryHTTPTests(unittest.TestCase):
         camera = self.ok('/catalog/looks?kind=camera&limit=100')['items']
         self.assertEqual({(i['kind'], i['group']) for i in camera}, {('camera', 'body'), ('camera', 'lens'), ('camera', 'aperture')})
         self.assertEqual(camera[1], {'id': 'digital-cinema', 'kind': 'camera', 'group': 'body', 'labelKey': 'lookCatalog.camera.body.digitalCinema',
-                                     'promptText': story_look.option('camera', 'digital-cinema')['promptText'], 'preview': None})
+                                     'promptText': story_look.option('camera', 'digital-cinema')['promptText'],
+                                     'preview': {'poster': '/projects/assets/look-samples/camera/digital-cinema.webp', 'clip': None}})
         moves = self.ok('/catalog/looks?kind=move&limit=100')['items']
         self.assertEqual([i['id'] for i in moves][:2], ['auto', 'push-in'])
         self.assertTrue(all(set(i) == {'id', 'kind', 'labelKey', 'promptText', 'preview'} for i in moves))
