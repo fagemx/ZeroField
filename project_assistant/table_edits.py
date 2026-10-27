@@ -113,6 +113,81 @@ def _row_meta(row):
             "attrs": {"owner": None, "created": None, **row.get("attrs", {})}}
 
 
+def _is_header(row):
+    return bool(row.get("content")) and all(c.get("type") == "tableHeader" for c in row["content"])
+
+
+def _label(cell):
+    try:
+        return " ".join(cell_value(cell or {}, {}).split())
+    except ValueError:
+        return ""
+
+
+def _target_name(table, row, rid, index=None):
+    """Name a target the way the reviewer saw it: column header, row number and the row's first cell."""
+    data = [r for r in table.get("content", []) if not _is_header(r)]
+    number = next((n + 1 for n, r in enumerate(data) if r.get("attrs", {}).get("bid") == rid), None)
+    label = _label((row.get("content") or [{}])[0])[:60]
+    where = (f"row {number}" if number else "the row") + (f" “{label}”" if label else "" if number else f" {rid}")
+    if index is None:
+        return where
+    header = next((r for r in table.get("content", []) if _is_header(r)), {}).get("content", [])
+    return f"{(_label(header[index]) if index < len(header) else '') or f'column {index + 1}'} in {where}"
+
+
+def rebase_ops(doc, ops):
+    """Rebase reviewed row edits onto the current page; return the targets that changed since review.
+
+    A row edit is pinned by the cells it writes and by its row (SPEC_20 R17): other rows, other cells
+    of the same row and the page revision may move. Same-cell changes, deleted rows and row
+    structure/metadata changes are conflicts. Rebased ops are updated in place.
+    """
+    tables = {t.get("attrs", {}).get("bid"): t for t in doc.get("content", []) if t.get("type") == "table"}
+    rows = {(bid, row.get("attrs", {}).get("bid")): row for bid, table in tables.items() for row in table.get("content", [])}
+    conflicts = []
+    for op in ops:
+        if op.get("op") != "put_row" or not op.get("edited_cols") or not op.get("base"):
+            continue
+        table, before, after = tables.get(op.get("table"), {}), op["base"], op.get("node", {})
+        current = rows.get((op.get("table"), op.get("rid")))
+        if current == before:
+            continue
+        before_cells, after_cells = before.get("content", []), after.get("content", [])
+        current_cells = (current or {}).get("content", [])
+        cols = op["edited_cols"]
+        if current is None:
+            conflicts.append({"row_id": op.get("rid"), "table_id": op.get("table"), "col_index": None, "reason": "row_deleted",
+                              "target": _target_name(table, before, op.get("rid"))})
+            continue
+        if (len(before_cells) != len(current_cells) or len(after_cells) != len(current_cells) or _row_meta(before) != _row_meta(current)
+                or any(type(i) is not int or not 0 <= i < len(current_cells) for i in cols)):
+            conflicts.append({"row_id": op.get("rid"), "table_id": op.get("table"), "col_index": None, "reason": "row_changed",
+                              "target": _target_name(table, current, op.get("rid"))})
+            continue
+        changed = [i for i in cols if _cell_base(before_cells[i]) != _cell_base(current_cells[i])]
+        conflicts.extend({"row_id": op.get("rid"), "table_id": op.get("table"), "col_index": i, "reason": "value_changed",
+                          "target": _target_name(table, current, op.get("rid"), i), "before": _label(before_cells[i]),
+                          "mine": _label(after_cells[i]), "current": _label(current_cells[i])} for i in changed)
+        if changed:
+            continue
+        merged = copy.deepcopy(current)
+        for index in cols:
+            merged["content"][index] = after_cells[index]
+        op["base"], op["node"] = current, merged
+    return conflicts
+
+
+def conflict_message(conflicts):
+    """One sentence naming the first changed target, for the proposal's failure note."""
+    first = conflicts[0]
+    verb = {"row_deleted": "was deleted", "row_changed": "was restructured"}.get(first["reason"], "changed")
+    more = len(conflicts) - 1
+    return (first["target"][:1].upper() + first["target"][1:] + f" {verb} after this proposal was made"
+            + (f"; {more} more target{'s' if more > 1 else ''} also changed" if more else "")
+            + ". Nothing was applied; generate a new proposal.")
+
+
 def prepare(doc, row_edits, new_rows, values, table_id=None):
     if not isinstance(row_edits, list) or not isinstance(new_rows, list) or not 0 < len(row_edits) + len(new_rows) <= 200:
         raise ValueError("Provide changes or additions for 1–200 rows.")
@@ -193,7 +268,10 @@ def apply(conn, me, slug, target):
             return 400, {"error": "Invalid source revision for this test run."}
         # Consistent key order prevents reciprocal source/target lock deadlocks.
         locked = {source_key: repo.get_tab_for_update(conn, slug, source_key) for source_key in sorted(set(versions) | {s['target_tab'] for s in source_scopes} | {key})}
-        if any(not locked[source_key] or locked[source_key]["revision"] != expected for source_key, expected in versions.items()):
+        # SPEC_20 R17: reference pages stay pinned by revision. The proposal's own page is pinned by the
+        # cells and rows it writes (rebase_ops below), so an edit elsewhere on it no longer fails the proposal.
+        if any(not locked[source_key] or (source_key != key and locked[source_key]["revision"] != expected)
+               for source_key, expected in versions.items()):
             return 409, {"error": "The test source changed or was deleted. Review it and test again."}
         tab = locked[key]
     else:
@@ -203,32 +281,15 @@ def apply(conn, me, slug, target):
     if target.get("expected_revision") is not None and target["expected_revision"] != tab["revision"]:
         return 409, {"error": "The page changed. Generate a new proposal for added rows."}
     ops = copy.deepcopy(target.get("ops", []))
-    # Parallel branches may update different cells of the same row. Rebase only
-    # explicitly edited columns whose own bases are unchanged. Row structure,
-    # metadata and locks retain the normal optimistic checks.
-    rows = {(table.get("attrs", {}).get("bid"), row.get("attrs", {}).get("bid")): row
-            for table in tab["doc"].get("content", []) if table.get("type") == "table"
-            for row in table.get("content", [])}
     tables = {table.get("attrs", {}).get("bid"): table for table in tab["doc"].get("content", []) if table.get("type") == "table"}
     for op in ops:
         if op.get("column_ids") and op["column_ids"] != column_ids(tables.get(op.get("table"), {})):
             return 409, {"error": "The column structure changed. Review the edit targets again."}
-        if op.get("op") != "put_row" or not op.get("edited_cols") or not op.get("base"):
-            continue
-        before, after = op["base"], op.get("node", {})
-        current = rows.get((op.get("table"), op.get("rid")))
-        if current is None or current == before:
-            continue
-        before_cells, current_cells, after_cells = before.get("content", []), current.get("content", []), after.get("content", [])
-        cols = op["edited_cols"]
-        if (len(before_cells) != len(current_cells) or len(after_cells) != len(current_cells)
-                or _row_meta(before) != _row_meta(current)
-                or any(type(i) is not int or not 0 <= i < len(current_cells) or _cell_base(before_cells[i]) != _cell_base(current_cells[i]) for i in cols)):
-            continue
-        merged = copy.deepcopy(current)
-        for index in cols:
-            merged["content"][index] = after_cells[index]
-        op["base"], op["node"] = current, merged
+    # Parallel branches and other proposals may update other rows or other cells of the same row.
+    # Only the edited cells and their rows are pinned; locks keep the normal optimistic checks.
+    conflicts = rebase_ops(tab["doc"], ops)
+    if conflicts:
+        return 409, {"error": conflict_message(conflicts), "conflicts": conflicts}
     checked = blocks.apply_ops(tab["doc"], ops, blocks.Actor(me.actor_id, me.can_edit), locks=repo.tab_locks(conn, slug, key), now=service._now())
     if checked.conflicts:
         return 409, {"error": "The data changed or is being edited. Generate a new proposal.", "conflicts": checked.conflicts}
@@ -251,7 +312,14 @@ def apply(conn, me, slug, target):
             return 409, {"error": str(exc)}
     for edit in target.get("field_edits", []):
         if values.get(edit["fid"]) != edit.get("base"):
-            return 409, {"error": "The column changed. Generate a new proposal."}
+            where = next(((op, index) for op in ops if op.get("base") for index in op.get("edited_cols", [])
+                          if index < len(op["base"].get("content", [])) and (_field(op["base"]["content"][index]) or {}).get("attrs", {}).get("fid") == edit["fid"]), None)
+            if not where:
+                return 409, {"error": "The column changed. Generate a new proposal."}
+            op, index = where
+            changed = [{"row_id": op.get("rid"), "table_id": op.get("table"), "col_index": index, "reason": "value_changed",
+                        "target": _target_name(tables.get(op.get("table"), {}), op["base"], op.get("rid"), index)}]
+            return 409, {"error": conflict_message(changed), "conflicts": changed}
     after_values = {**values, **{edit["fid"]: {"value": edit["value"]} for edit in target.get("field_edits", [])}}
     try:
         for op in ops:

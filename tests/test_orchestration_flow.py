@@ -79,6 +79,27 @@ class OrchestrationFlowTests(OrchestrationFixture,unittest.TestCase):
         with self.assertRaises(cp.OrchestrationError):
             self.finish(claim,{'text':'late'})
 
+    def test_profile_single_steps_on_one_page_pin_only_their_own_rows(self):
+        # SPEC_20 R17: a single-step proposal carries the run's source revision of its own page; approving
+        # the first one moves that revision, and the second still applies because its own row is untouched.
+        self.start_profile_flow({'execution_mode':'single_step','node_id':'fill','input_mode':'current_sources','sample_row_id':'b_shot1'})
+        body={'execution_mode':'single_step','node_id':'fill','input_mode':'current_sources','sample_row_id':'b_shot2',
+              'definition_revision':flows.definition(self.conn,self.slug,'flow')['revision']}
+        flows.start(self.conn,self.me,self.slug,'flow',{**body,'source_revisions':flows.preflight(self.conn,self.me,self.slug,'flow',body)['source_revisions']})
+        bridge.sync_project(self.conn,self.slug)
+        waiting={}
+        for _ in range(2):
+            claim=cp.claim_dispatch(self.conn,'builtin',['sheet_ops'],allowed_projects=[self.slug])
+            row=db.get_task(self.conn,self.slug,claim['task_id'])['target']['row_id']
+            waiting[row]=self.finish(claim,{'text':'generated '+row})[0]
+        self.assertIn('shots',store.proposal(self.conn,waiting['b_shot2'])['target']['source_revisions'])
+        for row in ('b_shot1','b_shot2'):
+            code,result=service.apply_proposal(self.conn,self.me,self.slug,waiting[row],{})
+            self.assertEqual((code,result['proposal']['status']),(200,'applied'),result)
+        tab=repo.get_tab(self.conn,self.slug,'shots')
+        self.assertEqual([row['content'][1]['content'][0]['content'][0]['text'] for row in tab['doc']['content'][0]['content'][1:]],
+                         ['generated b_shot1','generated b_shot2'])
+
     def test_profile_and_limb_binding_is_ambiguous(self):
         value=profile_graph()
         value['nodes'][0]['limb_id']=self.worker['id']

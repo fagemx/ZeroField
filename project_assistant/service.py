@@ -252,23 +252,45 @@ def _with_mentions(conn, text: str, target: dict) -> str:
     return f"{text}\n{tags}" if tags else text
 
 
-def _write(conn, me, slug, proposal, content):
-    if proposal["action"] == "table_edit":
-        return table_edits.apply(conn, me, slug, proposal["target"])
-    action, target = proposal["action"], proposal["target"] or {}
-    if target.get('request_scope') or target.get('source_revisions'):
-        sources=target.get('source_revisions',{})
-        locked={key:repo.get_tab_for_update(conn,slug,key) for key in sorted(set(sources)|{target['tab_key']})}
-        tab=locked[target['tab_key']]
-        try:
-            if not tab:
+def _check_sources(conn, slug, target):
+    """Pins shared by every non-table action (SPEC_20 R17).
+
+    Reference pages in ``source_revisions`` stay pinned by revision and a ``request_scope`` keeps its
+    input fingerprint. The proposal's own page is not pinned as a whole: each action checks its own
+    target (a row, an anchor, a field) when it writes. Targets without a page (``tab_key``) are fine.
+    Returns an error tuple, or None.
+    """
+    sources = target.get('source_revisions') or {}
+    if not target.get('request_scope') and not sources:
+        return None
+    own = target.get('tab_key')
+    locked = {key: repo.get_tab_for_update(conn, slug, key) for key in sorted(set(sources) | ({own} if own else set()))}
+    try:
+        if own and not locked[own]:
+            raise ValueError("The source page was deleted.")
+        if any(not locked[key] or (key != own and locked[key]['revision'] != revision) for key, revision in sources.items()):
+            raise ValueError("A reference source changed. Review it again.")
+        if target.get('request_scope'):
+            if not own:
                 raise ValueError("The source page was deleted.")
-            if any(not locked[key] or locked[key]['revision']!=revision for key,revision in sources.items()):
-                raise ValueError("A reference source changed. Review it again.")
-            if target.get('request_scope'):
-                request_scope.verify_source(target['request_scope'],{**tab,'key':target['tab_key']},repo.field_values(conn,slug).get(target['tab_key'],{}))
-        except ValueError as exc:
-            return _error(409,str(exc))
+            request_scope.verify_source(target['request_scope'], {**locked[own], 'key': own}, repo.field_values(conn, slug).get(own, {}))
+    except ValueError as exc:
+        return _error(409, str(exc))
+    return None
+
+
+def _write(conn, me, slug, proposal, content):
+    """Perform one approved proposal as the approving user. Each action pins only its own target.
+
+    ``table_edit`` pins the cells and rows it writes (``table_edits.apply``). Other actions run
+    ``_check_sources`` first, then write through the matching service, which checks the target.
+    """
+    action, target = proposal["action"], proposal["target"] or {}
+    if action == "table_edit":
+        return table_edits.apply(conn, me, slug, target)
+    problem = _check_sources(conn, slug, target)
+    if problem:
+        return problem
     if action == "私下轉給負責人":
         if not content:
             return _error(400, "The question for the owner is empty.")

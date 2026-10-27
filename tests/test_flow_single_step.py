@@ -6,6 +6,7 @@ import unittest
 import test_execution as legacy
 from project_assistant import flow_runner, service as assistant_service
 from project_docs import repository as repo, service
+from project_docs.doc_schema import node_text
 
 
 class FlowAdapterContractTests(unittest.TestCase):
@@ -115,24 +116,87 @@ class SingleStepTests(unittest.TestCase):
                 flow_runner.start(self.conn, self.me, self.slug, "flow", self.request(**changes))
         self.assertEqual(flow_runner.list_runs(self.conn, self.slug, "flow")["runs"], [])
 
-    def test_source_changed_while_executing_or_waiting_for_approval_cannot_write(self):
+    def cells(self, rid):
+        doc = repo.get_tab(self.conn, self.slug, "shots")["doc"]
+        return [node_text(cell) for row in doc["content"][0]["content"] if row["attrs"]["bid"] == rid for cell in row["content"]]
+
+    def edit_cell(self, rid, col, text):
+        tab = repo.get_tab(self.conn, self.slug, "shots")
+        doc = copy.deepcopy(tab["doc"])
+        row = next(row for row in doc["content"][0]["content"] if row["attrs"]["bid"] == rid)
+        row["content"][col]["content"][0]["content"][0]["text"] = text
+        repo.save_tab_doc(self.conn, self.slug, "shots", doc=doc, title=tab["title"], actor_id=self.actor, session_id="human", base_revision=tab["revision"])
+
+    def apply(self, proposal_id):
+        code, decided = assistant_service.apply_proposal(self.conn, self.me, self.slug, proposal_id, {})
+        self.assertEqual(code, 200, decided)
+        return decided["proposal"]
+
+    def test_waiting_proposal_pins_only_its_target_cell(self):
+        # SPEC_20 R17 replaces the SPEC_08 whole-page pin that
+        # test_source_changed_while_executing_or_waiting_for_approval_cannot_write asserted.
+        self.save(self.graph())
+        flow_runner.start(self.conn, self.me, self.slug, "flow", self.request())
+        result = self.finish(self.claim(), "reviewed output")
+        self.edit_cell("b_shot1", 0, "source updated elsewhere")
+        applied = self.apply(result["proposal_id"])
+        self.assertEqual(applied["status"], "applied", applied["error"])
+        self.assertEqual(self.cells("b_shot1"), ["source updated elsewhere", "original"])
+        self.assertEqual(self.cells("b_shot2"), ["Shot 2", "reviewed output"])
+        revision = repo.get_tab(self.conn, self.slug, "shots")["revision"]
+        flow_runner.start(self.conn, self.me, self.slug, "flow", self.request(source_revisions={"shots": revision}))
+        stale = self.finish(self.claim(), "stale output")
+        self.edit_cell("b_shot2", 1, "edited by hand")
+        failed = self.apply(stale["proposal_id"])
+        self.assertEqual(failed["status"], "failed")
+        self.assertIn("Output in row 2 “Shot 2” changed after this proposal was made", failed["error"])
+        self.assertEqual(self.cells("b_shot2"), ["Shot 2", "edited by hand"])
+
+    def test_source_changed_while_executing_cannot_write(self):
+        # The sample stays frozen while the step runs; R17 only relaxes the pin of a waiting proposal.
         self.save(self.graph())
         flow_runner.start(self.conn, self.me, self.slug, "flow", self.request())
         task = self.claim()
-        result = self.finish(task, "stale source output")
-        doc = copy.deepcopy(self.doc)
-        doc["content"][0]["content"][1]["content"][0]["content"][0]["content"][0]["text"] = "source updated elsewhere"
-        repo.save_tab_doc(self.conn, self.slug, "shots", doc=doc, title="Shots", actor_id=self.actor, session_id="changed", base_revision=1)
-        code, decided = assistant_service.apply_proposal(self.conn, self.me, self.slug, result["proposal_id"], {})
-        self.assertEqual(code, 200)
-        self.assertEqual(decided["proposal"]["status"], "failed")
-        self.assertNotIn("stale source output", str(repo.get_tab(self.conn, self.slug, "shots")["doc"]))
-        flow_runner.start(self.conn, self.me, self.slug, "flow", self.request(source_revisions={"shots": 2}))
-        second = self.claim()
-        repo.save_tab_doc(self.conn, self.slug, "shots", doc=doc, title="Shots renamed", actor_id=self.actor, session_id="changedagain", base_revision=2)
+        repo.save_tab_doc(self.conn, self.slug, "shots", doc=self.doc, title="Shots renamed", actor_id=self.actor, session_id="renamed", base_revision=1)
         with self.assertRaises(flow_runner.ExecutionError) as error:
-            self.finish(second, "late execution")
+            self.finish(task, "late execution")
         self.assertEqual(error.exception.status, 409)
+
+    def test_three_waiting_proposals_on_one_page_all_apply_in_sequence(self):
+        # Phase 2 reproduction: three keyframes made one at a time, then approved one after another.
+        doc = copy.deepcopy(self.doc)
+        third = copy.deepcopy(doc["content"][0]["content"][2])
+        third["attrs"]["bid"] = "b_shot3"
+        third["content"][0]["content"][0]["content"][0]["text"] = "Shot 3"
+        doc["content"][0]["content"].append(third)
+        repo.save_tab_doc(self.conn, self.slug, "shots", doc=doc, title="Shots", actor_id=self.actor, session_id="third", base_revision=1)
+        self.save(self.graph())
+        rows = ["b_shot1", "b_shot2", "b_shot3"]
+        runs = [flow_runner.start(self.conn, self.me, self.slug, "flow", self.request(sample_row_id=rid, source_revisions={"shots": 2}))["run"]["id"]
+                for rid in rows]
+        waiting = {}
+        for _ in rows:
+            task = self.claim()
+            waiting[task["row_id"]] = self.finish(task, "keyframe " + task["row_id"])["proposal_id"]
+        self.assertIsNone(self.claim())
+        for rid in rows:
+            self.assertEqual(self.apply(waiting[rid])["status"], "applied", rid)
+        self.assertEqual([self.cells(rid) for rid in rows],
+                         [["Shot 1", "keyframe b_shot1"], ["Shot 2", "keyframe b_shot2"], ["Shot 3", "keyframe b_shot3"]])
+        self.assertEqual({flow_runner.detail(self.conn, self.slug, "flow", run)["run"]["status"] for run in runs}, {"succeeded"})
+
+    def test_deleted_target_row_fails_the_waiting_proposal_without_restoring_it(self):
+        self.save(self.graph())
+        flow_runner.start(self.conn, self.me, self.slug, "flow", self.request())
+        result = self.finish(self.claim(), "orphan output")
+        doc = copy.deepcopy(self.doc)
+        del doc["content"][0]["content"][2]
+        repo.save_tab_doc(self.conn, self.slug, "shots", doc=doc, title="Shots", actor_id=self.actor, session_id="deleted", base_revision=1)
+        failed = self.apply(result["proposal_id"])
+        self.assertEqual(failed["status"], "failed")
+        self.assertIn("The row “Shot 2” was deleted after this proposal was made", failed["error"])
+        self.assertEqual(self.cells("b_shot2"), [])
+        self.assertNotIn("orphan output", str(repo.get_tab(self.conn, self.slug, "shots")["doc"]))
 
     def test_changed_source_before_claim_fails_in_place_without_external_execution(self):
         self.save(self.graph(target=False))
