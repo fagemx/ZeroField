@@ -1,4 +1,6 @@
 // Previs plans as plain data: camera keys, lens and actor action for one shot. No three.js here, so it is testable in node.
+// A story shot's plan is stored in the project (SPEC_20 R26); project_docs/story_previs.py validates it against the enums
+// here. plan.code and plan.cast[i].code name who plays the actor and each other cast member (@CAST-01, from the cast sheet).
 // Coordinates are station-local: the actor stands at the console station facing +z (toward the glass); his reaching
 // arm is on -x, which a camera behind him sees on screen right (the same screen layout as the Blender blockouts).
 import { bezierAt } from '../controls/controlsModel.js';
