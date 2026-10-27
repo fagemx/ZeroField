@@ -22,7 +22,8 @@ KEY = r"([a-z0-9][a-z0-9-]{0,40})"
 MAX_JSON_BODY = 3 * 1024 * 1024
 MAX_UPLOAD_BODY = media.MAX_BYTES
 STATIC_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-                ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2"}
+                ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2",
+                ".webp": "image/webp", ".mp4": "video/mp4"}  # SPEC_19 look samples (stills and camera-move loops)
 
 _SCHEMA_READY = False
 _SCHEMA_LOCK = threading.Lock()
