@@ -42,9 +42,10 @@
 - 在 [`ui/src/assistant/ProposalRaceView.jsx`](./ui/src/assistant/ProposalRaceView.jsx) 中，當候選提案為影片時，必須渲染並排 `<video>` 播放器供盲測挑片。
 
 ### ③ Comfy Developer Platform（Comfy Router / SDK）與 Open Weights 核心工作流
-- **「必須建構於 Comfy Developer Platform（Comfy Router 和／或 Comfy SDK）之上」是否為比賽規定：待確認**（SPEC_20 R6）。官方頁（comfy.org/open-source-higgsfield，2026-10-27 逐句核對）沒有這條，只寫可以在任何地方執行 ComfyUI，Developer Platform 只出現在導覽列；`docs/HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md` 寫過這句，但現行官方頁沒有。確認出處前**不要把它寫成比賽規定**，只當成建議。
+- **Comfy Developer Platform 不是比賽規定**（SPEC_20 R6，2026-10-27 確認）。官方頁（comfy.org/open-source-higgsfield）「App requirements」第 1 條要求作品用 ComfyUI 建構，執行方式不限：完全本機、Comfy Cloud、Developer Platform、Comfy Router、Comfy SDK 或混用。這段條文由頁面的前端元件從網站翻譯檔載入，只看頁面 HTML 找不到。`docs/HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md` 寫的「built using the Comfy Developer Platform」與現行條文不符，以官方條文為準。
+  - 第 3 條：另外結合的工具與模型都可以用，但要在示範影片說明（例如劇組用的 Ollama＋`qwen3.8:27b`）。
   - 啟動器預設是本機 ComfyUI：`run_studio.py --platform local`（`run_studio.py:486`；環境變數 `COMFY_PLATFORM` 可改預設值），未指定 `--comfy-url`／`COMFY_BASE_URL` 時工作流直接送到 `127.0.0.1:8188`（`card_engine.comfy_base_url`）。
-  - 要走 Developer Platform 才帶 `--platform comfy_sdk`（2026-10-21 自架 GPU 實測通過）：未設 `COMFY_API_KEY` 時接官方 `comfy-api-proxy`（`127.0.0.1:8189`，把本機 ComfyUI 轉成 SDK 的 v2 API），設了金鑰則接 Comfy Cloud。若 R6 確認是規定，展示啟動改用 `--platform comfy_sdk`。
+  - 要走 Developer Platform 才帶 `--platform comfy_sdk`（2026-10-21 自架 GPU 實測通過）：未設 `COMFY_API_KEY` 時接官方 `comfy-api-proxy`（`127.0.0.1:8189`，把本機 ComfyUI 轉成 SDK 的 v2 API），設了金鑰則接 Comfy Cloud。展示啟動維持預設的本機 ComfyUI。
   - Open Weights Only 組的官方規則是不得使用夥伴節點（Partner Nodes）或閉源 API、只能用開放權重模型；本機 ComfyUI 跑開放權重同樣符合，不需要 comfy-api-proxy。Comfy Router 是託管模型（含閉源）的轉接，本專案只在混合模式使用。
   - 已知不相容：`comfy-api-proxy` 0.1.6 要求 `metadata` 是字串，`comfy-sdk` 0.5.0 送的是字典；worker 設定不要帶 `metadata`。
 - `workflows/` 內的預設工作流採用 100% 開放權重模型（**`LTX-2.5`** 作為核心影片模型以符合 LTX \$2,000 加碼獎資格 ＋ **`FLUX`** 作為角色／場景資產與首幀模型），同時符合 **Best Overall** 與 **Open Weights Only** 參賽條件。官方頁沒有提到語言模型或代理；本專案從嚴解讀，**展示路徑上的代理與評分模型也只用開放權重**（預設為本機 Ollama＋`qwen3.8:27b`；SPEC_20 供應商原則 1）。
