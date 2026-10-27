@@ -80,7 +80,7 @@ Generation outputs are proposals for director review. The launcher uses `OPENBEN
 
 The crew (Showrunner, Screenwriter, Cinematographer, Continuity Supervisor) uses a language model for chat, proposed edits and continuity grading; media generation runs on the Comfy workflows above. By default that model is local open weights: [Ollama](https://ollama.com) serving `qwen3.8:27b` at `http://127.0.0.1:11434/v1`. No `OPENBENCH_*` variable is needed.
 
-1. Install Ollama, then pull the model (about 18 GB):
+1. Install Ollama, then pull the model (about 17 GB):
 
    ```powershell
    ollama pull qwen3.8:27b

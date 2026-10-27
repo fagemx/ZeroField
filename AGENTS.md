@@ -47,7 +47,7 @@
   - 要走 Developer Platform 才帶 `--platform comfy_sdk`（2026-10-21 自架 GPU 實測通過）：未設 `COMFY_API_KEY` 時接官方 `comfy-api-proxy`（`127.0.0.1:8189`，把本機 ComfyUI 轉成 SDK 的 v2 API），設了金鑰則接 Comfy Cloud。若 R6 確認是規定，展示啟動改用 `--platform comfy_sdk`。
   - Open Weights Only 組的官方規則是不得使用夥伴節點（Partner Nodes）或閉源 API、只能用開放權重模型；本機 ComfyUI 跑開放權重同樣符合，不需要 comfy-api-proxy。Comfy Router 是託管模型（含閉源）的轉接，本專案只在混合模式使用。
   - 已知不相容：`comfy-api-proxy` 0.1.6 要求 `metadata` 是字串，`comfy-sdk` 0.5.0 送的是字典；worker 設定不要帶 `metadata`。
-- `workflows/` 內的預設工作流採用 100% 開放權重模型（**`LTX-2.5`** 作為核心影片模型以符合 LTX \$2,000 加碼獎資格 ＋ **`FLUX`** 作為角色／場景資產與首幀模型），同時符合 **Best Overall** 與 **Open Weights Only** 參賽條件。**Open Weights Only 也看代理與評分模型，它們同樣須為開放權重**（預設為本機 Ollama＋`qwen3.8:27b`；SPEC_20 供應商原則 1）。
+- `workflows/` 內的預設工作流採用 100% 開放權重模型（**`LTX-2.5`** 作為核心影片模型以符合 LTX \$2,000 加碼獎資格 ＋ **`FLUX`** 作為角色／場景資產與首幀模型），同時符合 **Best Overall** 與 **Open Weights Only** 參賽條件。官方頁沒有提到語言模型或代理；本專案從嚴解讀，**展示路徑上的代理與評分模型也只用開放權重**（預設為本機 Ollama＋`qwen3.8:27b`；SPEC_20 供應商原則 1）。
 - `samples/` 與預設專案素材必須 **100% SFW、無版權爭議、無真實名人姓名或肖像**。
 
 ### ④ 改完前端 `ui/src/` 必跑 `npm run build --prefix ui`
