@@ -17,3 +17,6 @@
 .board-comment-review textarea{width:100%;box-sizing:border-box;resize:vertical;border:1px solid var(--line);padding:8px;font:inherit;line-height:1.5}.board-comment-review blockquote{margin:8px 0;padding-left:10px;border-left:2px solid var(--control);color:var(--text)}
 
 .race-video { display: block; width: 100%; max-height: 320px; background: var(--surface); }.race-differences .media-video-player { max-height: 320px; }
+.crew-readiness{margin:4px 0 8px;padding:10px 12px;border:1px solid var(--warning-line);border-radius:8px;background:var(--pill-warning-bg);font-size:12px;line-height:1.55;color:var(--text)}
+.crew-readiness header{display:flex;align-items:center;gap:10px}.crew-readiness strong{color:var(--warning);font-weight:650}.crew-readiness header button{margin-left:auto;border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:5px 9px;color:var(--positive);cursor:pointer;font:inherit;font-size:12px}.crew-readiness header button:disabled{opacity:.6;cursor:default}
+.crew-readiness ul{margin:6px 0 0;padding-left:18px}.crew-readiness li{margin:4px 0;overflow-wrap:anywhere}.crew-readiness li small{display:block;color:var(--muted)}.crew-readiness code{padding:1px 5px;border-radius:3px;background:var(--surface);font-size:11px;white-space:nowrap}.crew-readiness .error{margin:6px 0 0}.board-agent .needs-setup{color:var(--warning)}

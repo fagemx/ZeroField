@@ -1,13 +1,66 @@
 import { agentLabel } from '../format.js';
 import { useLocale } from '../i18n/react.jsx';
-import { t as uiText } from '../i18n/index.js';
-import { useEffect, useRef, useState } from 'react';
+import { t as uiText, currentLocale } from '../i18n/index.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '../api.js';
 import { TableProposalReview } from './TableProposalReview.jsx';
 import { ProposalRaceView } from './ProposalRaceView.jsx';
 import { groupBoardItems } from './orchestrationModel.js';
 import './orchestration.css';
 
-const statusLabel = { get queued() { return uiText("agentBoard.queued"); }, get running() { return uiText("agentBoard.running"); }, get completed() { return uiText("agentBoard.completed"); }, get succeeded() { return uiText("agentBoard.completed"); }, get failed() { return uiText("agentBoard.failed"); }, get canceled() { return uiText("agentBoard.canceled"); }, get online() { return uiText("agentBoard.available"); }, get busy() { return uiText("agentBoard.busy"); }, get offline() { return uiText("agentBoard.offline"); } };
+const statusLabel = { get queued() { return uiText("agentBoard.queued"); }, get running() { return uiText("agentBoard.running"); }, get completed() { return uiText("agentBoard.completed"); }, get succeeded() { return uiText("agentBoard.completed"); }, get failed() { return uiText("agentBoard.failed"); }, get canceled() { return uiText("agentBoard.canceled"); }, get online() { return uiText("agentBoard.available"); }, get busy() { return uiText("agentBoard.busy"); }, get offline() { return uiText("agentBoard.offline"); }, get needs_setup() { return uiText("agentBoard.needsSetup"); } };
+
+// Readiness fix hints (SPEC_20 §4.2) → crewReadiness messages; anything newer falls back to a generic line.
+const FIX_TEXT = { restart_without_no_worker: 'restartWithoutNoWorker', start_ollama: 'startOllama', start_model_server: 'startModelServer', check_endpoint: 'checkEndpoint', ollama_pull: 'ollamaPull', load_model: 'loadModel', set_api_key: 'setApiKey', configure_provider: 'configureProvider', allow_host: 'allowHost', enable_environment: 'enableEnvironment', keep_local: 'keepLocal', set_model_pricing: 'setModelPricing', reconcile_reservations: 'reconcileReservations', enable_agent: 'enableAgent', use_builtin_provider: 'useBuiltinProvider', reconfigure_provider: 'reconfigureProvider' };
+
+// One plain line per distinct problem and fix; the agents it stops are named once beneath it.
+export function readinessLines(readiness, agents = []) {
+  if (!readiness || readiness.ready) return [];
+  const names = new Map(agents.map(agent => [agent.agent_key, agentLabel(agent)])), lines = new Map();
+  for (const blocker of readiness.blockers || []) {
+    const id = [blocker.code, blocker.fix, blocker.model, blocker.host, blocker.port, blocker.count].join('|');
+    if (!lines.has(id)) lines.set(id, { id, agents: [],
+      text: uiText(`crewReadiness.${Object.hasOwn(FIX_TEXT, blocker.fix) ? FIX_TEXT[blocker.fix] : 'unknown'}`, { model: blocker.model, host: blocker.host, port: blocker.port, count: blocker.count, minutes: blocker.minutes, code: blocker.code }),
+      command: blocker.fix === 'ollama_pull' && blocker.model ? `ollama pull ${blocker.model}` : '' });
+    const line = lines.get(id), name = blocker.agentKey && (names.get(blocker.agentKey) || blocker.agentKey);
+    if (name && !line.agents.includes(name)) line.agents.push(name);
+  }
+  return [...lines.values()];
+}
+
+export function CrewReadinessBanner({ readiness, agents, error = '', checking = false, onCheck }) {
+  const lines = readinessLines(readiness, agents);
+  if (!lines.length && !error) return null;
+  return <section className="crew-readiness" aria-label={uiText("crewReadiness.label")}>
+    <header>{lines.length > 0 && <strong>{uiText("crewReadiness.title")}</strong>}
+      <button type="button" disabled={checking} onClick={onCheck}>{uiText(checking ? "crewReadiness.checking" : "crewReadiness.checkAgain")}</button></header>
+    {error && <p className="error" role="alert">{uiText("crewReadiness.checkFailed", {v0: error})}</p>}
+    {lines.length > 0 && <ul>{lines.map(line => <li key={line.id}>{line.text}{line.command && <> <code>{line.command}</code></>}
+      {line.agents.length > 0 && <small>{uiText("crewReadiness.affects", {v0: new Intl.ListFormat(currentLocale(), {type: 'conjunction'}).format(line.agents)})}</small>}</li>)}</ul>}
+  </section>;
+}
+
+function useCrewReadiness(slug) {
+  const [state, setState] = useState({ readiness: null, error: '', checking: false }), current = useRef(slug);
+  current.current = slug;
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setState(value => ({ ...value, checking: true }));
+    try {
+      const readiness = await api.get(`/projects/api/${slug}/agents/readiness${refresh ? '?refresh=1' : ''}`);
+      if (current.current === slug) setState({ readiness, error: '', checking: false });
+    } catch (error) {
+      if (current.current === slug) setState(value => ({ ...value, error: error.message, checking: false }));
+    }
+  }, [slug]);
+  useEffect(() => {
+    if (!slug) return undefined;
+    setState({ readiness: null, error: '', checking: false });
+    load();
+    const timer = setInterval(() => load(), 30000);
+    return () => clearInterval(timer);
+  }, [slug, load]);
+  return { ...state, check: () => load(true) };
+}
 
 function CommentProposalReview({ proposal, assistant }) {
   const locale = useLocale();
@@ -34,8 +87,12 @@ export function AgentBoard({ assistant, me, onOpenTarget }) {
   const locale = useLocale();
   const title = useRef(null), [busy, setBusy] = useState(null), [errors, setErrors] = useState({}), [reviewing, setReviewing] = useState(null);
   useEffect(() => { assistant.setBoardOpen(true); title.current?.focus({ preventScroll: true }); return () => assistant.setBoardOpen(false); }, [assistant.setBoardOpen]);
-  const board = assistant.board;
+  const board = assistant.board, crew = useCrewReadiness(assistant.slug);
   const groups = groupBoardItems(['needs_you', 'working', 'done', 'idle'].flatMap(key => board[key] || []));
+  const checkCrew = async () => {
+    await crew.check();
+    try { await assistant.reloadBoard(true); } catch { /* the board poll reports its own errors */ }
+  };
   const work = async (id, action) => {
     setBusy(id); setErrors(current => ({ ...current, [id]: '' }));
     try { await action(); }
@@ -85,8 +142,10 @@ export function AgentBoard({ assistant, me, onOpenTarget }) {
           {item.kind === 'task' && !item.flow_bound && ['failed', 'canceled'].includes(item.status) && <button type="button" disabled={busy !== null || !me.can_write} onClick={() => work(item.id, () => assistant.retryWork(item))}>{uiText("agentBoard.retry")}</button>}</div>
         {errors[item.id] && <p className="error" role="alert">{errors[item.id]}</p>}</article>)}
     </section>
-    <section className="board-group"><h4>{uiText("agentBoard.agentsWorkers")}</h4>{groups.idle.map(agent => <div className="board-agent" key={agent.id}>
-      <strong>{agent.icon} {agentLabel(agent)}</strong><small>{statusLabel[agent.status] || agent.status} · {agent.active_dispatches || 0}/{agent.max_concurrency || 1}</small>
+    <section className="board-group"><h4>{uiText("agentBoard.agentsWorkers")}</h4>
+      <CrewReadinessBanner readiness={crew.readiness} agents={groups.idle} error={crew.error} checking={crew.checking} onCheck={checkCrew} />
+      {groups.idle.map(agent => <div className="board-agent" key={agent.id}>
+      <strong>{agent.icon} {agentLabel(agent)}</strong><small className={agent.status === 'needs_setup' ? 'needs-setup' : undefined}>{statusLabel[agent.status] || agent.status} · {agent.active_dispatches || 0}/{agent.max_concurrency || 1}</small>
     </div>)}</section>
     {board.cursor && <button type="button" className="board-more" disabled={busy !== null} onClick={() => work('more', assistant.moreBoard)}>{uiText("agentBoard.loadMoreTasks")}</button>}
     {board.ui.selected && <ProposalRaceView gate={board.ui.selected} returnFocusRef={title} onClose={() => assistant.updateBoardUi({ selected: null })}

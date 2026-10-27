@@ -180,6 +180,7 @@ GET_ROUTES = [
     (re.compile(rf"/projects/api/{SLUG}/orchestration/board"), "orchestration_board"),
     (re.compile(rf"/projects/api/{SLUG}/orchestration/runs/([0-9a-f-]{{36}})"), "orchestration_detail"),
     (re.compile(rf"/projects/api/{SLUG}/agents"), "agents"),
+    (re.compile(rf"/projects/api/{SLUG}/agents/readiness"), "agents_readiness"),
     (re.compile(r"/projects/api/members"), "members"),
     (re.compile(rf"/projects/api/{SLUG}/tabs/{KEY}/export"), "export_tab"),
     (re.compile(r"/projects/api/me"), "me"),
@@ -313,11 +314,14 @@ def _call(name, conn, me, args, query, body, raw):
         actions={'orchestration_cancel_run':control.cancel_run_request,'orchestration_cancel_dispatch':control.cancel_dispatch_request,
                  'orchestration_resolve':control.resolve_gate_request,'orchestration_retry':control.retry_task_request}
         return actions[name](conn,me,*args,body)
-    if name in ('agents','save_agent','toggle_agent'):
+    if name in ('agents','agents_readiness','save_agent','toggle_agent'):
         from project_assistant import agent_registry
         try:
             if name == 'agents':
                 return 200, {'agents':agent_registry.roster(conn,me,args[0])}
+            if name == 'agents_readiness':
+                from project_assistant import crew_readiness
+                return 200, crew_readiness.readiness(conn,me,args[0],refresh=(query.get('refresh') or [''])[0]=='1')
             if name == 'toggle_agent':
                 profile = agent_registry.get_agent(conn,args[0],args[1])
                 if not profile:
