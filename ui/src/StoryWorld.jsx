@@ -22,6 +22,7 @@ import { CrewAsk } from './CrewAsk.jsx';
 import { ShotProposals } from './ShotProposals.jsx';
 import { ASSET_CREW_KINDS, CONTINUITY_KINDS, EPISODE_CREW_KINDS, assetProposals } from './crewJobModel.js';
 import { PreproductionPanel } from './PreproductionPanel.jsx';
+import { EpisodeLook } from './EpisodeLook.jsx';
 
 const focusedSceneOf = (shots, rid) => (rid && shots.find(shot => shot.rowId === rid)?.sceneId) || null;
 const renderTools = props => <WritingToolsPanel {...props}/>;
@@ -35,6 +36,8 @@ const renderTools = props => <WritingToolsPanel {...props}/>;
 // intent: where the shell's space menu sent you ({view, facet}), taken once; onImportTable opens the sheet import for the shot table.
 // controlRef/onStatus/focusSource/onIdentityLost are the writing workspace's contract with the shell (save boundary, status chip, jump from
 // a shot back to its source, sign-in lost); me is whoever is signed in, fixed for the life of the workspace.
+// SPEC_19 R12: the format tile at the foot of the left rail opens the Episode look page over the middle and right columns (the script
+// and its panels stay mounted underneath, so x brings them back as they were); it replaces the storyboard dialog's style choice.
 export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '', writable, focus = {}, intent = null, controlRef, focusSource = null, onFocus, onStatus, onIdentityLost,
   onChanged, onStage, onOpenShot, onAssets, onVault, onIntentDone, onImportTable, onSourceDone,
   proposals = [], onApplyProposal, onDismissProposal, onReloadProposals}) {
@@ -50,6 +53,7 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
   // columns of the shell it renders into.
   const [ready, setReady] = useState(false), [seed, setSeed] = useState(null);
   const [scriptStatus, setScriptStatus] = useState(null), [railFocus, setRailFocus] = useState(null), [leftSlot, setLeftSlot] = useState(null), [rightSlot, setRightSlot] = useState(null);
+  const [lookOpen, setLookOpen] = useState(false), formatTile = useRef(null);
   const localControl = useRef(null), control = controlRef || localControl;
   const mounted = useRef(true), loadedFor = useRef(null), openedFor = useRef(null), sentTo = useRef(epId);
   const inflight = useRef(new Set()), activeRef = useRef(''), intentSeen = useRef(null), changedRef = useRef(onChanged), focusRef = useRef(focus);
@@ -78,6 +82,7 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     if (scene?.sceneId && scene.sceneId !== focusRef.current.sceneId) onFocus?.({sceneId:scene.sceneId, shotRid:null});  // the scene in the editor is the focus
   }, [onFocus]);
   useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
+  useEffect(() => setLookOpen(false), [epId]);  // another episode, its own look
   useEffect(() => rememberWorld(epId, {view, pick, scene:sceneSel}), [epId, view, pick, sceneSel]);
   // Leaving the script view unmounts the workspace; the shell's status chip must not keep what it last said.
   useEffect(() => {if (view !== 'script') {setScriptStatus(null); onStatus?.(null);}}, [view]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -337,6 +342,13 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
   const jumpTo = railFocus && railFocus.nonce > (externalSource?.nonce || 0) ? railFocus : externalSource;
   const sourceDone = nonce => {setRailFocus(current => current?.nonce === nonce ? null : current); onSourceDone?.(nonce);};
   const seeded = () => {if (seed) acknowledgeStart(epId, seed); setSeed(null);};
+  // The Episode look page: closing it puts the focus back on the tile that opened it; an applied look is the episode's format here too.
+  const closeLook = () => {setLookOpen(false); requestAnimationFrame(() => formatTile.current?.focus());};
+  const appliedLook = settings => {
+    if (settings?.aspectRatio) setRatio(settings.aspectRatio);
+    if (settings?.stylePresetId) setStyle(String(settings.stylePresetId));
+    onChanged?.();
+  };
   const scenes = ep?.scenes || [];
   const shotsByScene = useMemo(() => shots.reduce((map, shot) => map.set(shot.sceneId, (map.get(shot.sceneId) || 0) + 1), new Map()), [shots]);
   const missing = missingAssetSheets(ep);
@@ -365,7 +377,7 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     {error && <p role="alert" className="canvas-error">{error}</p>}
   </>;
 
-  return <div className={'studio-space story-world' + (active ? ' is-editing' : '')}>
+  return <div className={'studio-space story-world' + (lookOpen ? ' is-look' : active ? ' is-editing' : '')}>
     <nav className="space-list" aria-label={t(view === 'world' ? 'world.facets' : 'world.scenes')}>
       <div className="space-list-head">{view === 'world'
         ? <><b>{t('world.worldTitle')}</b><span className="num">{scoped.length}</span></>
@@ -385,11 +397,13 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
           </ol>}
         </>}
       {writable
-        ? <button type="button" className="space-foot world-format-btn" title={t('world.format')} aria-label={t('world.format') + ': ' + [ratio, styleName].filter(Boolean).join(' · ')} onClick={openBuild}>
+        ? <button ref={formatTile} type="button" className={'space-foot world-format-btn' + (lookOpen ? ' is-open' : '')} title={t('episodeLook.title')} aria-expanded={lookOpen}
+          aria-label={t('episodeLook.open', {summary: [ratio, styleName].filter(Boolean).join(' · ')})} onClick={() => setLookOpen(open => !open)}>
           {styleSample && <img className="world-format-thumb" src={styleSample} alt="" loading="lazy"/>}
           <span>{[ratio, styleName].filter(Boolean).join(' · ')}</span><Icon name="arrowRight" size={13}/></button>
         : <p className="space-foot">{[ratio, styleName].filter(Boolean).join(' · ')}</p>}
     </nav>
+    {lookOpen && <EpisodeLook epId={epId} ep={ep} styles={styles} shots={shots} writable={writable} onClose={closeLook} onApplied={appliedLook}/>}
 
     <main className={'space-main' + (view === 'script' ? ' is-writing' : '')}>
       {view === 'world' ? <>
@@ -434,10 +448,12 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
             title={ep?.scriptDirty ? t('world.confirmFirst') : undefined}>{t('story.generateMissingAssets')} ({missing.length})</button>}
           <AssetGenerationState group={group}/></>}</>}
       </div>
-      <button type="button" className="primary studio-primary" disabled={primary.disabled} title={primary.hintKey ? t(primary.hintKey) : undefined} onClick={onPrimary}>
-        {t(primary.labelKey)}</button>
+      {/* While the Episode look page is open its "Apply to episode" is the one primary button. */}
+      {!lookOpen && <button type="button" className="primary studio-primary" disabled={primary.disabled} title={primary.hintKey ? t(primary.hintKey) : undefined} onClick={onPrimary}>
+        {t(primary.labelKey)}</button>}
     </aside>
-    {building && <BreakdownDialog value={{breakdownMode, ratio, style}} styles={styles} rebuild={shots.length > 0} shots={shots.length} confirmDisabled={!canBuild}
+    {/* The style is chosen on the Episode look page (SPEC_19 3.6): the dialog passes the episode's on unchanged. */}
+    {building && <BreakdownDialog value={{breakdownMode, ratio, style}} styles={[]} rebuild={shots.length > 0} shots={shots.length} confirmDisabled={!canBuild}
       estimate={estimate} target={target} onTarget={setTarget}
       onImport={onImportTable ? importTable : undefined} onConfirm={confirmBuild} onCancel={() => setBuilding(false)}/>}
   </div>;

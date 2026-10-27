@@ -2025,7 +2025,13 @@
     "requestNotAllowed": "Cross-origin requests are not allowed.",
     "requestNotAllowed2": "The studio interface has not been built.",
     "requestNotAllowed3": "Page not found.",
-    "unknownLookKind": "Unknown look kind {{kind}}. Use one of: {{kinds}}."
+    "unknownLookKind": "Unknown look kind {{kind}}. Use one of: {{kinds}}.",
+    "lookNotObject": "{{setting}} must be an object of look settings.",
+    "unknownLookSetting": "Unknown look setting '{{key}}'; use {{keys}}.",
+    "unknownLookOption": "Unknown {{setting}} option '{{id}}'; choose an option from the look catalog.",
+    "shotLookRevisionConflict": "The look of shot {{shot}} has changed since revision {{base}} (it is now revision {{current}}). Reload it before saving.",
+    "shotProposalLookChanged": "The look of shot {{v0}} changed after this proposal was made (revision {{v1}}, now {{v2}}). Nothing was applied; generate a new proposal.",
+    "shotProposalLookInvalid": "The look proposed for shot {{v0}} no longer fits the look catalog: {{v1}} Nothing was applied; generate a new proposal."
   },
   "access": {
     "login": "Sign in to your studio account to open this page.",
@@ -4311,7 +4317,10 @@
     "previewNotAdopted": "not adopted",
     "preview_opticalRig": "Optical rig",
     "preview_cameraMovement": "Camera movement",
-    "preview_moves": "Move tags"
+    "preview_moves": "Move tags",
+    "preview_film": "Film",
+    "preview_color": "Color",
+    "preview_light": "Lighting"
   },
   "look": {
     "buttons": "Look",
@@ -4360,7 +4369,40 @@
     "quote_start": "In point",
     "quoteHint_end": "Quote the out point of {{shot}} at the caret",
     "quoteHint_start": "Quote the in point of {{shot}} at the caret",
-    "quoteHint": "A quoted take is frozen when you generate: which take and which second are kept with the new take."
+    "quoteHint": "A quoted take is frozen when you generate: which take and which second are kept with the new take.",
+    "kind_genre": "Genre",
+    "kind_era": "Image era",
+    "kind_tempo": "Tempo",
+    "kind_palette": "Color palette",
+    "kind_light": "Lighting",
+    "backToEpisode": "Back to episode",
+    "followsEpisode": "Follows the episode",
+    "ownValue": "Set for this shot · the episode has {{value}}",
+    "episodeCamera": "The Optical Rig cell is empty, so this shot uses the episode's camera: {{value}}. A choice here writes this shot's own.",
+    "previous": "Previous",
+    "next": "Next",
+    "carouselAt": "{{from}}–{{to}} of {{count}}",
+    "eraOlder": "Older",
+    "eraNewer": "Newer",
+    "search": "Search",
+    "searchLabel": "Search {{what}}",
+    "sort": "Sort",
+    "sort_catalog": "Suggested order",
+    "sort_name": "Name",
+    "sort_tone": "Dark to light",
+    "noMatch": "Nothing matches “{{query}}”.",
+    "proposed": "Proposed",
+    "proposalWaiting": "A crew proposal is waiting",
+    "proposalTitle": "Crew proposal",
+    "proposalBy": "{{author}} proposes",
+    "proposalCrew": "The crew",
+    "proposalToEpisode": "Back to the episode",
+    "proposalApply": "Apply",
+    "proposalApplying": "Applying…",
+    "proposalDismiss": "Dismiss",
+    "proposalStale": "The shot's look changed after this was proposed (revision {{base}}, now {{current}}): applying it may be refused.",
+    "proposalReadOnly": "Only a member who can edit can apply it.",
+    "proposalMore": "{{count}} more after this one"
   },
   "lookCatalog": {
     "camera": {
@@ -4401,6 +4443,77 @@
       "rackFocus": "Rack focus",
       "pov": "Point of view",
       "static": "Locked off"
+    },
+    "genre": {
+      "auto": "Auto",
+      "rainMystery": "Rain-soaked mystery",
+      "quietDrama": "Quiet drama",
+      "creepingUnease": "Creeping unease",
+      "instrumentRoomSf": "Instrument-room sci-fi",
+      "distantMiles": "Distant miles",
+      "fieldRecord": "Field record",
+      "brightCaper": "Bright caper",
+      "closeWarmth": "Close warmth"
+    },
+    "era": {
+      "auto": "Auto",
+      "earlyLens": "Early-lens era",
+      "saturatedPrint": "Saturated-print era",
+      "grainFilm": "Grain-film era",
+      "tapeEra": "Tape era",
+      "cleanDigital": "Clean digital era"
+    },
+    "tempo": {
+      "auto": "Auto",
+      "stillHold": "Still hold",
+      "slowDrift": "Slow drift",
+      "holdThenBurst": "Hold, then burst",
+      "staccatoRun": "Staccato run"
+    },
+    "palette": {
+      "auto": "Auto",
+      "midnightSlate": "Midnight slate",
+      "lampAmber": "Lamp amber",
+      "verdigrisRust": "Verdigris and rust",
+      "boneInk": "Bone and ink",
+      "wetGlassNeon": "Wet-glass neon",
+      "mossFog": "Moss fog",
+      "seaBleached": "Sea-bleached",
+      "cinderGlow": "Cinder glow",
+      "floeWhite": "Floe white",
+      "mulberryHour": "Mulberry hour",
+      "sugarPaper": "Sugar-paper daylight",
+      "dryOchre": "Dry ochre"
+    },
+    "light": {
+      "auto": "Auto",
+      "windowSide": "Side-window soft light",
+      "practicalLamp": "Practical lamp pool",
+      "hardTop": "Hard overhead light",
+      "backlightRim": "Backlit rim",
+      "instrumentGlow": "Instrument glow",
+      "overcastFlat": "Overcast even light",
+      "lowSun": "Low sun"
     }
+  },
+  "episodeLook": {
+    "title": "Episode look",
+    "open": "Episode look: {{summary}}",
+    "hint": "Every shot uses these unless it sets its own.",
+    "format": "Format",
+    "ratio": "Aspect ratio",
+    "style": "Style",
+    "noStyles": "No style samples yet.",
+    "looks": "Film setup, camera, color and light",
+    "pick": "Pick a look button to see its examples.",
+    "apply": "Apply to episode",
+    "applying": "Applying…",
+    "applied": "Applied. Shots that set their own keep theirs.",
+    "unsaved": "Not applied yet",
+    "loading": "Loading the episode's settings…",
+    "failed": "Could not load the episode's settings: {{message}}",
+    "overrides": "{{count}} shots set their own",
+    "cameraHint": "A shot with text in its Optical Rig cell keeps it; an empty cell uses this camera.",
+    "cameraOverrides": "{{count}} shots have their own."
   }
 }

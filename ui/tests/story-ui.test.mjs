@@ -98,7 +98,7 @@ test('Story & World hosts the writing workspace and keeps one primary action and
   for(const asked of ['Aspect Ratio','Style Preset','Storyboard Density','name="breakdown"','world-format"']) assert.ok(!html.includes(asked),asked+' is asked in the dialog, it no longer stands on the page');
   assert.equal((html.match(/class="primary/g)||[]).length,1,'one primary action');
   assert.doesNotMatch(html,/role="dialog"/,'the dialog is closed until the action is pressed');
-  assert.match(html,/<button type="button" class="space-foot world-format-btn"[^>]*aria-label="Format and style: 16:9"/,'the foot of the left rail opens the same dialog');
+  assert.match(html,/<button type="button" class="space-foot world-format-btn"[^>]*aria-expanded="false" aria-label="Episode look: 16:9"/,'SPEC_19 R12: the foot of the left rail opens the Episode look page');
   assert.match(page({shots:[{shotId:'s1',sceneId:'sc1'}]}),/Update Storyboard &amp; Open Shot Stage/);
   assert.doesNotMatch(page({writable:false}),/world-format-btn/,'a reader sees the format, not a way to change it');
 });
@@ -426,7 +426,7 @@ test('the composer: the take on top, the look buttons, the prompt with its tags 
   assert.match(html,/<section class="shot-composer" aria-label="Shot composer">/);
   assert.match(html,/Scene 1 · 4\.0 s · Nothing adopted yet/);
   assert.match(html,/<div class="look-buttons" role="toolbar" aria-label="Look">/);
-  assert.equal((html.match(/class="look-button"/g)||[]).length,2,'package B: references and camera');
+  assert.equal((html.match(/class="look-button"/g)||[]).length,5,'references, film setup, camera, palette and lighting');
   assert.match(html,/<b>References<\/b><em class="look-scope is-shot">This shot<\/em><\/span><small>3 in this shot<\/small>/,'two known codes and one the cast sheet does not know');
   assert.match(html,/data-shot-prompt="b2"/,'R puts the focus here');
   assert.match(html,/<span class="pc-tag is-asset" contenteditable="false" data-token="@CAST-01" data-kind="asset" title="@CAST-01"><img class="pc-thumb" src="\/kael\.png" alt=""><span class="pc-label">Kael<\/span><\/span>/);
