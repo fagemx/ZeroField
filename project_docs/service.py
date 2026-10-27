@@ -173,8 +173,18 @@ def create_project(conn, me: Identity, body: dict):
                         actor_id=me.actor_id, position=pos * 10, surface_type=surface_type)
         for fid, (kind, val) in values.items():
             repo.set_field_value(conn, slug, key, fid, kind=kind, value=val, actor_id=me.actor_id)
-    from project_assistant import flow_runner
+    from project_assistant import flow_runner, local_workers
+    # The launcher's local workers serve every production: scope this one in the same transaction and bind the
+    # studio pipeline to them. Without local workers the template pipeline is saved unbound, as before.
+    workers = local_workers.grant_project(conn, slug)
     for key, definition in templates.flow_specs(template).items():
+        bound = local_workers.studio_pipeline(conn, slug, workers) if workers and key == "comfy-pipeline" else None
+        if bound:
+            try:
+                flow_runner.save_definition(conn, me, slug, key, {"definition": bound, "revision": 0})
+                continue
+            except flow_runner.ExecutionError:
+                pass  # checks run before the write; fall back to the template pipeline
         flow_runner.save_definition(conn, me, slug, key, {"definition": definition, "revision": 0})
     repo.add_audit(conn, slug, action="project_create", actor_id=me.actor_id,
                    detail={"title": title, "status": status, "template": template})

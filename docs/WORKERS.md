@@ -13,9 +13,20 @@ $env:OPENBENCH_LIMB_TOKEN = '<工作台發出的 token>'
 openbench-worker --config examples/worker.example.json
 ```
 
-原始碼也可用 `python -m project_assistant.limb_worker --config examples/worker.example.json`。`--once` 領取並處理一項任務後離開。工作流節點可綁定指定 Worker，或由同能力 Worker 共同消化佇列。`examples/worker.py` 保留為協定入門範例；正式執行器是 `limb_worker.py`。
+原始碼也可用 `python -m project_assistant.limb_worker --config examples/worker.example.json`。`--once` 領取並處理一項任務後離開。工作流節點可綁定指定 Worker，或由同能力 Worker 共同消化佇列（啟動器的本機 Worker 除外，見下節）。`examples/worker.py` 保留為協定入門範例；正式執行器是 `limb_worker.py`。
 
 複製範例設定並填上自己的端點、模型與工作流。憑證只放 Worker 環境變數，`api_key_env` 指定變數名稱；Head token 不會傳給模型或橋接服務。供應商回傳的任意 URL 不會直接當成本機檔案或 shell 指令執行。HTTP 不跟隨重新導向，遠端素材由設定的服務原站提供。
+
+## 啟動器的本機媒體 Worker
+
+`run_studio.py` 不帶 `--no-worker` 啟動時，開發模式與 token／header 驗證模式都註冊同一組本機媒體 Worker（14 個階段，`--worker-config` 可另加 `anchor`），服務這台伺服器上的所有專案（`project_assistant/local_workers.py`）。
+
+- 範圍仍是明確的專案清單：啟動時寫入全部專案，`create_project` 在同一筆交易把新專案加進去，沒有萬用字元。
+- 身分沿用展示專案原本的固定 id（`uuid5("zerofield-studio:zerofield-showcase:<階段>")`），已綁定的展示管線不必重綁；token 每次啟動重發，只留在記憶體。
+- 每個本機 Worker 只跑一張固定工作流，所以只領取綁定給它的步驟；沒綁 Worker 的步驟留給專案自己選的 Worker。
+- 有本機 Worker 時，新的 ZeroField Studio 專案的 Comfy Pipeline 是已綁定的展示生產線，只含範本有欄位的步驟：參考圖、關鍵幀→鏡頭→導演剪輯、OpenJutsu 重製→對比、預演動作→質感關鍵幀→質感、版面關鍵幀→版面算圖（不含 OpenJutsu 前處理與物件替換）。沒有本機 Worker 時存原本未綁定的範本。
+- 既有專案的 Comfy Pipeline 若還是未改過的範本，啟動時換成上述預設；改過的保持原樣。
+- `--no-worker` 不註冊、不換 token，也不改 Worker 資料。
 
 ## 可用 adapter
 

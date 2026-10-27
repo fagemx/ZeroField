@@ -56,7 +56,7 @@ npm run build --prefix ui
 python run_studio.py --port 3020 --no-worker
 ```
 
-Open [http://127.0.0.1:3020/projects/](http://127.0.0.1:3020/projects/). The launcher seeds the default development showcase and crew, registers separate workers, and fills only empty showcase media cells once. Subsequent launches preserve edits and custom pipeline definitions. Existing productions are preserved. Development mode binds to the local machine and includes a crew identity switcher. This command is browse only (`--no-worker`); [Models](#models) shows how to turn the crew on.
+Open [http://127.0.0.1:3020/projects/](http://127.0.0.1:3020/projects/). The launcher seeds the default development showcase and crew and fills only empty showcase media cells once. Without `--no-worker` it also registers one set of local media workers that serves every production on this server; new productions get a Comfy Pipeline bound to them. Subsequent launches preserve edits and custom pipeline definitions. Existing productions are preserved. Development mode binds to the local machine and includes a crew identity switcher. This command is browse only (`--no-worker`); [Models](#models) shows how to turn the crew on.
 
 For local generation, install the models/nodes listed in [workflow setup](workflows/README.md), then run:
 
@@ -72,9 +72,9 @@ comfy-api-proxy
 python run_studio.py --port 3020 --platform comfy_sdk
 ```
 
-Generation outputs are proposals for director review. The launcher uses `OPENBENCH_DB_URI` or `DATABASE_URL` when supplied, otherwise it starts the embedded development database. `OPENBENCH_PG_BIN` selects an installed PostgreSQL bin directory. Non-development authentication never seeds demo accounts or registers demo workers.
+Generation outputs are proposals for director review. The launcher uses `OPENBENCH_DB_URI` or `DATABASE_URL` when supplied, otherwise it starts the embedded development database. `OPENBENCH_PG_BIN` selects an installed PostgreSQL bin directory. Non-development authentication never seeds demo accounts; unless `--no-worker` is given, it registers the same local media workers as development mode.
 
-`--no-worker` is browse only: it starts no workers, so nothing calls a model. To use the crew, set up a model as described in [Models](#models) and start without that flag. Existing `OPENBENCH_*` environment variables and CLI entry points are retained for compatibility.
+`--no-worker` is browse only: it registers and starts no workers, so nothing calls a model. To use the crew, set up a model as described in [Models](#models) and start without that flag. Existing `OPENBENCH_*` environment variables and CLI entry points are retained for compatibility.
 
 ## Models
 
