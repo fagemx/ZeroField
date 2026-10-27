@@ -1,6 +1,6 @@
 # SPEC_20 規劃代理層：劇組真的會規劃、對內對外分工、供應商原則
 
-> **狀態：** 已實作，待驗收（2026-10-27）。使用者指示不受參賽截止時間限制、R1–R44 全部完整實作；各項實作已併入整合分支 `feat/spec20-integration`，R44 與部分項目尚未完成，逐項狀態與未完成處見 §11。完整分片測試已跑（收據 `docs/spec20-verification.json`：後端 1237、前端 592 項全過）。2026-10-27 在使用者的 4090 上做了實機驗收（收據的 `real_acceptance`）：A14、A15、A17 通過；R42 以本機模型跑了分拍與接點，分數偏低；R44 只用介面走到匯出成片，但靠介面上的變通繞過兩個阻擋斷點，斷點未修。真實 MCP 主機檢查還沒做。
+> **狀態：** 已實作，待驗收（2026-10-27）。使用者指示不受參賽截止時間限制、R1–R44 全部完整實作；各項實作已併入整合分支 `feat/spec20-integration`，R44 與部分項目尚未完成，逐項狀態與未完成處見 §11。完整分片測試已跑（收據 `docs/spec20-verification.json`：後端 1237、前端 592 項全過）。2026-10-27 在使用者的 4090 上做了實機驗收（收據的 `real_acceptance`）：A14、A15、A17 通過；R42 以本機模型跑了分拍與接點，分數偏低；R44 只用介面走到匯出成片，但靠介面上的變通繞過兩個阻擋斷點。2026-10-28 修好這兩個斷點（R44-3、R44-7）後重走一次（收據的 `real_acceptance.R44_rewalk`）：劇組與連戲評分改走 OpenRouter 上的託管開放權重 DeepSeek V4.1 Flash 1017，製作政策維持 `open_weights_only`，不用任何變通就走到匯出成片，兩個斷點關閉；其餘非阻擋斷點仍在。真實 MCP 主機檢查還沒做。
 > **依據：** [`docs/research/2026-10-27-planning-agent-layer.md`](../research/2026-10-27-planning-agent-layer.md)（研究備忘，含查證狀態）。
 > **相關：** SPEC_08（中控台）、SPEC_13／14／16（故事與拆鏡）、SPEC_18（R4 階梯、R8 生成列）、SPEC_19（生成台、採用即成片、引用與接點；另一個工作階段在 `feat/spec19-integration` 平行實作，見 §10）。
 > **截止：** 參賽截止 2026-10-30 09:00 PT（台灣 10/31 00:00）。「P0／P1／P2」只代表先後與重要性，不再是截止前後的切分。
@@ -444,10 +444,10 @@ R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 | R41 外部代理連線頁 | partial | `ui/src/agentConsole/ConsoleExternalAgents.jsx`、`externalAgentsModel.js`、`project_docs/agent_http.py` | 工具標籤由伺服器的工具登記提供（英文），zh-TW 沒有翻譯 |
 | R42 劇組評測集 | partial | `research/crew_eval/`、`scripts/crew_eval.py`、`crew_planning.py`、`crew_continuity.py`（`run_eval_job`） | 分拍、走位、接點各 8 題與評分器完成。2026-10-27 在 4090 上以本機 `qwen3.8:27b` 實跑（`research/crew_eval/reports/spec20-real-2026-10-27-*.json`）：分拍 18.56%（硬性 2/8，軟分 0.79；8 題都由模型回答，失分全在拍數：工作提示詞要每拍約 1–1.5 秒，題目允許的拍數較少，兩邊不一致，未改提示詞）；接點 24.29%（硬性 2/8，軟分 0.58；多報 5 次、漏報 3 次，一題兩次回答都因「修正沒改到文字」被擋下，規則退路什麼都沒報）。走位沒有劇組工作與轉接器（3D 走位是代理迴圈裡的 `propose_previs_ops` 工具），未跑 |
 | R43 離線工具清單檢查 | done | `scripts/audit_tool_surface.py`、`tests/fixtures/tool_surface.json`、`tests/test_tool_registry.py` | 含 ACP 可見工具 |
-| R44 空白專案實走 | partial | `docs/spec20-verification.json`（`real_acceptance.R44`）、`docs/research/screenshots/spec20/` | 2026-10-27 只用介面（無頭 Edge 1440×900）與本機模型走完一集：新專案貼三場劇本 → 劇組拆鏡（採用）→ 前製流程與三道鎖 → 審核描述、出場、分拍、運鏡與 3D 計畫 → 兩鏡的首幀與 LTX-2.5 影片 → 連戲評分 → 匯出 8.1 秒成片。兩個阻擋斷點靠變通繞過、未修：新專案的管線有多個步驟寫同一欄，「拍這鏡」、Run 與 Run Pipeline 都失敗，只能從 Comfy Pipeline 的單步測試生成（R44-7）；貼上的劇本存成一段，三場變一場（R44-3）。其他斷點：劇本角色抓不到、範本內容混入新專案、場景代碼撞到範本、流程面板與評分面板輪詢停住，見收據 |
+| R44 空白專案實走 | partial | `docs/spec20-verification.json`（`real_acceptance.R44`、`R44_rewalk`）、`docs/research/screenshots/spec20/`（`r44-*`、`r44b-*`） | 2026-10-27 只用介面（無頭 Edge 1440×900）與本機模型走完一集：新專案貼三場劇本 → 劇組拆鏡（採用）→ 前製流程與三道鎖 → 審核描述、出場、分拍、運鏡與 3D 計畫 → 兩鏡的首幀與 LTX-2.5 影片 → 連戲評分 → 匯出 8.1 秒成片，兩個阻擋斷點當時靠變通繞過。2026-10-28 修正後重走（劇組與評分用 OpenRouter 的 DeepSeek V4.1 Flash 1017，`hosted_open`，花費約 0.07 美元）：貼上的編號場景劇本直接成三場、以標題命名（R44-3 關閉）；Keyframe／Cinema Shot 的 Run、Re-shoot Take 與兩鏡的 Run Pipeline 都找到這一欄的預設步驟、送到 FLUX 3 Klein 與 LTX-2.5，管線步驟面板顯示「Default step for this column」（R44-7 關閉；「拍這鏡」按鈕已被 SPEC_19 的鏡頭面板取代）。前製四段 10 秒、24 秒、1.8 分、28 秒（本機模型為 16 秒、1.5 分、6.4 分、1.7 分）。仍在的斷點：劇本進來是私稿（R44-1）、範本內容混入（R44-2）、角色抓不到（R44-4）、場景代碼撞到範本（R44-5）、預覽分配推薦沒裝的 MiniMax H3；輪詢停住（R44-6、R44-8）這次沒出現，見收據 |
 
 **未完成的驗收**
 - 完整後端測試在最後分片跑了一次（1237 項全過），前端 592 項與建置也通過，見 `docs/spec20-verification.json`；這些測試全部用假的模型端點、假的 ComfyUI 與 GPU 探測、假的 ACP 代理。
-- 實機驗收（2026-10-27，收據的 `real_acceptance`）：A14、A15、A17 通過；R42 的分拍與接點分數低（18.56%、24.29%），走位沒跑；R44 走到成片但兩個阻擋斷點（R44-3、R44-7）與數個非阻擋斷點未修。
+- 實機驗收（2026-10-27，收據的 `real_acceptance`）：A14、A15、A17 通過；R42 的分拍與接點分數低（18.56%、24.29%），走位沒跑；R44 走到成片但兩個阻擋斷點（R44-3、R44-7）與數個非阻擋斷點未修。2026-10-28 重走（`real_acceptance.R44_rewalk`）確認 R44-3、R44-7 已修好；R44-1、R44-2、R44-4、R44-5 與預覽分配推薦 MiniMax H3 仍未修。
 - MCP 用 MCP Inspector、Goose＋Ollama、Claude Code 各接一次的檢查沒做；MCP Apps 卡片只在模擬主機頁（無頭 Edge）看過。
 - 等 SPEC_19 併入才能補的項目：R19 的生成台入口、R23 的故事 API 自動評分、R18 的質感提案、R34 的生成台與成片接點兩張卡片。
