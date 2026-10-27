@@ -87,6 +87,17 @@ class VocabularyTests(unittest.TestCase):
         self.assertEqual(crew.ALIASES, previs_ops.TARGET_ALIASES)
         self.assertEqual({name: tuple(fields) for name, fields in crew.OP_FIELDS.items()},
                          {name: tuple(fields) for name, fields in previs_ops.OP_FIELDS.items()})
+        self.assertEqual(crew.SKILLS, story_previs.SKILLS)
+
+    def test_every_blocking_reference_passes_the_servers_validation(self):
+        """A reference answer scores full marks in crew_eval and is also a request the server accepts (final §4.6)."""
+        cases = json.loads((ROOT / 'research' / 'crew_eval' / 'cases' / 'blocking.json').read_text(encoding='utf-8'))['cases']
+        for case in cases:
+            with self.subTest(case=case['id']):
+                inp, ref = case['input'], case['reference']
+                previs_ops.validate_request({'shotId': 'sh_x', 'baseRevision': ref['baseRevision'], 'ops': ref['ops']})
+                previs_ops.validate_ops(ref['ops'], base_set=inp['set']['stage'], on_set=(), acting=len(inp.get('beats') or []),
+                                        cast_codes=[member['code'] for member in inp['cast']])
 
 
 class GoldenTests(unittest.TestCase):
@@ -276,6 +287,32 @@ console.log(JSON.stringify(plans.map(p => actingBeats({ ...defaultPlan(), ...p }
                               capture_output=True, text=True, timeout=60)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual([previs_ops.acting_beats({'action': 'turnreach', **p}) for p in plans], json.loads(done.stdout))
+
+    SOLVE = """
+import { solveRequest } from './src/previs/ops.js';
+import { actingBeats } from './src/previs/blocking.js';
+const { plan, warnings } = solveRequest(JSON.parse(process.argv[1]));
+console.log(JSON.stringify({ warnings, starts: actingBeats(plan).map(b => b.start) }));
+"""
+
+    def test_the_crew_eval_retime_case_solves_on_a_plan_with_its_acting_beats(self):
+        """blocking-03: the reference's retime moves the shove (acting beat 2) to 0.6 of the shot without hitting beat 3."""
+        case = next(c for c in json.loads((ROOT / 'research' / 'crew_eval' / 'cases' / 'blocking.json').read_text(encoding='utf-8'))['cases']
+                    if c['id'].startswith('blocking-03'))
+        frames = lambda seconds: round(seconds * 24)  # noqa: E731
+        args = {'standIdle': {}, 'walkTo': {'to': [0, 0.1]}, 'reachGrip': {'anchor': 'console_edge', 'reach': 6, 'hold': 7, 'release': 6}}
+        use = [{'skill': b['skill'], 'f0': frames(b['from']), **({'frames': frames(b['to']) - frames(b['from'])} if b['skill'] != 'reachGrip' else {}),
+                'args': args[b['skill']]} for b in case['input']['beats']]
+        stored = {'set': 'observatory', 'move': 'static', 'lens': 35, 'action': 'stand', 'facing': 'console', 'mood': 'grey',
+                  'seconds': case['input']['shot']['seconds'], 'code': '@CAST-01', 'use': use}
+        self.assertEqual(previs_ops.acting_beats(stored), len(case['input']['beats']))
+        request = {'stored': stored, 'shot': {}, 'ops': case['reference']['ops'], 'castCodes': [m['code'] for m in case['input']['cast']]}
+        done = subprocess.run(['node', '--input-type=module', '-e', self.SOLVE, json.dumps(request)], cwd=ROOT / 'ui',
+                              capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        solved = json.loads(done.stdout)
+        self.assertEqual([w for w in solved['warnings'] if 'Acting beat' in w], [])
+        self.assertEqual(solved['starts'][1], round(0.6 * 96))
 
 
 class ToolDeclarationTests(unittest.TestCase):

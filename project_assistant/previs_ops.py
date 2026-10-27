@@ -497,6 +497,20 @@ def propose_previs_ops(ctx, conn, args):
     return _report(proposal, prepared, solved)
 
 
+# ---------- the camera job's 3D camera (crew_planning.PREVIS_HOOK, SPEC_20 R20) ----------
+
+def propose_from_job(ctx, conn, shot_id, ops):
+    """The Cinematographer's camera job (crew_planning) also proposes its §4.6 camera op as a previsPlan proposal on the
+    shot's current plan revision: the framed camera path shows as the ghost camera in the 3D Stage, next to the job's
+    Optical Rig and Camera Motion cell proposal. Runs in a savepoint of the job's transaction, so a refusal (OpsRefusal)
+    leaves nothing of this proposal behind and the cell proposal stands. Returns the proposal id."""
+    state = story_previs.stored(story.shot_meta(conn, shot_id))
+    with conn.transaction():
+        prepared = prepare(conn, ctx.slug, {'shotId': shot_id, 'baseRevision': state['planRevision'], 'ops': ops})
+        solved = solve(prepared)
+        return commit(conn, prepared, solved, ctx.me.actor_id, ctx=ctx, agent_key=getattr(ctx, 'agent_key', None))['id']
+
+
 # ---------- the 3D Stage's solve of an operations-only proposal ----------
 
 def attach_solution(conn, me, slug, proposal_id, body):

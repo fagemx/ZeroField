@@ -19,7 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from project_assistant import crew_jobs, crew_planning as planning, crew_readiness, tool_registry
+from project_assistant import crew_jobs, crew_planning as planning, crew_readiness, headless_previs, tool_registry
 from project_docs import story_previs
 import test_story_openapi as fixture
 
@@ -279,6 +279,21 @@ class FakeResponse:
         return self.raw
 
 
+PNG = b'\x89PNG\r\n\x1a\n' + b'\x00' * 32
+
+
+def fake_solver(request, *, title='', files=None, render=True, timeout=None):
+    """The headless solve of a camera op, faked (tests/test_previs_ops.py and the golden file pin the real one): the shot's
+    stored plan or seed with the op's lens and move and a two-key path, plus a contact sheet."""
+    camera = next(op for op in request['ops'] if op['op'] == 'camera')
+    seed = {key: value for key, value in (request['shot'].get('previsPlan') or {}).items() if key in ('set', 'action', 'facing', 'seconds')}
+    base = request['stored'] or {'set': 'observatory', 'move': 'pushin', 'lens': 35, 'action': 'stand', 'facing': 'console',
+                                 'mood': 'grey', 'seconds': 4, **seed}
+    plan = {**base, 'lens': camera['lens'], 'move': camera['move'], 'keys': [[0, [1.0, 1.4, -2.5], [0, 1.4, 0]], [96, [-1.0, 1.4, -2.5], [0, 1.4, 0]]]}
+    return {'solved': {'version': 1, 'plan': plan, 'warnings': [], 'base': {}}, 'image': PNG, 'renderError': None, 'browser': 'fake',
+            'sheet': {'width': 1944, 'height': 818, 'frames': [{'frame': 0, 'seconds': 0}]}, 'seconds': 0.1}
+
+
 class FakeEndpoint:
     """An OpenAI-compatible endpoint behind an opener: answers in order and records each request body."""
 
@@ -320,6 +335,9 @@ class CrewJobServerTests(unittest.TestCase):
         self.probe = patch.object(crew_readiness, '_probe', return_value=('ok', {'qwen3.8:27b'}))
         self.probe.start()
         self.addCleanup(self.probe.stop)
+        solver = patch.object(headless_previs, 'run', fake_solver)  # R27: no browser in unit tests
+        solver.start()
+        self.addCleanup(solver.stop)
         agent_registry.ensure_default_agents(self.conn, self.slug)
         store.set_setting(self.conn, self.slug, 'builtin_worker_seen_at', cp.now().isoformat())
         self.conn.commit()
@@ -518,7 +536,13 @@ class CrewJobServerTests(unittest.TestCase):
         self.assertEqual((status, done['source']), ('succeeded', 'model'), done)
         self.assertEqual(endpoint.requests[0]['reasoning_effort'], 'low')
         self.assertEqual(done['result']['previsOps'], [{'op': 'camera', 'size': 'close', 'angle': 'low', 'lens': 85, 'move': 'orbit'}])
-        self.assertIsNone(done['result']['previsProposalId'], 'the 3D op waits for propose_previs_ops (R27)')
+        # R27: the camera op also becomes a 3D plan proposal (the ghost camera in the 3D Stage), next to the cell proposal.
+        previs = self.proposal(done['result']['previsProposalId'])
+        self.assertEqual((previs['action'], previs['status'], previs['agent_key'], previs['target']['field'], previs['target']['ops']),
+                         ('shot_meta', 'pending', 'sheet_ops', 'previsPlan', done['result']['previsOps']))
+        self.assertEqual((previs['target']['value']['lens'], previs['target']['value']['move'], previs['target']['solve']['status']),
+                         (85, 'orbit', 'solved'))
+        self.assertTrue(previs['target']['preview']['url'].startswith(f'/projects/api/{self.slug}/assets/pa_'))
         proposal = self.proposal(done['result']['proposalIds'][0])
         [group] = proposal['target']['review']['groups']
         changes = {c['column']: c['after'] for c in group['changes']}
@@ -532,6 +556,26 @@ class CrewJobServerTests(unittest.TestCase):
         status, done = self.run_job(FakeEndpoint(branded, branded))
         self.assertEqual(done['source'], 'rule_fallback')
         self.assertFalse(planning.brands_in(done['result']['camera']['opticalRig']))
+
+    def test_a_camera_job_keeps_its_cells_when_the_3d_plan_cannot_take_the_camera(self):
+        shot = self.shots[0]
+        answer = {'size': 'medium', 'angle': 'eye', 'lens': 50, 'move': 'static', 'opticalRig': '50mm prime, medium shot at eye level',
+                  'cameraMotion': 'Static tripod, locked off', 'reason': 'Hold on the standoff.'}
+        shot_meta = "SELECT count(*) FROM projectops.assistant_proposal WHERE project_slug=%s AND action='shot_meta'"
+        self.ask(shot, 'camera')
+        with patch.object(headless_previs, 'run', side_effect=headless_previs.Refused('ops[0].to', 'ops[0].to must be the key a static camera holds.')):
+            status, done = self.run_job(FakeEndpoint(answer))
+        self.assertEqual(status, 'succeeded', done)
+        self.assertEqual((done['result']['previsProposalId'], len(done['result']['proposalIds'])), (None, 1))
+        self.assertIn('static camera', done['result']['previsError'])
+        self.assertEqual(self.counted(shot_meta), 0, 'the refused 3D proposal left nothing behind')
+        self.assertEqual(self.proposal(done['result']['proposalIds'][0])['status'], 'pending')
+        # Without a headless browser the camera op waits as operations only, for the 3D Stage to solve.
+        self.ask(shot, 'camera')
+        with patch.object(headless_previs, 'run', side_effect=headless_previs.Unavailable('no_browser', 'No browser.')):
+            status, done = self.run_job(FakeEndpoint({**answer, 'lens': 85, 'opticalRig': '85mm prime, close-up at eye level'}))
+        previs = self.proposal(done['result']['previsProposalId'])
+        self.assertEqual((previs['target']['value'], previs['target']['solve']['status']), (None, 'ops_only'))
 
     # ---- cancel ----
     def test_a_job_can_be_canceled_queued_or_running_and_then_writes_nothing(self):
