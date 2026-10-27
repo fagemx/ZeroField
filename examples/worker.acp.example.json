@@ -8,6 +8,7 @@
       "model": "CONFIGURE_YOUR_MODEL",
       "command": ["node", "/absolute/path/node_modules/@agentclientprotocol/codex-acp/dist/index.js"],
       "api_key_env": "OPENBENCH_ACP_PROVIDER_KEY",
+      "required_mode": "read-only",
       "env": {
         "CODEX_CONFIG": "{\"model\":\"CONFIGURE_YOUR_MODEL\"}"
       }

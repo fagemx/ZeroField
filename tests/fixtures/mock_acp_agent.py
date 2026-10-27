@@ -32,7 +32,9 @@ for line in sys.stdin:
     elif method == 'session/new':
         session = request['params']; assert Path(session['cwd']).is_absolute()
         assert len(session['mcpServers']) == 1
-        send({'id': identifier, 'result': {'sessionId': 'fixture-session'}})
+        # codex-acp reports the mode INITIAL_AGENT_MODE started the session in (SPEC_20 R35 confirms it).
+        send({'id': identifier, 'result': {'sessionId': 'fixture-session', 'modes': {'currentModeId': os.environ['INITIAL_AGENT_MODE'],
+              'availableModes': [{'id': 'read-only', 'name': 'Read Only'}, {'id': 'auto', 'name': 'Auto'}]}}})
         if MODE == 'blocked_write':
             time.sleep(3)
             sys.exit(0)
@@ -42,7 +44,7 @@ for line in sys.stdin:
             Path('child.pid').write_text(str(child.pid))
             time.sleep(90)
         if MODE == 'deny':
-            for index, name in enumerate(('fs/read_text_file', 'terminal/create', 'session/request_permission', 'unknown/test')):
+            for index, name in enumerate(('session/request_permission', 'unknown/test')):  # fs/* and terminal/* stop the turn (R35)
                 send({'id': 'agent-' + str(index), 'method': name, 'params': {'sessionId': 'fixture-session', 'options': []}})
                 response = json.loads(sys.stdin.readline())
                 assert response['id'] == 'agent-' + str(index)
