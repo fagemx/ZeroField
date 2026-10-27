@@ -1,0 +1,580 @@
+"""Crew planning jobs (SPEC_20 fixed decisions 9, 10, 12; R7, R19, R20).
+
+A crew job is one judgment step a built-in crew role makes for a shot (the Cinematographer writing a beat sheet or
+choosing the camera). Every job has the four things of fixed decision 12: a JSON output schema, a validator in
+code, at most one retry, and a rule fallback. A job declares them once (:class:`CrewJob`, registered in ``JOBS``):
+
+    kind          'beats' | 'camera' (crew_planning declares both)
+    role          the built-in crew agent that does it (agent_registry.ROSTER key; both jobs are 'sheet_ops')
+    schema        the JSON Schema the model answers with (``response_format`` on a tool-free round, else in the prompt)
+    effort        the job's own reasoning_effort (SPEC_20 R10)
+    gather        (ctx, conn, shot_id, request) -> {'input', 'shot', 'reads'}: context from the R16 read tools
+    instructions  (input) -> system prompt          prompt  (input) -> the user turn
+    validate      (output, input) -> [errors]       fallback  (input) -> an output built by rules
+    propose       (ctx, conn, gathered, outcome) -> result: cell-scoped proposals only, never a write (decision 9)
+
+Runner (:func:`run_pipeline`): one governed model call asking for the schema, validate, at most one retry that shows
+the model its answer and the validation errors, and if that is still invalid the rule fallback, marked
+``source: 'rule_fallback'`` in the job result and on the proposal. A malformed or empty answer counts as invalid
+output. A missing model is not invalid output: when the crew cannot work (a readiness blocker for the role:
+no worker, model unreachable or missing, policy, pricing, credentials) :func:`request` answers 409
+``DRAMA_CREW_NOT_READY`` and writes nothing (R7); when the model goes away mid-job the job fails with its failure
+class (SPEC_20 R12) and proposes nothing. The rule fallback stands in for bad output only.
+
+States of a job record (``projectops.story_record`` kind ``crew_job``)::
+
+    queued -> running -> succeeded | failed        queued | running -> canceled (by the requester or an admin)
+
+Jobs run on the assistant worker (worker.poll_once claims them before chat turns and dispatches), one at a time per
+claim, with a lease; a job whose worker died fails when its lease runs out. Canceling cannot interrupt a model call
+already in flight (SPEC_20 pitfall M): the runner checks before every call and before it proposes, so a canceled
+job never writes. Every model call is governed (ProviderAdmission: reserved, attributed to the role and the
+requester, accounted under the session ``crew:<jobId>``, a loopback model unbilled), every context read is audited by
+the read tools, and the job record keeps the attempts, usage, the answering model and the context hashes. Manual
+jobs are never blocked by the automation switch; ``automatic=True`` callers (R25, a later wave) are.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import re
+import uuid
+from dataclasses import dataclass, field
+from typing import Callable
+
+KIND = 'crew_job'  # projectops.story_record kind
+ACTIVE = ('queued', 'running')
+FINISHED = ('succeeded', 'failed', 'canceled')
+LEASE_SECONDS = 15 * 60
+MODEL_TIMEOUT = 300
+SOURCE_MODEL, SOURCE_FALLBACK = 'model', 'rule_fallback'
+NOT_READY = 'DRAMA_CREW_NOT_READY'
+PAUSED = 'DRAMA_AUTOMATION_PAUSED'
+BAD_OUTPUT = ('empty', 'output')  # failure classes that describe the answer, not the transport: they count as invalid
+JOB_ID = re.compile(r'cj_[0-9a-f]{32}')
+BOARD_LIMIT = 100
+RETRY_NOTE = ('Your answer did not pass validation:\n{errors}\n'
+              'Fix exactly these problems and answer again with the whole JSON object, nothing else.')
+# Readiness blockers in words, for the 409 sentence (the UI shows its own text for each fix hint).
+BLOCKER_TEXT = {
+    'worker_not_running': 'the crew worker is not running',
+    'provider_unreachable': 'the model server is not reachable',
+    'model_missing': 'the model is not installed',
+    'kind_removed': 'the model runtime was removed',
+    'cli_blocked': 'the role runs on a command-line agent',
+    'auth_missing': 'the model credentials are missing',
+    'network_policy': 'the network or production policy does not allow this model',
+    'pricing_missing': 'the model has no price limit',
+    'agent_disabled': 'the role is disabled',
+    'reservations_stuck': 'earlier model calls are still unsettled',
+}
+
+
+class Canceled(Exception):
+    """The job was canceled; nothing more is written."""
+
+
+class Refused(Exception):
+    """Governance or configuration refused the model call (not a model failure)."""
+
+
+class ModelUnavailable(Exception):
+    """The model could not answer (transport, quota, auth, timeout, GPU): no rule fallback, no proposal."""
+
+    def __init__(self, reply, attempts):
+        super().__init__(reply.error or reply.failure)
+        self.reply, self.attempts = reply, attempts
+
+
+class FallbackFailed(Exception):
+    """Even the rule fallback does not pass the job's validation (the shot itself is unusable)."""
+
+    def __init__(self, errors, attempts):
+        super().__init__('; '.join(errors))
+        self.errors, self.attempts = errors, attempts
+
+
+def no_options(body):
+    if body:
+        raise ValueError('This crew request takes no fields: ' + ', '.join(sorted(body)) + '.')
+    return {}
+
+
+@dataclass(frozen=True)
+class CrewJob:
+    kind: str
+    role: str
+    title: str
+    schema: dict
+    effort: str
+    gather: Callable
+    instructions: Callable
+    prompt: Callable
+    validate: Callable
+    fallback: Callable
+    propose: Callable
+    options: Callable = no_options  # (request body) -> normalized options, or raise ValueError
+    check_row: Callable | None = None  # (shot row) -> a sentence when the job cannot apply to this sheet, else None
+    timeout: int = MODEL_TIMEOUT
+
+
+JOBS: dict[str, CrewJob] = {}
+
+
+def declare(job: CrewJob) -> CrewJob:
+    if job.kind in JOBS:
+        raise ValueError(f'Crew job {job.kind!r} is declared twice.')
+    if job.effort not in ('low', 'medium', 'high'):
+        raise ValueError('A crew job effort is low, medium or high.')
+    JOBS[job.kind] = job
+    return job
+
+
+def job(kind) -> CrewJob:
+    if kind not in JOBS:
+        from project_assistant import crew_planning  # noqa: F401  (declares the built-in jobs)
+    return JOBS[kind]
+
+
+# ---------- the pipeline: call, validate, retry once, fall back ----------
+
+@dataclass
+class Reply:
+    ok: bool
+    answer: str = ''        # the text the model sent, also when it was malformed
+    failure: str = ''       # model_client.FAILURE_CLASSES when not ok
+    error: str = ''
+    usage: dict = field(default_factory=dict)
+    model: str = ''
+    seconds: float = 0.0
+
+
+@dataclass
+class Outcome:
+    source: str             # SOURCE_MODEL | SOURCE_FALLBACK
+    output: dict
+    attempts: list
+    errors: list            # the last validation errors (a fallback's reason)
+
+
+def parse_answer(answer):
+    """(object, problem): the answer's one JSON object, thinking and code fences removed."""
+    text = re.sub(r'(?s)<think>.*?</think>', '', answer or '').strip()
+    text = re.sub(r'^```(?:json)?\s*|\s*```$', '', text).strip()
+    try:
+        value = json.loads(text)
+    except ValueError:
+        start, end = text.find('{'), text.rfind('}')
+        try:
+            value = json.loads(text[start:end + 1]) if 0 <= start < end else None
+        except ValueError:
+            value = None
+    if not isinstance(value, dict):
+        return None, 'The answer is not one JSON object.'
+    return value, ''
+
+
+def run_pipeline(crew_job, job_input, call_model, *, cancelled=None):
+    """Run one job on its input: the model's answer if it validates (first or after one retry), else the rule fallback.
+
+    call_model(instructions, turn_text, history) -> Reply. Raises ModelUnavailable when the model cannot answer,
+    Canceled when cancelled() turns true before a call or before the fallback, FallbackFailed when even the rule
+    output is invalid."""
+    instructions = crew_job.instructions(job_input)
+    text, history, attempts, errors = crew_job.prompt(job_input), [], [], []
+    for number in (1, 2):
+        if cancelled and cancelled():
+            raise Canceled()
+        reply = call_model(instructions, text, history)
+        entry = {'attempt': number, 'model': reply.model, 'seconds': reply.seconds, 'usage': dict(reply.usage)}
+        if not reply.ok and reply.failure not in BAD_OUTPUT:
+            attempts.append({**entry, 'valid': False, 'failure': reply.failure or 'provider', 'error': reply.error[:300]})
+            raise ModelUnavailable(reply, attempts)
+        if reply.answer.strip():
+            output, problem = parse_answer(reply.answer)
+            errors = [problem] if problem else list(crew_job.validate(output, job_input))
+        else:
+            output, errors = None, ['The answer was empty.']
+        attempts.append({**entry, 'valid': not errors, 'errors': [e[:300] for e in errors[:8]]})
+        if not errors:
+            return Outcome(SOURCE_MODEL, output, attempts, [])
+        history = history + [{'role': 'user', 'content': text},
+                             {'role': 'assistant', 'content': reply.answer.strip() or '(no answer)'}]
+        text = RETRY_NOTE.format(errors='\n'.join('- ' + e for e in errors[:12]))
+    if cancelled and cancelled():
+        raise Canceled()
+    output = crew_job.fallback(job_input)
+    problems = list(crew_job.validate(output, job_input))
+    if problems:
+        raise FallbackFailed(problems, attempts)
+    return Outcome(SOURCE_FALLBACK, output, attempts, errors)
+
+
+def model_caller(config, *, admission=None, effort=None, schema_name, schema, timeout=MODEL_TIMEOUT, opener=None):
+    """call_model for run_pipeline: one tool-free OpenAI-compatible call asking for the schema (SPEC_20 R8, R10)."""
+    from project_assistant import agent_registry, providers, tools
+    from project_assistant.execution_governance import AdmissionError
+
+    def no_tools(*_):
+        raise ValueError('Crew jobs call no tools.')
+
+    def call(instructions, text, history):
+        seen = []
+        try:
+            result = providers.run_openai_compat_turn(
+                config=config, instructions=instructions, turn_text=text, history=history, call_tool=no_tools,
+                timeout=timeout, tool_specs=[], reasoning_effort=effort, on_text=seen.append,
+                json_schema={'name': schema_name, 'schema': schema},
+                **({'admission': admission} if admission is not None else {}), **({'opener': opener} if opener else {}))
+        except (AdmissionError, agent_registry.AgentError, tools.ToolError) as exc:
+            raise Refused('Model governance refused the call: ' + str(exc)) from None
+        ok = result.status == 'ok'
+        # A tool call where none was offered ('lockdown') is a malformed answer, not a transport failure.
+        failure = '' if ok else (result.failure or ('output' if result.status == 'lockdown' else 'provider'))
+        return Reply(ok=ok, answer=(result.answer if ok else (seen[-1] if seen else '')) or '',
+                     failure=failure, error=result.error or ('The model called a tool instead of answering.' if result.status == 'lockdown' else ''),
+                     usage=dict(result.usage), model=result.model or config.model, seconds=result.seconds)
+    return call
+
+
+# ---------- records ----------
+
+def now():
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def _load(conn, job_id, *, lock=False):
+    with conn.cursor() as cur:
+        cur.execute('SELECT data, project_slug FROM projectops.story_record WHERE id=%s AND kind=%s'
+                    + (' FOR UPDATE' if lock else ''), (job_id, KIND))
+        row = cur.fetchone()
+    return (dict(row[0], slug=row[1]) if row else None)
+
+
+def _save(conn, record):
+    from project_docs import story_openapi as story
+    data = {k: v for k, v in record.items() if k != 'slug'}
+    story.store(conn, record['jobId'], KIND, data, record['slug'], record['requestedBy'])
+    return record
+
+
+def public(record):
+    keys = ('jobId', 'kind', 'role', 'shotId', 'shotLabel', 'status', 'source', 'requestedBy', 'requestedAt', 'startedAt',
+            'finishedAt', 'request', 'result', 'error', 'failure', 'attempts', 'model', 'usage')
+    return {k: record.get(k) for k in keys}
+
+
+def _records(conn, slug, *, owner=None, shot_id=None, limit=BOARD_LIMIT):
+    with conn.cursor() as cur:
+        cur.execute("""SELECT data FROM projectops.story_record WHERE kind=%s AND project_slug=%s
+                       AND (%s::uuid IS NULL OR owner_id=%s::uuid) AND (%s::text IS NULL OR data->>'shotId'=%s)
+                       ORDER BY data->>'requestedAt' DESC, id DESC LIMIT %s""",
+                    (KIND, slug, owner, owner, shot_id, shot_id, limit))
+        return [dict(row[0], slug=slug) for row in cur.fetchall()]
+
+
+def listing(conn, me, slug, shot_id):
+    """This member's crew jobs for one shot, newest first."""
+    return [public(r) for r in _records(conn, slug, owner=me.actor_id, shot_id=shot_id, limit=20)]
+
+
+def running_count(conn, slug, role):
+    """Running crew jobs of one role: the roster counts them with its dispatches."""
+    with conn.cursor() as cur:
+        cur.execute("""SELECT count(*) FROM projectops.story_record WHERE kind=%s AND project_slug=%s
+                       AND data->>'status'='running' AND data->>'role'=%s""", (KIND, slug, role))
+        return cur.fetchone()[0]
+
+
+# ---------- requesting a job ----------
+
+def readiness_blockers(conn, me, slug, role):
+    """The readiness blockers that stop this role (crew_readiness probes local endpoints; it ends the transaction)."""
+    from project_assistant import agent_registry, crew_readiness
+    profile = agent_registry.get_agent(conn, slug, role, effective=False)
+    if not profile:
+        return [{'code': 'agent_disabled', 'agentKey': role, 'fix': 'enable_agent'}]
+    payload = crew_readiness.readiness(conn, me, slug)
+    return crew_readiness.blocks(payload, profile)
+
+
+def not_ready_message(blockers, role_name):
+    reasons = list(dict.fromkeys(BLOCKER_TEXT.get(b['code'], b['code'].replace('_', ' ')) for b in blockers))
+    return (f"The crew can't work yet: {'; '.join(reasons)}. The {role_name} needs a working model before it can "
+            "propose anything; the crew board lists each fix. Nothing was written.")
+
+
+def _relock(conn, slug):
+    from project_assistant import orchestrator as cp
+    cp.lock_project(conn, slug)
+    with conn.cursor() as cur:
+        cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ('story-write:' + slug,))
+
+
+def request(conn, me, slug, kind, shot_id, body, *, automatic=False):
+    """Queue one crew job for a shot (manual unless automatic), or explain with 409 why the crew cannot work.
+
+    Raises story_openapi.StoryError: 422 for a bad request, 409 DRAMA_CREW_NOT_READY (nothing written) when a
+    readiness blocker stops the role, 409 DRAMA_AUTOMATION_PAUSED for an automatic request while paused.
+    The same member's active job of the same kind for the same shot is returned instead of a second one."""
+    from project_assistant import agent_registry, automation
+    from project_docs import repository as repo, story_openapi as story
+    crew_job = job(kind)
+    if not isinstance(body, dict):
+        story.invalid('Send the crew request as a JSON object.')
+    try:
+        options = crew_job.options(body)
+    except ValueError as exc:
+        story.invalid(str(exc))
+    if automatic and automation.automation_paused(conn, slug):
+        raise story.StoryError(409, PAUSED, 'Automatic crew work is paused for this production.')
+    _, row = story.find_row(conn, shot_id, 'shot')
+    problem = crew_job.check_row(row) if crew_job.check_row else None
+    if problem:
+        story.invalid(problem)
+    blockers = readiness_blockers(conn, me, slug, crew_job.role)  # may end the transaction: lock again below
+    _relock(conn, slug)
+    if blockers:
+        name = next((r[1] for r in agent_registry.ROSTER if r[0] == crew_job.role), crew_job.role)
+        raise story.StoryError(409, NOT_READY, not_ready_message(blockers, name),
+                               details={'agentKey': crew_job.role, 'blockers': blockers})
+    for record in _records(conn, slug, owner=me.actor_id, shot_id=shot_id, limit=20):
+        if record['kind'] == kind and record['status'] in ACTIVE:
+            return public(record)
+    job_id = 'cj_' + uuid.uuid4().hex
+    record = {'jobId': job_id, 'kind': kind, 'role': crew_job.role, 'shotId': shot_id, 'shotLabel': (row['cells'] or [''])[0],
+              'tabKey': row['tabKey'], 'rowId': row['rid'], 'status': 'queued', 'requestedBy': me.actor_id,
+              'requestedAt': now(), 'request': options, 'automatic': bool(automatic), 'attempts': [], 'usage': {},
+              'slug': slug}
+    _save(conn, record)
+    repo.add_audit(conn, slug, action='crew_job_requested', actor_id=me.actor_id, tab_key=row['tabKey'], target=job_id,
+                   detail={'kind': kind, 'role': crew_job.role, 'shotId': shot_id, 'request': options})
+    return public(record)
+
+
+def cancel(conn, me, slug, job_id):
+    """Cancel a queued or running job (its requester or a showrunner); a finished job answers 409."""
+    from project_assistant import orchestrator as cp
+    from project_docs import repository as repo
+    cp.actor(conn, slug, me, write=True)
+    record = _load(conn, job_id, lock=True) if JOB_ID.fullmatch(job_id or '') else None
+    if not record or record['slug'] != slug or (record['requestedBy'] != me.actor_id and getattr(me, 'role', '') != 'admin'):
+        raise cp.OrchestrationError(404, 'Crew job not found.')
+    if record['status'] not in ACTIVE:
+        raise cp.OrchestrationError(409, 'This crew job has already finished.')
+    record.update(status='canceled', finishedAt=now(), canceledBy=me.actor_id)
+    _save(conn, record)
+    repo.add_audit(conn, slug, action='crew_job_canceled', actor_id=me.actor_id, tab_key=record.get('tabKey'),
+                   target=job_id, detail={'kind': record['kind'], 'shotId': record['shotId']})
+    return public(record)
+
+
+def cancel_request(conn, me, slug, job_id, body):
+    """POST /projects/api/{slug}/orchestration/crew-jobs/{jobId}/cancel (the crew board's cancel)."""
+    from project_assistant import orchestration_service as control
+    def action():
+        control.object_body(body or {}, ('reason', 'client_request_id'))
+        return {'job': cancel(conn, me, slug, job_id)}
+    return control.result(action)
+
+
+# ---------- the worker side ----------
+
+def _expire(conn):
+    """Running jobs past their lease: their worker stopped. They fail; nothing was proposed."""
+    with conn.cursor() as cur:
+        cur.execute("""SELECT id FROM projectops.story_record WHERE kind=%s AND data->>'status'='running'
+                       AND (data->>'leaseUntil')::timestamptz < NOW() FOR UPDATE SKIP LOCKED""", (KIND,))
+        stale = [row[0] for row in cur.fetchall()]
+    for job_id in stale:
+        record = _load(conn, job_id)
+        record.update(status='failed', finishedAt=now(), error='The crew worker stopped while this job ran. Ask the crew again.')
+        _save(conn, record)
+
+
+def claim(conn, worker_id, *, slug=None):
+    """The oldest queued crew job (of one production when slug is given), leased to this worker; None when there is
+    none. The caller commits."""
+    _expire(conn)
+    with conn.cursor() as cur:
+        cur.execute("""SELECT id FROM projectops.story_record WHERE kind=%s AND data->>'status'='queued'
+                       AND (%s::text IS NULL OR project_slug=%s)
+                       ORDER BY data->>'requestedAt', id LIMIT 1 FOR UPDATE SKIP LOCKED""", (KIND, slug, slug))
+        row = cur.fetchone()
+    if not row:
+        return None
+    record = _load(conn, row[0])
+    started = dt.datetime.now(dt.timezone.utc)
+    record.update(status='running', startedAt=started.isoformat(), leaseOwner=worker_id,
+                  leaseUntil=(started + dt.timedelta(seconds=LEASE_SECONDS)).isoformat())
+    _save(conn, record)
+    return {'crewJob': record['jobId'], 'slug': record['slug']}
+
+
+def _identity(conn, actor_id):
+    from project_docs import repository as repo
+    from project_docs.service import Identity
+    member = next((m for m in repo.active_members(conn) if m['actor_id'] == actor_id), None)
+    return Identity(member['actor_id'], member['name'], member['role']) if member else None
+
+
+def _status(connection_factory, job_id):
+    conn = connection_factory()
+    try:
+        record = _load(conn, job_id)
+        conn.rollback()
+        return record['status'] if record else 'canceled'
+    finally:
+        conn.close()
+
+
+def _finish(conn, job_id, worker_id, **changes):
+    """Settle the job in a fresh transaction unless it was canceled or taken over meanwhile."""
+    conn.rollback()
+    record = _load(conn, job_id, lock=True)
+    if not record or record['status'] != 'running' or record.get('leaseOwner') != worker_id:
+        conn.rollback()
+        return None
+    record.update(finishedAt=now(), **changes)
+    _save(conn, record)
+    conn.commit()
+    return record
+
+
+def _usage(attempts):
+    total = {}
+    for attempt in attempts:
+        for key, value in (attempt.get('usage') or {}).items():
+            if type(value) is int:
+                total[key] = total.get(key, 0) + value
+    return total
+
+
+def execute(connection_factory, claimed, worker_id, *, opener=None):
+    """Run one claimed job to its end: context, governed model calls, validation, retry, fallback, proposals.
+
+    Returns the final status ('succeeded', 'failed', 'canceled' or 'skipped' when the lease is not ours)."""
+    from project_assistant import agent_registry, tools
+    from project_assistant import execution_governance as governance
+    from project_assistant.agent_runtime import provider_for
+    from project_docs import repository as repo, story_openapi as story
+    job_id = claimed['crewJob']
+    conn = connection_factory()
+    attempts = []
+    try:
+        record = _load(conn, job_id)
+        if not record or record['status'] != 'running' or record.get('leaseOwner') != worker_id:
+            conn.rollback()
+            return 'canceled' if record and record['status'] == 'canceled' else 'skipped'
+        slug, crew_job = record['slug'], job(record['kind'])
+        me = _identity(conn, record['requestedBy'])
+        if me is None:
+            _finish(conn, job_id, worker_id, status='failed', error='The member who asked is no longer on this production.')
+            return 'failed'
+        ctx = tools.ToolContext(connection_factory, slug, me, None, None, agent_key=crew_job.role)
+        gathered = crew_job.gather(ctx, conn, record['shotId'], record.get('request') or {})
+        profile = agent_registry.get_agent(conn, slug, crew_job.role)
+        if not profile or not profile.get('enabled', True):
+            raise Refused('The crew role that does this job is disabled.')
+        try:
+            config = provider_for(profile)
+        except (ValueError, tools.ToolError) as exc:
+            raise Refused(str(exc)) from None
+        if config.kind != 'openai_compat':
+            raise Refused('Crew jobs need an OpenAI-compatible model for this role.')
+        record.update(context=gathered['reads'], model=config.model)
+        _save(conn, record)
+        conn.commit()  # no transaction across inference
+        governed = governance.media_context(me, slug, agent_key=crew_job.role, accounting_session_key='crew:' + job_id,
+                                            execution_key='crew:%s:%s' % (job_id, record.get('startedAt')))
+        governed.connection_factory = connection_factory
+        admission = governance.ProviderAdmission(governed, profile, config, 'llm_turn', purpose='crew_' + crew_job.kind)
+        call = model_caller(config, admission=admission, effort=crew_job.effort, schema_name='crew_' + crew_job.kind,
+                            schema=crew_job.schema, timeout=crew_job.timeout, opener=opener)
+        outcome = run_pipeline(crew_job, gathered['input'], call,
+                               cancelled=lambda: _status(connection_factory, job_id) != 'running')
+        attempts = outcome.attempts
+        conn.rollback()
+        record = _load(conn, job_id, lock=True)
+        if not record or record['status'] != 'running' or record.get('leaseOwner') != worker_id:
+            conn.rollback()
+            return 'canceled'
+        result = crew_job.propose(ctx, conn, gathered, outcome, job_id=job_id)
+        record.update(status='succeeded', finishedAt=now(), source=outcome.source, result=result, attempts=attempts,
+                      usage=_usage(attempts), model=next((a['model'] for a in reversed(attempts) if a.get('model')), config.model),
+                      **({'fallbackReason': outcome.errors[:8]} if outcome.source == SOURCE_FALLBACK else {}))
+        _save(conn, record)
+        repo.add_audit(conn, slug, action='crew_job_finished', actor_id=me.actor_id, tab_key=record.get('tabKey'), target=job_id,
+                       detail={'kind': crew_job.kind, 'role': crew_job.role, 'source': outcome.source,
+                               'proposalIds': result.get('proposalIds', []), 'attempts': len(attempts)})
+        conn.commit()
+        return 'succeeded'
+    except Canceled:
+        conn.rollback()
+        return 'canceled'
+    except ModelUnavailable as exc:
+        from project_assistant.model_client import FAILURE_TEXT
+        failure = exc.reply.failure or 'provider'
+        done = _finish(conn, job_id, worker_id, status='failed', failure=failure, attempts=exc.attempts, usage=_usage(exc.attempts),
+                       error=FAILURE_TEXT.get(failure, exc.reply.error or 'The model did not answer.'))
+        return 'failed' if done else 'canceled'
+    except FallbackFailed as exc:
+        done = _finish(conn, job_id, worker_id, status='failed', attempts=exc.attempts, usage=_usage(exc.attempts),
+                       error='The model answer failed validation twice and the rule fallback is not usable for this shot: '
+                             + '; '.join(exc.errors[:3]))
+        return 'failed' if done else 'canceled'
+    except Refused as exc:
+        done = _finish(conn, job_id, worker_id, status='failed', attempts=attempts, error=str(exc)[:500])
+        return 'failed' if done else 'canceled'
+    except story.StoryError as exc:
+        done = _finish(conn, job_id, worker_id, status='failed', attempts=attempts, error=str(exc)[:500])
+        return 'failed' if done else 'canceled'
+    except Exception as exc:  # noqa: BLE001 - one broken job must not stop the worker
+        print(f'crew job {job_id} failed: {type(exc).__name__}: {exc}', flush=True)
+        done = _finish(conn, job_id, worker_id, status='failed', attempts=attempts,
+                       error='The crew job failed on the server. Ask again; if it keeps failing, check the server log.')
+        return 'failed' if done else 'canceled'
+    finally:
+        conn.close()
+
+
+# ---------- the crew board ----------
+
+def _summary(record):
+    result = record.get('result') or {}
+    if record['status'] != 'succeeded':
+        return None
+    if result.get('unchanged'):
+        return 'No change: the shot already says this.'
+    ids = ', '.join('#' + str(i) for i in result.get('proposalIds', []))
+    if record.get('source') == SOURCE_FALLBACK:
+        return f'Rule fallback, not model-written: proposal {ids} is waiting on the shot.'
+    return f'Proposal {ids} is waiting on the shot.'
+
+
+def board_item(record):
+    title = job(record['kind']).title + ' · ' + (record.get('shotLabel') or record['shotId'])
+    return {'id': 'crew:' + record['jobId'], 'kind': 'crew_job', 'job_id': record['jobId'], 'shot_id': record['shotId'],
+            'title': title, 'status': record['status'], 'agent_key': record['role'],
+            'target': {k: v for k, v in (('tab_key', record.get('tabKey')), ('row_id', record.get('rowId'))) if v},
+            'created_at': record['requestedAt'], 'summary': _summary(record), 'source': record.get('source'),
+            'error': record.get('error'), 'failure': record.get('failure'), 'tools_trace': []}
+
+
+def board(conn, me, slug):
+    """(working, done) board items of this member's crew jobs."""
+    records = _records(conn, slug, owner=me.actor_id)
+    return ([board_item(r) for r in records if r['status'] in ACTIVE],
+            [board_item(r) for r in records if r['status'] in FINISHED])
+
+
+def counts(conn, me, slug):
+    with conn.cursor() as cur:
+        cur.execute("""SELECT count(*) FILTER (WHERE data->>'status' IN ('queued','running')),
+                              count(*) FILTER (WHERE data->>'status' IN ('succeeded','failed','canceled'))
+                       FROM projectops.story_record WHERE kind=%s AND project_slug=%s AND owner_id=%s::uuid""",
+                    (KIND, slug, me.actor_id))
+        working, done = cur.fetchone()
+    return working, min(done, BOARD_LIMIT)
+
+

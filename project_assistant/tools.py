@@ -618,6 +618,8 @@ HANDLERS.update(context_tools.HANDLERS)
 _STRUCTURED = frozenset(studio_tools.HANDLERS) | frozenset(context_tools.HANDLERS)
 from project_assistant import external_tools
 HANDLERS.update(external_tools.HANDLERS)
+from project_assistant import crew_planning  # SPEC_20 R7/R19/R20: propose_shot_prompt, propose_camera
+HANDLERS.update(crew_planning.HANDLERS)
 
 
 class ToolResult(str):

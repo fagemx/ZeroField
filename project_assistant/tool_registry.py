@@ -488,6 +488,49 @@ register(
          annotations={'readOnlyHint': False, 'destructiveHint': False, 'idempotentHint': True, 'openWorldHint': False}),
 )
 
+# Crew planning proposals (SPEC_20 R7, R19, R20, §4.7): checked by the same validators as the crew jobs
+# (project_assistant/crew_planning.py) and written only as cell-scoped table proposals for the director to adopt.
+# The registry schema has no number type, so a beat's seconds are checked by the handler (§4.4).
+_CAMERA_LENSES = [24, 35, 50, 85]  # ui/src/previs/plan.js LENSES (tests cross-check)
+_CAMERA_MOVES = ['pushin', 'pullout', 'orbit', 'crane', 'track', 'static']  # plan.js MOVES
+_PROPOSAL = {'readOnlyHint': False, 'destructiveHint': False, 'idempotentHint': False, 'openWorldHint': False}
+register(
+    Tool('propose_shot_prompt',
+         "Propose a shot's beat sheet for its Action & Audio Prompt. sheet is {setup, beats, sound, constraints}; each beat "
+         'is {from, to, camera, action} with from and to in seconds (numbers). Beats start at 0, follow each other '
+         "without gaps or overlaps and end at the shot's length (4, 6, 8 or 10 s; from its 3D plan unless seconds names "
+         'it); every @ tag of the current prompt stays exactly as written; no other tag; no camera or lens brand names; '
+         'lenses only as 24, 35, 50 or 85 mm. The tool checks the sheet, compiles it to the timed prompt text '
+         '("0-1.5s: camera; action.") and creates a proposal the director reviews on the shot; nothing is written '
+         'until it is adopted. Read the shot first with read_shot.',
+         _obj({'shot_id': _ID,
+               'sheet': _obj({'setup': {'type': 'string', 'minLength': 1, 'maxLength': 2000},
+                              'beats': {'type': 'array', 'minItems': 1, 'maxItems': 12, 'items': {'type': 'object'}},
+                              'sound': {'type': 'string', 'maxLength': 600},
+                              'constraints': {'type': 'array', 'maxItems': 8,
+                                              'items': {'type': 'string', 'minLength': 1, 'maxLength': 200}}},
+                             ['setup', 'beats', 'sound', 'constraints']),
+               'seconds': {'type': 'integer', 'enum': [4, 6, 8, 10]}}, ['shot_id', 'sheet']),
+         'crew', 'project_assistant.crew_planning:propose_shot_prompt', mutating=True, analysis_only=False,
+         annotations=_PROPOSAL, label='Propose Beat Sheet', grants=('coordinator', 'sheet_ops'), zerofield_mcp=True),
+    Tool('propose_camera',
+         "Propose a shot's camera: lens (24, 35, 50 or 85 mm) and move (pushin, pullout, orbit, crane, track, static), "
+         'optionally size (wide, full, medium, close, extreme_close), angle (low, eye, high, overhead) and the '
+         'Optical Rig and Camera Motion texts. Texts are brand-free: optical_rig names that one lens in millimetres and '
+         'camera_motion names the move in words the 3D Stage reads (push in, pull out, orbit, crane, track, static); '
+         'omitted texts are written from the choice. Creates a proposal for the two cells that the director reviews on '
+         'the shot, shown as a ghost camera in the 3D Stage; nothing is written until it is adopted.',
+         _obj({'shot_id': _ID, 'lens': {'type': 'integer', 'enum': _CAMERA_LENSES},
+               'move': {'type': 'string', 'enum': _CAMERA_MOVES},
+               'size': {'type': 'string', 'enum': ['wide', 'full', 'medium', 'close', 'extreme_close']},
+               'angle': {'type': 'string', 'enum': ['low', 'eye', 'high', 'overhead']},
+               'optical_rig': {'type': 'string', 'minLength': 1, 'maxLength': 200},
+               'camera_motion': {'type': 'string', 'minLength': 1, 'maxLength': 200},
+               'reason': {'type': 'string', 'maxLength': 400}}, ['shot_id', 'lens', 'move']),
+         'crew', 'project_assistant.crew_planning:propose_camera', mutating=True, analysis_only=False,
+         annotations=_PROPOSAL, label='Propose Camera', grants=('coordinator', 'sheet_ops'), zerofield_mcp=True),
+)
+
 for _module in EXTENSIONS:
     register(*importlib.import_module(_module).TOOLS)
 _sealed = True

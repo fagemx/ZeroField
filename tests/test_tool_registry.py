@@ -32,6 +32,8 @@ HISTORIC_GRANTS = {
 EXTERNAL_ONLY = {'get_workflow', 'request_generation'}  # declared for zerofield-mcp; no built-in grant
 # SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
 CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
+# SPEC_20 R7/R19/R20: the Cinematographer's proposal tools, after the context tools (the Showrunner has every tool).
+CREW = {'sheet_ops': ['propose_shot_prompt', 'propose_camera']}
 
 
 class ToolSurfaceAuditTests(unittest.TestCase):
@@ -90,7 +92,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(tool_specs.DELEGATION_TOOLS, {'list_agents', 'spawn_agent', 'check_delegation', 'cancel_delegation',
                                                        'ask_decision_gate', 'trigger_flow_run'})
         self.assertEqual(tool_specs.MUTATING_TOOLS, {'propose', 'propose_table_edit', 'spawn_agent', 'cancel_delegation',
-                                                     'ask_decision_gate', 'trigger_flow_run', 'request_generation'}
+                                                     'ask_decision_gate', 'trigger_flow_run', 'request_generation',
+                                                     'propose_shot_prompt', 'propose_camera'}
                          | set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual({n for n, p in tool_specs.DEFAULT_POLICIES.items() if p != 'auto'},
                          {'studio_ingest_script', 'studio_manage_asset', 'studio_dispatch_shot', 'studio_edit_timeline'})
@@ -107,7 +110,7 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(tool_registry.ANALYSIS_ONLY_DENIED, {'propose', 'propose_table_edit', 'trigger_flow_run',
                                                               'studio_ingest_script', 'studio_manage_asset',
                                                               'studio_dispatch_shot', 'studio_edit_timeline',
-                                                              'request_generation'})
+                                                              'request_generation', 'propose_shot_prompt', 'propose_camera'})
         self.assertEqual(tool_registry.RACE_DENIED, {'studio_ingest_script', 'studio_manage_asset',
                                                      'studio_dispatch_shot', 'studio_edit_timeline', 'request_generation'})
         self.assertEqual(dict(tool_registry.REQUIRES), {'spawn_agent': ('allow_subagents',),
@@ -135,8 +138,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertFalse(any(tool_registry.get(name).grants for name in EXTERNAL_ONLY))
         for key, grants in HISTORIC_GRANTS.items():
             with self.subTest(key=key):
-                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + CONTEXT)
-                self.assertEqual(agent_registry.default_tools(key, False), grants + CONTEXT)
+                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + CONTEXT + CREW.get(key, []))
+                self.assertEqual(agent_registry.default_tools(key, False), grants + CONTEXT + CREW.get(key, []))
         self.assertEqual(agent_registry.default_tools('custom_agent'), agent_registry.default_tools('qa_critic'))
 
     def test_ui_catalog_matches_console_model(self):
