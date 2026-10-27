@@ -3,6 +3,7 @@ export const EMPTY_COUNTS = { needs_you: 0, working: 0, done: 0, idle: 0 };
 
 export function cancellationRequest(base, slug, item) {
   if (item.kind === 'flow') return { path: `/projects/api/${slug}/tabs/${item.target.tab_key}/flow/runs/${item.flow_run_id}/cancel`, body: {} };
+  if (item.kind === 'crew_job') return { path: `${base}/crew-jobs/${item.job_id}/cancel`, body: {} };  // SPEC_20 R7/R20 planning job
   if (item.gate_id && item.run_id) return { path: `${base}/runs/${item.run_id}/cancel`, body: { reason: uiText("orchestrationModel.batchCanceledFromAgentBoard") } };
   return { path: `${base}/dispatches/${item.dispatch_id}/cancel`, body: { admission_no: item.admission_no, reason: uiText("orchestrationModel.canceledFromAgentBoard") } };
 }

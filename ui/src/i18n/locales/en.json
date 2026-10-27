@@ -2883,7 +2883,21 @@
     "empty": "(empty)",
     "cleared": "(cleared)",
     "showInStage": "Show this camera in the 3D Stage",
-    "failed": "The change was not applied. The assistant has the details."
+    "failed": "The change was not applied. The assistant has the details.",
+    "ruleFallback": "Rule fallback, not model-written: the crew's answer failed its checks twice.",
+    "askCrew": "Ask the crew",
+    "askCrewHint": "The Cinematographer proposes; nothing changes until you apply it.",
+    "askBeats": "Write the beat sheet",
+    "askCamera": "Choose the camera",
+    "crewQueued": "Waiting for the crew…",
+    "crewRunning": "The Cinematographer is working…",
+    "crewCanceled": "Canceled.",
+    "crewFailed": "The crew could not finish: {{v0}}",
+    "crewUnchanged": "No change: the shot already says this.",
+    "crewProposed": "Proposal ready above.",
+    "crewFallback": "Rule fallback, not model-written: proposal ready above.",
+    "crewCancel": "Cancel",
+    "crewNotReady": "The crew can't work yet, so nothing was written. Fix this first:"
   },
   "timeline": {
     "trackTitle": "Timeline",
