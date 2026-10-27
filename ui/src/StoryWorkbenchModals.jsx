@@ -253,6 +253,8 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
   const currentTakes = takesVersion === mediaVersion ? takes : {images:[],videos:[]};
   const reviewStatus = source?.status ?? shot?.reviewStatus;
   const compositionSource = approvedCompositionSource(currentTakes);
+  // A video is in use once it is adopted (in the cell and the shot Approved); a still once it is the first frame.
+  const inUse = (kind, take) => Boolean(take.selected) && (kind === 'images' || normalizeStatus(reviewStatus) === 'Approved');
   useEffect(() => {
     let alive = true;
     Promise.all([storyList('/shots/' + id + '/images'), storyList('/shots/' + id + '/videos'), storyRequest('/shots/' + id), ...['IMAGE','VIDEO'].map(capability => storyList('/catalog/apps?capability=' + capability))]).then(([images,videos,view,...lists]) => {
@@ -272,7 +274,7 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
   });
   return <section className="story-shot-tools">
     <h3>{t('story.candidateTakes')}</h3>
-    {shot && <p>{statusLabel(reviewStatus)} · {t('allocation.complexity_' + shot.complexity.complexity_tier)}</p>}
+    {shot && <p>{normalizeStatus(reviewStatus) === 'Approved' ? t('take.adopted') : statusLabel(reviewStatus)} · {t('allocation.complexity_' + shot.complexity.complexity_tier)}</p>}
     {shot && ['Retake','Pending Review','Approved'].includes(normalizeStatus(reviewStatus)) && <div className="story-escalation" aria-label={t('allocation.escalation')}>
       {['closed_hero','open_structural_lock','ab_race','closed_to_open_4k'].map(strategy=><button key={strategy} disabled={!writable || disabled || action.busy} onClick={()=>perform(async()=>{const result=await storyRequest(escalationPath(slug,shot.episodeId || episodeId(slug),id),'POST',{strategy});setMediaRun(result.runId);})}>{t('allocation.strategy_'+strategy)}</button>)}
       <button disabled={!writable || disabled || action.busy || normalizeStatus(reviewStatus)!=='Approved' || !compositionSource} onClick={()=>perform(async()=>{const result=await storyRequest(escalationPath(slug,shot.episodeId || episodeId(slug),id),'POST',{chainMode:'open_previz_to_closed_hero',...compositionSource});setMediaRun(result.runId);})}>{t('allocation.approvedHero')}</button>
@@ -280,10 +282,12 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
     {mediaRun && <MediaRunReview slug={slug} runId={mediaRun} writable={writable} onChanged={async()=>{setLoaded(n=>n+1);await onChanged?.();}}/>}
     {['images','videos'].map(kind => <div className="story-takes" key={kind}>{currentTakes[kind].map(take => <figure key={take.imageId || take.videoId}>
       <MediaCell compact type={kind === 'images' ? 'image' : 'video'} value={take.url} label={take.imageId || take.videoId}/>
-      <figcaption><button disabled={!writable || disabled || action.busy || take.selected} aria-pressed={take.selected} onClick={() => perform(async () => {
-        await storyRequest(`/shots/${id}/selected-${kind === 'images' ? 'image' : 'video'}`, 'PUT', kind === 'images' ? {imageId:take.imageId} : {videoId:take.videoId});
+      <figcaption><button disabled={!writable || disabled || action.busy || inUse(kind, take)} aria-pressed={inUse(kind, take)} onClick={() => perform(async () => {
+        // SPEC_19 R1: using a take is adopting it (POST /shots/{id}/adoptions): a video joins the cut (status Approved, trim reset),
+        // a still only becomes the first frame (1.2 J). The old PUT selected-video picked a take without putting it in the cut.
+        await storyRequest(`/shots/${id}/adoptions`, 'POST', kind === 'images' ? {imageId:take.imageId} : {videoId:take.videoId});
         setTakes(old=>({...old,[kind]:selectedTake(old[kind],take.imageId||take.videoId,kind==='images'?'image':'video')}));
-      })}>{t(take.selected ? 'story.selectedTake' : 'story.useTake')}</button>
+      })}>{kind === 'videos' ? t(inUse(kind, take) ? 'take.inCut' : 'take.adopt') : t(take.selected ? 'story.selectedTake' : 'story.useTake')}</button>
       {kind === 'videos' && <GradeButton grade={takeGrade(grading.grades, take.url)} disabled={!writable || grading.busy} onGrade={() => grading.grade({videoId:take.videoId})}/>}</figcaption>
     </figure>)}</div>)}
     <TakeGrades grading={grading} writable={writable} onRetake={videoApp && !disabled && !action.busy ? retake : null}/>

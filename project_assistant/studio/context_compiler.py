@@ -6,6 +6,8 @@ import json
 import math
 import re
 
+from project_docs import story_look, story_take_refs
+
 from . import runtime
 from .runtime import MAX_MATERIALS
 
@@ -344,6 +346,14 @@ def resolve_studio_context(task: dict) -> dict:
     mode = column(r"jutsu\s*mode|^mode$")
     action = column(r"action.*prompt|swap\s*prompt|prompt|appearance")
     still = task.get("capability") == "image_gen"
+    # SPEC_19 R10: catalog #move tags become their sentences where they stand (a still drops them); once a prompt has
+    # one, the tags are the shot's camera movement and the Camera Motion column no longer applies.
+    camera_moves = [item_id for _, item_id in story_look.move_tokens(action)]
+    if camera_moves:
+        action, motion = story_look.expand_moves(action, still=still), ""
+    # SPEC_19 R15: a quoted take (@SC01-S02.end) becomes its sentence where it stands; its frame is bound below.
+    take_refs = story_take_refs.compiler_refs(source)
+    action = story_take_refs.expand(action, take_refs)
     # Text-to-image encoders read "Optical Rig: RED ..." / "Static Tripod" as props to draw; a still has no camera move.
     parts = [f"{label}: {value.rstrip('.')}." for label, value in
              (("Optical Rig", "" if still else optical), ("Camera Movement", "" if still else motion), ("Mode", mode)) if value]
@@ -408,13 +418,25 @@ def resolve_studio_context(task: dict) -> dict:
     if not roles.get("source_video"):
         # Legacy headerless row inputs still work; actual MIME is checked before upload.
         roles["source_video"] = next(iter(row_urls), None)
+    # SPEC_19 4.5: a take quoted as the first frame is this render's first frame, over the row's first-frame/keyframe cells
+    # and any prepared one; a take quoted as reference joins the reference pictures after the cast, sets and props.
+    first = next((ref for ref in take_refs if ref["use"] == "first_frame"), None)
+    if first:
+        roles["first_frame"] = roles["anchor_keyframe"] = first["frameUrl"]
+    quoted = list({ref["frameUrl"]: ref for ref in take_refs if ref["use"] == "reference" and ref["frameUrl"] not in references}.values())
+    references = references + [ref["frameUrl"] for ref in quoted]
     asset_map = {asset["asset_id"]: dict(asset, url=next(iter(asset["reference_urls"]), None)) for asset in resolved}
     compiled_prompt = "\n".join(p for p in parts if p)
-    planned_slots = slot_plan(resolved, 6, limit=runtime.MAX_MATERIALS, excluded_ids=excluded_refs)
+    # Reference slots are planned from the resolved assets, so a quoted frame takes the last place there too. It is not a
+    # subject of the shot: the prompts compiled from the assets below never name it.
+    frames = [{"asset_id": f"{ref['shotIndex']}.{ref['edge']}".upper(), "name": f"Shot {ref['shotIndex']} {ref['edge']} frame",
+               "appearance_prompt": story_take_refs.describe(ref), "seed": None, "reference_urls": [ref["frameUrl"]],
+               "appear_count": 0, "cast_order": 2_000_000 + i, "take_ref": True} for i, ref in enumerate(quoted)]
+    planned_slots = slot_plan(resolved + frames, 6, limit=runtime.MAX_MATERIALS, excluded_ids=excluded_refs)
     ctx = {"compiled_prompt": compiled_prompt,
            "action_prompt": action,
            "seed": _take_seed(next((a["seed"] for a in resolved if a["seed"] is not None), None), source.get("take")),
-           "optical_rig": optical, "camera_motion": motion, "jutsu_mode": mode,
+           "optical_rig": optical, "camera_motion": motion, "camera_moves": camera_moves, "jutsu_mode": mode,
            "resolved_assets": resolved, "asset_map": asset_map,
            "excluded_refs": excluded_refs, "slot_plan": planned_slots,
            "asset_images": references, "reference_image_urls": references,
@@ -424,6 +446,8 @@ def resolve_studio_context(task: dict) -> dict:
            "source_video_url": roles.get("source_video")}
     ctx["h3_context_ir_prompt"] = compile_h3_context_ir(ctx)
     ctx["ltx_ingredients_prompt"] = compile_ltx_ingredients_prompt(ctx)
+    if frames:
+        ctx["resolved_assets"] = resolved + frames  # after the prompts: the card's reference slots see them, the text does not
     return ctx
 
 

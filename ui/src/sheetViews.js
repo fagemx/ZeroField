@@ -6,7 +6,7 @@ import { assetReferences, assetVariants, mediaStages, resolveAssetReference } fr
 import { sceneKey } from './storyModel.js';
 
 // review and compare are Shot Stage views of one shot (SPEC_15); a production sheet opens on the gallery overview.
-const MODES = ['grid', 'canvas', 'stage', 'gallery', 'kanban', 'review', 'compare'];
+const MODES = ['grid', 'canvas', 'stage', 'gallery', 'kanban', 'review', 'compare', 'composer'];  // composer: the Shot Stage's shot composer (SPEC_19 R7)
 const COMMON_STATUSES = STATUSES;
 
 function viewColumns(parsed) {
@@ -78,6 +78,16 @@ function signature(parsed) {
 
 export function viewPreferences(parsed, preferences) {
   return {...preferences, signature: signature(parsed)};
+}
+
+// The view a sheet shows for its stored mode (SPEC_19 R7). On a production sheet the composer needs a chosen shot: with none chosen yet
+// the Shot Stage is its overview grid. The 3D stage and the previs comparison need a Previs column; review, compare and the composer
+// belong to production sheets; anything else falls back to the overview (production) or the table.
+export function viewMode(stored, {productionSheet = false, selected = false, hasStage = false} = {}) {
+  const fallback = productionSheet ? 'gallery' : 'grid';
+  if (stored === 'composer') return productionSheet && selected ? 'composer' : fallback;
+  if ((['stage', 'compare'].includes(stored) && !hasStage) || (['review', 'compare'].includes(stored) && !productionSheet)) return fallback;
+  return stored;
 }
 
 export function restoreViewPreferences(raw, parsed, fallback = 'grid') {

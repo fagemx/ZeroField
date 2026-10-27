@@ -1,9 +1,12 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useLocale } from './i18n/react.jsx';
 import { currentLocale, setLocale, t } from './i18n/index.js';
 import { episodeId, storyList, storyRequest, waitStoryTask } from './storyModel.js';
 import { SHOT_FILTERS } from './studioModel.js';
+import { FILL_MODES, adoptedCount, filmSummary, playlist } from './takeModel.js';
 import { Icon } from './Icon.jsx';
+import { filmSeams, seamPlaylist } from './takeModel.js';
+import { CheckCutsButton, PlayModeToggle, SeamDetail, SeamDot, useEpisodeCuts } from './film/Seams.jsx';
 import './studio-shell.css';
 import { semanticEnumKey } from './writing/writingModel.js';
 
@@ -27,7 +30,7 @@ export const tabOfSpace = key => SPACES.find(space => space.key === key)?.tab ||
 export const spaceNote = (key, counts = {}) => key === 'story'
   ? [counts.scriptDirty && t('shell.storyUpdated'), counts.missing && t('shell.missingImages', {count:counts.missing})].filter(Boolean).join(' · ')
   : key === 'stage' ? [t('shell.shotCount', {count:counts.shots || 0}), counts.review && t('shell.toReview', {count:counts.review})].filter(Boolean).join(' · ')
-    : t('shell.filmSummary', {filmed:counts.filmed || 0, total:counts.shots || 0});
+    : t('shell.filmAdopted', {adopted:counts.adopted || 0, total:counts.shots || 0});
 // SPEC_18 R6: the same needs as things you can press. `target` is where the press goes: the shell carries it into the space ({view, facet}
 // for Story & World, {filter} for the Shot Stage) and the space takes it once. The Timeline only reports how far the film is.
 export const spaceShortcuts = (key, counts = {}) => key === 'story'
@@ -35,7 +38,7 @@ export const spaceShortcuts = (key, counts = {}) => key === 'story'
     counts.missing && {id:'missing', label:t('shell.missingImages', {count:counts.missing}), target:{view:'world', facet:'missing'}}].filter(Boolean)
   : key === 'stage' ? [counts.review && {id:'review', label:t('shell.toReview', {count:counts.review}), target:{filter:'review'}},
     counts.missingShots && {id:'missing', label:t('shell.shotsMissingRefs', {count:counts.missingShots}), target:{filter:'missing'}}].filter(Boolean)
-    : [{id:'filmed', label:t('shell.filmSummary', {filmed:counts.filmed || 0, total:counts.shots || 0}), target:null}];
+    : [{id:'adopted', label:t('shell.filmAdopted', {adopted:counts.adopted || 0, total:counts.shots || 0}), target:null}];
 
 // One episode's state for the top bar, both spaces and the film: refreshed when a page saves (version) or on demand.
 export function useEpisode(slug, epId, version, enabled = true) {
@@ -57,17 +60,59 @@ export function useEpisode(slug, epId, version, enabled = true) {
 
 // Cinema slate order, the same order the exported film uses.
 const shotOrder = shot => String(shot.shotIndex).split(/(\d+)/).map(part => /^\d+$/.test(part) ? part.padStart(6, '0') : part.toLowerCase()).join('');
-export const orderedShots = shots => shots.filter(shot => shot.tabKey === STAGE_TAB).sort((a, b) => shotOrder(a).localeCompare(shotOrder(b)));
+export const inSlateOrder = shots => [...shots].sort((a, b) => shotOrder(a).localeCompare(shotOrder(b)));
+export const orderedShots = shots => inSlateOrder(shots.filter(shot => shot.tabKey === STAGE_TAB));
+// SPEC_19 R6: the film's number is the shots in the cut (adopted); filmed (a take in the cell) stays for the pages that ask it.
+// review: shots with a new take to choose from (the derived state), legacy Pending Review included.
 export function episodeCounts(ep, shots, assets = null) {
   const cut = orderedShots(shots);
   return {
     shots:cut.length,
-    review:cut.filter(shot => SHOT_FILTERS.review({status:shot.reviewStatus})).length,
+    review:cut.filter(shot => SHOT_FILTERS.review({status:shot.reviewStatus, info:shot})).length,
     missing:assets ? assets.filter(asset => !asset.selectedImageUrl).length : ep?.missingAssetCodes?.length || 0,
     missingShots:cut.filter(shot => SHOT_FILTERS.missing({info:shot})).length,
     filmed:cut.filter(shot => shot.selectedVideoUrl).length,
+    adopted:adoptedCount(cut),
     scriptDirty:Boolean(ep?.scriptDirty),
   };
+}
+
+// SPEC_19 R19: a take tried in the cut. It is screen state only, shared by the shot's panel and the film window of this page: never
+// written to the server or to browser storage. {shotId, url, number} or null.
+let trialTake = null;
+const trialListeners = new Set();
+export const filmTrial = {
+  get: () => trialTake,
+  set(next) {
+    const value = next?.shotId && next?.url ? {shotId:next.shotId, url:next.url, number:next.number ?? null} : null;
+    if (value?.shotId === trialTake?.shotId && value?.url === trialTake?.url) return;
+    trialTake = value; trialListeners.forEach(listener => listener());
+  },
+  subscribe(listener) {trialListeners.add(listener); return () => trialListeners.delete(listener);},
+};
+export const useFilmTrial = () => useSyncExternalStore(filmTrial.subscribe, filmTrial.get, filmTrial.get);
+
+// What the film window and "Play around" play: playlist(), except that with the "latest" fill a shot with no take yet plays its previs,
+// so the episode always plays from start to end. The export's "latest" fill does not do this (the server leaves such a shot out).
+export function filmPlayback(shots, {fill = 'latest', trial = null} = {}) {
+  const items = playlist(shots, {fill, trial});
+  if (fill !== 'latest') return items;
+  const have = new Set(items.map(item => item.shotId));
+  return [...items, ...playlist(shots, {fill:'previs'}).filter(item => item.source === 'previs' && !have.has(item.shotId))].sort((a, b) => a.index - b.index);
+}
+
+// One clip of a playlist() item in one <video>: it starts at the item's in point and stops at its out point (the trim), then calls
+// onDone once. Keyed by the caller on the item, so a new clip is a new element and only one ever decodes (SPEC_19 1.2 I).
+// An item with tail (seamPlaylist(): a seam's outgoing side whose end is not known yet) starts that many seconds before its end.
+export function ClipVideo({item, onDone, onMeasured, ...rest}) {
+  const done = useRef(false);
+  const finish = video => {if (done.current) return; done.current = true; video?.pause(); onDone?.();};
+  const from = Number.isFinite(item.in) && item.in > 0 ? item.in : 0, to = Number.isFinite(item.out) ? item.out : null;
+  const tail = Number.isFinite(item.tail) && item.tail > 0 ? item.tail : null;
+  return <video src={item.url} autoPlay playsInline preload="metadata" {...rest}
+    onLoadedMetadata={event => {const video = event.currentTarget, start = tail === null ? from : Math.max(from, (to ?? video.duration) - tail); onMeasured?.(item.url, video.duration); if (start > 0 && start < video.duration) video.currentTime = start;}}
+    onTimeUpdate={event => {if (to !== null && event.currentTarget.currentTime >= to) finish(event.currentTarget);}}
+    onEnded={event => finish(event.currentTarget)}/>;
 }
 
 // The breadcrumb is also the focus line: project / episode / space (a menu) / scene / shot. The focus travels between spaces.
@@ -103,7 +148,7 @@ export function StudioTopBar({project, episodes, epId, onEpisode, space, pageTit
           onClick={() => onLayout?.(key)}><Icon name={'panel' + key[0].toUpperCase() + key.slice(1)} size={15}/></button>)}
       </div>}
       <button type="button" className={'studio-film' + (film.open ? ' on' : '')} aria-pressed={film.open} onClick={film.onToggle}>
-        <Icon name="play" />{t('shell.film')}<span className="num">{counts.filmed}/{counts.shots}</span></button>
+        <Icon name="play" />{t('shell.film')}<span className="num">{counts.adopted || 0}/{counts.shots || 0}</span></button>
       {settings}
       {identity}
     </div>
@@ -190,12 +235,19 @@ export function CommandPalette({commands, onClose}) {
   </div>;
 }
 
-// The film overlay: the whole episode in slate order. Shots without a take fall back to their previs, then a slate card.
+// SPEC_19 R6, 3.4: the film window, the whole episode in slate order. Only adopted shots are the cut. For playback the gaps are filled
+// with the newest take (the default, so the episode always plays from start to end; a shot with no take plays its previs), the previs,
+// or skipped; a filled shot is marked in the corner. A take tried in the cut (R19) stands in for its shot here too, marked Trial. The export sends selection "adopted" and
+// its own fill (previs by default); a trial never reaches it. A shot with nothing to play holds its slate card for two seconds.
 export function FilmOverlay({epId, shots, writable, onClose, onTimeline}) {
   useLocale();
-  const cut = useMemo(() => orderedShots(shots).map(shot => ({...shot, play:shot.selectedVideoUrl || shot.previsVideoUrl || null, fill:!shot.selectedVideoUrl && Boolean(shot.previsVideoUrl)})), [shots]);
-  const [at, setAt] = useState(0), [exporting, setExporting] = useState(false), [film, setFilm] = useState(null), [error, setError] = useState('');
-  const [fill, setFill] = useState(true);
+  const cut = useMemo(() => orderedShots(shots), [shots]);
+  const trial = useFilmTrial();
+  const [fill, setFill] = useState('latest'), [exportFill, setExportFill] = useState('previs');
+  const items = useMemo(() => new Map(filmPlayback(cut, {fill, trial}).map(item => [item.shotId, item])), [cut, fill, trial]);
+  const exportPlan = useMemo(() => playlist(cut, {fill:exportFill}), [cut, exportFill]);
+  const summary = filmSummary(cut);
+  const [at, setAt] = useState(0), [exporting, setExporting] = useState(false), [film, setFilm] = useState(null), [segments, setSegments] = useState(null), [error, setError] = useState('');
   const [alignment, setAlignment] = useState(null), [alignmentError, setAlignmentError] = useState('');
   useEffect(() => {
     let active = true; setAlignment(null); setAlignmentError('');
@@ -203,52 +255,87 @@ export function FilmOverlay({epId, shots, writable, onClose, onTimeline}) {
     return () => {active = false;};
   }, [epId, shots]);
   const differing = alignment?.items.filter(item => item.storyAlignment?.state !== 'in_sync' || item.storyAlignment?.mediaOutdated) || [];
-  const video = useRef(null), box = useRef(null), alive = useRef(true);
-  const current = cut[at];
+  const box = useRef(null), alive = useRef(true);
+  const current = cut[at], item = current ? items.get(current.shotId) || null : null;
+  // SPEC_19 R17, R18 (package D): the seams of the cut and their checks (GET /episodes/{id}/cuts). "Cuts only" plays a second either
+  // side of each seam in this same screen, one clip at a time (seamPlaylist() of what the whole film plays), and shows the check of
+  // the seam on screen; a seam dot on the strip plays from that seam. seamAt -1: a seam with nothing to play is shown, not played.
+  const cuts = useEpisodeCuts(epId, shots);
+  const seams = useMemo(() => filmSeams(cut, cuts.items), [cut, cuts.items]);
+  const seamAfter = new Map(seams.map(seam => [seam.fromShotId, seam]));
+  const seamItems = useMemo(() => seamPlaylist([...items.values()]), [items]);
+  const [playMode, setPlayMode] = useState('whole'), [seamAt, setSeamAt] = useState(0), [seamKey, setSeamKey] = useState(null);
+  const seamItem = playMode === 'seams' && !film && seamAt >= 0 ? seamItems[Math.min(seamAt, seamItems.length - 1)] || null : null;
+  const seamShown = seams.find(seam => seam.key === (seamItem?.seam.key || seamKey)) || null;
+  const shown = playMode === 'seams' ? seamItem : item;
+  const nextSeam = () => setSeamAt(i => (i + 1 < seamItems.length ? i + 1 : i));
+  const choosePlayMode = value => {setFilm(null); setPlayMode(value); setSeamAt(0); setSeamKey(null);};
+  const playSeam = seam => {setFilm(null); setPlayMode('seams'); setSeamKey(seam.key); setSeamAt(seamItems.findIndex(entry => entry.seam.key === seam.key));};
   useEffect(() => {alive.current = true; box.current?.focus(); return () => {alive.current = false;};}, []);
-  // A shot with nothing to play holds its slate card for two seconds, then the cut moves on.
+  // The next shot to play: the next one, or with "skip" the next one that has something to play.
+  const advance = () => setAt(i => {
+    for (let next = i + 1; next < cut.length; next += 1) if (fill !== 'skip' || items.has(cut[next].shotId)) return next;
+    return i;
+  });
   useEffect(() => {
-    if (!current || current.play) return undefined;
-    const timer = setTimeout(() => setAt(i => (i + 1 < cut.length ? i + 1 : i)), 2000);
+    if (!current || item || film || playMode === 'seams') return undefined;
+    const timer = setTimeout(advance, 2000);
     return () => clearTimeout(timer);
-  }, [current, cut.length]);
+  }, [current, item, film, cut.length, fill, playMode]);  // eslint-disable-line react-hooks/exhaustive-deps
   const exportFilm = async () => {
-    setExporting(true); setError('');
+    setExporting(true); setError(''); setSegments(null);
     try {
-      const task = await storyRequest(`/episodes/${epId}/films`, 'POST', fill ? {fillPrevis:true} : {});
+      const task = await storyRequest(`/episodes/${epId}/films`, 'POST', {selection:'adopted', fill:exportFill});
       const result = await waitStoryTask(task);
-      if (alive.current) setFilm(result.videoUrl);
+      if (alive.current) {setFilm(result.videoUrl); setSegments(result.segments || null);}
     } catch (err) {if (alive.current) setError(err.message);}
     finally {if (alive.current) setExporting(false);}
   };
+  const label = shotId => cut.find(shot => shot.shotId === shotId)?.shotIndex || shotId;
+  const filled = (segments || []).filter(segment => segment.source !== 'adopted');
   return <div className="modal-scrim studio-film-scrim" onMouseDown={event => {if (event.target === event.currentTarget) onClose();}}>
     <section ref={box} tabIndex={-1} className="studio-film-overlay" role="dialog" aria-modal="true" aria-label={t('shell.filmTitle')}
       onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); onClose();}}}>
-      <header><h2>{t('shell.filmTitle')}</h2><span className="studio-note">{t('shell.filmSummary', {filmed:cut.filter(s => s.selectedVideoUrl).length, total:cut.length})}</span>
+      <header><h2>{t('shell.filmTitle')}</h2><span className="studio-note">{t('film.title', {adopted:summary.adopted, total:summary.shots})}</span>
+        {summary.withTake > 0 && <span className="studio-note warn">{t('film.withTake', {count:summary.withTake})}</span>}
         <span className="spacer"/>{onTimeline && <button type="button" className="quiet" onClick={() => {onClose(); onTimeline();}}><Icon name="timeline" />{t('shell.openInTimeline')}</button>}
         <button type="button" className="icon-btn" aria-label={t('sheetDialog.closePanel')} onClick={onClose}><Icon name="close" /></button></header>
       {alignmentError && <p role="alert">{t('writing.integration.alignmentUnavailable')} {alignmentError}</p>}
-      {!!differing.length && <p role="status">{t('writing.integration.filmWarning', {shots:differing.map(item => item.shotIndex).join(', ')})}</p>}
+      {!!differing.length && <p role="status">{t('writing.integration.filmWarning', {shots:differing.map(entry => entry.shotIndex).join(', ')})}</p>}
       <div className="studio-film-screen">
         {film ? <video src={film} controls autoPlay playsInline preload="metadata" aria-label={t('story.episodeFilm')}/>
-          : current?.play ? <video ref={video} key={current.shotId} src={current.play} controls autoPlay playsInline preload="metadata"
-            onEnded={() => setAt(i => (i + 1 < cut.length ? i + 1 : i))} aria-label={current.shotIndex}/>
+          : playMode === 'seams' ? (seamItem ? <ClipVideo key={`seam:${seamAt}:${seamItem.shotId}:${seamItem.url}`} item={seamItem} controls onDone={nextSeam} aria-label={seamShown ? t('seam.title', {from:seamShown.fromShotIndex, to:seamShown.toShotIndex}) : String(seamItem.shotIndex)}/>
+            : <div className="studio-film-slate">{t(seamItems.length ? 'seam.notPlayable' : 'seam.none')}</div>)
+          : item ? <ClipVideo key={current.shotId + ':' + item.url} item={item} controls onDone={advance} aria-label={current.shotIndex}/>
           : <div className="studio-film-slate">{current ? <><b>{current.shotIndex}</b><span>{t('shell.notShot')}</span></> : t('shell.noShots')}</div>}
-        {!film && current?.fill && <span className="studio-film-tag">{t('shell.previsFill')}</span>}
+        {!film && shown && shown.source !== 'adopted' && <span className={'studio-film-tag is-' + shown.source}>{t('film.tag_' + shown.source)}</span>}
+      </div>
+      {playMode === 'seams' && !film && <SeamDetail seam={seamShown}/>}
+      <div className="studio-film-fill" role="group" aria-label={t('film.fillLabel')}>
+        <PlayModeToggle mode={playMode} onMode={choosePlayMode}/>
+        <span className="studio-note">{t('film.fillLabel')}</span>
+        <div className="studio-segmented">{FILL_MODES.map(mode => <button key={mode} type="button" aria-pressed={fill === mode} onClick={() => setFill(mode)}>{t('film.fill_' + mode)}</button>)}</div>
       </div>
       <ol className="studio-film-strip" aria-label={t('shell.filmStrip')}>
-        {cut.map((shot, index) => <li key={shot.shotId}><button type="button" aria-current={index === at && !film ? 'true' : undefined}
-          className={shot.selectedVideoUrl ? 'shot' : shot.fill ? 'shot fill' : 'shot empty'} onClick={() => {setFilm(null); setAt(index);}}>
-          {shot.selectedImageUrl ? <img src={shot.selectedImageUrl} alt="" loading="lazy"/> : <span className="studio-film-blank"/>}
-          <span>{shot.shotIndex}</span></button></li>)}
+        {cut.map((shot, index) => {
+          const entry = items.get(shot.shotId);
+          return <li key={shot.shotId}><button type="button" aria-current={index === at && !film ? 'true' : undefined}
+            className={'shot' + (!entry ? ' empty' : entry.source !== 'adopted' ? ' fill' : '') + (entry?.source === 'trial' ? ' is-trial' : '')}
+            title={entry && entry.source !== 'adopted' ? t('film.tag_' + entry.source) : undefined} onClick={() => {setFilm(null); setPlayMode('whole'); setAt(index);}}>
+            {shot.selectedImageUrl ? <img src={shot.selectedImageUrl} alt="" loading="lazy"/> : <span className="studio-film-blank"/>}
+            <span>{shot.shotIndex}</span></button>
+            {seamAfter.get(shot.shotId) && <SeamDot seam={seamAfter.get(shot.shotId)} active={playMode === 'seams' && seamShown?.key === seamAfter.get(shot.shotId).key} onPick={playSeam}/>}</li>;
+        })}
       </ol>
+      {filled.length > 0 && <p className="studio-note studio-film-filled" role="status">{t('film.exported', {shots:filled.map(segment => t('film.segmentFill', {shot:label(segment.shotId), source:t('film.tag_' + segment.source)})).join(', ')})}</p>}
       <footer>
-        {cut.some(shot => shot.fill) ? <label className="studio-note studio-fill"><input type="checkbox" checked={fill} onChange={event => setFill(event.target.checked)}/>{t('shell.exportFill')}</label>
-          : <span className="studio-note">{t('shell.exportHelp')}</span>}
+        <label className="studio-note studio-fill">{t('film.exportFill')}<select value={exportFill} onChange={event => setExportFill(event.target.value)}>
+          {['previs', 'latest', 'skip'].map(mode => <option key={mode} value={mode}>{t('film.fill_' + mode)}</option>)}</select></label>
+        {writable && <CheckCutsButton epId={epId} seams={seams} onQueued={cuts.reload}/>}
         {error && <span role="alert" className="canvas-error">{error}</span>}
         {film && <a className="icon-btn" href={film} download><Icon name="download" />{t('shell.downloadFilm')}</a>}
         <span className="spacer"/>
-        <button type="button" className="primary" disabled={!writable || exporting || !cut.some(s => s.selectedVideoUrl || (fill && s.fill))} onClick={exportFilm}>
+        <button type="button" className="primary" disabled={!writable || exporting || !exportPlan.length} title={exportPlan.length ? undefined : t('film.nothingToExport')} onClick={exportFilm}>
           {exporting ? t('story.working') : t('shell.exportFilm')}</button>
       </footer>
     </section>

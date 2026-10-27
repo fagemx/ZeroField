@@ -120,7 +120,51 @@ def build_ingredients_sheet(image_blobs: list[bytes], destination: Path,
     return total_w, total_h
 
 
+_PROJECT_ASSET_URL = re.compile(r"/projects/api/([^/]+)/assets/(pa_[0-9a-f]{32})")
+_URL_ESCAPES = re.compile(r"[?#\\%\s]|(?:^|/)\.\.?(?:/|$)")
+
+
+def _own_project_asset_url(task, value):
+    """Return config.source_url when it is exactly one asset of this task's own project.
+
+    Accepted form: /projects/api/{project_slug}/assets/pa_<32 hex>. External URLs, other projects,
+    path escapes, query strings, fragments and percent-encoding are all refused before any download."""
+    if not isinstance(value, str) or not value:
+        raise runtime.WorkerError("source_url must be a project asset URL string like /projects/api/{project}/assets/pa_<32 hex>")
+    if not value.startswith("/projects/api/"):
+        raise runtime.WorkerError("source_url must be a path to an asset of this project, not an external URL")
+    if _URL_ESCAPES.search(value):
+        raise runtime.WorkerError("source_url must not contain path escapes, query strings, fragments or encoded characters")
+    match = _PROJECT_ASSET_URL.fullmatch(value)
+    if not match:
+        raise runtime.WorkerError("source_url must look like /projects/api/{project}/assets/pa_<32 lowercase hex>")
+    slug = task.get("project_slug") if isinstance(task, dict) else None
+    if not isinstance(slug, str) or not slug:
+        raise runtime.WorkerError("source_url cannot be verified: the task carries no project_slug")
+    if match[1] != slug:
+        raise runtime.WorkerError("source_url belongs to another project; only assets of this task's project may be used")
+    return value
+
+
+def _fetch_project_video(task, head, value):
+    """Download config.source_url through the head's scoped asset access, keeping the 64 MB cap and the video MIME check."""
+    url = _own_project_asset_url(task, value)
+    raw, mime = head.asset(task, url)
+    if not isinstance(mime, str) or not mime.startswith("video/"):
+        raise runtime.WorkerError(f"source_url must point to a video asset, not {mime or 'unknown media'}")
+    if not raw:
+        raise runtime.WorkerError("source_url video is empty")
+    if len(raw) > legacy.MAX_MEDIA:
+        raise runtime.WorkerError("source_url video exceeds the 64 MB asset limit")
+    return url, raw, mime
+
+
 def prepare_reference_media(task, config, head, mode):
+    # config.source_url (extract_frame only) names another video of this project to cut a frame from,
+    # instead of the source video of the task's own row.
+    source_url = config.get("source_url")
+    if source_url is not None and mode != "extract_frame":
+        raise runtime.WorkerError("source_url is only supported by the extract_frame mode")
     ctx = legacy.resolve_studio_context(task)
     local = dict(config, _lease_lost=getattr(head, "lease_lost", lambda: False))
     with tempfile.TemporaryDirectory(prefix="zerofield-reference-") as folder:
@@ -144,14 +188,19 @@ def prepare_reference_media(task, config, head, mode):
                         width=sheet_w, height=sheet_h, ltx_ingredients_prompt=ctx.get("ltx_ingredients_prompt", ""),
                         **({"asset_id": identifier} if re.fullmatch(r"pa_[0-9a-f]{32}", identifier) else {}))
 
-        urls = [ctx.get("source_video")] + context_compiler._shot_media_candidates(task)
         source = None
-        for url in dict.fromkeys(url for url in urls if url):
-            raw, mime = head.asset(task, url)
-            if mime.startswith("video/"):
-                source = Path(folder) / ("source" + (mimetypes.guess_extension(mime) or ".mp4"))
-                source.write_bytes(raw)
-                break
+        if source_url is not None:
+            source_url, raw, mime = _fetch_project_video(task, head, source_url)
+            source = Path(folder) / ("source" + (mimetypes.guess_extension(mime) or ".mp4"))
+            source.write_bytes(raw)
+        else:
+            urls = [ctx.get("source_video")] + context_compiler._shot_media_candidates(task)
+            for url in dict.fromkeys(url for url in urls if url):
+                raw, mime = head.asset(task, url)
+                if mime.startswith("video/"):
+                    source = Path(folder) / ("source" + (mimetypes.guess_extension(mime) or ".mp4"))
+                    source.write_bytes(raw)
+                    break
 
         structure = config.get("structure_type", "edge_lineart")
         is_lineworlds = mode == "time_strata" or (mode == "motion_structure" and structure in ("layout_silhouette", "sparse_tracks", "time_strata"))
@@ -172,6 +221,9 @@ def prepare_reference_media(task, config, head, mode):
                                          int(config.get("grid_size", 32)))
                 vf_args = ["-vf", f"scale={gw}:{gh}:force_original_aspect_ratio=decrease,pad={gw}:{gh}:(ow-iw)/2:(oh-ih)/2"]
             legacy._run_preparation(["-ss", str(timestamp), "-i", str(source), *vf_args, "-frames:v", "1", "-f", "image2", str(destination)], local)
+            if source_url is not None:
+                # Where the frame came from, so a later snapshot can name its source shot and moment.
+                extra_meta.update(source_url=source_url, timestamp_sec=timestamp)
         elif mode == "frame_sheet":
             destination, times = build_video_frame_sheet(source, metadata["duration"], Path(folder), local)
             mime, role = "image/png", "frame_sheet"

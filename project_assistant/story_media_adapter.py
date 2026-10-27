@@ -193,7 +193,8 @@ def execute(dispatch):
             job = verify_task(conn, task)
             run = db.get_run(conn, task["project_slug"], task["run_id"])
             _, row = story.find_row(conn, job["entityId"], "shot")
-            execution = {"id": dispatch["id"], "capability": "video_gen", "production_policy": job["production_policy"], "input": story.snapshot(conn, job["slug"], row)}
+            # project_slug lets the worker check that media it is pointed at (extract_frame source_url) is this production's.
+            execution = {"id": dispatch["id"], "project_slug": job["slug"], "capability": "video_gen", "production_policy": job["production_policy"], "input": story.snapshot(conn, job["slug"], row)}
             outputs = dict(job["sources"])
             for predecessor in db.tasks(conn, job["slug"], run["id"]):
                 if predecessor["status"] != "completed":

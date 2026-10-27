@@ -56,9 +56,12 @@ _PROCESS = uuid.uuid4().hex
 
 
 class StoryError(ValueError):
-    def __init__(self, status, code, message, details=None):
+    """An API error. ``message_key`` (``errors.*``) and ``message_params`` let the interface translate the message; the
+    English ``message`` stays the fallback."""
+    def __init__(self, status, code, message, details=None, *, message_key=None, message_params=None):
         super().__init__(message)
         self.status, self.code, self.details = status, code, details
+        self.message_key, self.message_params = message_key, message_params
 
 
 def invalid(message):
@@ -152,8 +155,10 @@ def project(conn, identifier):
     found = repo.get_project(conn, slug)
     if not found:
         raise StoryError(404, "DRAMA_NOT_FOUND", "Production not found.")
+    from project_docs import story_adoption
     return {**found, "projectId": "pj_" + slug, "description": found["summary"],
-            "productionPolicy": production_policy(conn, slug)}
+            "productionPolicy": production_policy(conn, slug),
+            "autoVideoAfterFirstFrame": story_adoption.auto_video_enabled(conn, slug)}
 
 
 def episodes(conn, slug):
@@ -401,8 +406,10 @@ def shot_meta(conn, identifier):
     return record(conn, "meta_" + identifier, required=False) or {}
 
 
-def shot_view(conn, slug, row):
-    from project_docs import story_trim
+def shot_view(conn, slug, row, *, takes=None):
+    """A shot's API payload. ``adoption`` is always present (SPEC_19); ``takeSummary`` needs the take history, so only
+    callers answering a client pass ``takes`` (a story_adoption.Takes shared by the whole response)."""
+    from project_docs import story_adoption, story_trim
     identifier = shot_id(slug, row)
     meta = shot_meta(conn, identifier)
     from project_docs import story_previs
@@ -421,7 +428,7 @@ def shot_view(conn, slug, row):
     missing = [c for c in refs if c.startswith(("CAST-", "SET-", "LOC-")) and not known.get(c, {}).get("selectedImageUrl")]
     has_previs = any(media_url(v) for k, v in fields.items() if re.search(r"previs|pose.*skeleton", k, re.I))
     previs = next((media_url(v) for k, v in fields.items() if re.search(r"previs|blockout", k, re.I) and media_url(v)), None)
-    return {**meta, "shotId": identifier, "rowId": row["rid"], "tabKey": row["tabKey"], "shotIndex": row["cells"][0],
+    view = {**meta, "shotId": identifier, "rowId": row["rid"], "tabKey": row["tabKey"], "shotIndex": row["cells"][0],
             "description": next((v for k, v in fields.items() if re.search("prompt", k, re.I)), ""),
             "opticalRig": next((v for k, v in fields.items() if re.search(r"optical|rig", k, re.I)), ""),
             "cameraMotion": next((v for k, v in fields.items() if re.search(r"camera.*motion", k, re.I)), ""),
@@ -431,15 +438,44 @@ def shot_view(conn, slug, row):
                           "hasPrevis": has_previs, "hasDialogue": bool(meta.get("dialogue"))},
             "selectedImageUrl": output("image"), "selectedVideoUrl": output("video"), "previsVideoUrl": previs,
             "trim": story_trim.view(meta, output("video"))}
+    view["adoption"] = story_adoption.adoption_view(meta, status, output("video"))
+    if takes is not None:
+        from project_docs import story_take_refs
+        view["takeSummary"] = story_adoption.take_summary(takes, row, view["adoption"])
+        # SPEC_19 R16: the shots the adopted take quoted, and whether each tag still resolves to the quoted frame.
+        view["takeRefs"] = story_take_refs.view_refs(conn, slug, identifier, view["adoption"], takes)
+    return view
 
 
-def film_shots(items, fill_previs=False):
-    """(shot, video URL) of an episode film in shot order: the cinema slate is the cut; a lab clip joins once it is approved.
-    fill_previs: a slate shot without a take plays its grey previs, so the whole episode can be watched before it is shot."""
+FILM_SELECTIONS = ("selected", "adopted")
+FILM_FILLS = ("previs", "latest", "skip")
+
+
+def film_plan(items, selection="selected", fill="skip"):
+    """(shot, video URL, source) of an episode film in shot order; source is "adopted", "latest" or "previs".
+
+    selection "selected" (the RH-compatible default): the cinema slate is the cut, every slate take in it; a lab clip joins
+    once it is approved. selection "adopted" (SPEC_19): only adopted shots are the cut. ``fill`` decides what a slate shot
+    outside the cut plays: "latest" its newest take (the one in its cell), "previs" its grey previs, "skip" nothing. A lab
+    clip never fills. In "selected" mode every slate take is already in, so only "previs" adds anything.
+    """
+    from project_docs.story_adoption import ADOPTED
     ordered = sorted(items, key=lambda s: tuple((0, int(part)) if part.isdigit() else (1, part.casefold()) for part in re.split(r"(\d+)", str(s["shotIndex"]))))
-    take = lambda s: s["selectedVideoUrl"] or (fill_previs and s["tabKey"] == "cinema-studio" and s.get("previsVideoUrl")) or None
-    return [(s, take(s)) for s in ordered if take(s)
-            and (s["tabKey"] == "cinema-studio" or s.get("reviewStatus") in ("Approved", "已完成"))]
+    result = []
+    for shot in ordered:
+        slate, adopted, take = shot["tabKey"] == "cinema-studio", shot.get("reviewStatus") in ADOPTED, shot["selectedVideoUrl"]
+        previs = slate and fill == "previs" and shot.get("previsVideoUrl")
+        if take and (adopted or (slate and (selection == "selected" or fill == "latest"))):
+            result.append((shot, take, "adopted" if adopted else "latest"))
+        elif previs:
+            result.append((shot, previs, "previs"))
+    return result
+
+
+def film_shots(items, fill_previs=False, *, selection="selected", fill=None):
+    """(shot, video URL) of an episode film in shot order (see film_plan).
+    fill_previs: a slate shot without a take plays its grey previs, so the whole episode can be watched before it is shot."""
+    return [(shot, url) for shot, url, _ in film_plan(items, selection, fill or ("previs" if fill_previs else "skip"))]
 
 
 def film_cut(items, fill_previs=False):
@@ -447,11 +483,49 @@ def film_cut(items, fill_previs=False):
     return [url for _, url in film_shots(items, fill_previs)]
 
 
-def shots(conn, ep):
+def film_segments(conn, ep, plan, trims):
+    """The ``segments`` an export records (SPEC_19 R6, D10): where every clip of this film came from, in film order.
+
+    ``[{shotId, source, takeUrl, in, out, takeRefs, cut}]``, frozen when the export is queued. ``source`` is "adopted",
+    "latest" or "previs"; ``takeUrl`` the clip played (the previs itself for "previs"); ``in``/``out`` the seconds of it
+    played (0 and null: all of it, as ``trims``); ``takeRefs`` the take reference snapshots that take froze when it was
+    rendered (``[]`` when it quoted nothing, its history is unknown, or it is a previs); ``cut`` the cut from this segment
+    to the next as ``GET /episodes/{id}/cuts`` lists it (without its ``index``), with its check, or null for the last
+    segment and for two segments that are not neighbours there (a shot between them is left out of this film).
+    """
+    from project_docs import story_adoption, story_cuts, story_take_refs
+    takes = story_adoption.Takes(conn, ep["slug"])
+    cuts = {(cut["fromShotId"], cut["toShotId"]): {k: v for k, v in cut.items() if k != "index"}
+            for cut in story_cuts.cuts(conn, ep)} if len(plan) > 1 else {}
+    result = []
+    for i, ((shot, url, source), trim) in enumerate(zip(plan, trims)):
+        following = plan[i + 1][0]["shotId"] if i + 1 < len(plan) else None
+        result.append({"shotId": shot["shotId"], "source": source, "takeUrl": url,
+                       "in": (trim or {}).get("in") or 0, "out": (trim or {}).get("out"),
+                       "takeRefs": [] if source == "previs" else story_take_refs.take_snapshots(conn, shot["shotId"], url, takes),
+                       "cut": cuts.get((shot["shotId"], following)) if following else None})
+    return result
+
+
+def film_options(body):
+    """(selection, fill) of POST /episodes/{id}/films; without the new fields the RH request means exactly what it meant."""
+    selection = body.get("selection", "selected")
+    if selection not in FILM_SELECTIONS:
+        invalid("selection must be selected or adopted.")
+    if "fill" not in body:
+        return selection, "previs" if body.get("fillPrevis") is True else "skip"
+    if body["fill"] not in FILM_FILLS:
+        invalid("fill must be previs, latest or skip.")
+    if body.get("fillPrevis") is True and body["fill"] != "previs":
+        invalid("fillPrevis: true means fill: previs; send one of them.")
+    return selection, body["fill"]
+
+
+def shots(conn, ep, *, takes=None):
     result = []
     for key in ("cinema-studio", "openjutsu-lab"):
         for row in table_rows(conn, ep["slug"], key):
-            view = shot_view(conn, ep["slug"], row)
+            view = shot_view(conn, ep["slug"], row, takes=takes)
             if view.get("episodeId", f"ep_{ep['slug']}_01") == ep["episodeId"]:
                 result.append(view)
     return result
@@ -674,10 +748,13 @@ def candidate_list(conn, identifier, kind):
     current = media_url(row["cells"][column])
     if current:
         urls.append(current)
-    urls.extend(c["url"] for c in records(conn, "candidate", slug) if c["entityId"] == identifier and c["kind"] == kind)
+    from project_docs.story_adoption import latest_created
+    stored = [c for c in records(conn, "candidate", slug) if c["entityId"] == identifier and c["kind"] == kind]
+    urls.extend(c["url"] for c in stored)
+    created = latest_created(stored)  # SPEC_19: null for history, uploads and candidates written before createdAt
     prefix, key = ("im_", "imageId") if kind == "image" else ("vd_", "videoId")
-    result = [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current}
-              for url in dict.fromkeys(urls)]
+    result = [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current,
+               "createdAt": created.get(url)} for url in dict.fromkeys(urls)]
     if entity == 'shot':
         from project_docs import writing_impact
         evidence = [c for c in records(conn, 'candidate', slug) + records(conn, 'story_media_receipt', slug)
@@ -726,12 +803,28 @@ def register_card(conn, me, body):
             "nodeInfoList": worker.build_node_info(card)}
 
 
+def app_code(card):
+    """A card's primary appCode: its first RH alias, else its card id."""
+    return next((a for a, cid in ALIASES.items() if cid == card["card_id"]), card["card_id"])
+
+
+def look_catalog(kind=None):
+    """GET /catalog/looks items (story_look.api_items): every kind, or one; 400 with a message key for an unknown kind."""
+    from project_docs import story_look
+    try:
+        return story_look.api_items(kind)
+    except story_look.LookCatalogError:
+        raise StoryError(400, "DRAMA_VALIDATION_FAILED", f"Unknown look kind {kind!r}; use one of {', '.join(story_look.API_KINDS)}.",
+                         {"kinds": list(story_look.API_KINDS)}, message_key="errors.unknownLookKind",
+                         message_params={"kind": kind, "kinds": ", ".join(story_look.API_KINDS)}) from None
+
+
 def catalog_entries():
     """(card, catalog item) pairs: the primary appCode of every registered card, then the card's other aliases."""
     result = []
     for card in worker.openapi_list_cards():
         ec = card.get("engine_config", {})
-        code = next((a for a, cid in ALIASES.items() if cid == card["card_id"]), card["card_id"])
+        code = app_code(card)
         item = {"appCode": code, "card_id": card["card_id"], "name": card["label"], "capability": card["output_mode"].upper(),
                 "webappId": str(ec.get("webappId", card["card_id"])), "skuId": str(ec.get("webappId", "0")),
                 "imageMode": "T2I" if card["card_id"] == "local-smoke" else "I2I", "nodes": card["nodes"],
@@ -797,6 +890,34 @@ def queue_task(conn, me, slug, kind, job, actions):
     return public_task(task)
 
 
+def take_refs(conn, shot, episode_id, prompt, uses):
+    """SPEC_19 R15: snapshots of the @SC01-S02.end / .start tags in a shot's prompt (story_take_refs.resolve)."""
+    from project_docs import story_take_refs
+    if not story_take_refs.tokens(prompt):
+        return story_take_refs.resolve(prompt, [], shot, uses)  # no tag: only takeRefUses is checked
+    return story_take_refs.resolve(prompt, shots(conn, episode(conn, episode_id)), shot, uses)
+
+
+def prepare_take_refs(identifier, slug, job, head):
+    """SPEC_19 R15 worker preparation: cut each quoted frame from its take (extract_frame with source_url) before the
+    generation, and freeze frameUrl/at into the task's job; a retry keeps the frames it already has."""
+    from project_docs import http, story_take_refs, writing_impact
+    refs = story_take_refs.frozen(job)
+    if not refs or all(ref.get('frameUrl') for ref in refs):
+        return refs
+    from project_assistant import execution_governance as governance
+    refs = story_take_refs.prepare_frames(identifier, slug, refs, head,
+        operation=lambda key, action: governance.run_operation(head.accounting_context, identifier + ':' + key, action))
+    with http.open_connection() as conn:
+        current = record(conn, identifier, lock=True)
+        if current['status'] != 'RUNNING':
+            raise worker.WorkerError('Story operation ended before generation.')
+        current['_job']['storyProvenance'] = writing_impact.with_take_refs(current['_job'].get('storyProvenance'), refs)
+        store(conn, identifier, 'task', current)
+    job['storyProvenance'] = writing_impact.with_take_refs(job.get('storyProvenance'), refs)
+    return refs
+
+
 def generation_job(conn, me, identifier, kind, body):
     slug, row = find_row(conn, identifier, "shot" if identifier.startswith("sh_") else "asset")
     authorize(conn, me, slug, write=True)
@@ -834,13 +955,24 @@ def generation_job(conn, me, identifier, kind, body):
         values.update({f"{n['nodeId']}.{n['fieldName']}": chosen["url"] for n in card["nodes"] if n.get("slot") == "driving_video"})
     column = media_column(row, kind)
     workflow = frozen[1] if frozen else worker._resolve_openapi_card_and_workflow(card["card_id"])[1]
-    episode_id = shot_view(conn, slug, row).get('episodeId', 'ep_' + slug + '_01') if identifier.startswith('sh_') else None
+    shot = shot_view(conn, slug, row) if identifier.startswith('sh_') else None
+    episode_id = shot.get('episodeId', 'ep_' + slug + '_01') if shot else None
     job = {"episodeId": episode_id, "entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
            "card": card, "workflow": workflow, "values": values, "column": column, "production_policy": policy}
+    refs = []
     if identifier.startswith('sh_'):
-        from project_docs import writing_impact
+        from project_docs import writing_impact, story_take_refs
         job['storyProvenance'] = writing_impact.freeze_for_shot(conn, me, identifier)
         writing_impact.validate_frozen_row(job['storyProvenance'], job['row']['cells'])
+        # SPEC_19 R15: @SC01-S02.end / .start in the prompt sent are frozen now, into the job and the new take's provenance.
+        refs = take_refs(conn, shot, episode_id, prompt or shot['description'], body.get('takeRefUses'))
+        if refs:
+            job['storyProvenance'] = writing_impact.with_take_refs(job['storyProvenance'], refs)
+            if prompt:
+                # An override replaces the compiled prompt, so its tags become their sentences here (the same function).
+                values.update({f"{n['nodeId']}.{n['fieldName']}": story_take_refs.expand(prompt, refs) for n in card["nodes"] if n.get("slot") == "prompt"})
+    elif body.get('takeRefUses') is not None:
+        invalid('takeRefUses applies to shot generations only.')
     if body.get("_allocation"):
         job["allocation"] = copy.deepcopy(body["_allocation"])
         job['_accounting_prefix'] = body.get('_accountingPrefix') or 'generation:' + uuid.uuid4().hex
@@ -849,19 +981,144 @@ def generation_job(conn, me, identifier, kind, body):
         for step in job["allocation"]["stages"]:
             if step["kind"] == "generate":
                 step["card"], step["workflow"] = (card, workflow) if step["card_id"] == card["card_id"] else worker._resolve_openapi_card_and_workflow(step["card_id"])
+    if refs and any(c["engine_config"]["driver"] == "comfy_router" for c in
+                    [card] + [s["card"] for s in job.get("allocation", {}).get("stages", []) if s["kind"] == "generate"]):
+        # Like any future generated Router reference: the quoted frame is cut after admission and cannot be quoted before.
+        raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "A quoted take's frame is cut after admission, so an official Router card cannot quote it in advance; use a local card for this shot.")
     if identifier.startswith('sh_') and not job.get('allocation'):
         from project_docs import story_allocation
         step={'step_id':'generate','kind':'generate','card_id':card['card_id'],'depends_on':[],'inputs':{},'output_role':'output_'+kind}
+        sources = None
+        if any(ref['use'] == 'first_frame' for ref in refs):
+            # The worker cuts the quoted frame; until then it is a planned image in the shot's first-frame roles.
+            step['inputs'] = {role: {'approved_source_id': 'take-ref'} for role in ('first_frame', 'anchor_keyframe')}
+            sources = {'approved:take-ref': {'planned_output': True, 'content_type': 'image/png', 'output_role': 'first_frame'}}
         readiness={'stages':[step],'configuration_blockers':[]}
-        story_allocation.preflight_inputs(conn,slug,identifier,readiness,{card['card_id']:(card,workflow)},card_values=values)
+        story_allocation.preflight_inputs(conn,slug,identifier,readiness,{card['card_id']:(card,workflow)},sources,card_values=values)
         if not readiness['ready']:
             raise StoryError(409,'DRAMA_STAGE_PRECONDITION','Resolve required generation inputs before batch admission: ' + ', '.join(readiness['input_blockers']))
     return slug,job
 
 
+MAX_TAKES = 4  # SPEC_19 B7: takes one generation request may ask for
+
+
+def take_count(body):
+    """The ``count`` of a generation request: a whole number from 1 to MAX_TAKES, else 422."""
+    value = body["count"]
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_TAKES:
+        invalid(f"count must be a whole number from 1 to {MAX_TAKES}.")
+    return value
+
+
+def takes_so_far(conn, slug, identifier, kind):
+    """The number the next take of this row and kind gets: the takes it lists (``GET .../videos`` or ``/images``) plus the
+    Story renders of that kind still queued or running for it, so two batches sent back to back never share a seed."""
+    with conn.cursor() as cur:
+        cur.execute("""SELECT count(*) FROM projectops.story_record WHERE kind='task' AND project_slug=%s
+                         AND data->>'status' IN ('QUEUED','RUNNING') AND data->'_job'->>'entityId'=%s AND data->'_job'->>'kind'=%s""",
+                    (slug, identifier, kind))
+        in_flight = cur.fetchone()[0]
+    return len(candidate_list(conn, identifier, kind)) + in_flight
+
+
+def seed_take(job, take):
+    """``job`` for take number ``take`` (0 = the first take the row ever had): the card's seed input becomes the seed the
+    take would start from (an explicit modelParams seed, else the row's identity seed, else the card's default) plus
+    ``take``, the way a pipeline re-shoot advances it. A card without a seed input keeps its own seed."""
+    node = next((n for n in job["card"]["nodes"] if n.get("slot") == "seed"), None)
+    if node is None:
+        return job
+    key = f"{node['nodeId']}.{node['fieldName']}"
+    base = job["values"].get(key)
+    if base is None:
+        base = worker.resolve_studio_context({"input": job["input"], "capability": job["kind"] + "_gen"}).get("seed")
+    if base is None:
+        base = node.get("defaultValue", 0)
+    try:
+        seed = int(str(base).strip()) + take
+    except ValueError:
+        invalid("The seed must be a whole number for several takes to advance it.")
+    if node.get("max") is not None:
+        seed %= int(node["max"]) + 1
+    job["values"][key] = str(seed)
+    return job
+
+
 def generation(conn, me, identifier, kind, body, actions):
-    slug,job=generation_job(conn,me,identifier,kind,body)
-    return queue_task(conn, me, slug, ("SHOT_" if identifier.startswith("sh_") else "ASSET_") + kind.upper() + "_GENERATE", job, actions)
+    """POST /shots|assets/{id}/image-generations, video-generations.
+
+    Without ``count`` the request and its answer (one task) are exactly the RH ones. With ``count`` (1-4, SPEC_19 B7) it
+    queues that many tasks of the same job, each with the seed of its take number (``seed_take``), and answers
+    ``{tasks: [task, ...], count}``. An official Router card renders one take per request: its quote covers one set of
+    inputs, so a count above 1 is refused and its single take keeps the quoted seed.
+    """
+    task_type = ("SHOT_" if identifier.startswith("sh_") else "ASSET_") + kind.upper() + "_GENERATE"
+    if "count" not in body:
+        slug, job = generation_job(conn, me, identifier, kind, body)
+        return queue_task(conn, me, slug, task_type, job, actions)
+    count = take_count(body)
+    slug, job = generation_job(conn, me, identifier, kind, {k: v for k, v in body.items() if k != "count"})
+    if worker.card_execution_profile(job["card"])["driver"] == "comfy_router":
+        if count > 1:
+            invalid("An official Router card renders one take per request, as quoted; send count 1 and quote each take.")
+        return {"tasks": [queue_task(conn, me, slug, task_type, job, actions)], "count": 1}
+    first = takes_so_far(conn, slug, identifier, kind)
+    tasks = [queue_task(conn, me, slug, task_type, seed_take(copy.deepcopy(job), first + i), actions) for i in range(count)]
+    return {"tasks": tasks, "count": count}
+
+
+def worker_task(identifier, slug, job, refs):
+    """The Studio worker task of a Story generation job: execute_task sends it, prompt_preview compiles the same one."""
+    from project_docs import story_take_refs
+    # project_slug lets the worker check that media it is pointed at (extract_frame source_url) is this production's.
+    return {"id": identifier, "project_slug": slug, "capability": job["kind"] + "_gen",
+            "input": story_take_refs.worker_input(job["input"], refs),
+            "workflow": job["workflow"], "production_policy": job.get("production_policy")}
+
+
+def compile_card_form(task, card, values):
+    """(context, form values) the Studio worker compiles for ``card`` before it submits anything: the shot context
+    (``resolve_studio_context``: # move tags and quoted takes become their sentences there) and the card's form
+    (``_build_card_form_values``: which compiled text each prompt input gets, the explicit values over it). Pure: without a
+    worker head no media is read."""
+    ctx = worker.resolve_studio_context(task)
+    return ctx, worker._build_card_form_values(card, ctx, dict(card["engine_config"], card_values=values), task, None)
+
+
+def prompt_preview(conn, me, identifier, kind, body):
+    """POST /shots/{id}/prompt-previews (SPEC_19 B6): what a generation with this body would send, without sending it.
+
+    The body is a generation request (``count`` is validated and ignored). The job is built and validated exactly as for
+    a generation inside a savepoint that is always rolled back, so nothing is queued, reserved or written. Returns::
+
+        {compiledPrompt,   # the text the card's prompt input receives, word for word (null if the card has none)
+         references: [{kind: "asset", code, name, imageUrl} | {kind: "take", shotId, shotIndex, edge, takeUrl, at, frameUrl,
+                       use, adopted, lastFrameAt}],   # the pictured subjects, then the quoted takes as frozen on submit
+         look: {opticalRig, cameraMovement, moves}}   # the look inputs the compiler read; moves are catalog #ids in order
+
+    A quoted take's frame is cut by the worker after admission (frameUrl is null here); the sentence its tag becomes does
+    not depend on that frame.
+    """
+    import psycopg
+    from project_docs import story_take_refs
+    if "count" in body:
+        take_count(body)
+    with conn.transaction():
+        slug, job = generation_job(conn, me, identifier, kind, {k: v for k, v in body.items() if k != "count"})
+        raise psycopg.Rollback()
+    refs = story_take_refs.frozen(job)
+    # Until the worker cuts the frame, the quoted take stands in for it: the compiler only checks it is a production asset.
+    standing = [dict(ref, frameUrl=ref.get("frameUrl") or ref["takeUrl"]) for ref in refs]
+    ctx, form = compile_card_form(worker_task("tk_preview", slug, job, standing), job["card"], job["values"])
+    prompts = [form.get(f"{n['nodeId']}.{n['fieldName']}") for n in job["card"]["nodes"] if n.get("slot") == "prompt"]
+    compiled = next((str(p) for p in prompts if p is not None), None)
+    references = [{"kind": "asset", "code": a["asset_id"], "name": a["name"], "imageUrl": next(iter(a.get("reference_urls") or ()), None)}
+                  for a in ctx.get("resolved_assets") or [] if not a.get("take_ref")]
+    references += [{"kind": "take", **ref} for ref in refs]
+    return {"compiledPrompt": compiled, "references": references,
+            "look": {"opticalRig": ctx.get("optical_rig") or "", "cameraMovement": ctx.get("camera_motion") or "",
+                     "moves": list(ctx.get("camera_moves") or [])}}
 
 
 def router_quote(me, identifier, body):
@@ -1032,15 +1289,15 @@ def execute_task(identifier):
         elif task["type"] == "FILM_EXPORT":
             from project_assistant import execution_governance as governance
             from project_docs import story_trim
-            output = governance.run_operation(head.accounting_context, identifier + ':export', lambda: worker.ffmpeg({"id": identifier, "input": {"rows": story_trim.film_rows(job)}},
+            output = governance.run_operation(head.accounting_context, identifier + ':export', lambda: worker.ffmpeg({"id": identifier, "project_slug": slug, "input": {"rows": story_trim.film_rows(job)}},
                                    dict(job["config"], timeout=head.outbound_timeout(job['config'].get('timeout',1800)),
                                         probe_timeout=head.outbound_timeout(job['config'].get('probe_timeout',60))), head))
         else:
             with http.open_connection() as conn:
                 authorize(conn, me, slug, write=True)
                 authorize_card(conn, slug, job["card"])
-            execution = {"id": identifier, "capability": job["kind"] + "_gen", "input": job["input"],
-                         "workflow": job["workflow"], "production_policy": job.get("production_policy")}
+            refs = prepare_take_refs(identifier, slug, job, head)
+            execution = worker_task(identifier, slug, job, refs)
             if job.get("allocation"):
                 from project_docs import story_allocation
                 output = story_allocation.execute_steps(execution, job["allocation"]["stages"], head, job["values"])
@@ -1070,7 +1327,9 @@ def execute_task(identifier):
                 set_script(conn, me, ep, output["scriptContent"])
                 result = {"episodeId": ep["episodeId"]}
             elif task["type"] == "FILM_EXPORT":
-                result = {"fileId": output["asset_id"], "videoUrl": output["asset_url"]}
+                # segments: where every clip came from (SPEC_19); a job queued before they existed has none to report.
+                result = {"fileId": output["asset_id"], "videoUrl": output["asset_url"],
+                          **({"segments": job["segments"]} if "segments" in job else {})}
                 store(conn, "fl_" + identifier, "film", {**result, "episodeId": job["episodeId"], "filmId": "fl_" + identifier}, slug)
             else:
                 if not output["content_type"].startswith(job["kind"] + "/"):
@@ -1081,11 +1340,14 @@ def execute_task(identifier):
                 if job['entityId'].startswith('sh_'):
                     result = writing_impact.candidate_view(result, evidence)
                 store(conn, "ca_" + identifier, "candidate", {"entityId": job["entityId"], "kind": job["kind"], "url": output["asset_url"],
-                      **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
+                      "createdAt": now(), **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
                 repo.get_tab_for_update(conn, slug, job["row"]["tabKey"])
                 _, row = find_row(conn, job["entityId"], "shot" if job["entityId"].startswith("sh_") else "asset")
+                from project_docs import story_adoption
+                # An adopted shot keeps the take that is in the cut: a new render only joins its candidates (SPEC_19 R2).
+                adopted = job['entityId'].startswith('sh_') and story_adoption.row_status(row) in story_adoption.ADOPTED
                 # A delayed render is kept as a candidate, not allowed to overwrite a newer selection.
-                if row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
+                if not adopted and row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
                     mutate_row(conn, me, slug, row["tabKey"], row["rid"], {job["column"]: f"[{job['kind']}]({output['asset_url']})"})
                     if job["kind"] == "video" and job["entityId"].startswith("sh_"):
                         from project_docs import story_trim
@@ -1235,6 +1497,14 @@ def notify(owner, task):
         action()
 
 
+def auto_cut_checks(conn, me, slug, shot_id, actions):
+    """SPEC_19 decision 8: with auto grading on, a new adoption or trim queues the cut checks next to the shot."""
+    from project_assistant import take_grader
+    from project_docs import story_cuts
+    if story_cuts.on_adoption_changed(conn, slug, shot_id, me.actor_id):
+        actions.append(take_grader.kick)
+
+
 def dispatch(conn, me, method, path, body, query, actions, headers=None):
     """Return unwrapped data; callers own commit, rollback and post-commit launches."""
     from project_docs import story_alignment, story_estimates
@@ -1283,6 +1553,8 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
                          and (not scope or options.in_scope(card, scope))], query)
         if path == "/catalog/styles":
             return page(STYLES, query)
+        if path == "/catalog/looks":
+            return page(look_catalog(query.get("kind")), query)
         if path == "/catalog/director-styles":
             return page([{"directorStyleId": str(i + 1), "name": name} for i, name in enumerate(["ARRI Alexa 65 / 35mm Anamorphic", "RED V-Raptor / 85mm Prime", "16mm Bolex"])], query)
         if path == "/catalog/aspect-ratios":
@@ -1337,10 +1609,15 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             if method == "GET":
                 return p
             if method == "PATCH":
+                if "autoVideoAfterFirstFrame" in body and not isinstance(body["autoVideoAfterFirstFrame"], bool):
+                    invalid("autoVideoAfterFirstFrame must be true or false.")
                 update = {k: body[src] for k, src in (("title", "title"), ("summary", "description")) if src in body}
                 status, result = service.update_project(conn, me, slug, update)
                 if status != 200:
                     invalid(result["error"])
+                if "autoVideoAfterFirstFrame" in body:
+                    from project_docs import story_adoption
+                    story_adoption.set_auto_video(conn, slug, body["autoVideoAfterFirstFrame"])
                 return project(conn, slug)
             if method == "DELETE":
                 if not me.can_edit:
@@ -1374,6 +1651,11 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
         ep = episode(conn, parts[1]); slug = ep["slug"]
         authorize(conn, me, slug, write=method != "GET")
         tail = "/".join(parts[2:])
+        if tail in ("cuts", "cut-checks"):
+            from project_docs import story_cuts
+            result = story_cuts.dispatch(conn, me, method, tail, ep, body, actions)
+            if result is not None:
+                return result
         if not tail:
             if method == "GET":
                 return episode_view(conn, ep)
@@ -1505,7 +1787,8 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             write_scenes(conn, me, ep, [next(s for s in items if s["sceneId"] == sid) for sid in order])
             return {"items": scenes(conn, ep)}
         if tail == "shots" and method == "GET":
-            return page(shots(conn, ep), query)
+            from project_docs import story_adoption
+            return page(shots(conn, ep, takes=story_adoption.Takes(conn, slug)), query)
         if tail in ("shot-image-generations", "shot-video-generations") and method == "POST":
             chosen = shots(conn, ep)
             if "shotIds" in body:
@@ -1529,16 +1812,22 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
                 return page([f for f in records(conn, "film", slug) if f["episodeId"] == ep["episodeId"]], query)
             if method == "POST":
                 from project_docs import story_trim
-                clips = film_shots(shots(conn, ep), fill_previs=body.get("fillPrevis") is True)
-                if not clips:
-                    raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Select at least one shot video before exporting a film.")
+                selection, fill = film_options(body)
+                plan = film_plan(shots(conn, ep), selection, fill)
+                if not plan:
+                    raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Adopt at least one shot before exporting a film." if selection == "adopted"
+                                     else "Select at least one shot video before exporting a film.")
+                clips = [(shot, url) for shot, url, _ in plan]
+                trims = story_trim.film_trims(clips)
                 return queue_task(conn, me, slug, "FILM_EXPORT", {"episodeId": ep["episodeId"], "urls": [url for _, url in clips],
-                                                                   "trims": story_trim.film_trims(clips), "config": {}}, actions)
+                                                                   "trims": trims, "config": {},
+                                                                   "segments": film_segments(conn, ep, plan, trims)}, actions)
     if parts[0] in ("assets", "shots") and len(parts) >= 2:
         identifier = parts[1]; entity = "asset" if parts[0] == "assets" else "shot"
         slug, row = find_row(conn, identifier, entity); tail = "/".join(parts[2:])
         authorize(conn, me, slug, write=method != "GET")
-        view = lambda: asset_view(slug, find_row(conn, identifier, entity)[1]) if entity == "asset" else shot_view(conn, slug, find_row(conn, identifier, entity)[1])
+        from project_docs import story_adoption
+        view = lambda: asset_view(slug, find_row(conn, identifier, entity)[1]) if entity == "asset" else shot_view(conn, slug, find_row(conn, identifier, entity)[1], takes=story_adoption.Takes(conn, slug))
         if not tail:
             if method == "GET":
                 result = view()
@@ -1568,6 +1857,12 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             return options.describe(conn, slug, identifier, entity, row, query)
         if tail in ("image-generations", "video-generations") and method == "POST":
             return generation(conn, me, identifier, "image" if tail == "image-generations" else "video", body, actions)
+        if entity == "shot" and tail == "prompt-previews" and method == "POST":
+            # The body of a video-generations request; kind "image" previews an image-generations one (as router-quotes).
+            kind = body.get("kind", "video")
+            if kind not in ("image", "video"):
+                invalid("kind must be image or video.")
+            return prompt_preview(conn, me, identifier, kind, {k: v for k, v in body.items() if k != "kind"})
         if tail in ("images", "videos") and method == "GET":
             return page(candidate_list(conn, identifier, "image" if tail == "images" else "video"), query)
         if tail == "images" and method == "POST":
@@ -1577,13 +1872,27 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             raw = file_bytes(conn, file["fileId"])
             aid = repo.put_asset(conn, slug, data=raw, content_type=file["contentType"], actor_id=me.actor_id)
             url = f"/projects/api/{slug}/assets/{aid}"
-            store(conn, "ca_" + uuid.uuid4().hex, "candidate", {"entityId": identifier, "kind": "image", "url": url}, slug)
+            store(conn, "ca_" + uuid.uuid4().hex, "candidate", {"entityId": identifier, "kind": "image", "url": url, "createdAt": now()}, slug)
             return next(c for c in candidate_list(conn, identifier, "image") if c["url"] == url)
         if tail in ("selected-image", "selected-video") and method == "PUT":
             return select_candidate(conn, me, identifier, "image" if tail.endswith("image") else "video", body)
+        if entity == "shot" and tail == "adoptions" and method == "POST":
+            try:
+                before = media_url(row["cells"][media_column(row, "image")])
+            except StoryError:
+                before = None
+            adopted = story_adoption.adopt(conn, me, identifier, body)
+            if "imageId" in body:  # a first frame does not change the cut; it may start the shot's video (§7 decision 1)
+                adopted["autoVideo"] = story_adoption.follow_first_frame(conn, me, identifier, before, actions)
+            else:
+                auto_cut_checks(conn, me, slug, identifier, actions)
+            return adopted
+        if entity == "shot" and tail == "adoption" and method == "DELETE":
+            return story_adoption.unadopt(conn, me, identifier)
         if entity == "shot" and tail == "trim" and method == "PUT":
             from project_docs import story_trim
             story_trim.set_trim(conn, slug, identifier, row, body)
+            auto_cut_checks(conn, me, slug, identifier, actions)
             return view()
         if entity == "shot" and tail == "previs-plan" and method in ("GET", "PUT"):
             from project_docs import story_previs  # SPEC_20 R26: the stored 3D plan, revisioned (If-Match)
@@ -1667,10 +1976,11 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             rid = mutate_row(conn, me, slug, row["tabKey"], cells=dict(enumerate(second)), after=row["rid"])
             other = f"sh_{slug}_{rid}"
             from project_docs import story_trim
-            store(conn, "meta_" + other, "shot_meta", story_trim.strip(shot_meta(conn, identifier)), slug)  # the new half has no take yet
+            # The new half has no take yet: neither the cut nor the adoption of the original carries over.
+            store(conn, "meta_" + other, "shot_meta", {k: v for k, v in story_trim.strip(shot_meta(conn, identifier)).items() if k != "adoption"}, slug)
             from project_docs import writing_impact
             writing_impact.split_lineage(conn, slug, identifier, other)
-            return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1])]}
+            return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1], takes=story_adoption.Takes(conn, slug))]}
     if parts[0] == "scenes" and len(parts) >= 2:
         ep, scene = locate_scene(conn, parts[1]); tail = "/".join(parts[2:])
         from project_docs import story_crew  # SPEC_20 R22: who is in each shot of the scene, proposals only
@@ -1689,7 +1999,8 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             rid = mutate_row(conn, me, ep["slug"], "cinema-studio", cells={0: text(body, "shotIndex", f"SC{scene['sceneIndex']:02d}-S{len(shots(conn, ep)) + 1:02d}"), 3: text(body, "description"), 6: "Queued"})
             identifier = f"sh_{ep['slug']}_{rid}"
             store(conn, "meta_" + identifier, "shot_meta", {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"]}, ep["slug"])
-            return shot_view(conn, ep["slug"], find_row(conn, identifier, "shot")[1])
+            from project_docs import story_adoption
+            return shot_view(conn, ep["slug"], find_row(conn, identifier, "shot")[1], takes=story_adoption.Takes(conn, ep["slug"]))
     if path in ("/shot-merges", "/scene-merges") and method == "POST":
         key = "shotIds" if path == "/shot-merges" else "sceneIds"
         ids = body.get(key, [])
@@ -1715,7 +2026,8 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
                               {'entityId': ids[0], 'kind': kind, 'url': candidate['url'],
                                'storyProvenance': candidate.get('storyProvenance')}, slug)
                 mutate_row(conn, me, slug, row["tabKey"], other["rid"], delete=True)
-            return shot_view(conn, slug, find_row(conn, ids[0], "shot")[1])
+            from project_docs import story_adoption
+            return shot_view(conn, slug, find_row(conn, ids[0], "shot")[1], takes=story_adoption.Takes(conn, slug))
         found = [locate_scene(conn, i) for i in ids]
         if len({ep["episodeId"] for ep, _ in found}) != 1:
             invalid("Merged scenes must belong to one episode.")
@@ -1928,6 +2240,8 @@ def handle(handler, parsed, method):
         payload = {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]}
         if isinstance(exc, StoryError) and exc.details is not None:
             payload['details'] = exc.details
+        if isinstance(exc, StoryError) and exc.message_key:
+            payload['message_key'], payload['message_params'] = exc.message_key, dict(exc.message_params or {})
         handler.send_json(status, payload)
     finally:
         if conn:

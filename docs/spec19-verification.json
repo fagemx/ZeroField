@@ -1,0 +1,91 @@
+{
+  "date": "2026-10-27",
+  "stage": "SPEC_19 packages A, B and D: adoption is the film, the shot composer, cross-shot references and cut checks; package C (film / colour / lighting looks) is decided but not built",
+  "base_commit": "3b8ca651f67ec518c3dc81a6ca06944db274f2bc",
+  "branch": "feat/spec19-integration",
+  "commit": "0a6782572a72c47995611d5a74ea67f4d930b6f2 is the tree every check below ran against (the backend suite ran at 2478e6f; nothing under project_docs, project_assistant or tests changed after it). The commit that adds this receipt, the README line and the screenshots sits on top of it.",
+  "scope": [
+    "R1 R2 adoption: one ✓ or A adopts a story candidate (videoId), a pending pipeline proposal (proposalId, through apply_proposal) or a first frame (imageId); media and Approved land in one table edit; later story takes never overwrite an adopted shot",
+    "R3 R4 R5 the right column 'in the cut': derived state, neighbours and Play around on one player, progress bar, merged take list, trim, crew proposals, the … menu; A adopts and moves to the next shot with a new take, R writes Retake and opens the composer prompt",
+    "R6 film counts adopted shots; the film window fills gaps with the latest take, previs or nothing and exports selection: adopted",
+    "R7 the Shot Stage's views in one View menu, the composer by default once a shot is picked",
+    "R8 R9 R10 the composer: take on top, Reference and Camera example walls, Optical Rig from the catalog, # camera moves expanded in place, the prompt as the largest input with inline @ / # / cross-shot tags, one parameter row with 1-4 takes and the estimate, and a read-only view of the exact compiled prompt",
+    "R15 R16 cross-shot references (@SC01-S02.end / .start) frozen into each new take's provenance, with 'upstream changed' and Re-shoot with the new one",
+    "R17 R18 cut checks (outgoing and incoming frame side by side, queued behind renders on the same GPU hand-off), seam dots, Cuts only playback",
+    "R19 trying a take in the cut without writing",
+    "Decisions 1-8 of section 7, including the automatic video after a first-frame adoption (open-weights cards only, autoVideoAfterFirstFrame) and cut checks after an adoption or trim behind the auto-grade switch",
+    "Film segments carry take, in / out, reference snapshots and the cut result (D10)"
+  ],
+  "not_done": [
+    "Package C: film setup, colour and lighting looks, the episode look, OpenJutsu in the composer and all sample media (the option list and names are final in docs/specs/SPEC_19_LOOK_OPTIONS_DRAFT.md)",
+    "Sample media for camera and move options (B10): the walls show placeholder textures",
+    "D7: a human-labelled comparison of cut checks on the Phase 2 six-shot film (needs a real GPU run)",
+    "Cross-shot references on the M8 pipeline path (story_media_adapter.enqueue / receipts)"
+  ],
+  "backend": {
+    "command": "python -X utf8 shard_suite.py <repo> <shard> 4, four processes in parallel, each loading a quarter of tests/test_*.py by file size",
+    "environment": "a throwaway PostgreSQL 16 cluster on 127.0.0.1:55461, one fresh database per shard (zf_shard0-3); not the showcase cluster",
+    "passed": 927,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "shards": [{"tests": 250, "seconds": 255.5}, {"tests": 217, "seconds": 385.1}, {"tests": 244, "seconds": 274.4}, {"tests": 216, "seconds": 540.8}],
+    "wall_seconds": 544,
+    "note": "An earlier single-process run of the same branch reported one error that did not reproduce on a rerun (869/869); another agent was running its own suite against the same database at the time."
+  },
+  "frontend": {"command": "npm test --prefix ui", "passed": 582, "failed": 0, "skipped": 0},
+  "build": {"command": "npm run build --prefix ui", "status": "passed", "committed": "0a67825"},
+  "browser_journeys": {
+    "tool": "Python Playwright, headless Chromium, over real HTTP and PostgreSQL (zf_w4_browser on the throwaway cluster)",
+    "results": [
+      {"file": "ui/tests/shotReview.browser.py", "tests": 3, "passed": 3, "covers": "adopt with ✓, Mark as blocked / Unblock through the … menu, the same review component stays mounted, an unsent override survives, the hand-off uses the adopted video, R opens the composer prompt, a late older candidate response is ignored"},
+      {"file": "ui/tests/agentConsole.browser.py", "tests": 4, "passed": 4, "covers": "console navigation, templates, keyboard, locale and returning to the production on the same shot"}
+    ],
+    "fixed_on_the_way": "Two shotReview tests still assumed the removed status menu and that R stays in Review; they now follow SPEC_19. The agentConsole failure also failed on main (3b8ca65): after a reload the shell's shot focus was not restored, so the Shot Stage fell back to the first shot; App.jsx now restores it."
+  },
+  "packaging": {
+    "command": "pip wheel --no-deps --no-build-isolation . then python scripts/verify_wheel.py <wheel>",
+    "wheel_sha256": "f0c2e2f35f8cea450f052b19d94e8a5a9fcef03a095fd402a5ff1ae49cf809a3",
+    "verified": "SQL, prompts, workflows, samples, frontend and CLI entry points",
+    "new_resources_included": ["project_docs/look_catalog.json", "project_docs/story_adoption.py", "project_docs/story_look.py", "project_docs/story_take_refs.py", "project_docs/story_cuts.py"]
+  },
+  "ui_verification": {
+    "tool": "Headless Edge driven over the DevTools protocol, screenshots read back from disk",
+    "environment": "A file copy of the stopped showcase cluster started on 127.0.0.1:55463, served by run_studio.py --no-worker from an export of the branch; the user's .openbench_pg was never started or written",
+    "viewports": ["1920x1080", "1280x720"],
+    "locale": "zh-TW",
+    "screenshots": [
+      "docs/research/screenshots/spec19-composer-zh-1920.png",
+      "docs/research/screenshots/spec19-composer-zh-1280.png",
+      "docs/research/screenshots/spec19-camera-wall-zh-1920.png",
+      "docs/research/screenshots/spec19-film-zh-1920.png",
+      "docs/research/screenshots/spec19-film-zh-1280.png",
+      "docs/research/screenshots/spec19-after-adopt-key-zh-1280.png"
+    ],
+    "checks": [
+      "One primary button on the Shot Stage ('生成 1 支'); no horizontal scroll; right column 320 px",
+      "1280x720: take, take strip, look buttons, prompt and parameter row on the first screen without scrolling",
+      "Only one video plays; the six other video elements are paused take thumbnails with preload=metadata",
+      "Keyboard: ↓ / ↑ change shot, the camera wall opens and Esc closes it, R moves the focus to the composer prompt, A adopts S03 (film 3/6 → 4/6) and moves to S04, the next shot with a new take",
+      "Film window: adopted 3/6 with '3 鏡有 Take 但未採用', Whole / Cuts only, gap fill latest / previs / skip, Check cuts, one primary Export button",
+      "No page exceptions"
+    ],
+    "fixed_on_the_way": [
+      "studio.css's global button rule squeezed the right column's neighbour captions to one letter; the neighbours and take rows now win their own styles",
+      "At 1280x720 the parameter row fell below the first screen; the composer is now a flex column whose player gives up height first (to 120 px)"
+    ]
+  },
+  "unverified": [
+    "No take was generated by a real model; generation was checked as requests, counts, seeds and compiled text, not as output.",
+    "Cut checks ran with a stand-in vision model and mocked ComfyUI hand-off; no real frame sheet was graded.",
+    "The automatic video after a first-frame adoption was tested with a patched task pool; no local render ran.",
+    "Seam dots, Cuts only and trying a take were seen in unit and render tests and in the film window, not played through end to end in a browser.",
+    "contenteditable caret, IME input and undo inside the composer prompt were not driven in a browser."
+  ],
+  "limits": "Camera and move options have no sample media yet; film / colour / lighting looks are not built; the M8 pipeline path does not resolve cross-shot references; Router cards are limited to one take per request; preexisting oddities left as they were: crew proposals show raw image markdown, and the film window's 'open in timeline' button renders as a grey block. No live provider, GPU or billing acceptance is claimed.",
+  "follow_up": [
+    "App.jsx sets sheet focus without the shell's shot focus in three more places (annotations, proposals, flow sources); on a mounted Shot Stage they may snap back to the previous shot.",
+    "Timeline.jsx still swaps takes through PUT selected-video instead of the adoption endpoint.",
+    "Shot generation-options list only video cards: the composer's first-frame workflows come from /catalog/apps without policy filtering or estimates."
+  ]
+}

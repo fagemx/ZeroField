@@ -2,11 +2,13 @@ import { useLocale } from './i18n/react.jsx';
 import { t as uiText } from './i18n/index.js';
 import { MediaCell } from './MediaCell.jsx';
 import { statusOptions } from './sheetViews.js';
-import { statusClass, statusLabel } from './format.js';
+import { normalizeStatus, statusClass, statusLabel } from './format.js';
 
 export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, onStatus, writable, busy, parsed, onUpload, onRunStep, onVariant, onRebuildScene, scenes=[], shotInfo={}, compact=false, current=null}) {
   // compact: the Shot Stage overview, one cover per shot; the stage chain lives in Review.
   const locale = useLocale();
+  // SPEC_19 decision 2: on the Shot Stage an Approved shot reads "Adopted"; the table and every other page keep "Approved". The value is unchanged.
+  const statusText = value => compact && normalizeStatus(value) === 'Approved' ? uiText('take.adopted') : statusLabel(value);
   const card = (item) => {
     const {row, index, title, cover, summary} = item;
     const column = model.groupColumn;
@@ -29,8 +31,8 @@ export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, 
         <dl className="sheet-card-summary">{summary.map((field, i) => <div key={i}><dt>{field.label}</dt><dd title={String(field.value)}>{field.value}</dd></div>)}</dl>
         <div className="sheet-card-actions">{column >= 0 && <select aria-label={uiText("sheetCards.message", {v0: (parsed.headers[column]), v1: (title)})} value={value} disabled={!writable || busy} onChange={event => onStatus(row.rid, column, event.target.value)}>
           <option value="" disabled={row.cells[column]?.kind === 'status'}>{uiText("sheetCards.notConfigured")}</option>
-          {value && !options.includes(value) && <option value={value} disabled>{statusLabel(value)}</option>}
-          {options.map(option => <option key={option} value={option}>{statusLabel(option)}</option>)}
+          {value && !options.includes(value) && <option value={value} disabled>{statusText(value)}</option>}
+          {options.map(option => <option key={option} value={option}>{statusText(option)}</option>)}
         </select>}<button className="quiet" aria-label={uiText("sheetCards.viewDetails", {v0: (title)})} onClick={() => onOpen(row.rid)}>{uiText("sheetCards.details")}</button></div>
       </div>
     </article>;
@@ -43,7 +45,7 @@ export function SheetCards({model, mode, selected, onSelect, onOpen, onPreview, 
   })}</div>;
   if (mode === 'gallery') return <div className="sheet-gallery" role="list" aria-label={uiText("sheetCards.galleryItems")}>{model.cards.map(card)}</div>;
   return <div className="sheet-board" aria-label={uiText("sheetCards.statusBoard")}>{model.groups.map(group => <section className="sheet-board-column" key={group.value} aria-label={uiText("sheetCards.items", {v0: (group.label), v1: (group.cards.length)})}>
-    <header><span className={`sheet-board-dot${statusClass(group.value) === 'done' ? ' done' : ''}`} /><h2>{group.label}</h2><span>{group.cards.length}</span></header>
+    <header><span className={`sheet-board-dot${statusClass(group.value) === 'done' ? ' done' : ''}`} /><h2>{compact && normalizeStatus(group.value) === 'Approved' ? uiText('take.adopted') : group.label}</h2><span>{group.cards.length}</span></header>
     <div role="list" aria-label={uiText("sheetCards.sData", {v0: (group.label)})}>{group.cards.map(card)}</div>
     {!group.cards.length && <p className="sheet-board-empty">{uiText("sheetCards.noData")}</p>}
   </section>)}</div>;
