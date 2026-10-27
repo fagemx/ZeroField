@@ -74,13 +74,14 @@ class ShotReviewInteractions(unittest.TestCase):
         self.fixture.conn.commit()
         self.page.goto(f'http://127.0.0.1:{self.fixture.server.server_port}/projects/{self.fixture.slug}/#cinema-studio')
         # SPEC_15 Shot Stage: pick the shot in the overview, then open it in Review; its controls stand in the detail column.
-        self.page.locator('.stage-view-btn').click(); self.page.locator('.stage-view-list').get_by_role('menuitemradio',name='Overview',exact=True).click()
+        self.view('Overview')
         self.page.get_by_role('button',name=self.shot['shotIndex'],exact=True).click()
-        self.page.locator('.stage-view-btn').click(); self.page.locator('.stage-view-list').get_by_role('menuitemradio',name='Review',exact=True).click()
+        self.view('Review')
         self.tools = self.page.locator('.story-shot-tools')
         expect(self.tools.locator('.story-takes figure').first).to_be_visible()
-        # SPEC_19 R3: the shot column has no status menu any more. Its status moves through "Retake (R)", a take's ✓ (adoption) and
-        # the folded "…" menu (Mark as blocked / Unblock / Remove from the cut, Replace Upload and the other rarer actions).
+        # SPEC_19 R3: the shot column has no status menu any more. Its status moves through a take's ✓ (adoption), the folded "…"
+        # menu (Mark as blocked / Unblock / Remove from the cut, Replace Upload and the other rarer actions) and "Retake (R)". Only the
+        # first two keep Review on screen: Retake opens the shot composer on its prompt (SPEC_19 3.1, 3.5).
         self.column = self.page.locator('.shot-detail.shot-film')
         self.hero = self.tools.get_by_role('button',name='Approved composition → Closed Hero',exact=True)
         self.page.evaluate('window.__sameReview=document.querySelector(".story-shot-tools")')
@@ -88,6 +89,11 @@ class ShotReviewInteractions(unittest.TestCase):
         self.draft = self.tools.locator('details input').first
         expect(self.draft).to_be_visible()
         self.draft.fill('Keep my unsent card override')
+
+    def view(self, name):
+        """Pick one of the Shot Stage's views from its View menu (SPEC_19 R7)."""
+        self.page.locator('.stage-view-btn').click()
+        self.page.locator('.stage-view-list').get_by_role('menuitemradio',name=name,exact=True).click()
 
     def assert_same_review(self):
         self.assertTrue(self.page.evaluate('window.__sameReview === document.querySelector(".story-shot-tools")'))
@@ -107,6 +113,7 @@ class ShotReviewInteractions(unittest.TestCase):
         self.assertEqual(saved.value.status,200)
 
     def retake(self):
+        """The "Retake (R)" button: one table edit of the status cell, then the shot composer opens on the prompt."""
         button = self.column.get_by_role('button',name='Retake (R)',exact=True)
         expect(button).to_be_enabled()
         with self.page.expect_response(lambda response: response.url.endswith('/table-edit') and response.request.method=='POST') as saved:
@@ -131,20 +138,32 @@ class ShotReviewInteractions(unittest.TestCase):
     def test_status_changes_update_actions_without_reopen_and_keep_video_source(self):
         self.prepare_row('Queued',video=True)
         expect(self.tools.locator('.story-escalation')).to_have_count(0)
-        self.retake()
+        # Status changes made beside Review update its actions in place: the same mounted review, the unsent override kept.
+        self.adopt(1)  # the take already in the cell, now adopted: Approved
         expect(self.tools.locator('.story-escalation')).to_be_visible(timeout=4000)
-        expect(self.hero).to_be_disabled()
+        expect(self.hero).to_be_enabled(timeout=4000)
         self.assert_same_review()
         self.set_status('Mark as blocked')
         expect(self.tools.locator('.story-escalation')).to_have_count(0,timeout=4000)
+        self.assert_same_review()
         self.set_status('Unblock')
-        self.adopt(1)  # the take already in the cell, now adopted: Approved
+        expect(self.tools.locator('.story-escalation')).to_have_count(0,timeout=4000)
+        self.adopt(1)
         expect(self.hero).to_be_enabled(timeout=4000)
         self.assert_same_review()
         selected = next(c for c in self.fixture.ok('/shots/'+self.id+'/videos')['items'] if c['selected'])
         self.click_handoff({'chainMode':'open_previz_to_closed_hero','referenceSourceVideoId':selected['videoId']})
         self.assert_same_review()
         self.page.screenshot(path=str(self.evidence/'status-video-review.png'),full_page=True)
+        # Retake leaves Review for the shot composer on purpose (SPEC_19 3.1, 3.5). Back in Review the shot shows its Retake actions
+        # (no Approved hero) and the override typed before is still there, though the review was mounted again.
+        self.retake()
+        expect(self.page.locator('.stage-view-btn')).to_contain_text('Composer')
+        expect(self.page.locator(f'[data-shot-prompt="{self.shot["rowId"]}"]')).to_be_focused()
+        self.view('Review')
+        expect(self.tools.locator('.story-escalation')).to_be_visible(timeout=4000)
+        expect(self.hero).to_be_disabled()
+        expect(self.draft).to_have_value('Keep my unsent card override')
 
     def test_approved_image_only_handoff_and_localized_preflight_blockers(self):
         self.prepare_row('Approved')
@@ -169,8 +188,8 @@ class ShotReviewInteractions(unittest.TestCase):
         self.page.screenshot(path=str(self.evidence/'image-handoff-zh-blockers.png'),full_page=True)
 
     def test_media_refresh_ignores_an_older_inflight_candidate_response(self):
-        # An image-only shot has no video to adopt, so the status moves through Retake and the "…" menu; what matters here is that
-        # the first, late answer for the takes never replaces the newer first frame.
+        # An image-only shot has no video to adopt, and Retake would leave Review for the composer, so the status moves through the
+        # "…" menu; what matters here is that the first, late answer for the takes never replaces the newer first frame.
         self.prepare_row('Queued')
         old_images = self.fixture.ok('/shots/'+self.id+'/images')
         held = []
@@ -180,10 +199,11 @@ class ShotReviewInteractions(unittest.TestCase):
             else:
                 route.continue_()
         self.page.route('**/shots/'+self.id+'/images**',delay_first)
-        self.retake()
+        # The status edit reloads the sheet first; the review asks for its takes again only after that reload.
+        with self.page.expect_request(lambda request: '/shots/'+self.id+'/images' in request.url):
+            self.set_status('Mark as blocked')
         self.page.wait_for_timeout(150)
         self.assertEqual(len(held),1)
-        self.set_status('Mark as blocked')
         self.set_status('Unblock')
         replacement = io.BytesIO()
         Image.new('RGB',(32,32),'blue').save(replacement,format='PNG')
