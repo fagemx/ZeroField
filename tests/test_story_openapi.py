@@ -1000,7 +1000,15 @@ class StoryHTTPTests(unittest.TestCase):
         moves = self.ok('/catalog/looks?kind=move&limit=100')['items']
         self.assertEqual([i['id'] for i in moves][:2], ['auto', 'push-in'])
         self.assertTrue(all(set(i) == {'id', 'kind', 'labelKey', 'promptText', 'preview'} for i in moves))
-        self.assertEqual(self.ok('/catalog/looks?kind=palette'), {'items': [], 'nextCursor': None})
+        # SPEC_19 package C: genre, era, tempo, palette and light, colours on the palettes.
+        palettes = self.ok('/catalog/looks?kind=palette&limit=100')
+        self.assertEqual((palettes['items'], palettes['nextCursor']), (story_look.api_items('palette'), None))
+        self.assertEqual([('hex' in i, i['id'] == 'auto') for i in palettes['items']][:2], [(False, True), (True, False)])
+        self.assertEqual(palettes['items'][1]['hex'][:2], ['#2E3A4A', '#5B6F86'])
+        for kind, count in (('genre', 9), ('era', 6), ('tempo', 5), ('light', 8)):
+            self.assertEqual([i['id'] for i in self.ok(f'/catalog/looks?kind={kind}&limit=100')['items']][1:],
+                             [i['id'] for i in story_look.api_items(kind)][1:])
+            self.assertEqual(len(story_look.api_items(kind)), count)
         code, payload = self.call('/catalog/looks?kind=colour')
         self.assertEqual((code, payload['code'], payload['message_key'], payload['message_params']['kind']),
                          (400, 'DRAMA_VALIDATION_FAILED', 'errors.unknownLookKind', 'colour'))

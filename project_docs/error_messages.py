@@ -546,4 +546,9 @@ MESSAGES = (
     ('不接受從別的網站送來的請求', 'requestNotAllowed', None),
     ('專案工作台的前端還沒建置。', 'requestNotAllowed2', None),
     ('找不到這個頁面', 'requestNotAllowed3', None),
+    # project_assistant.shot_meta (SPEC_19 R11, SPEC_20 R18): a proposal of a shot's look override, pinned by lookRevision.
+    ('The look of shot {label} changed after this proposal was made (revision {base}, now {current}). Nothing was applied; generate a new proposal.', 'shotProposalLookChanged',
+     'The\\ look\\ of\\ shot\\ (?P<v0>[\\s\\S]*?)\\ changed\\ after\\ this\\ proposal\\ was\\ made\\ \\(revision\\ (?P<v1>\\d+),\\ now\\ (?P<v2>\\d+)\\)\\.\\ Nothing\\ was\\ applied;\\ generate\\ a\\ new\\ proposal\\.'),
+    ('The look proposed for shot {label} no longer fits the look catalog: {reason} Nothing was applied; generate a new proposal.', 'shotProposalLookInvalid',
+     'The\\ look\\ proposed\\ for\\ shot\\ (?P<v0>[\\s\\S]*?)\\ no\\ longer\\ fits\\ the\\ look\\ catalog:\\ (?P<v1>[\\s\\S]*?)\\ Nothing\\ was\\ applied;\\ generate\\ a\\ new\\ proposal\\.'),
 )

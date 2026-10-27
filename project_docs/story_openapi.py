@@ -406,6 +406,90 @@ def shot_meta(conn, identifier):
     return record(conn, "meta_" + identifier, required=False) or {}
 
 
+# ---------- the look (SPEC_19 R11, R12) ----------
+# The episode look lives in the episode's settings (``settings.look``); a shot's override of it in ``meta_<shotId>.look``
+# (only the kinds it sets), with ``lookRevision`` counting its writes (0 before the first one).
+
+SHOT_SHEETS = ("cinema-studio", "openjutsu-lab")
+LOOK_CONFLICT = "DRAMA_LOOK_REVISION_CONFLICT"
+
+
+def look_error(exc):
+    """A refused look (story_look.LookCatalogError) as the 400 the API answers, with a message key when it has one."""
+    return StoryError(400, "DRAMA_VALIDATION_FAILED", str(exc), message_key="errors." + exc.reason if exc.reason else None,
+                      message_params=exc.params if exc.reason else None)
+
+
+def valid_shot_look(value):
+    """A checked copy of a shot look override (story_look.validate_shot_look); 400 when it is not one."""
+    from project_docs import story_look
+    try:
+        return story_look.validate_shot_look(value)
+    except story_look.LookCatalogError as exc:
+        raise look_error(exc) from None
+
+
+def look_revision(meta):
+    revision = meta.get("lookRevision") if isinstance(meta, dict) else None
+    return revision if isinstance(revision, int) and not isinstance(revision, bool) and revision >= 0 else 0
+
+
+def source_look(conn, slug, tab_key, rid):
+    """The ``look`` a worker task source of this sheet row carries (story_look.source_look): the shot's episode look
+    and its override, compiled. None for a row outside the shot sheets and for a shot whose look sets nothing, so such a
+    source is exactly what it was before looks existed. Both generation paths call this: the Story API through
+    ``snapshot`` and the M8 pipeline through ``flow_runner`` (SPEC_19 C3)."""
+    if tab_key not in SHOT_SHEETS:
+        return None
+    from project_docs import story_look
+    meta = shot_meta(conn, f"sh_{slug}_{rid}")
+    # A shot outside any storyboard build belongs to the first episode, as generation_job reads it.
+    ep = record(conn, meta.get("episodeId") or f"ep_{slug}_01", required=False) or {}
+    episode_look = (ep.get("settings") or {}).get("look") or {}
+    override = meta.get("look") if isinstance(meta.get("look"), dict) else {}
+    if not episode_look and not override:
+        return None
+    try:
+        return story_look.source_look(episode_look, override)
+    except story_look.LookCatalogError as exc:
+        raise look_error(exc) from None
+
+
+def put_shot_look(conn, slug, identifier, changes, base=None):
+    """Set (an id) or remove (null) a shot's look overrides in the caller's transaction; returns the new lookRevision.
+
+    Shared by PUT /shots/{id}/look and an approved crew proposal (project_assistant.shot_meta). base, when given, must
+    be the stored lookRevision, else 409 DRAMA_LOOK_REVISION_CONFLICT (details {currentRevision, baseRevision}) and
+    nothing is written. Every write moves the revision on by one."""
+    changes = valid_shot_look(changes)
+    with conn.cursor() as cur:  # the first write of a shot has no meta record to lock yet
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("shot-look:" + identifier,))
+    meta = record(conn, "meta_" + identifier, required=False, lock=True) or {}
+    current = look_revision(meta)
+    if base is not None and base != current:
+        try:
+            label = str(find_row(conn, identifier, "shot")[1]["cells"][0]).strip() or identifier
+        except (StoryError, IndexError):
+            label = identifier
+        raise StoryError(409, LOOK_CONFLICT, f"The look of shot {label} has changed since revision {base} (it is now revision "
+                         f"{current}). Reload it before saving.", {"currentRevision": current, "baseRevision": base},
+                         message_key="errors.shotLookRevisionConflict", message_params={"shot": label, "base": base, "current": current})
+    saved = meta.get("look") if isinstance(meta.get("look"), dict) else {}
+    look = {kind: value for kind, value in {**saved, **changes}.items() if value is not None}
+    meta = {key: value for key, value in meta.items() if key != "look"} | ({"look": look} if look else {})
+    store(conn, "meta_" + identifier, "shot_meta", meta | {"lookRevision": current + 1}, slug)
+    return current + 1
+
+
+def set_shot_look(conn, slug, identifier, body):
+    """PUT /shots/{id}/look: ``{genre?, era?, tempo?, palette?, light?, baseRevision?}``; an id sets that kind's override,
+    null removes it, a kind left out is kept."""
+    base = body.get("baseRevision")
+    if base is not None and (isinstance(base, bool) or not isinstance(base, int) or base < 0):
+        raise StoryError(400, "DRAMA_VALIDATION_FAILED", "baseRevision must be a whole number of at least 0.")
+    put_shot_look(conn, slug, identifier, {key: value for key, value in body.items() if key != "baseRevision"}, base)
+
+
 def shot_view(conn, slug, row, *, takes=None):
     """A shot's API payload. ``adoption`` is always present (SPEC_19); ``takeSummary`` needs the take history, so only
     callers answering a client pass ``takes`` (a story_adoption.Takes shared by the whole response)."""
@@ -437,7 +521,9 @@ def shot_view(conn, slug, row, *, takes=None):
             "readiness": {"ready": bool(output("image") or has_previs or not missing), "missingAssets": missing,
                           "hasPrevis": has_previs, "hasDialogue": bool(meta.get("dialogue"))},
             "selectedImageUrl": output("image"), "selectedVideoUrl": output("video"), "previsVideoUrl": previs,
-            "trim": story_trim.view(meta, output("video"))}
+            "trim": story_trim.view(meta, output("video")),
+            # SPEC_19 R11: the shot's look override ({} without one) and the revision a PUT /shots/{id}/look pins.
+            "look": dict(meta["look"]) if isinstance(meta.get("look"), dict) else {}, "lookRevision": look_revision(meta)}
     view["adoption"] = story_adoption.adoption_view(meta, status, output("video"))
     if takes is not None:
         from project_docs import story_take_refs
@@ -852,11 +938,15 @@ def resolve_app(code, kind, policy=None):
 
 
 def snapshot(conn, slug, row):
+    # SPEC_19 R11: a shot's compiled look is part of its source, so every digest of the source (Router quotes, batch
+    # guards) also covers the look its prompt will be written with; a shot without a look keeps its old source.
+    look = source_look(conn, slug, row.get("tabKey"), row["rid"])
     return {"rows": [{"row_id": row["rid"], "tab_key": row["tabKey"], "cells": row["cells"]}],
             "tabs": [{"tab_key": key, "tables": [{"headers": row["headers"], "rows": [{"row_id": row["rid"], "cells": row["cells"]}]}]}
                      for key in [row["tabKey"]]] + [{"tab_key": "soul-cast", "tables": [{"headers": r["headers"],
                      "rows": [{"cells": r["cells"]} for r in table_rows(conn, slug, "soul-cast")]}]}
-                     for r in table_rows(conn, slug, "soul-cast")[:1]]}
+                     for r in table_rows(conn, slug, "soul-cast")[:1]],
+            **({"look": look} if look else {})}
 
 
 def public_task(task):
@@ -1095,9 +1185,11 @@ def prompt_preview(conn, me, identifier, kind, body):
         {compiledPrompt,   # the text the card's prompt input receives, word for word (null if the card has none)
          references: [{kind: "asset", code, name, imageUrl} | {kind: "take", shotId, shotIndex, edge, takeUrl, at, frameUrl,
                        use, adopted, lastFrameAt}],   # the pictured subjects, then the quoted takes as frozen on submit
-         look: {opticalRig, cameraMovement, moves}}   # the look inputs the compiler read; moves are catalog #ids in order
+         look: {opticalRig, cameraMovement, moves,    # the look inputs the compiler read; moves are catalog #ids in order
+                film, color, light}}                   # the Film, Color and Lighting text (SPEC_19 R11), "" when unset
 
-    A quoted take's frame is cut by the worker after admission (frameUrl is null here); the sentence its tag becomes does
+    opticalRig is the episode camera when the shot's Optical Rig cell is empty; for kind "image" film has no tempo. A
+    quoted take's frame is cut by the worker after admission (frameUrl is null here); the sentence its tag becomes does
     not depend on that frame.
     """
     import psycopg
@@ -1118,7 +1210,8 @@ def prompt_preview(conn, me, identifier, kind, body):
     references += [{"kind": "take", **ref} for ref in refs]
     return {"compiledPrompt": compiled, "references": references,
             "look": {"opticalRig": ctx.get("optical_rig") or "", "cameraMovement": ctx.get("camera_motion") or "",
-                     "moves": list(ctx.get("camera_moves") or [])}}
+                     "moves": list(ctx.get("camera_moves") or []), "film": ctx.get("look_film") or "",
+                     "color": ctx.get("look_color") or "", "light": ctx.get("look_light") or ""}}
 
 
 def router_quote(me, identifier, body):
@@ -1732,7 +1825,16 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
                     invalid("Unsupported aspectRatio.")
                 if str(body.get("stylePresetId", "88123")) not in {s["stylePresetId"] for s in STYLES}:
                     raise StoryError(422, "DRAMA_STYLE_NOT_FOUND", "Unknown style preset.")
-                ep["settings"] = body
+                # SPEC_19 R12: the episode look. A PUT without it keeps the stored one (StoryWorld sends only the ratio
+                # and style); {} clears it.
+                look = (ep.get("settings") or {}).get("look")
+                if "look" in body:
+                    from project_docs import story_look
+                    try:
+                        look = story_look.validate_episode_look(body["look"])
+                    except story_look.LookCatalogError as exc:
+                        raise look_error(exc) from None
+                ep["settings"] = {k: v for k, v in body.items() if k != "look"} | ({"look": look} if look else {})
                 store(conn, ep["episodeId"], "episode", ep, slug)
             if method in ("GET", "PUT"):
                 return ep.get("settings", {})
@@ -1893,6 +1995,9 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             from project_docs import story_trim
             story_trim.set_trim(conn, slug, identifier, row, body)
             auto_cut_checks(conn, me, slug, identifier, actions)
+            return view()
+        if entity == "shot" and tail == "look" and method == "PUT":
+            set_shot_look(conn, slug, identifier, body)  # SPEC_19 R11: this shot's look override
             return view()
         if entity == "shot" and tail == "previs-plan" and method in ("GET", "PUT"):
             from project_docs import story_previs  # SPEC_20 R26: the stored 3D plan, revisioned (If-Match)

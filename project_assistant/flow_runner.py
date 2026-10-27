@@ -876,9 +876,22 @@ def _inputs(conn, run, task, node):
                 (run["project_slug"], task["row_id"], task["target"]["tab_key"], None if col is None else str(col),
                  task["created_at"], cell_ops, run["project_slug"], task["target"]["tab_key"], cell_ops))
             take = cur.fetchone()[0]
-    return {"prompt": privacy.sanitize(node["prompt"], mode), "tabs": inputs, "scope": node.get("scope", "legacy"),
-            "row_id": task["row_id"], "rows": structured_rows, "target": task["target"], "take": take,
-            "target_tables": target_tables, "predecessors": results, "predecessor_tasks": predecessor_tasks}
+    payload = {"prompt": privacy.sanitize(node["prompt"], mode), "tabs": inputs, "scope": node.get("scope", "legacy"),
+               "row_id": task["row_id"], "rows": structured_rows, "target": task["target"], "take": take,
+               "target_tables": target_tables, "predecessors": results, "predecessor_tasks": predecessor_tasks}
+    # SPEC_19 C3: a row of a shot sheet carries its episode look and override, compiled by the function the Story API
+    # uses (story_openapi.source_look), so both paths write the same Film, Color and Lighting lines. It is catalog text,
+    # not production data, so it is not masked (masking would break the palette's colour codes).
+    row = next((r for r in structured_rows if r["row_id"] == task["row_id"]), None) if task["row_id"] else None
+    if row:
+        from project_docs import story_openapi as story
+        try:
+            look = story.source_look(conn, run["project_slug"], row["tab_key"], row["row_id"])
+        except story.StoryError as exc:
+            raise ExecutionError(409, str(exc)) from None
+        if look:
+            payload["look"] = look
+    return payload
 
 
 def _sanitize_output(conn, slug, original, mode, keep_provenance=False):
