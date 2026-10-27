@@ -512,3 +512,75 @@
 .studio-film-tag.is-previs { color: var(--muted); }
 .studio-film-filled { margin: 0; white-space: normal; }
 .studio-fill select { height: 28px; margin-left: 6px; font-size: 12.5px; }
+
+/* ---------- SPEC_19 package D: references and "upstream changed", seams and their checks, "Cuts only", adopting latest takes ----------
+   Seam colours: green holds, yellow has problems, grey not checked (or not checkable yet), a hollow ring is queued, a red ring could not
+   run. Yellow (not the amber accent) marks a stale reference too. Buttons carry .workbench-app.studio-shell: studio.css's control rule
+   reaches every button inside .canvas at a higher specificity than a plain .studio-shell rule. */
+.studio-shell { --seam-pass: #3fc07a; --seam-issue: #f0c94a; --seam-none: #5d6a7a; --seam-failed: #e5566f; }
+
+/* References: what the adopted take quoted, and what changed upstream since. */
+.take-refs { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--bg-2); }
+.take-refs.is-stale { box-shadow: inset 0 0 0 1px rgba(240, 201, 74, .45); }
+.take-refs > ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.take-refs li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.take-ref-frame { flex: none; display: block; width: 44px; aspect-ratio: 16 / 9; border-radius: 4px; object-fit: cover; background: var(--ground); }
+.take-ref-frame.is-blank { border: 1px dashed var(--control); }
+.take-ref-text { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 12px; color: var(--text); }
+.take-ref-text > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+.take-ref-text .num { font: 500 11.5px ui-monospace, Consolas, monospace; }
+.take-ref-text b.num { font-weight: 600; }
+.take-ref-use { color: var(--muted); font-style: normal; }
+.take-ref-text small { color: var(--faint); font-size: 11px; }
+.take-ref-text small.take-ref-change { display: inline-flex; align-items: center; gap: 4px; color: var(--seam-issue); }
+.workbench-app.studio-shell .take-refs-reshoot, .workbench-app.studio-shell .seam-check, .workbench-app.studio-shell .adopt-latest-btn {
+  display: inline-flex; align-items: center; justify-self: start; gap: 5px; height: 26px; padding: 0 9px; border: 1px solid var(--line-2); border-radius: 6px;
+  background: transparent; color: var(--text); font: 500 12px/1 Inter, system-ui, sans-serif; white-space: nowrap; cursor: pointer; }
+.workbench-app.studio-shell :is(.take-refs-reshoot, .seam-check, .adopt-latest-btn):hover:not(:disabled) { border-color: var(--control); background: var(--active); }
+.workbench-app.studio-shell :is(.take-refs-reshoot, .seam-check, .adopt-latest-btn):disabled { opacity: .45; cursor: default; }
+
+/* The progress bar: a yellow corner on a shot whose take quotes a changed upstream, a dot in each gap for the seam. */
+.film-cut > header { flex-wrap: wrap; }
+.film-progress li { position: relative; }
+.workbench-app.studio-shell .film-progress .film-seg { display: block; height: 100%; padding: 0; border: 0; border-radius: 2px; }
+.studio-shell .film-seg.state-empty { background: #3a4554; }
+.film-seg-stale { position: absolute; left: 0; top: 0; z-index: 2; width: 0; height: 0; border-top: 7px solid var(--seam-issue); border-right: 7px solid transparent; border-top-left-radius: 2px; pointer-events: none; }
+/* .seam-dot.seam-dot: the colour must also outrank studio.css's hover rule for buttons in .canvas. */
+.workbench-app.studio-shell .seam-dot.seam-dot { position: absolute; top: 50%; right: -6px; z-index: 3; box-sizing: border-box; width: 10px; height: 10px; min-width: 0; padding: 0;
+  transform: translateY(-50%); border: 2px solid var(--surface); border-radius: 50%; background: var(--seam-none); box-shadow: none; cursor: pointer; }
+.workbench-app.studio-shell .seam-dot.seam-dot.is-pass { background: var(--seam-pass); }
+.workbench-app.studio-shell .seam-dot.seam-dot.is-issue { background: var(--seam-issue); }
+.workbench-app.studio-shell .seam-dot.seam-dot.is-queued { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--seam-none); }
+.workbench-app.studio-shell .seam-dot.seam-dot.is-failed { background: var(--surface); box-shadow: inset 0 0 0 2px var(--seam-failed); }
+.workbench-app.studio-shell .seam-dot.seam-dot:hover, .workbench-app.studio-shell .seam-dot.seam-dot.is-active { border-color: var(--surface); outline: 2px solid var(--text); outline-offset: 1px; }
+.workbench-app.studio-shell .seam-dot.seam-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.workbench-app.studio-shell .film-mode > button { border: 0; }
+.workbench-app.studio-shell .film-mode > button[aria-pressed="true"] { background: var(--active); color: var(--text); }
+
+/* One seam's check: state, score, the problems, the two frames side by side. */
+.seam-detail { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--bg-2); font-size: 12px; color: var(--text); }
+.seam-detail > header { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.seam-detail > header b { font: 600 12px ui-monospace, Consolas, monospace; }
+.seam-mark { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--seam-none); }
+.seam-mark.is-pass { background: var(--seam-pass); } .seam-mark.is-issue { background: var(--seam-issue); }
+.seam-mark.is-queued { background: transparent; box-shadow: inset 0 0 0 1.5px var(--seam-none); }
+.seam-mark.is-failed { background: transparent; box-shadow: inset 0 0 0 2px var(--seam-failed); }
+.seam-state { color: var(--muted); }
+.seam-detail.is-issue .seam-state { color: var(--seam-issue); } .seam-detail.is-pass .seam-state { color: #6fd59c; } .seam-detail.is-failed .seam-state { color: #f0728a; }
+.seam-score { color: var(--muted); font: 500 11.5px ui-monospace, Consolas, monospace; }
+.seam-issues { display: grid; gap: 3px; margin: 0; padding-left: 16px; line-height: 1.45; }
+.seam-note { margin: 0; color: var(--muted); line-height: 1.45; overflow-wrap: anywhere; }
+.seam-frames { display: block; width: 100%; border-radius: 6px; background: #000; object-fit: contain; }
+
+/* The film window: "Cuts only" beside the fill, the seam dots in the strip's gaps, "Check cuts" in the footer. */
+.studio-film-overlay .seam-detail { padding: 8px 12px; }
+.studio-film-overlay .seam-frames { max-width: 420px; }
+.studio-film-fill .film-mode { margin-right: 8px; }
+.studio-film-strip li { position: relative; }
+.workbench-app.studio-shell .studio-film-strip .seam-dot.seam-dot { top: 31px; right: -9px; }
+.seam-check-all { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+
+/* The overview's action bar: "Adopt latest takes" and what it did. */
+.adopt-latest { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.adopt-latest-report { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; color: var(--muted); font-size: 12px; }
+.adopt-latest-report ul { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 0; list-style: none; color: var(--faint); }
