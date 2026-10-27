@@ -120,6 +120,12 @@ claude mcp add zerofield -e ZEROFIELD_MCP_TOKEN=zfsa_... -e ZEROFIELD_PROJECT=<p
 
 `ZEROFIELD_URL` selects another local port (default `http://127.0.0.1:3020`). Everything the agent writes is a proposal that a crew member adopts in ZeroField. `request_generation` submits only free local open-weights renders and refuses closed or paid plans. `GET .../service-accounts` lists tokens with their call counts; `POST .../service-accounts/<accountKey>/revoke` revokes one. Every call is audited under the service account.
 
+Agents that connect over HTTP instead of launching a process can use the studio's own MCP endpoint, `POST http://127.0.0.1:3020/mcp` (Streamable HTTP, same protocol versions). It is for clients on this machine only: it refuses non-loopback clients, a `Host` other than `localhost`, `127.0.0.1` or `[::1]`, a non-local `Origin`, and requests relayed by a proxy or tunnel. Every request needs the same service-account token as a Bearer header, with the same tools, write mode, expiry, revocation, rate limit and audit as `zerofield-mcp`; `X-ZeroField-Project` optionally refuses a token for another production. The endpoint answers each message with one JSON response and keeps no sessions; `GET` and `DELETE` return 405.
+
+```powershell
+claude mcp add --transport http zerofield http://127.0.0.1:3020/mcp --header "Authorization: Bearer zfsa_..."
+```
+
 ## External workflows and reference preparation
 
 The seeded OpenJutsu slate includes independently replaceable **Source Driving Video**, **First Frame**, **Motion Structure**, **Anchor Keyframe**, **Remastered Video** and **Split-Screen MP4** cells. The preparation stages use the original source video. Each result is reviewed before downstream generation proceeds.
