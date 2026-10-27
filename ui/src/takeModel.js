@@ -105,6 +105,25 @@ function proposalVideos(entry) {
   return (entry.group?.changes || entry.changes || []).flatMap(change => videoUrlsIn(change?.after, change?.column || ''));
 }
 
+// The video takes a rowProposals() entry would write ([] when it changes no video cell).
+export const proposalTakeUrls = entry => proposalVideos(entry);
+// A proposal entry that is nothing but a take: it edits one row only, and every change it makes is a video. Such an entry is reviewed
+// in the Take list (its ✓ adopts it through POST /adoptions {proposalId}), not as a crew proposal. An entry that also changes text,
+// or edits other rows (which the adoption endpoint refuses), stays a crew proposal.
+export function takeOnlyProposal(entry) {
+  const changes = entry?.group?.changes || [];
+  return (entry?.size ?? 1) === 1 && changes.length > 0 && changes.every(change => videoUrlsIn(change?.after, change?.column || '').length > 0);
+}
+// Whether a merged take can be adopted from the Take list, and with which body for POST /shots/{id}/adoptions (null when it cannot).
+// A take with a pending proposal behind it is always adopted through the proposal (SPEC_19 1.2 K), so the M8 gate decides it; a
+// proposal that edits more rows than this one is applied as a crew proposal instead. Otherwise the candidate is adopted.
+export function adoptionBody(take) {
+  const entry = take?.entry, proposalId = entry?.proposal?.id ?? take?.proposalId ?? null;
+  if (entry && (entry.size ?? 1) === 1 && proposalId !== null) return {proposalId};
+  if (take?.videoId) return {videoId: take.videoId};
+  return null;
+}
+
 // One list of takes for a shot, newest first: GET /shots/{id}/videos candidates ({videoId, url, selected, createdAt?}) and the pending
 // media proposals for the row (rowProposals() entries), one per url (a candidate wins over a proposal with the same url). A take
 // without a time is older than every timed one; among those the later one in the input is newer.

@@ -8,25 +8,26 @@ import {join,dirname,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {t,setLocale} from '../src/i18n/index.js';
 import {sourceDraft,editStoryScreenplay,hasSceneHeadings,needsStoryAdaptation,adaptStoryDraft,buildStoryFromDraft,storyComposition,choiceContrast,missingAssetSheets,assetGroupActive,rememberAssetGroup,restoredAssetGroup} from '../src/storyImport.js';
+import {mergeTakes,filmNeighbors,filmSegments,filmSummary} from '../src/takeModel.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 let temporary, components;
 before(async()=>{
   temporary=await mkdtemp(join(root,'tests/.story-render-'));
-  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette,SpaceMenu,spaceNote,spaceShortcuts,SPACES,spaceOf,tabOfSpace} from './src/StudioShell.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {BreakdownDialog} from './src/BreakdownDialog.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
+  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette,SpaceMenu,spaceNote,spaceShortcuts,SPACES,spaceOf,tabOfSpace,FilmOverlay,episodeCounts,filmTrial} from './src/StudioShell.jsx'; export {ShotFilmView} from './src/ShotFilmPanel.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {BreakdownDialog} from './src/BreakdownDialog.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
   const output=join(temporary,'components.mjs');await writeFile(output,result.outputFiles[0].text);components=await import(pathToFileURL(output));
 });
 after(async()=>{if(temporary)await rm(temporary,{recursive:true,force:true});});
 const render=(name,props)=>renderToStaticMarkup(React.createElement(components[name],props));
 
 test('the studio top bar is a breadcrumb: one space button that opens a menu, no standing tabs, the focus, Ctrl K and one film entry',()=>{
-  const html=render('StudioTopBar',{project:{title:'The Last Signal'},episodes:[{episodeId:'ep_demo_01',title:'Episode 1'}],epId:'ep_demo_01',space:'stage',crumbs:{scene:'Scene 02 · Signal',shot:'S03'},counts:{shots:8,review:2,missing:1,filmed:6,scriptDirty:true},onEpisode(){},onSpace(){},onCommand(){},film:{open:false,onToggle(){}}});
+  const html=render('StudioTopBar',{project:{title:'The Last Signal'},episodes:[{episodeId:'ep_demo_01',title:'Episode 1'}],epId:'ep_demo_01',space:'stage',crumbs:{scene:'Scene 02 · Signal',shot:'S03'},counts:{shots:8,review:2,missing:1,filmed:7,adopted:6,scriptDirty:true},onEpisode(){},onSpace(){},onCommand(){},film:{open:false,onToggle(){}}});
   assert.match(html,/<button type="button" class="studio-space-btn" aria-haspopup="menu" aria-expanded="false"[^>]*>[\s\S]*?<span>Shot Stage<\/span>/);
   assert.doesNotMatch(html,/role="menu"|studio-spaces|aria-current="page"|>Story &amp; World<|>Timeline</,'the other spaces are offered only when the menu is open');
   assert.match(html,/<span class="studio-focus" title="Scene 02 · Signal">Scene 02 · Signal<\/span>/);
   assert.match(html,/<b class="studio-focus is-now" title="S03"><i class="studio-dot" aria-hidden="true"><\/i>S03<\/b>/,'the shot in focus ends the breadcrumb');
   assert.match(html,/role="group" aria-label="Panels"/);assert.doesNotMatch(html,/aria-label="Bottom panel"/,'only a space with a bottom panel offers its toggle');
-  assert.match(html,/Ctrl K/);assert.match(html,/Film<span class="num">6\/8<\/span>/);
+  assert.match(html,/Ctrl K/);assert.match(html,/Film<span class="num">6\/8<\/span>/,'SPEC_19 R6: the film number is the adopted shots, not the shots with a take');
   assert.doesNotMatch(html,/[①②③④⑤⑥]|Start Creating|My Projects|Studio Engine/,'no numbered stations and no second set of entries');
   assert.equal((html.match(/>Film</g)||[]).length,1,'one film entry');
 });
@@ -35,10 +36,10 @@ test('three spaces map to their pages, and the space menu says what each one nee
   assert.deepEqual(components.SPACES.map(space=>[space.key,space.tab]),[['story','story-world'],['stage','cinema-studio'],['timeline','timeline']]);
   assert.equal(components.spaceOf('timeline'),'timeline');assert.equal(components.spaceOf('soul-cast'),'story');assert.equal(components.spaceOf('openjutsu-lab'),'stage');assert.equal(components.spaceOf('other'),null);
   assert.equal(components.tabOfSpace('timeline'),'timeline');assert.equal(components.tabOfSpace('nope'),'cinema-studio');
-  const counts={shots:8,review:2,missing:1,filmed:6,scriptDirty:true};
+  const counts={shots:8,review:2,missing:1,filmed:7,adopted:6,scriptDirty:true};
   assert.equal(components.spaceNote('story',counts),'Script changed · 1 missing images');
   assert.equal(components.spaceNote('stage',counts),'8 shots · 2 to review');
-  assert.equal(components.spaceNote('timeline',counts),'6 of 8 shots have a take');
+  assert.equal(components.spaceNote('timeline',counts),'6 of 8 shots adopted');
 });
 
 test('Toolbox, Open API and Agent Console are commands in the Ctrl K palette',()=>{
@@ -139,15 +140,15 @@ test('the dialog shows what each way of splitting would give, marks the one near
 });
 
 test('the space menu lists what each space needs as items of their own, never a button inside a button',()=>{
-  const counts={shots:8,review:2,missing:2,missingShots:1,filmed:6,scriptDirty:true};
+  const counts={shots:8,review:2,missing:2,missingShots:1,filmed:7,adopted:6,scriptDirty:true};
   const html=render('SpaceMenu',{space:'stage',counts,defaultOpen:true,onSpace(){}});
   assert.match(html,/role="menu" aria-label="Creative spaces"/);
   assert.deepEqual([...html.matchAll(/<button type="button" role="(menuitemradio|menuitem)"/g)].map(match=>match[1]),
     ['menuitemradio','menuitem','menuitem','menuitemradio','menuitem','menuitem','menuitemradio','menuitem'],'each shortcut follows its space, as its own item');
-  for(const text of ['Script changed','2 missing images','2 to review','1 shots missing references','6 of 8 shots have a take']) assert.ok(html.includes(text),text);
+  for(const text of ['Script changed','2 missing images','2 to review','1 shots missing references','6 of 8 shots adopted']) assert.ok(html.includes(text),text);
   assert.doesNotMatch(html,/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button/,'no button inside another button');
   assert.doesNotMatch(html,/<small>/,'the notes are items now, not small print');
-  const calm=render('SpaceMenu',{space:'story',counts:{shots:8,filmed:8},defaultOpen:true,onSpace(){}});
+  const calm=render('SpaceMenu',{space:'story',counts:{shots:8,filmed:8,adopted:8},defaultOpen:true,onSpace(){}});
   assert.deepEqual([...calm.matchAll(/role="(menuitemradio|menuitem)"/g)].map(match=>match[1]),['menuitemradio','menuitemradio','menuitemradio','menuitem'],'nothing to fix: no shortcut, only the film so far');
   assert.doesNotMatch(render('SpaceMenu',{space:'stage',counts}),/role="menuitem"/,'closed: nothing');
   assert.deepEqual(components.spaceShortcuts('story',counts).map(item=>[item.id,item.target]),[['script',{view:'script'}],['missing',{view:'world',facet:'missing'}]]);
@@ -294,4 +295,94 @@ test('the P4 contrast preview matches the server rule: two of the last five held
   assert.equal(choiceContrast(traces(['restraint']),'reversal').contrastDetected,false);
   assert.equal(choiceContrast(traces(['restraint','restraint']),'collision').contrastDetected,false);
   assert.equal(choiceContrast(traces(['collision','collision','x','x','x','x']),'negative_space').contrastDetected,false,'only the last five count');
+});
+
+// SPEC_19 package A: the shot in the cut. S02 is adopted (Take 2, trimmed), two takes arrived since (a candidate and a pipeline take).
+const filmAt=minute=>new Date(Date.UTC(2026,9,27,10,minute)).toISOString();
+const filmShot=(n,extra={})=>({shotId:'sh_demo_b'+n,rowId:'b'+n,shotIndex:'S0'+n,tabKey:'cinema-studio',reviewStatus:'Queued',selectedVideoUrl:null,selectedImageUrl:null,previsVideoUrl:null,trim:{in:0,out:null},adoption:null,...extra});
+function filmFixture({proposalSize=1,trial=null,writable=true}={}){
+  const s1=filmShot(1,{reviewStatus:'Approved',selectedVideoUrl:'/t/1a.mp4',selectedImageUrl:'/s/1.png',adoption:{adopted:true,url:'/t/1a.mp4',at:filmAt(1),by:'u1'},takeSummary:{total:1,newSinceAdoption:0}});
+  const s2=filmShot(2,{reviewStatus:'Approved',selectedVideoUrl:'/t/2b.mp4',selectedImageUrl:'/s/2.png',adoption:{adopted:true,url:'/t/2b.mp4',at:filmAt(5),by:'u1'},trim:{in:0.4,out:3.8}});
+  const s3=filmShot(3,{previsVideoUrl:'/p/3.mp4',takeSummary:{total:0,newSinceAdoption:0}});
+  const candidates=[{videoId:'vd_a',url:'/t/2a.mp4',createdAt:filmAt(2),selected:false},{videoId:'vd_b',url:'/t/2b.mp4',createdAt:filmAt(4),selected:true},{videoId:'vd_c',url:'/t/2c.mp4',createdAt:filmAt(8),selected:false}];
+  const entry={proposal:{id:41,created_at:filmAt(9)},group:{index:0,row_id:'b2',changes:[{column:'Cinema Shot',before:'',after:'[Video](/t/2d.mp4)'}]},size:proposalSize,partial:false};
+  const takes=mergeTakes(candidates,[entry],{status:'Approved',adoption:s2.adoption});
+  const film=[s1,{...s2,takes},s3];
+  return {label:'S02',sceneTitle:'Observatory',state:'new_take',newCount:2,writable,disabled:false,canStatus:true,
+    menuItems:[{id:'block',label:'Mark as blocked',run(){}},{id:'table',label:'Open in table',run(){}}],
+    neighbours:filmNeighbors(film,'sh_demo_b2'),segments:filmSegments(film),summary:filmSummary(film),currentId:'sh_demo_b2',trial,takes,hasFrame:true,
+    trim:{url:'/t/2b.mp4',trim:{in:0.4,out:3.8},source:4},onTimeline(){},notes:{messages:[{id:1,name:'Maya',body:'Hold on the dial.'}],node:null},cast:{count:2,node:null}};
+}
+
+test('the shot in the cut: neighbours, progress, takes newest first with a ✓ each, and no approve button',()=>{
+  const html=render('ShotFilmView',filmFixture());
+  assert.match(html,/<aside class="shot-detail shot-film" aria-label="This shot in the cut">/);
+  assert.doesNotMatch(html,/class="primary|Approve/,'R3: no approve button and no primary button in the column');
+  assert.match(html,/<span class="shot-state is-new_take"><i class="shot-dot state-new_take" aria-hidden="true"><\/i>New take<span class="num">2<\/span><\/span>/);
+  for(const text of ['In the cut','Shot 2 of 3','Play around','Adopted 2 of 3 · ','Cut uses 0.4–3.8 s · 3.4 of 4.0 s','Timeline','Retake (R)','Hold on the dial.','Notes · 1','On set · 2']) assert.ok(html.includes(text),text);
+  assert.equal((html.match(/class="film-seg /g)||[]).length,3,'one progress segment per shot');
+  assert.match(html,/class="film-seg state-adopted"[^>]*aria-label="S01 · Adopted/);assert.match(html,/class="film-seg state-new_take is-current" aria-current="true"/);assert.match(html,/class="film-seg state-empty"/);
+  assert.deepEqual([...html.matchAll(/aria-label="Adopt Take (\d)"/g)].map(match=>match[1]),['4','3','1'],'newest first; the adopted take has no ✓ to press');
+  assert.match(html,/Take 2<\/b><em class="take-badge is-adopted">In the cut<\/em>/);assert.match(html,/class="take-check is-on" role="img" aria-label="Adopted"/);
+  assert.match(html,/Take 4<\/b><em class="take-badge is-new">New<\/em>[\s\S]*?From the pipeline/);
+  assert.match(html,/aria-label="Reject Take 4"/,'a pipeline take can still be rejected');
+  assert.match(html,/<details class="shot-menu"><summary aria-label="More shot actions"/,'the menu is folded');
+  assert.match(html,/<details class="shot-cast-fold"><summary>On set · 2<\/summary>/,'the cast is folded at the bottom');
+  assert.equal((html.match(/<video/g)||[]).length,4,'paused first frames of the four takes; nothing plays until asked');
+  assert.match(html,/<video src="\/t\/2d\.mp4#t=0\.1" preload="metadata" muted=""/);
+});
+
+test('a reader sees the cut and can try a take, but has no ✓ and no ↻ (A15)',()=>{
+  const html=render('ShotFilmView',filmFixture({writable:false}));
+  assert.doesNotMatch(html,/Adopt Take|Retake \(R\)|take-check|Reject Take/);
+  assert.match(html,/aria-label="Try Take 3 in the cut"/);
+  assert.match(html,/In the cut<\/em>/,'the take in the cut is still marked');
+});
+
+test('a pipeline take shared with other rows is applied as a crew proposal, not adopted from the list',()=>{
+  const html=render('ShotFilmView',filmFixture({proposalSize:2}));
+  assert.doesNotMatch(html,/aria-label="Adopt Take 4"/);assert.doesNotMatch(html,/Reject Take 4/);
+  assert.match(html,/class="take-check is-off" title="Part of a crew proposal across 2 rows/);
+});
+
+test('a take tried in the cut is marked on its row, on the progress bar and on the shot thumbnail',()=>{
+  const html=render('ShotFilmView',filmFixture({trial:{shotId:'sh_demo_b2',url:'/t/2c.mp4',number:3}}));
+  assert.match(html,/<li class="take-row is-trial">[\s\S]*?Take 3<\/b><em class="take-badge is-new">New<\/em><em class="take-badge is-trial">Trial<\/em>/);
+  assert.match(html,/aria-pressed="true" aria-label="Trying Take 3 in the cut/);
+  assert.match(html,/class="film-seg state-new_take is-current is-trial"[^>]*aria-label="S02 · New take · [\d.]+ s · Trial"[^>]*><em>Trial<\/em>/);
+  assert.match(html,/<li class="is-current is-trial">[\s\S]*?<em class="film-tag is-trial">Trial<\/em>/);
+  assert.doesNotMatch(render('ShotFilmView',filmFixture({trial:{shotId:'sh_other',url:'/t/9.mp4'}})),/Trial/,'a trial on another shot is not this one');
+});
+
+test('the shot column reads in Traditional Chinese, Approved shown as adopted',async()=>{
+  await components.setLocale('zh-TW');
+  try{
+    const html=render('ShotFilmView',{...filmFixture(),state:'adopted',newCount:0});
+    for(const text of ['這一鏡在成片裡','在成片裡','第 2／3 鏡','接著看','已採用','採用 Take 4','採用中','再拍 (R)','成片用 0.4–3.8 秒 · 3.4／4.0 秒','節奏台','管線產出','出場 · 2']) assert.ok(html.includes(text),text);
+    assert.doesNotMatch(html,/已核准|核准/);
+  }finally{await components.setLocale('en');}
+});
+
+test('the film window: adopted shots are the cut, gaps play the latest take by default and export as previs, adopted count in the top bar',()=>{
+  const shots=[filmShot(1,{reviewStatus:'Approved',selectedVideoUrl:'/t/1a.mp4',selectedImageUrl:'/s/1.png'}),filmShot(2,{selectedVideoUrl:'/t/2a.mp4'}),filmShot(3,{previsVideoUrl:'/p/3.mp4'}),filmShot(4,{tabKey:'openjutsu-lab',reviewStatus:'Approved',selectedVideoUrl:'/t/lab.mp4'})];
+  const html=render('FilmOverlay',{epId:'ep_demo_01',shots,writable:true,onClose(){}});
+  for(const text of ['Adopted 1 of 3 shots','1 shots have a take but none adopted','Fill gaps with','Export gaps as']) assert.ok(html.includes(text),text);
+  assert.match(html,/aria-pressed="true">Latest take<\/button>/,'playback fills with the newest take');
+  assert.match(html,/<option value="previs" selected="">Previs<\/option>/,'the export fills with previs unless asked');
+  assert.equal((html.match(/<video/g)||[]).length,1,'one player');assert.match(html,/<video src="\/t\/1a\.mp4"/);
+  assert.match(html,/class="shot fill" title="Not adopted"/);assert.match(html,/class="shot fill" title="Previs"/);
+  assert.match(html,/<button type="button" class="primary">Export Episode MP4<\/button>/);
+  assert.deepEqual(components.episodeCounts(null,shots),{shots:3,review:1,missing:0,missingShots:0,filmed:2,adopted:1,scriptDirty:false});
+});
+
+test('a take tried in the cut stands in for its shot in the film window, marked Trial, and never reaches the export',()=>{
+  const shots=[filmShot(1,{reviewStatus:'Approved',selectedVideoUrl:'/t/1a.mp4'}),filmShot(2)];
+  components.filmTrial.set({shotId:'sh_demo_b1',url:'/t/1b.mp4',number:2});
+  try{
+    const html=render('FilmOverlay',{epId:'ep_demo_01',shots,writable:true,onClose(){}});
+    assert.match(html,/<video src="\/t\/1b\.mp4"/);assert.match(html,/<span class="studio-film-tag is-trial">Trial<\/span>/);
+    assert.match(html,/class="shot fill is-trial" title="Trial"/);
+    assert.ok(html.includes('Adopted 1 of 2 shots'),'the trial changes no count');
+  }finally{components.filmTrial.set(null);}
+  assert.equal(components.filmTrial.get(),null);
 });

@@ -3,13 +3,14 @@ import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
 import { mediaOf } from './sheetModel.js';
 import { mediaStages, SHOT_FILTERS } from './studioModel.js';
-import { statusClass, statusLabel } from './format.js';
+import { shotStateOf } from './takeModel.js';
 import { CameraFidelity } from './ShotBench.jsx';
 import { Icon } from './Icon.jsx';
 
 // SPEC_18 R4: the shot's three rungs, cheapest first: previs -> first frame -> video. Each shows what exists (a picture, or a paused first
 // frame; nothing here ever plays on its own) and opens the view where that rung is worked on. A shot with no previs yet is told so, with a
-// quiet way to plan one; it never blocks shooting.
+// quiet way to plan one; it never blocks shooting. SPEC_19 took it out of the shot's right column (the column is now the shot in the
+// cut); the shot composer turns it into its output switch.
 const RUNG_ICON = {previs: 'cube', frame: 'image', video: 'play'};
 function RungThumb({step}) {
   const media = step.media;
@@ -52,10 +53,13 @@ export function ShotSourceBadge({alignment, shotId, onSource}) {
 // SPEC_15 Shot Stage: the storyboard, the 3D stage and review are views of one shot list, not three stations.
 const cover = (parsed, row) => mediaStages(parsed, row).filter(stage => stage.media).find(stage => stage.type === 'image') || null;
 
-export function ShotList({parsed, rows, statusColumn, shotInfo, scenes, currentRid, filter, onFilter, onPick}) {
+// Each shot shows what it is doing in the film (SPEC_19 4.1: generating, new take, adopted, ...), derived from the table status, the
+// shot view and the rows with a running task (inFlight, a Set of row ids); the table's own status words stay in the table.
+export function ShotList({parsed, rows, statusColumn, shotInfo, scenes, currentRid, filter, onFilter, onPick, inFlight = null}) {
   useLocale();
   const status = row => statusColumn < 0 ? '' : row.cells[statusColumn]?.value || '';
-  const entry = row => ({status:status(row), info:shotInfo[row.rid]});
+  const entry = row => ({status:status(row), info:shotInfo[row.rid], inFlight:Boolean(inFlight?.has(row.rid))});
+  const stateOf = row => shotStateOf({...(shotInfo[row.rid] || {}), reviewStatus:status(row)}, {inFlight:Boolean(inFlight?.has(row.rid))});
   const shown = rows.filter(row => SHOT_FILTERS[filter](entry(row)));
   const titles = Object.fromEntries(scenes.map(scene => [scene.sceneId, scene.title]));
   const groups = [];
@@ -75,11 +79,11 @@ export function ShotList({parsed, rows, statusColumn, shotInfo, scenes, currentR
     {groups.map(group => <section key={group.key || 'none'}>
       {group.key && <h3>{titles[group.key] || group.key}</h3>}
       <ol>{group.rows.map(row => {
-        const image = cover(parsed, row), value = status(row);
+        const image = cover(parsed, row), state = stateOf(row);
         return <li key={row.rid}><button type="button" aria-current={row.rid === currentRid ? 'true' : undefined} onClick={() => onPick(row.rid)}>
           <span className="shot-list-thumb">{image ? <img src={image.media.url} alt="" loading="lazy"/> : <span className="shot-list-blank"/>}</span>
-          <span className="shot-list-text"><b>{String(row.cells[0]?.value || '—')}</b><small>{value ? statusLabel(value) : '—'}</small></span>
-          <span className={'shot-dot ' + statusClass(value)} aria-hidden="true"/>
+          <span className="shot-list-text"><b>{String(row.cells[0]?.value || '—')}</b><small>{t('take.state_' + state)}</small></span>
+          <span className={'shot-dot state-' + state} aria-hidden="true"/>
         </button></li>;
       })}</ol>
     </section>)}

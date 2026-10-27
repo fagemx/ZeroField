@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SHOT_STATES, shotState, shotStateOf, newTakeCount, newTakeCountOf, isAdopted, adoptedCount, mergeTakes, nextNewTake, thumbOf, filmNeighbors, filmSegments, filmSummary, playlist} from '../src/takeModel.js';
+import {SHOT_STATES, shotState, shotStateOf, newTakeCount, newTakeCountOf, isAdopted, adoptedCount, mergeTakes, nextNewTake, thumbOf, filmNeighbors, filmSegments, filmSummary, playlist,
+  adoptionBody, proposalTakeUrls, takeOnlyProposal} from '../src/takeModel.js';
 import {rowProposals} from '../src/proposalModel.js';
 
 const at = minutes => new Date(Date.UTC(2026, 9, 27, 10, minutes)).toISOString();
@@ -324,6 +325,33 @@ test('a trial take can stand in for a shot that is not adopted or would be skipp
 test('trying the take that is already adopted keeps its trim', () => {
   const shots = [adopted(1, {trim: {in: 1, out: 2.5}})];
   assert.deepEqual(playlist(shots, {trial: {shotId: shots[0].shotId, url: '/take/1.mp4'}}).map(item => [item.in, item.out, item.source]), [[1, 2.5, 'adopted']]);
+});
+
+test('a take is adopted through its proposal when one stands behind it, else as a candidate; a proposal over several rows is not adoptable here', () => {
+  const single = rowProposals([mediaProposal(4, 'b1', [{column: 'Cinema Shot', before: '', after: '[Video](/take/4.mp4)'}])], 'b1');
+  const shared = mediaProposal(6, 'b1', [{column: 'Cinema Shot', before: '', after: '[Video](/take/6.mp4)'}]);
+  shared.review.groups.push({index: 1, row_id: 'b2', row_number: 2, label: 'Row 2', changes: [{column: 'Cinema Shot', before: '', after: '[Video](/take/7.mp4)'}]});
+  const several = rowProposals([shared], 'b1');
+  const merged = mergeTakes([take(1), take(4)], [...single, ...several]);
+  const byUrl = url => merged.find(item => item.url === url);
+  assert.deepEqual(adoptionBody(byUrl('/take/4.mp4')), {proposalId: 4}, 'a candidate with a pending proposal goes through the proposal (1.2 K)');
+  assert.deepEqual(adoptionBody(byUrl('/take/1.mp4')), {videoId: 'vd_1'});
+  assert.equal(adoptionBody(byUrl('/take/6.mp4')), null, 'the adoption endpoint refuses a proposal that edits other rows');
+  assert.equal(adoptionBody(null), null);
+  assert.deepEqual(adoptionBody({url: '/x.mp4', videoId: 'vd_x', entry: several[0]}), {videoId: 'vd_x'}, 'a known candidate stays adoptable when its proposal spans rows');
+});
+
+test('a proposal entry that is only a take is reviewed in the Take list; text, frames or other rows keep it a crew proposal', () => {
+  const entry = changes => rowProposals([mediaProposal(3, 'b1', changes)], 'b1')[0];
+  const video = {column: 'Cinema Shot', before: '', after: '[Video](/take/3.mp4)'};
+  assert.equal(takeOnlyProposal(entry([video])), true);
+  assert.deepEqual(proposalTakeUrls(entry([video])), ['/take/3.mp4']);
+  assert.equal(takeOnlyProposal(entry([video, {column: 'Prompt', before: 'a', after: 'b'}])), false, 'it also rewrites the prompt');
+  assert.equal(takeOnlyProposal(entry([{column: 'Keyframe', before: '', after: '![](/frame/3.png)'}])), false, 'a first frame is not a take');
+  assert.equal(takeOnlyProposal({...entry([video]), size: 2}), false, 'it edits another row too');
+  assert.equal(takeOnlyProposal(entry([])), false);
+  assert.equal(takeOnlyProposal(null), false);
+  assert.deepEqual(proposalTakeUrls(entry([{column: 'Prompt', before: 'a', after: 'b'}])), []);
 });
 
 test('the adopted count is shots with Approved and a video in the cell, legacy statuses included', () => {
