@@ -495,7 +495,9 @@ function ProjectPage({ slug }) {
           const loaded = await api.get(`/projects/api/${slug}/tabs/${target.tab_key}`);
           tableId = loaded.tab.doc.content.find(node => node.type === 'table' && node.content.some(row => row.attrs?.bid === target.row_id))?.attrs.bid;
         }
-        setSheetFocus({ tabKey: target.tab_key, tableId, rowId: target.row_id, colIndex: target.col_index ?? 0, nonce: Date.now() });
+        // stage: open the shot on the 3D Stage (a crew proposal of a new 3D plan is reviewed there, SPEC_20 R18); a sheet without
+        // a stage opens the row instead.
+        setSheetFocus({ tabKey: target.tab_key, tableId, rowId: target.row_id, colIndex: target.col_index ?? 0, nonce: Date.now(), ...(target.stage ? { openStage: true, openRow: true } : {}) });
       }
       if (target.block_id && !surfaceControl.current?.flashUnit?.(target.block_id)) pendingFlash.current = target.block_id;
     }

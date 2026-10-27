@@ -209,7 +209,29 @@ function Sources({ items, tabs, onOpenTab }) {
   );
 }
 
-function ProposalCard({ proposal, compact, onApply, onDismiss }) {
+// SPEC_20 R18: a crew proposal of a new 3D plan for a shot is reviewed on the 3D Stage, where it shows over the current plan; the
+// card says what it is, opens the stage on the shot, and can turn it down.
+function ShotMetaCard({ proposal, onDismiss, onOpenTab }) {
+  const locale = useLocale();
+  const [busy, setBusy] = useState(false);
+  const target = proposal.target || {}, shot = target.shot || {};
+  return (
+    <div className="pcard">
+      <div className="h">{uiText("stage.metaCardAsk")}</div>
+      <div className="where">{ACTION_LABEL.shot_meta} → <b>{target.display || shot.label}</b></div>
+      {proposal.content && <div className="where" style={{whiteSpace: "pre-wrap"}}>{proposal.content}</div>}
+      <div className="acts">
+        {onOpenTab && shot.tabKey && <button type="button" className="btn primary"
+          onClick={() => onOpenTab({ tab_key: shot.tabKey, row_id: shot.rowId, stage: true })}>{uiText("stage.metaOpenStage")}</button>}
+        <button type="button" className="btn" disabled={busy} onClick={async () => { setBusy(true); try { await onDismiss(proposal); } finally { setBusy(false); } }}>
+          {uiText("stage.metaReject")}</button>
+        <span className="note">{uiText("stage.metaCardNote")}</span>
+      </div>
+    </div>
+  );
+}
+
+function ProposalCard({ proposal, compact, onApply, onDismiss, onOpenTab }) {
   const locale = useLocale();
   const [text, setText] = useState(proposal.content || "");
   const [busy, setBusy] = useState(false);
@@ -225,6 +247,7 @@ function ProposalCard({ proposal, compact, onApply, onDismiss }) {
   }
   if (proposal.status === "dismissed") return <div className="pcard cancelled">{copy.dismissed}：{actionLabel} → {display}</div>;
   if (proposal.status === "failed") return <div className="pcard cancelled">{copy.failed}：{proposal.error || uiText("assistantViews.askTheAssistantToReviseTheProposal")}</div>;
+  if (proposal.action === "shot_meta") return <ShotMetaCard proposal={proposal} onDismiss={onDismiss} onOpenTab={onOpenTab} />;
   if (compact) return <div className="pcard">{copy.compactLead}{actionLabel} → <b>{display}</b>。{copy.compactTail}</div>;
   if (proposal.action === "table_edit") return <TableProposalReview proposal={proposal} onApply={onApply} onDismiss={onDismiss} />;
   const editable = !["改狀態", "table_edit"].includes(proposal.action);
@@ -309,7 +332,7 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
         )}
       </div>
       {proposals.map((p) => (
-        <ProposalCard key={p.id} proposal={p} compact={compact && p.status === "pending"} onApply={onApply} onDismiss={onDismiss} />
+        <ProposalCard key={p.id} proposal={p} compact={compact && p.status === "pending"} onApply={onApply} onDismiss={onDismiss} onOpenTab={onOpenTab} />
       ))}
     </>
   );
@@ -342,7 +365,7 @@ function Chat({ assistant, tabs, compact, ownerName, onOpenTab, onStarter, quick
       {earlier.length > 0 && (
         <div className="earlier">
           <div className="earlier-t">{uiText("assistantViews.earlierConversationsHaveResponsesAwaitingApproval", {v0: (earlier.length)})}</div>
-          {earlier.map((p) => <ProposalCard key={p.id} proposal={p} compact={compact} onApply={assistant.apply} onDismiss={assistant.dismiss} />)}
+          {earlier.map((p) => <ProposalCard key={p.id} proposal={p} compact={compact} onApply={assistant.apply} onDismiss={assistant.dismiss} onOpenTab={onOpenTab} />)}
         </div>
       )}
       {!thread.length && (
@@ -559,7 +582,7 @@ function Bench({ assistant, focus, onOpenTab }) {
   const looked = lastDone ? lookedAt(lastDone.tools) : [];
   return (
     <>
-      {pending.map((p) => <ProposalCard key={p.id} proposal={p} onApply={assistant.apply} onDismiss={assistant.dismiss} />)}
+      {pending.map((p) => <ProposalCard key={p.id} proposal={p} onApply={assistant.apply} onDismiss={assistant.dismiss} onOpenTab={onOpenTab} />)}
       {question && (
         <>
           <div className="qcard">
