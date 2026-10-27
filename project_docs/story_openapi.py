@@ -401,8 +401,10 @@ def shot_meta(conn, identifier):
     return record(conn, "meta_" + identifier, required=False) or {}
 
 
-def shot_view(conn, slug, row):
-    from project_docs import story_trim
+def shot_view(conn, slug, row, *, takes=None):
+    """A shot's API payload. ``adoption`` is always present (SPEC_19); ``takeSummary`` needs the take history, so only
+    callers answering a client pass ``takes`` (a story_adoption.Takes shared by the whole response)."""
+    from project_docs import story_adoption, story_trim
     identifier = shot_id(slug, row)
     meta = shot_meta(conn, identifier)
     fields = dict(zip(row["headers"], row["cells"]))
@@ -419,7 +421,7 @@ def shot_view(conn, slug, row):
     missing = [c for c in refs if c.startswith(("CAST-", "SET-", "LOC-")) and not known.get(c, {}).get("selectedImageUrl")]
     has_previs = any(media_url(v) for k, v in fields.items() if re.search(r"previs|pose.*skeleton", k, re.I))
     previs = next((media_url(v) for k, v in fields.items() if re.search(r"previs|blockout", k, re.I) and media_url(v)), None)
-    return {**meta, "shotId": identifier, "rowId": row["rid"], "tabKey": row["tabKey"], "shotIndex": row["cells"][0],
+    view = {**meta, "shotId": identifier, "rowId": row["rid"], "tabKey": row["tabKey"], "shotIndex": row["cells"][0],
             "description": next((v for k, v in fields.items() if re.search("prompt", k, re.I)), ""),
             "opticalRig": next((v for k, v in fields.items() if re.search(r"optical|rig", k, re.I)), ""),
             "cameraMotion": next((v for k, v in fields.items() if re.search(r"camera.*motion", k, re.I)), ""),
@@ -429,15 +431,41 @@ def shot_view(conn, slug, row):
                           "hasPrevis": has_previs, "hasDialogue": bool(meta.get("dialogue"))},
             "selectedImageUrl": output("image"), "selectedVideoUrl": output("video"), "previsVideoUrl": previs,
             "trim": story_trim.view(meta, output("video"))}
+    view["adoption"] = story_adoption.adoption_view(meta, status, output("video"))
+    if takes is not None:
+        view["takeSummary"] = story_adoption.take_summary(takes, row, view["adoption"])
+    return view
 
 
-def film_shots(items, fill_previs=False):
-    """(shot, video URL) of an episode film in shot order: the cinema slate is the cut; a lab clip joins once it is approved.
-    fill_previs: a slate shot without a take plays its grey previs, so the whole episode can be watched before it is shot."""
+FILM_SELECTIONS = ("selected", "adopted")
+FILM_FILLS = ("previs", "latest", "skip")
+
+
+def film_plan(items, selection="selected", fill="skip"):
+    """(shot, video URL, source) of an episode film in shot order; source is "adopted", "latest" or "previs".
+
+    selection "selected" (the RH-compatible default): the cinema slate is the cut, every slate take in it; a lab clip joins
+    once it is approved. selection "adopted" (SPEC_19): only adopted shots are the cut. ``fill`` decides what a slate shot
+    outside the cut plays: "latest" its newest take (the one in its cell), "previs" its grey previs, "skip" nothing. A lab
+    clip never fills. In "selected" mode every slate take is already in, so only "previs" adds anything.
+    """
+    from project_docs.story_adoption import ADOPTED
     ordered = sorted(items, key=lambda s: tuple((0, int(part)) if part.isdigit() else (1, part.casefold()) for part in re.split(r"(\d+)", str(s["shotIndex"]))))
-    take = lambda s: s["selectedVideoUrl"] or (fill_previs and s["tabKey"] == "cinema-studio" and s.get("previsVideoUrl")) or None
-    return [(s, take(s)) for s in ordered if take(s)
-            and (s["tabKey"] == "cinema-studio" or s.get("reviewStatus") in ("Approved", "已完成"))]
+    result = []
+    for shot in ordered:
+        slate, adopted, take = shot["tabKey"] == "cinema-studio", shot.get("reviewStatus") in ADOPTED, shot["selectedVideoUrl"]
+        previs = slate and fill == "previs" and shot.get("previsVideoUrl")
+        if take and (adopted or (slate and (selection == "selected" or fill == "latest"))):
+            result.append((shot, take, "adopted" if adopted else "latest"))
+        elif previs:
+            result.append((shot, previs, "previs"))
+    return result
+
+
+def film_shots(items, fill_previs=False, *, selection="selected", fill=None):
+    """(shot, video URL) of an episode film in shot order (see film_plan).
+    fill_previs: a slate shot without a take plays its grey previs, so the whole episode can be watched before it is shot."""
+    return [(shot, url) for shot, url, _ in film_plan(items, selection, fill or ("previs" if fill_previs else "skip"))]
 
 
 def film_cut(items, fill_previs=False):
@@ -445,11 +473,25 @@ def film_cut(items, fill_previs=False):
     return [url for _, url in film_shots(items, fill_previs)]
 
 
-def shots(conn, ep):
+def film_options(body):
+    """(selection, fill) of POST /episodes/{id}/films; without the new fields the RH request means exactly what it meant."""
+    selection = body.get("selection", "selected")
+    if selection not in FILM_SELECTIONS:
+        invalid("selection must be selected or adopted.")
+    if "fill" not in body:
+        return selection, "previs" if body.get("fillPrevis") is True else "skip"
+    if body["fill"] not in FILM_FILLS:
+        invalid("fill must be previs, latest or skip.")
+    if body.get("fillPrevis") is True and body["fill"] != "previs":
+        invalid("fillPrevis: true means fill: previs; send one of them.")
+    return selection, body["fill"]
+
+
+def shots(conn, ep, *, takes=None):
     result = []
     for key in ("cinema-studio", "openjutsu-lab"):
         for row in table_rows(conn, ep["slug"], key):
-            view = shot_view(conn, ep["slug"], row)
+            view = shot_view(conn, ep["slug"], row, takes=takes)
             if view.get("episodeId", f"ep_{ep['slug']}_01") == ep["episodeId"]:
                 result.append(view)
     return result
@@ -672,10 +714,13 @@ def candidate_list(conn, identifier, kind):
     current = media_url(row["cells"][column])
     if current:
         urls.append(current)
-    urls.extend(c["url"] for c in records(conn, "candidate", slug) if c["entityId"] == identifier and c["kind"] == kind)
+    from project_docs.story_adoption import latest_created
+    stored = [c for c in records(conn, "candidate", slug) if c["entityId"] == identifier and c["kind"] == kind]
+    urls.extend(c["url"] for c in stored)
+    created = latest_created(stored)  # SPEC_19: null for history, uploads and candidates written before createdAt
     prefix, key = ("im_", "imageId") if kind == "image" else ("vd_", "videoId")
-    result = [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current}
-              for url in dict.fromkeys(urls)]
+    result = [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current,
+               "createdAt": created.get(url)} for url in dict.fromkeys(urls)]
     if entity == 'shot':
         from project_docs import writing_impact
         evidence = [c for c in records(conn, 'candidate', slug) + records(conn, 'story_media_receipt', slug)
@@ -1068,7 +1113,9 @@ def execute_task(identifier):
                 set_script(conn, me, ep, output["scriptContent"])
                 result = {"episodeId": ep["episodeId"]}
             elif task["type"] == "FILM_EXPORT":
-                result = {"fileId": output["asset_id"], "videoUrl": output["asset_url"]}
+                # segments: where every clip came from (SPEC_19); a job queued before they existed has none to report.
+                result = {"fileId": output["asset_id"], "videoUrl": output["asset_url"],
+                          **({"segments": job["segments"]} if "segments" in job else {})}
                 store(conn, "fl_" + identifier, "film", {**result, "episodeId": job["episodeId"], "filmId": "fl_" + identifier}, slug)
             else:
                 if not output["content_type"].startswith(job["kind"] + "/"):
@@ -1079,11 +1126,14 @@ def execute_task(identifier):
                 if job['entityId'].startswith('sh_'):
                     result = writing_impact.candidate_view(result, evidence)
                 store(conn, "ca_" + identifier, "candidate", {"entityId": job["entityId"], "kind": job["kind"], "url": output["asset_url"],
-                      **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
+                      "createdAt": now(), **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
                 repo.get_tab_for_update(conn, slug, job["row"]["tabKey"])
                 _, row = find_row(conn, job["entityId"], "shot" if job["entityId"].startswith("sh_") else "asset")
+                from project_docs import story_adoption
+                # An adopted shot keeps the take that is in the cut: a new render only joins its candidates (SPEC_19 R2).
+                adopted = job['entityId'].startswith('sh_') and story_adoption.row_status(row) in story_adoption.ADOPTED
                 # A delayed render is kept as a candidate, not allowed to overwrite a newer selection.
-                if row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
+                if not adopted and row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
                     mutate_row(conn, me, slug, row["tabKey"], row["rid"], {job["column"]: f"[{job['kind']}]({output['asset_url']})"})
                     if job["kind"] == "video" and job["entityId"].startswith("sh_"):
                         from project_docs import story_trim
@@ -1502,7 +1552,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             write_scenes(conn, me, ep, [next(s for s in items if s["sceneId"] == sid) for sid in order])
             return {"items": scenes(conn, ep)}
         if tail == "shots" and method == "GET":
-            return page(shots(conn, ep), query)
+            from project_docs import story_adoption
+            return page(shots(conn, ep, takes=story_adoption.Takes(conn, slug)), query)
         if tail in ("shot-image-generations", "shot-video-generations") and method == "POST":
             chosen = shots(conn, ep)
             if "shotIds" in body:
@@ -1526,16 +1577,21 @@ def dispatch(conn, me, method, path, body, query, actions):
                 return page([f for f in records(conn, "film", slug) if f["episodeId"] == ep["episodeId"]], query)
             if method == "POST":
                 from project_docs import story_trim
-                clips = film_shots(shots(conn, ep), fill_previs=body.get("fillPrevis") is True)
-                if not clips:
-                    raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Select at least one shot video before exporting a film.")
+                selection, fill = film_options(body)
+                plan = film_plan(shots(conn, ep), selection, fill)
+                if not plan:
+                    raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Adopt at least one shot before exporting a film." if selection == "adopted"
+                                     else "Select at least one shot video before exporting a film.")
+                clips = [(shot, url) for shot, url, _ in plan]
                 return queue_task(conn, me, slug, "FILM_EXPORT", {"episodeId": ep["episodeId"], "urls": [url for _, url in clips],
-                                                                   "trims": story_trim.film_trims(clips), "config": {}}, actions)
+                                                                   "trims": story_trim.film_trims(clips), "config": {},
+                                                                   "segments": [{"shotId": shot["shotId"], "source": source} for shot, _, source in plan]}, actions)
     if parts[0] in ("assets", "shots") and len(parts) >= 2:
         identifier = parts[1]; entity = "asset" if parts[0] == "assets" else "shot"
         slug, row = find_row(conn, identifier, entity); tail = "/".join(parts[2:])
         authorize(conn, me, slug, write=method != "GET")
-        view = lambda: asset_view(slug, find_row(conn, identifier, entity)[1]) if entity == "asset" else shot_view(conn, slug, find_row(conn, identifier, entity)[1])
+        from project_docs import story_adoption
+        view = lambda: asset_view(slug, find_row(conn, identifier, entity)[1]) if entity == "asset" else shot_view(conn, slug, find_row(conn, identifier, entity)[1], takes=story_adoption.Takes(conn, slug))
         if not tail:
             if method == "GET":
                 result = view()
@@ -1574,10 +1630,14 @@ def dispatch(conn, me, method, path, body, query, actions):
             raw = file_bytes(conn, file["fileId"])
             aid = repo.put_asset(conn, slug, data=raw, content_type=file["contentType"], actor_id=me.actor_id)
             url = f"/projects/api/{slug}/assets/{aid}"
-            store(conn, "ca_" + uuid.uuid4().hex, "candidate", {"entityId": identifier, "kind": "image", "url": url}, slug)
+            store(conn, "ca_" + uuid.uuid4().hex, "candidate", {"entityId": identifier, "kind": "image", "url": url, "createdAt": now()}, slug)
             return next(c for c in candidate_list(conn, identifier, "image") if c["url"] == url)
         if tail in ("selected-image", "selected-video") and method == "PUT":
             return select_candidate(conn, me, identifier, "image" if tail.endswith("image") else "video", body)
+        if entity == "shot" and tail == "adoptions" and method == "POST":
+            return story_adoption.adopt(conn, me, identifier, body)
+        if entity == "shot" and tail == "adoption" and method == "DELETE":
+            return story_adoption.unadopt(conn, me, identifier)
         if entity == "shot" and tail == "trim" and method == "PUT":
             from project_docs import story_trim
             story_trim.set_trim(conn, slug, identifier, row, body)
@@ -1658,10 +1718,11 @@ def dispatch(conn, me, method, path, body, query, actions):
             rid = mutate_row(conn, me, slug, row["tabKey"], cells=dict(enumerate(second)), after=row["rid"])
             other = f"sh_{slug}_{rid}"
             from project_docs import story_trim
-            store(conn, "meta_" + other, "shot_meta", story_trim.strip(shot_meta(conn, identifier)), slug)  # the new half has no take yet
+            # The new half has no take yet: neither the cut nor the adoption of the original carries over.
+            store(conn, "meta_" + other, "shot_meta", {k: v for k, v in story_trim.strip(shot_meta(conn, identifier)).items() if k != "adoption"}, slug)
             from project_docs import writing_impact
             writing_impact.split_lineage(conn, slug, identifier, other)
-            return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1])]}
+            return {"shots": [view(), shot_view(conn, slug, find_row(conn, other, "shot")[1], takes=story_adoption.Takes(conn, slug))]}
     if parts[0] == "scenes" and len(parts) >= 2:
         ep, scene = locate_scene(conn, parts[1]); tail = "/".join(parts[2:])
         if not tail and method == "GET":
@@ -1677,7 +1738,8 @@ def dispatch(conn, me, method, path, body, query, actions):
             rid = mutate_row(conn, me, ep["slug"], "cinema-studio", cells={0: text(body, "shotIndex", f"SC{scene['sceneIndex']:02d}-S{len(shots(conn, ep)) + 1:02d}"), 3: text(body, "description"), 6: "Queued"})
             identifier = f"sh_{ep['slug']}_{rid}"
             store(conn, "meta_" + identifier, "shot_meta", {"episodeId": ep["episodeId"], "sceneId": scene["sceneId"]}, ep["slug"])
-            return shot_view(conn, ep["slug"], find_row(conn, identifier, "shot")[1])
+            from project_docs import story_adoption
+            return shot_view(conn, ep["slug"], find_row(conn, identifier, "shot")[1], takes=story_adoption.Takes(conn, ep["slug"]))
     if path in ("/shot-merges", "/scene-merges") and method == "POST":
         key = "shotIds" if path == "/shot-merges" else "sceneIds"
         ids = body.get(key, [])
@@ -1703,7 +1765,8 @@ def dispatch(conn, me, method, path, body, query, actions):
                               {'entityId': ids[0], 'kind': kind, 'url': candidate['url'],
                                'storyProvenance': candidate.get('storyProvenance')}, slug)
                 mutate_row(conn, me, slug, row["tabKey"], other["rid"], delete=True)
-            return shot_view(conn, slug, find_row(conn, ids[0], "shot")[1])
+            from project_docs import story_adoption
+            return shot_view(conn, slug, find_row(conn, ids[0], "shot")[1], takes=story_adoption.Takes(conn, slug))
         found = [locate_scene(conn, i) for i in ids]
         if len({ep["episodeId"] for ep, _ in found}) != 1:
             invalid("Merged scenes must belong to one episode.")
