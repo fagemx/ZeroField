@@ -222,3 +222,15 @@
   background: var(--primary); color: var(--primary-ink); font-weight: 600; white-space: nowrap; }
 .workbench-app.studio-shell .studio-rails .sheet-main-view .shot-composer button.primary.composer-go.composer-go:hover:not(:disabled) { background: #fff; border-color: #fff; }
 .workbench-app.studio-shell .studio-rails .sheet-main-view .shot-composer button.primary.composer-go.composer-go:disabled { opacity: .45; }
+
+/* SPEC_19 8.5: at 1280×720 the take, the look buttons, the prompt and the parameter row share the first screen. The column is a flex
+   column and the player gives up height first (down to 120px); only below that does the column scroll. Taller screens grow the player
+   up to its cap instead of leaving space under the prompt. */
+.studio-shell .studio-rails .sheet-main-view:has(> .shot-composer) { display: flex; flex-direction: column; }
+.studio-shell .studio-rails .sheet-main-view > .shot-composer { flex: 1 1 auto; min-height: 0; }
+.shot-composer > :not(.composer-top) { flex: none; }
+.shot-composer > .composer-top { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.shot-composer > .composer-top > :not(.composer-view, .film-monitor) { flex: none; }
+.shot-composer > .composer-top > .composer-view { flex: 1 1 0; height: auto; min-height: 120px; max-height: 520px; }
+.shot-composer > .composer-top > .film-monitor { flex: 1 1 0; min-height: 120px; max-height: 560px; grid-template-rows: minmax(0, 1fr) auto; }
+.shot-composer > .composer-top > .film-monitor video { height: 100%; min-height: 0; aspect-ratio: auto; }

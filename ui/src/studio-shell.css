@@ -472,6 +472,12 @@
 .take-row.is-trial { box-shadow: inset 0 0 0 1px rgba(242, 179, 61, .6); }
 .studio-shell .take-play { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
 .studio-shell .take-play.is-still { cursor: default; }
+/* studio.css's control rule reaches every button inside .canvas (32px high, outlined, nowrap) at a higher specificity than a plain
+   .studio-shell rule, which squeezed the neighbour captions to one letter; the doubled class wins back the film column's own buttons. */
+.workbench-app.studio-shell .film-neighbours button { display: grid; justify-content: stretch; align-items: start; gap: 4px; height: auto; padding: 0;
+  border: 0; border-radius: 0; background: none; font: inherit; white-space: normal; }
+.workbench-app.studio-shell .take-play { display: flex; justify-content: flex-start; gap: 8px; height: auto; padding: 0; border: 0; border-radius: 0;
+  background: none; font: inherit; white-space: normal; }
 .take-thumb { flex: none; width: 64px; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 5px; background: var(--ground); }
 .take-thumb video, .take-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .take-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
