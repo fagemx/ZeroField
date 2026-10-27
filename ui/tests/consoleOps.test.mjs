@@ -75,7 +75,8 @@ test('every code, fix, failure kind and state the server can send has words in b
 
 test('queue lines speak plainly, keep other members private and keep failure classes from newer servers', async () => {
   await setLocale('en');
-  assert.equal(turnReason({ errorKind: 'timeout' }), 'The model did not answer in time.');
+  assert.equal(turnReason({ errorKind: 'timeout' }), 'The model took too long to answer. Try again, or ask for something smaller.', 'an R12 failure class reads as its providerFailures line');
+  assert.equal(turnReason({ errorKind: 'crash' }), 'The worker stopped unexpectedly during this turn.');
   assert.equal(turnReason({ errorKind: 'provider_overloaded' }), 'Failed (provider_overloaded).');
   const mine = queueLine('turns', { status: 'failed', errorKind: 'admission', detail: 'Agent concurrency limit reached.', agentKey: 'coordinator', mine: true, finishedAt: '2026-10-27T10:00:00Z' });
   assert.deepEqual([mine.who, mine.state, mine.reason, mine.detail, mine.mine], ['coordinator', 'Failed', 'Governance refused the call before it was sent.', 'Agent concurrency limit reached.', true]);

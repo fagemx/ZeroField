@@ -9,11 +9,11 @@ import { CONTEXT_COMMAND, HEALTH_STEPS, PULL_COMMAND, QUEUE_GROUPS, TONE, gpuSha
 // SPEC_20 R36/R38-R40 inside the existing pages: Dashboard carries the automation switch, the GPU panel and
 // the project-wide queue; Providers & API Keys carries the guided model setup and health check.
 
-function Pill({tone='muted',children}) {return <span className={'ac-pill '+tone}>{children}</span>;}
+export function Pill({tone='muted',children}) {return <span className={'ac-pill '+tone}>{children}</span>;}
 const when=value=>{const date=value ? new Date(value):null;return date && !Number.isNaN(date.getTime()) ? date.toLocaleString(currentLocale(),{dateStyle:'medium',timeStyle:'short'}):'';};
 
 /** Loads one operations endpoint now, on refresh and every `every` ms; requests abort on unmount. */
-function useOps(path,every) {
+export function useOps(path,every) {
   const {request,revision}=useConsole();
   const [state,setState]=useState({});const [tick,setTick]=useState(0);
   useEffect(()=>{
@@ -80,7 +80,7 @@ function ModelServer({server}) {
     {model.contextLength && model.contextLength<=4096 && <small className="ac-warn-text">{t('console.ops.gpu.smallContext')}</small>}</li>)}</ul>;
 }
 
-// ---------- R39 queue and failures ----------
+// ---------- R39 queue and failures (the R12 failure class reads as its plain-language line) ----------
 export function QueuePanel() {
   const [days,setDays]=useState(7);const [state,reload]=useOps('/queue?days='+days,15000);const view=state.data;
   const totals=queueTotals(view);

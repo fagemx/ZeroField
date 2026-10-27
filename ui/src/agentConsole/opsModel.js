@@ -2,6 +2,7 @@
 // check, the GPU panel, the project-wide queue and the automation switch. Wire values stay as the
 // server sends them; everything a person reads goes through console.ops.* messages.
 import { currentLocale, t } from '../i18n/index.js';
+import { providerFailureText } from '../assistant/providerFailures.js';
 
 export const HEALTH_STEPS = ['model', 'chat', 'tools', 'json', 'vision', 'context'];
 // A failure here means later steps would only repeat it; they are shown as skipped instead of run.
@@ -63,21 +64,23 @@ export function vram(device) {
 export const gpuShare = model => (Number.isFinite(model?.gpuShare) ? Math.round(model.gpuShare * 100) : null);
 
 // ---------- queue and failures ----------
-const ERROR_KINDS = ['abandoned', 'not_member', 'quota', 'lockdown', 'admission', 'crash', 'auth', 'timeout', 'unavailable', 'bad_response',
-  'kind_removed', 'configuration', 'local', 'provider', 'empty', 'output', 'error'];
+// Stored error kinds that are not an R12 failure class (SPEC_20 R12 classes read through providerFailureText).
+const ERROR_KINDS = ['abandoned', 'not_member', 'lockdown', 'admission', 'crash', 'unavailable', 'bad_response', 'kind_removed', 'configuration', 'error'];
 export const QUEUE_GROUPS = ['turns', 'dispatches', 'tasks', 'grades'];
 
-/** Why a chat turn failed, in plain words; the stored kind is kept for anything newer. */
+/** Why a chat turn failed, in plain words. A failed model call stores its R12 failure class; older kinds keep their own line. */
 export function turnReason(item) {
   const kind = item?.errorKind;
-  return ERROR_KINDS.includes(kind) ? t('console.ops.queue.kind.' + kind) : t('console.ops.queue.kind.other', { kind: kind || '?' });
+  return providerFailureText(kind) || (ERROR_KINDS.includes(kind) ? t('console.ops.queue.kind.' + kind) : t('console.ops.queue.kind.other', { kind: kind || '?' }));
 }
 /** One line per queued/running/failed item: who does it, what state, and the reason when it failed. */
 export function queueLine(group, item) {
   const who = group === 'tasks' ? t('console.ops.queue.pipelineStep', { node: item.nodeId, tab: item.tabKey })
     : group === 'grades' ? t(item.auto ? 'console.ops.queue.autoGrade' : 'console.ops.queue.manualGrade', { shot: item.shotId })
       : item.agentKey;
-  const reason = group === 'turns' ? (item.status === 'failed' ? turnReason(item) : '') : item.error || '';
+  // A failed dispatch carries the failure class of its model call; the raw error stays in the run log.
+  const reason = group === 'turns' ? (item.status === 'failed' ? turnReason(item) : '')
+    : group === 'dispatches' ? providerFailureText(item.failure) || item.error || '' : item.error || '';
   return { who, state: t('console.ops.queue.state.' + item.status, { defaultValue: item.status }), reason,
     detail: group === 'turns' ? item.detail || '' : '', mine: item.mine, at: item.finishedAt || item.updatedAt || item.createdAt || item.requestedAt };
 }

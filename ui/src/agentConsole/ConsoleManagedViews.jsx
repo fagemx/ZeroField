@@ -8,6 +8,7 @@ import { allocationDispatchBody, allocationPath } from '../storyModel.js';
 import { MediaCell } from '../MediaCell.jsx';
 import { ModelSetup } from './ConsoleOpsViews.jsx';
 import { ExternalAgents } from './ConsoleExternalAgents.jsx';
+import { ModelMatrix } from './ConsoleModelMatrix.jsx';
 
 export function ConsoleAgents() {
   const {catalog,resource,navigate,agentDrafts}=useConsole();
@@ -101,7 +102,7 @@ export function ConsoleEnvironments() {
 export function ConsoleProviders() {
   const state=useLoad('/api-keys');const providers=useLoad('/providers');const {canEdit,resource,navigate,action,request,refresh,catalog}=useConsole();
   const [agent,setAgent]=useDraft('probeAgent','coordinator');const [kind,setKind]=useState('llm');const [health,setHealth]=useState(null);
-  return <><ModelSetup/><p className="ac-notice">{t('console.referenceOnly')} {t('console.connectionNotice')}</p><Loading state={state}/><Loading state={providers}/>
+  return <><ModelSetup/><ModelMatrix/><p className="ac-notice">{t('console.referenceOnly')} {t('console.connectionNotice')}</p><Loading state={state}/><Loading state={providers}/>
     {state.data && <><JsonView label="allowlist" value={state.data.allowlisted_references} open/><SelectField label="defaultProvider" value={state.data.default?.vault_key || ''} disabled={!canEdit} options={[{value:'',label:t('console.noProjectDefault')},...(state.data.references || []).filter(r=>r.enabled).map(r=>({value:r.vault_key,label:r.display_name || r.vault_key}))]} onChange={v=>action(async()=>{await request('/api-keys/default',{method:'POST',body:{version:state.data.default.version,vault_key:v || null}});refresh();})}/></>}
     <ResourceEditor endpoint="providers" items={providers.data?.items} resourceKey="vault_key" selectedKey={resource} onSelect={key=>navigate('api_keys',key)} canWrite={canEdit}/>
     <h3>{t('console.health')}</h3><SelectField label="agent" value={agent} onChange={setAgent} options={(catalog.agents || []).filter(a=>!a.read_only).map(a=>({value:a.agent_key,label:a.display_name}))}/><SelectField label="probeKind" value={kind} onChange={setKind} options={['llm','router','mcp']}/><button disabled={!canEdit} onClick={()=>action(async()=>setHealth(await request('/connections/health',{method:'POST',body:{agent_key:agent,kind,...(kind==='router'?{model:'ltx/ltx-2-5-pro'}:{})}})))}>{t('console.probe')}</button>{health && <JsonView label="health" value={health} open/>}

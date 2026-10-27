@@ -41,7 +41,7 @@ test('a usage tier the production forbids names the switch that fixes it', () =>
     {code: 'network_policy', agentKey: 'sheet_ops', fix: 'use_hybrid_policy', host: 'models.example.test', model: 'closed-model', tier: 'closed'},
   ]}, []);
   assert.deepEqual(lines.map(line => line.text), [
-    'qwen/qwen3.8-27b runs on a hosted open-weights service (openrouter.ai), which is off for this production. The showrunner can turn on hosted open weights in Agent Console settings, or you can switch back to the local model.',
+    'qwen/qwen3.8-27b runs on a hosted open-weights service (openrouter.ai), which is off for this production. The showrunner can turn on hosted open weights in Agent Console, Providers & API Keys, or you can switch back to the local model.',
     'closed-model on models.example.test is a closed model, and this production allows open weights only. Switch back to the local model, or the showrunner can choose the hybrid production policy.',
   ]);
 });
