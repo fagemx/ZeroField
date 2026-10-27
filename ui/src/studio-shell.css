@@ -102,7 +102,9 @@
 .studio-shell .studio-film-strip button { display: grid; gap: 4px; width: 112px; padding: 0; border: 0; background: none; color: var(--muted); font: 500 12px ui-monospace, Consolas, monospace; text-align: left; cursor: pointer; }
 .studio-film-strip img, .studio-film-blank { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; background: var(--bg-2); }
 .studio-film-strip .shot.empty img, .studio-film-strip .shot.empty .studio-film-blank { opacity: .45; outline: 1px dashed #5a3a3e; outline-offset: -1px; }
-.studio-film-strip .shot.fill span:last-child::after { content: " · 3D"; color: #f5b656; }
+.studio-film-strip .shot.fill img, .studio-film-strip .shot.fill .studio-film-blank { outline: 1px dashed rgba(242, 179, 61, .55); outline-offset: -1px; }
+.studio-film-strip .shot.fill span:last-child::after { content: " ·"; color: #f5b656; }
+.studio-film-strip .shot.is-trial span:last-child { color: #f5b656; }
 .studio-film-strip button[aria-current] img, .studio-film-strip button[aria-current] .studio-film-blank { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- Floating panels: list · view · detail ---------- */
@@ -214,11 +216,6 @@
 .shot-detail > header { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .shot-detail > header b { font-size: 16px; }
 .shot-missing { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(229, 86, 111, .12); color: #f0728a; font-size: 12.5px; }
-.shot-primary { display: grid; gap: 6px; }
-.studio-shell .shot-detail .review-presets { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
-.studio-shell .shot-detail .review-presets > strong { color: var(--faint); font-size: 12px; font-weight: 500; }
-.studio-shell .shot-detail .review-presets > small { color: var(--text); font-size: 13px; line-height: 1.5; }
-.studio-shell .shot-detail .sheet-panel-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .shot-compare { display: grid; gap: 12px; }
 .shot-compare-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .shot-compare-pair figure { margin: 0; display: grid; gap: 6px; }
@@ -248,9 +245,6 @@
 .studio-shell .studio-rails .sheet-gallery { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .studio-shell .studio-rails .sheet-card[aria-current] { box-shadow: 0 0 0 1.5px var(--accent); }
 .studio-shell .studio-rails .sheet-card-summary > div:nth-child(n+2) { display: none; }
-.studio-shell .shot-detail .sheet-panel-actions button, .studio-shell .shot-detail .review-presets > button { height: 28px; padding: 0 10px; font-size: 12px; border-color: var(--line); color: var(--muted); }
-.studio-shell .shot-detail .review-presets > button { justify-self: start; }
-.studio-shell .shot-detail .modal-field { margin: 0; }
 
 /* One primary action per screen: inside the Shot Stage view, primaries (Block in 3D, run steps) fall back to outlined. */
 .studio-shell .studio-rails .sheet-main-view button.primary.primary.primary { background: transparent; border-color: var(--control); color: var(--text); }
@@ -401,3 +395,120 @@
 .binding-add-list small { display: block; color: var(--faint); font: 500 10.5px ui-monospace, Consolas, monospace; }
 /* SPEC_16A 3.8: the writing workspace's save state beside the breadcrumb, only when it is not the quiet "saved". */
 .studio-crumb .studio-writing { margin-left: 4px; padding: 2px 8px; border-radius: 6px; background: var(--active); color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+/* ---------- SPEC_19: the shot in the cut (right column), derived shot states, the film window's gaps ---------- */
+/* Derived states (takeModel.shotState): blue generating, amber new take, green adopted, hollow retake, red blocked, grey not shot. */
+.shot-dot.state-generating { background: #6ea8fe; } .shot-dot.state-new_take { background: var(--accent); } .shot-dot.state-adopted { background: #3fc07a; }
+.shot-dot.state-blocked { background: #e5566f; } .shot-dot.state-empty { background: #5d6a7a; }
+.shot-dot.state-retake { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.shot-film { gap: 14px; }
+.shot-film h3 { margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.shot-film-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.shot-film-head > b { flex: none; font-size: 16px; }
+.shot-film-scene { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.shot-state { flex: none; display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 12.5px; white-space: nowrap; }
+.shot-state .num { min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent-bg); color: #f5b656; font: 600 11px/18px ui-monospace, Consolas, monospace; text-align: center; }
+.shot-film .shot-missing { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.studio-shell .shot-film .shot-missing .quiet { height: 24px; padding: 0 8px; font-size: 12px; color: #f0728a; }
+
+/* The "…" menu: folded until asked for. */
+.shot-menu { position: relative; flex: none; }
+.shot-menu > summary { display: grid; place-items: center; width: 28px; height: 26px; border-radius: 6px; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; list-style: none; }
+.shot-menu > summary::-webkit-details-marker { display: none; }
+.shot-menu > summary:hover, .shot-menu[open] > summary { background: var(--active); color: var(--text); }
+.shot-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; width: 220px; padding: 4px; border: 1px solid var(--control); border-radius: 8px; background: var(--active); box-shadow: var(--shadow-float); }
+.workbench-app.studio-shell .shot-menu-list button { height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-size: 12.5px; text-align: left; cursor: pointer; }
+.workbench-app.studio-shell .shot-menu-list button:hover:not(:disabled) { background: var(--raised); }
+.workbench-app.studio-shell .shot-menu-list button:disabled { color: var(--faint); cursor: default; }
+
+/* The monitor: the panel's one player, shown while something plays. */
+.film-monitor { position: relative; margin: 0; display: grid; gap: 4px; }
+.film-monitor video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; background: #000; object-fit: contain; cursor: pointer; }
+.film-monitor figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font: 500 11.5px ui-monospace, Consolas, monospace; }
+.workbench-app.studio-shell .film-monitor-stop { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
+.workbench-app.studio-shell .film-monitor-stop:hover { background: var(--active); color: var(--text); }
+.film-tag { position: absolute; left: 6px; top: 6px; padding: 1px 7px; border-radius: 5px; background: rgba(14, 18, 23, .86); color: #f5b656; font-size: 11px; font-style: normal; }
+.film-tag.is-trial { background: var(--accent); color: #14110a; font-weight: 600; }
+
+/* In the cut: previous, this and next shot. */
+.film-cut { display: grid; gap: 8px; }
+.film-cut > header, .take-list > header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.workbench-app.studio-shell .film-around, .workbench-app.studio-shell .take-retake { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px solid var(--line-2); border-radius: 6px;
+  background: transparent; color: var(--text); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.workbench-app.studio-shell .film-around[aria-pressed="true"] { border-color: var(--control); background: var(--active); }
+.workbench-app.studio-shell .film-around:disabled, .workbench-app.studio-shell .take-retake:disabled { opacity: .45; cursor: default; }
+.film-neighbours { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.film-neighbours li { min-width: 0; }
+.studio-shell .film-neighbours button { display: grid; gap: 4px; width: 100%; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.film-thumb { position: relative; display: grid; place-items: center; box-sizing: border-box; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--ground); color: var(--faint); }
+.film-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.film-thumb.is-none, .film-thumb.is-blank { border-style: dashed; border-color: var(--control); }
+.film-thumb.is-latest img { opacity: .82; }
+.film-neighbours .is-current .film-thumb { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.film-neighbours .is-none { opacity: .5; }
+.film-neighbours .is-none small { color: var(--faint); font-size: 11px; }
+.film-caption { display: grid; gap: 1px; min-width: 0; }
+.film-caption b { overflow: hidden; font: 600 11.5px ui-monospace, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.film-caption small { display: flex; align-items: center; gap: 4px; overflow: hidden; color: var(--faint); font-size: 11px; white-space: nowrap; }
+.film-caption .shot-dot { width: 6px; height: 6px; }
+
+/* The episode's progress: one segment per shot, as long as it runs in the film; a gap between shots, no seam marks yet. */
+.film-progress { display: grid; gap: 6px; }
+.film-progress ol { display: flex; gap: 2px; height: 14px; margin: 0; padding: 0; list-style: none; }
+.film-progress li { flex: 1 1 0; min-width: 3px; }
+.studio-shell .film-seg { position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 2px; background: #3a4554; cursor: pointer; }
+.studio-shell .film-seg.state-adopted { background: #3fc07a; } .studio-shell .film-seg.state-new_take { background: var(--accent); }
+.studio-shell .film-seg.state-generating { background: #6ea8fe; } .studio-shell .film-seg.state-blocked { background: #e5566f; }
+.studio-shell .film-seg.state-retake { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.studio-shell .film-seg.is-current { outline: 2px solid var(--text); outline-offset: 1px; z-index: 1; cursor: default; }
+.studio-shell .film-seg.is-trial { background: repeating-linear-gradient(135deg, var(--accent) 0 3px, rgba(242, 179, 61, .4) 3px 6px); }
+.film-seg em { position: absolute; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%); padding: 0 5px; border-radius: 4px; background: var(--accent); color: #14110a; font: 600 10px/16px Inter, system-ui, sans-serif; font-style: normal; white-space: nowrap; }
+
+/* Takes: newest first; ✓ adopts, the film-strip icon tries the take in the cut. */
+.take-list { display: grid; gap: 6px; }
+.take-list > ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.take-row { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 3px; border-radius: 8px; }
+.take-row.is-playing { background: var(--active); }
+.take-row.is-trial { box-shadow: inset 0 0 0 1px rgba(242, 179, 61, .6); }
+.studio-shell .take-play { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.studio-shell .take-play.is-still { cursor: default; }
+.take-thumb { flex: none; width: 64px; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 5px; background: var(--ground); }
+.take-thumb video, .take-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.take-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.take-text > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.take-text b { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.take-text small { overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.take-badge { flex: none; padding: 0 5px; border-radius: 4px; font-size: 10.5px; font-style: normal; line-height: 16px; }
+.take-badge.is-new { background: var(--accent-bg); color: #f5b656; }
+.take-badge.is-adopted { background: rgba(63, 192, 122, .16); color: #6fd59c; }
+.take-badge.is-trial { background: var(--accent); color: #14110a; font-weight: 600; }
+.workbench-app.studio-shell .take-try, .workbench-app.studio-shell .take-dismiss { flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer; }
+.workbench-app.studio-shell .take-try:hover, .workbench-app.studio-shell .take-dismiss:hover:not(:disabled) { background: var(--active); color: var(--text); }
+.workbench-app.studio-shell .take-try[aria-pressed="true"] { color: var(--accent); }
+.take-check { flex: none; display: grid; place-items: center; box-sizing: border-box; width: 26px; height: 26px; border-radius: 50%; }
+.workbench-app.studio-shell button.take-check { padding: 0; border: 1.5px solid var(--control); background: transparent; color: var(--muted); cursor: pointer; }
+.workbench-app.studio-shell button.take-check:hover:not(:disabled), .workbench-app.studio-shell button.take-check:focus-visible { border-color: #3fc07a; color: #3fc07a; }
+.workbench-app.studio-shell button.take-check:disabled { opacity: .45; cursor: default; }
+.take-check.is-on { background: #3fc07a; color: #0e1217; }
+.take-check.is-off { border: 1.5px dashed var(--line-2); color: var(--faint); }
+.workbench-app.studio-shell .take-more { justify-self: start; height: 24px; padding: 0 8px; font-size: 12px; }
+
+/* The trim, the notes, and the cast folded at the bottom. */
+.film-trim { display: flex; align-items: center; gap: 6px; margin: 0; padding: 7px 10px; border-radius: 8px; background: var(--bg-2); color: var(--muted); font-size: 12px; }
+.film-trim .ico { flex: none; color: var(--faint); }
+.workbench-app.studio-shell .film-trim .quiet { display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 6px; font-size: 12px; }
+.film-notes { display: grid; gap: 6px; }
+.film-notes > p { margin: 0; color: var(--text); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.film-notes > p strong { color: var(--muted); font-weight: 600; }
+.film-notes summary, .shot-cast-fold > summary { color: var(--faint); font-size: 12px; cursor: pointer; }
+.film-notes .sheet-discussion { display: grid; gap: 6px; margin-top: 6px; }
+.film-notes .sheet-discussion h3 { display: none; }
+.shot-cast-fold { padding-top: 10px; border-top: 1px solid var(--line); }
+.shot-cast-fold[open] > summary { margin-bottom: 8px; }
+
+/* The film window: what fills the gaps, and how each filled shot is marked. */
+.studio-film-fill { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.studio-film-tag.is-trial { background: var(--accent); color: #14110a; font-weight: 600; }
+.studio-film-tag.is-previs { color: var(--muted); }
+.studio-film-filled { margin: 0; white-space: normal; }
+.studio-fill select { height: 28px; margin-left: 6px; font-size: 12.5px; }

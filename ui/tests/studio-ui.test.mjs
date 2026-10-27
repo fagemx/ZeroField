@@ -69,7 +69,9 @@ test('Micro review displays bound assets and edits prompts with the guarded cell
   assert.match(bench,/className="bench-assets" aria-label=\{uiText\('studio.boundAssets'\)\}/);
   assert.match(source,/onClick=\{\(\)=>beginEdit\(r,c\)\}/);
   assert.match(source,/\{previewRow&&shotControls\(preview.r,previewRow,preview.c\)\}/,'review edits the previewed row');
-  assert.match(source,/\{shotControls\(r,currentRow,col\)\}/,'the Shot Stage detail edits the current shot with the same guarded draft');
+  // SPEC_19 3.2: the Shot Stage column is the shot in the cut; its cell editors are reached through "Open in table" until the composer.
+  assert.doesNotMatch(source,/\{shotControls\(r,currentRow,col\)\}/,'the shot column no longer edits cells');
+  assert.match(source,/<ShotFilmPanel slug=\{slug\}/);assert.match(source,/table:\(\)=>openInTable\(currentRow\.rid,actionCol>=0\?actionCol:0\)/);
   assert.match(source,/<textarea ref=\{editor\} aria-label=\{parsed.headers\[c\]\} rows=\{4\} value=\{text\}/);
   assert.match(source,/onChange=\{event=>setText\(event.target.value\)\}/);
   assert.match(source,/if\(!previewTargetValid\|\|!guardDraft\(\)\)return/);
