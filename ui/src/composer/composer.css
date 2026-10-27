@@ -116,6 +116,8 @@
   /* The app's generic button rule centres its content, which shrinks a grid's only column to its content: the 16:9 frame
      then measured 24px. Stretch the column to the tile's width. */
   grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: stretch; align-items: stretch; }
+/* The camera's three columns are lists, one choice each (§3.3): a small tile is a row, thumbnail beside its name. */
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile.is-small { grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
 .look-frame { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: var(--active); box-shadow: 0 0 0 1px var(--line); }
 .look-frame > img, .look-frame > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile:hover .look-frame { box-shadow: 0 0 0 1px var(--control); }
