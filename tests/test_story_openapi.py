@@ -270,6 +270,40 @@ class FilmCutTests(unittest.TestCase):
         self.assertEqual(story.film_cut(items), ["/s01"])
         self.assertEqual(story.film_cut(items, fill_previs=True), ["/s01", "/p02"])  # a take wins; no previs, no clip; lab rows never fill
 
+    def test_adopted_selection_and_fill_choose_the_cut_and_name_each_source(self):
+        """SPEC_19 R6: selection "adopted" keeps only adopted shots; fill decides what a slate gap plays."""
+        shot = lambda index, tab, url, status="", previs=None: {"shotId": "sh_" + index, "shotIndex": index, "tabKey": tab,
+                                                                "selectedVideoUrl": url, "previsVideoUrl": previs, "reviewStatus": status}
+        items = [shot("S01", "cinema-studio", "/s01", "Approved", "/p01"), shot("S02", "cinema-studio", "/s02", "Retake", "/p02"),
+                 shot("S03", "cinema-studio", None, "", "/p03"), shot("S04", "cinema-studio", None),
+                 shot("VFX-01", "openjutsu-lab", "/vfx", "", "/pvfx"), shot("VFX-02", "openjutsu-lab", "/vfx2", "已完成")]
+        plan = lambda **options: [(s["shotIndex"], url, source) for s, url, source in story.film_plan(items, **options)]
+        adopted = [("S01", "/s01", "adopted"), ("VFX-02", "/vfx2", "adopted")]
+        # The RH default is the same cut as before; the sources only name which clips were adopted.
+        self.assertEqual(plan(), [("S01", "/s01", "adopted"), ("S02", "/s02", "latest"), ("VFX-02", "/vfx2", "adopted")])
+        self.assertEqual(story.film_cut(items), ["/s01", "/s02", "/vfx2"])
+        self.assertEqual(plan(fill="previs"), [("S01", "/s01", "adopted"), ("S02", "/s02", "latest"), ("S03", "/p03", "previs"), ("VFX-02", "/vfx2", "adopted")])
+        self.assertEqual(plan(fill="latest"), plan())
+        self.assertEqual(plan(selection="adopted"), adopted)
+        self.assertEqual(plan(selection="adopted", fill="skip"), adopted)
+        self.assertEqual(plan(selection="adopted", fill="latest"), [adopted[0], ("S02", "/s02", "latest"), adopted[1]])
+        # A gap plays its previs even when it has an unadopted take; a lab clip never fills.
+        self.assertEqual(plan(selection="adopted", fill="previs"), [adopted[0], ("S02", "/p02", "previs"), ("S03", "/p03", "previs"), adopted[1]])
+        self.assertEqual(story.film_shots(items, fill_previs=True), story.film_shots(items, fill="previs"))
+        self.assertEqual([url for _, url in story.film_shots(items, selection="adopted")], ["/s01", "/vfx2"])
+
+    def test_film_request_options_keep_the_rh_meaning(self):
+        self.assertEqual(story.film_options({}), ("selected", "skip"))
+        self.assertEqual(story.film_options({"fillPrevis": True}), ("selected", "previs"))
+        self.assertEqual(story.film_options({"fillPrevis": "yes"}), ("selected", "skip"))  # only true meant true, and still does
+        self.assertEqual(story.film_options({"fillPrevis": True, "fill": "previs"}), ("selected", "previs"))
+        self.assertEqual(story.film_options({"selection": "adopted", "fill": "latest"}), ("adopted", "latest"))
+        self.assertEqual(story.film_options({"selection": "adopted"}), ("adopted", "skip"))
+        for body in ({"selection": "all"}, {"selection": None}, {"fill": "none"}, {"fill": ["previs"]}, {"fillPrevis": True, "fill": "latest"}):
+            with self.assertRaises(story.StoryError, msg=body) as caught:
+                story.film_options(body)
+            self.assertEqual((caught.exception.status, caught.exception.code), (422, "DRAMA_VALIDATION_FAILED"))
+
 
 @unittest.skipUnless(os.environ.get("OPENBENCH_TEST_DB_URI"), "set OPENBENCH_TEST_DB_URI for Story HTTP tests")
 class StoryHTTPTests(unittest.TestCase):
@@ -723,6 +757,91 @@ class StoryHTTPTests(unittest.TestCase):
         self.assertFalse(done['result']['selected'])
         self.assertIsNone(self.ok('/shots/' + identifier)['selectedImageUrl'])
         self.assertTrue(self.ok('/shots/' + identifier + '/images')['items'])
+
+    def render_bytes(self, color):
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'take.mp4'
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', f'color=c={color}:s=64x64:r=8:d=0.5', '-c:v', 'libx264',
+                            '-pix_fmt', 'yuv420p', '-movflags', '+faststart', str(path)], check=True, timeout=30)
+            return path.read_bytes()
+
+    def test_a_render_for_an_adopted_shot_only_joins_its_candidates(self):
+        """SPEC_19 R2 (1.2 D): an unadopted shot still previews its newest take in the cell (selected: True); an adopted one keeps
+        the take that is in the cut and the render only becomes a dated candidate (selected: False)."""
+        identifier = self.prepare()[0]['shotId']
+        source = self.generation_inputs(identifier, self.render_bytes('blue'))
+        def generate(color):
+            raw = self.render_bytes(color)
+            with patch.object(worker, 'execute_story_card', side_effect=lambda task, card, values, head: head.upload(task, raw, 'video/mp4')):
+                done = self.await_task(self.ok(f'/shots/{identifier}/video-generations', 'POST', {'appCode': '2109942725885075458', 'modelParams': {'driving_video': source}}))
+            self.assertEqual(done['status'], 'SUCCEEDED', done)
+            return done['result']
+        takes = lambda: {t['url']: t for t in self.ok(f'/shots/{identifier}/videos?limit=100')['items']}
+        first = generate('red')
+        self.assertTrue(first['selected'])  # not adopted: unchanged behaviour
+        self.assertEqual(self.ok('/shots/' + identifier)['selectedVideoUrl'], first['videoUrl'])
+        self.assertIsNotNone(takes()[first['videoUrl']]['createdAt'])
+        self.assertIsNone(takes()[source]['createdAt'])  # a take placed in the sheet has no creation time
+        self.ok(f'/shots/{identifier}/adoptions', 'POST', {'videoId': takes()[first['videoUrl']]['videoId']})
+        second = generate('green')
+        self.assertFalse(second['selected'])
+        shot = self.ok('/shots/' + identifier)
+        self.assertEqual((shot['selectedVideoUrl'], shot['reviewStatus'], shot['adoption']['url']), (first['videoUrl'], 'Approved', first['videoUrl']))
+        self.assertEqual(shot['takeSummary'], {'total': 3, 'newSinceAdoption': 1})
+        listed = takes()[second['videoUrl']]
+        self.assertFalse(listed['selected'])
+        from datetime import datetime
+        self.assertGreater(datetime.fromisoformat(listed['createdAt']), datetime.fromisoformat(shot['adoption']['at']))
+        # Undo the adoption and the newest render previews in the cell again.
+        self.ok(f'/shots/{identifier}/adoption', 'DELETE')
+        third = generate('yellow')
+        self.assertTrue(third['selected'])
+        self.assertEqual(self.ok('/shots/' + identifier)['selectedVideoUrl'], third['videoUrl'])
+
+    def test_film_selection_and_fill_extend_the_rh_request_without_changing_it(self):
+        from project_docs import story_trim
+        one, two = self.prepare()
+        url = lambda letter: f'/projects/api/{self.slug}/assets/pa_' + letter * 32
+        story.mutate_row(self.conn, self.me, self.slug, 'cinema-studio', one['rowId'], {5: f'[Video]({url("a")})'})
+        story.mutate_row(self.conn, self.me, self.slug, 'cinema-studio', two['rowId'], {5: f'[Video]({url("b")})', 8: f'[Previs]({url("c")})'})
+        self.conn.commit()
+        self.ok(f'/shots/{one["shotId"]}/trim', 'PUT', {'in': 0.1, 'out': 0.3})
+        legacy = {key: story.film_shots(story.shots(self.conn, story.episode(self.conn, self.ep)), fill_previs=key) for key in (False, True)}
+        self.conn.rollback()
+        def queued(body):
+            with patch.object(story._POOL, 'submit'):
+                task = self.ok(f'/episodes/{self.ep}/films', 'POST', body)
+            job = story.record(self.conn, task['taskId'])['_job']
+            self.conn.rollback()
+            return job['urls'], [(s['shotId'], s['source']) for s in job['segments']], job['trims']
+        # The RH requests queue exactly the clips and cuts they queued before.
+        for body, key in (({}, False), ({'fillPrevis': True}, True), ({'fillPrevis': 'yes'}, False)):
+            urls, _, trims = queued(body)
+            self.assertEqual((urls, trims), ([u for _, u in legacy[key]], story_trim.film_trims(legacy[key])), body)
+        self.assertEqual(queued({}), queued({'selection': 'selected', 'fill': 'skip'}))
+        self.assertEqual(queued({'fillPrevis': True}), queued({'fill': 'previs'}))
+        self.assertEqual(queued({})[:2], ([url('a'), url('b')], [(one['shotId'], 'latest'), (two['shotId'], 'latest')]))
+        video_id = next(t['videoId'] for t in self.ok(f'/shots/{one["shotId"]}/videos')['items'] if t['url'] == url('a'))
+        self.ok(f'/shots/{one["shotId"]}/adoptions', 'POST', {'videoId': video_id})
+        self.assertEqual(queued({})[:2], ([url('a'), url('b')], [(one['shotId'], 'adopted'), (two['shotId'], 'latest')]))
+        self.assertEqual(queued({'selection': 'adopted'})[:2], ([url('a')], [(one['shotId'], 'adopted')]))
+        self.assertEqual(queued({'selection': 'adopted', 'fill': 'latest'})[:2], ([url('a'), url('b')], [(one['shotId'], 'adopted'), (two['shotId'], 'latest')]))
+        self.assertEqual(queued({'selection': 'adopted', 'fill': 'previs'})[:2], ([url('a'), url('c')], [(one['shotId'], 'adopted'), (two['shotId'], 'previs')]))
+        for body in ({'selection': 'all'}, {'fill': 'none'}, {'fillPrevis': True, 'fill': 'latest'}):
+            code, payload = self.call(f'/episodes/{self.ep}/films', 'POST', body)
+            self.assertEqual((code, payload['code']), (422, 'DRAMA_VALIDATION_FAILED'), body)
+        # The finished film records where every segment came from.
+        with patch.object(worker, 'ffmpeg', return_value={'asset_id': 'pa_' + 'f' * 32, 'asset_url': url('f')}):
+            film = self.await_task(self.ok(f'/episodes/{self.ep}/films', 'POST', {'selection': 'adopted', 'fill': 'previs'}))
+        segments = [{'shotId': one['shotId'], 'source': 'adopted'}, {'shotId': two['shotId'], 'source': 'previs'}]
+        self.assertEqual((film['status'], film['result']['segments']), ('SUCCEEDED', segments), film)
+        record = next(f for f in self.ok(f'/episodes/{self.ep}/films')['items'] if f['filmId'] == 'fl_' + film['taskId'])
+        self.assertEqual((record['videoUrl'], record['segments']), (url('f'), segments))
+        self.ok(f'/shots/{one["shotId"]}/adoption', 'DELETE')
+        code, payload = self.call(f'/episodes/{self.ep}/films', 'POST', {'selection': 'adopted'})
+        self.assertEqual((code, payload['code']), (409, 'DRAMA_STAGE_PRECONDITION'))
+        self.assertEqual(queued({})[0], [url('a'), url('b')])  # the RH default still exports every slate take
 
     def test_imported_cards_are_authenticated_persisted_and_in_catalog(self):
         card_id = 'test-card-' + self.slug
