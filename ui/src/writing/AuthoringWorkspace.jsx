@@ -147,7 +147,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   useEffect(()=>{
     if(!controlRef)return;
     const summary=()=>toolControls.summary(persistence.current?.snapshot() || {state:'readonly',dirty:false,recoverable:false});
-    const instance={flush,isDirty:()=>summary().dirty,recoveryState:()=>summary(),consoleContext:()=>({episodeId:epId,sourceRef:latest.current.resourceRef,sceneKeys:latest.current.selectedScene?[latest.current.selectedScene]:[],docHash:persistence.current?.base.docHash || latest.current.resource?.docHash}),focusSource:navigateSource,previewAdaptation:()=>actions.current.adaptation?.()};
+    const instance={flush,isDirty:()=>summary().dirty,recoveryState:()=>summary(),consoleContext:()=>({episodeId:epId,sourceRef:latest.current.resourceRef,sceneKeys:latest.current.selectedScene?[latest.current.selectedScene]:[],docHash:persistence.current?.base.docHash || latest.current.resource?.docHash}),focusSource:navigateSource,previewAdaptation:()=>actions.current.adaptation?.(),openCandidate:candidate=>actions.current.openCandidate?.(candidate)};
     controlRef.current=instance;return()=>{if(controlRef.current===instance)controlRef.current=null;};
   },[controlRef,epId,flush,navigateSource,toolControls]);
   useEffect(()=>{if(snapshot)onStatus?.({...toolControls.summary(snapshot),docHash:snapshot.docHash,manuscript:resourceRef.kind,panelOpen:Boolean(panel),characters:textCounts(snapshot.doc).characters,canAdapt:Boolean(writable&&resourceRef.kind==='source'&&!busy&&!switching&&!snapshot.recoveries?.length&&!['conflict','auth_lost'].includes(snapshot.state))});},[snapshot,onStatus,toolControls,toolRevision,resourceRef,panel,busy,switching,writable]);
@@ -193,6 +193,12 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
     const result=await post('previews',body);setPreview(result);setPanel('preview');
   };
   const adaptation=()=>run(async()=>{await requireServer();const current=persistence.current.base;const result=await post('previews',{kind:'adaptation',sourceRef:resourceRef,expectedSourceHash:current.docHash,targetDocHash:workspace.docHash,targetScenes,breakdownMode:'auto',...(current.composition || {})});setPreview(result);setPanel('preview');await reload();});actions.current.adaptation=adaptation;
+  // SPEC_20 R23: a crew candidate (adaptation or breakdown) opens as its writing preview; an expired one is made again from its branch.
+  actions.current.openCandidate=candidate=>run(async()=>{await requireServer();let found=null;
+    if(candidate?.previewId){try{const fresh=await transport(`previews/${encodeURIComponent(candidate.previewId)}`);if(fresh.status==='pending'&&!fresh.stale)found=fresh;}catch{found=null;}}
+    if(!found&&candidate?.branchId){const branch=await transport(`branches/${encodeURIComponent(candidate.branchId)}`),current=await transport('workspace');
+      found=await post('previews',{kind:'promotion',sourceRef:{kind:'branch',id:candidate.branchId},expectedSourceHash:branch.docHash,targetDocHash:current.docHash,whole:true});}
+    if(!found)throw new Error(t(p+'stalePreview'));setPreview(found);setPanel('preview');});
   const buildText=()=>run(async()=>{await requireServer();const action=createTextStoryboardAction(request,epId,{breakdownMode:ep?.settings?.breakdownMode || 'auto',signal:taskAbort.current.signal});actionRetry.current=async()=>{const result=await action();if(!mounted.current)return result;await onChanged?.(result);await reload();if(mounted.current)onStage?.({shotIds:[]});return result;};await actionRetry.current();actionRetry.current=null;});
   const download=()=>{
     const url=URL.createObjectURL(new Blob([documentText(persistence.current?.doc || resource.doc)],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='writing-recovery.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),0);

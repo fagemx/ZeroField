@@ -18,6 +18,9 @@ import { AuthoringWorkspace } from './writing/AuthoringWorkspace.jsx';
 import { WritingToolsPanel } from './writing/WritingToolsPanel.jsx';
 import { createActorBoundRequest } from './writing/writingTransport.js';
 import { Icon } from './Icon.jsx';
+import { CrewAsk } from './CrewAsk.jsx';
+import { ShotProposals } from './ShotProposals.jsx';
+import { ASSET_CREW_KINDS, EPISODE_CREW_KINDS, assetProposals } from './crewJobModel.js';
 
 const focusedSceneOf = (shots, rid) => (rid && shots.find(shot => shot.rowId === rid)?.sceneId) || null;
 const renderTools = props => <WritingToolsPanel {...props}/>;
@@ -32,7 +35,8 @@ const renderTools = props => <WritingToolsPanel {...props}/>;
 // controlRef/onStatus/focusSource/onIdentityLost are the writing workspace's contract with the shell (save boundary, status chip, jump from
 // a shot back to its source, sign-in lost); me is whoever is signed in, fixed for the life of the workspace.
 export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '', writable, focus = {}, intent = null, controlRef, focusSource = null, onFocus, onStatus, onIdentityLost,
-  onChanged, onStage, onOpenShot, onAssets, onVault, onIntentDone, onImportTable, onSourceDone}) {
+  onChanged, onStage, onOpenShot, onAssets, onVault, onIntentDone, onImportTable, onSourceDone,
+  proposals = [], onApplyProposal, onDismissProposal, onReloadProposals}) {
   useLocale();
   const [breakdownMode, setBreakdownMode] = useState('auto');
   const [ratio, setRatio] = useState('16:9'), [style, setStyle] = useState('88123'), [styles, setStyles] = useState([]);
@@ -142,6 +146,8 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
   }, [ep?.scenes, focus.sceneId, focus.shotRid]);  // eslint-disable-line react-hooks/exhaustive-deps
   // The crew's suggestions (SPEC_18 R11) follow what you hold: which view is open, and the card in front of you.
   useEffect(() => {onFocus?.({view});}, [view]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // The asset cards show the crew's pending proposals for them (SPEC_20 R21): the wall reads the latest ones when it opens.
+  useEffect(() => {if (view === 'world') onReloadProposals?.();}, [view]);  // eslint-disable-line react-hooks/exhaustive-deps
   const items = useMemo(() => worldItems(assets, shots), [assets, shots]);
   // SPEC_18 R5: the wall can be narrowed to one scene's assets; the type and needs-image filters work inside that.
   const sceneNow = sceneSel === UNSCENED || (sceneSel && (ep?.scenes || []).some(scene => scene.sceneId === sceneSel)) ? sceneSel : null;
@@ -292,6 +298,12 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
       .catch(err => {if (mounted.current) setError(err.message);});
   };
   const saveAsset = (assetId, fields) => run(async () => {await storyRequest('/assets/' + assetId, 'PATCH', fields); await refreshAsset(assetId);});
+  // An adopted crew proposal changed the card (its description, or a new look): the card and the wall catch up.
+  const applyAssetProposal = async (...args) => {
+    const applied = await onApplyProposal?.(...args);
+    if (applied && mounted.current && activeRef.current) await refreshAsset().catch(err => {if (mounted.current) setError(err.message);});
+    return applied;
+  };
   // SPEC_18 R12: looks are made, renamed and deleted beside the picture, through the variants API that was already there.
   const createLook = (assetId, fields) => run(async () => {await storyRequest(`/assets/${assetId}/variants`, 'POST', fields); await refreshAsset(assetId);});
   const renameLook = (assetId, variantId, name) => run(async () => {await storyRequest(`/assets/${assetId}/variants/${variantId}`, 'PATCH', {name}); await refreshAsset(assetId);});
@@ -396,13 +408,22 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
     <aside className="space-detail" aria-label={t('world.world')}>
       <div className="space-detail-body">
       {view === 'world' ? (active
-        ? <AssetEditor key={active.assetId} item={active} detail={detail?.assetId === active.assetId ? detail : null} scenes={scenes} writable={writable} busy={busy} runs={runs} ratio={ratio} styleName={styleName}
+        ? <>
+          <AssetEditor key={active.assetId} item={active} detail={detail?.assetId === active.assetId ? detail : null} scenes={scenes} writable={writable} busy={busy} runs={runs} ratio={ratio} styleName={styleName}
             onSave={saveAsset} onSelectImage={selectImage} onClose={closeEditor} onUpload={uploadAsset} onGenerate={generate} onCancel={cancelGeneration} onLookCreate={createLook} onLookRename={renameLook} onLookDelete={deleteLook} onOpenShot={onOpenShot} onOpenScene={openScene} onTable={onAssets} onVault={onVault}/>
+          {/* SPEC_20 R21: Art's description and look proposals are reviewed here, on the card they change. */}
+          <ShotProposals items={assetProposals(proposals, active)} writable={writable && !busy} onApply={applyAssetProposal} onDismiss={onDismissProposal}/>
+          <CrewAsk slug={slug} targetId={active.assetId} kinds={active.type === 'CHARACTER' && active.isDefault !== false ? ASSET_CREW_KINDS : ['description']}
+            noteKinds={['look']} title="shotProposal.askArt" hint="shotProposal.askArtHint" writable={writable} disabled={busy} onProposed={onReloadProposals}/>
+        </>
         : <WorldSummary withImages={items.filter(item => !item.needsImage).length} total={items.length}/>)
       : <>
         {/* The workspace's panels (versions, story impact, preview, world and search and files) take this column while one is open. */}
         <div className="story-panel-slot" ref={setRightSlot} hidden={!panelOpen}/>
         {!panelOpen && <>
+          {/* SPEC_20 R23: the Screenwriter's adaptation and breakdown candidates open in the script view's preview. */}
+          <CrewAsk slug={slug} targetId={epId} kinds={EPISODE_CREW_KINDS} title="shotProposal.askWriter" hint="shotProposal.askWriterHint"
+            writable={writable} disabled={busy || loading} onCandidate={candidate => control.current?.openCandidate?.(candidate)}/>
           <WorldList items={items} kind={kind} onKind={setKind} focusCode={focus.assetCode} onOpen={openAsset}/>
           {missing.length > 0 && <button type="button" disabled={!writable || busy || assetGroupActive(group) || ep?.scriptDirty} onClick={generateMissing}
             title={ep?.scriptDirty ? t('world.confirmFirst') : undefined}>{t('story.generateMissingAssets')} ({missing.length})</button>}

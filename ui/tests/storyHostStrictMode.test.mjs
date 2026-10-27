@@ -52,7 +52,8 @@ window.fetch = async (url, options = {}) => {
     {status, headers:{'Content-Type':'application/json'}});
   if (path === '/projects/api/strict') return response({me:actor});
   const base = '/aivideo/open/v1';
-  if (path === base+'/catalog/styles' || path === base+'/episodes/'+epId+'/assets')
+  // The episode's crew jobs (SPEC_20 R23, the script view's "Ask the Screenwriter") are a plain read, outside the writing session.
+  if (path === base+'/catalog/styles' || path === base+'/episodes/'+epId+'/assets' || path === base+'/episodes/'+epId+'/crew-jobs')
     return response({code:0, data:{items:[], nextCursor:null}});
   const tail = path.split('/episodes/'+epId+'/writing/')[1];
   if (tail) {
