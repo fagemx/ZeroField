@@ -16,7 +16,7 @@ def source_resources(source):
                           if "__pycache__" not in p.parts})
     for pattern in ("db/*.sql", "project_assistant/prompts/*.md", "workflows/*.json", "workflows/*.md",
                     "workflows/cards/*.json", "workflows/router/*.json", "samples/*.png", "samples/*.mp4",
-                    "samples/*.md", "samples/*.py", "static/projects/**/*"):
+                    "samples/*.md", "samples/*.py", "skills/**/*.md", "static/projects/**/*"):
         for path in source.glob(pattern):
             if path.is_file():
                 relative = path.relative_to(source).as_posix()
@@ -109,6 +109,9 @@ def verify(path, source=None):
                          'acp_bridge','mcp_stdio','tool_host'))
         expected.update("openbench_data/workflows/" + name + ".json" for name in
                         ("flux3_klein_soul_cast", "ltx25_cinema_shot", "ltx25_openjutsu_v2v"))
+        expected.update("openbench_data/skills/" + name + "/SKILL.md" for name in
+                        ("crew-preproduction", "shot-beats", "previs-blocking", "continuity-check"))
+        expected.add("openbench_data/skills/README.md")
         expected.update("openbench_data/samples/" + name for name in
                         ("cast_kael.png", "set_observatory.png", "keyframe_s01.png", "keyframe_s02.png",
                          "shot_s01.mp4", "shot_s02.mp4", "openjutsu_source.mp4", "openjutsu_remastered.mp4", "openjutsu_split.mp4", "first_frame_vfx01.png", "motion_structure_vfx01.mp4", "anchor_keyframe_vfx01.png"))
@@ -131,7 +134,7 @@ def verify(path, source=None):
             raise SystemExit("Wheel has no zerofield-studio console entry point")
         if source:
             print("Wheel source identity:", json.dumps(verify_identity(wheel.read, source), sort_keys=True))
-        print(f"Verified {Path(path).name}: SQL, prompts, workflows, samples, frontend and CLI entry points")
+        print(f"Verified {Path(path).name}: SQL, prompts, workflows, skills, samples, frontend and CLI entry points")
 
 
 if __name__ == "__main__":
