@@ -305,7 +305,7 @@
 **P1／P2**：檔案在各包開工前另列。原則是：新工具只改宣告表（R15）；3D 求解不在 Python 重寫（R27）。
 
 ## 6. 執行順序
-多代理平行實作：每個代理在自己的工作樹做一個工作包，完成後併進 `feat/spec20-integration`，每一波併完跑一次完整測試。複雜的工作包交給 Opus，單純的交給 Sonnet。
+多代理平行實作：每個代理在自己的工作樹做一個工作包，審查後立刻併進 `feat/spec20-integration`，依賴到齊的工作包馬上開工，不等整波。測試分三層：代理只跑自己新增的測試與直接改到的檔案的測試；併入時只跑該包新增的測試與有衝突的檔案的測試；完整測試只在全部完成後跑一次，並分片並行。複雜的工作包交給 Opus，單純的交給 Sonnet。
 
 | 波 | 工作包（並行） | 依賴 |
 |---|---|---|
@@ -363,7 +363,7 @@ R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 - MCP 用 MCP Inspector、Goose＋Ollama、Claude Code 各接一次並留收據。
 
 ## 9. 驗證與收據
-- **後端：** 在一次性的 PG（埠 55461）上跑完整測試（`python -m unittest discover -s tests -v`，設 `OPENBENCH_TEST_DB_URI`），不碰展示資料庫（55440）。
+- **後端：** 在一次性的 PG（埠 55471）上，全部完成後分片跑一次完整測試（`python -m unittest discover -s tests -v`，設 `OPENBENCH_TEST_DB_URI`），不碰展示資料庫（55440）。
 - **前端：** `npm test --prefix ui` 與 `npm run build --prefix ui`。看板橫幅用無頭 Edge 以實際尺寸截圖檢查，不用小瀏覽器窗格。
 - **實機**（A14、A15、A17）：只在使用者確認 GPU 空檔時做，用資料庫副本。
 - **收據：** `docs/spec20-verification.json`，記錄 commit、測試數、實機結果與未驗證項目。
