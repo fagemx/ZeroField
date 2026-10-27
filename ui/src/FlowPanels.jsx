@@ -3,7 +3,7 @@ import { agentLabel } from './format.js';
 import { useLocale } from './i18n/react.jsx';
 import { t as uiText } from './i18n/index.js';
 import { useState } from "react";
-import { CAPABILITIES, NODE_KINDS, SCOPE_LABELS, TASK_LABELS, connectedWorker, taskSourceContext } from "./flowModel.js";
+import { CAPABILITIES, NODE_KINDS, SCOPE_LABELS, TASK_LABELS, columnRivals, connectedWorker, setDefaultStep, taskSourceContext } from "./flowModel.js";
 import { Icon } from "./Icon.jsx";
 
 export function Status({ status }) {
@@ -17,6 +17,10 @@ export function FlowInspector({ selected, selectedId, definition, tabs, tab, wor
   const sampleTable = sourceTables.find((table) => table.rows.some((row) => row.rid === sampleRow)) || sourceTable;
   const setTarget = (patch) => update({ target: { ...(selected.target || {}), ...patch } });
   const setSource = (patch) => update({ row_source: { ...(selected.row_source || {}), ...patch } });
+  // SPEC_20 R44-7: shown only when another step writes the same column; a shot's Run buttons and Run Pipeline use the default step.
+  const rivals = columnRivals(definition, selected);
+  const defaultStep = rivals.length > 0 && <div className="flow-default-step"><label className="flow-check"><input type="checkbox" checked={selected.primary === true} onChange={(event) => change(setDefaultStep(definition, selectedId, event.target.checked))} />{uiText("flowPanels.defaultStep")}</label>
+    <p className="flow-muted">{uiText("flowPanels.defaultStepHint", { steps: rivals.map((node) => uiText("studio.stepName", { name: node.title || node.id })).join(uiText("studio.stepSeparator")) })}</p></div>;
   return <aside className="flow-sidepanel" aria-label={uiText("flowPanels.stepSettings", {v0: (selected.title)})}>
     <div className="flow-panel-title flow-node-head"><span className={`flow-kind tone-${(NODE_KINDS[selected.capability] || NODE_KINDS.llm).tone}`}><Icon name={(NODE_KINDS[selected.capability] || NODE_KINDS.llm).icon} /></span><div><strong>{selected.title || uiText("flowPanels.stepSettings2")}</strong><small>{CAPABILITIES[selected.capability]}</small></div><button aria-label={uiText("flowPanels.closeStepSettings")} onClick={onClose}>×</button></div>
     <fieldset disabled={!writable || busy} className="flow-step-form" onFocusCapture={(event) => { if (event.target.matches('textarea,input:not([type="checkbox"])')) onEditStart(); }} onBlurCapture={(event) => { if (event.target.matches('textarea,input:not([type="checkbox"])')) onEditEnd(); }}><label>{uiText("flowPanels.name")}<input value={selected.title} maxLength={200} onChange={(event) => update({ title: event.target.value })} /></label>
@@ -40,6 +44,7 @@ export function FlowInspector({ selected, selectedId, definition, tabs, tab, wor
         {targetKey && <><label>{uiText("flowPanels.outputFormat")}<select value={selected.target.kind === "doc" ? "doc" : "col_index" in selected.target ? "cell" : "table"} onChange={(event) => update({ target: event.target.value === "doc" ? { tab_key: targetKey, kind: "doc", mode: "append" } : event.target.value === "cell" ? { tab_key: targetKey, table_id: targetTables[0]?.tableId, col_index: 0, column_id: columnId(targetTables[0], 0), row_id: "" } : { tab_key: targetKey, kind: "table" } })}><option value="doc">{uiText("flowPanels.appendToDocument")}</option><option value="table">{uiText("flowPanels.proposeChangesToTheTable")}</option><option value="cell">{uiText("flowPanels.selectedDataColumn")}</option></select></label>
           {"col_index" in selected.target && <><label>{uiText("flowPanels.outputWorksheet")}<select value={selected.target.table_id || targetTable?.tableId || ""} onChange={(event) => { const table = targetTables.find((item) => item.tableId === event.target.value); setTarget({ table_id: event.target.value, col_index: 0, column_id: columnId(table, 0), row_id: "" }); }}>{targetTables.map((table) => <option value={table.tableId} key={table.tableId}>{table.name}</option>)}</select></label><label>{uiText("flowPanels.outputColumn")}<select value={selected.target.col_index ?? ""} onChange={(event) => setTarget({ col_index: Number(event.target.value), table_id: targetTable?.tableId, column_id: columnId(targetTable, Number(event.target.value)) })}>{targetTable?.headers.map((header, index) => <option key={index} value={index}>{header}</option>)}</select></label>
             {selected.scope !== "rows" && <label>{uiText("flowPanels.outputRow")}<select value={selected.target.row_id || ""} onChange={(event) => setTarget({ row_id: event.target.value })}><option value="">{uiText("flowPanels.selectARow")}</option>{targetTable?.rows.map((row, index) => <option key={row.rid} value={row.rid}>{index + 1} · {row.cells[0]?.value || row.rid}</option>)}</select></label>}{selected.scope === "rows" && <p className="flow-muted">{uiText("flowPanels.perRowResultsReturnToTheSourceRowUse")}</p>}</>}
+          {defaultStep}
           <label>{uiText("flowPanels.writeMode")}<select value={selected.write_mode || "proposal"} onChange={(event) => update({ write_mode: event.target.value })}><option value="proposal">{uiText("flowPanels.reviewProposalBeforeApplying")}</option><option value="direct" disabled={Boolean(selected.agent_key)}>{uiText("flowPanels.applyDirectlyAfterExecution")}</option></select></label></>}
       </div>
       <details className="flow-advanced"><summary>{uiText("flowPanels.connectionsWorkers")}</summary><p className="flow-muted">{uiText("flowPanels.connectionsWaitForUpstreamCompletionAndApprovalWorkersReceive")}</p>

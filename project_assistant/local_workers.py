@@ -90,14 +90,28 @@ STUDIO_LANES = (
     (("layoutkey", "Layout Key", "image_gen", "layoutkey", "cinema-studio", "Keyframe", ("Previs",)),
      ("layout", "Layout Render", "video_gen", "layout", "cinema-studio", "Cinema Shot", ("Previs", "Actor Matte", "Pose Skeleton"))),
 )
+# The main lane is the default step ("primary") of the Keyframe and Cinema Shot columns, which the previs and layout lanes also
+# write: a shot's Run buttons and Run Pipeline take it, the 3D Stage's lane buttons still name their own step (SPEC_20 R44-7).
+PRIMARY_STEPS = ("keyframe", "cinema")
+
+
+def mark_primary(graph):
+    """The seeded pipeline with its main lane marked as the default step of the columns it writes."""
+    return {**graph, "nodes": [dict(node, primary=True) if node["id"] in PRIMARY_STEPS else node for node in graph["nodes"]]}
+
+
+def without_primary(graph):
+    """The same pipeline as seeded before the default-step marker existed."""
+    return {**graph, "nodes": [{key: value for key, value in node.items() if key != "primary"} for node in graph["nodes"]]}
 
 
 def studio_pipeline(conn, slug, workers):
     """The default Comfy Pipeline of a studio production: the showcase lanes bound to the local workers.
 
     A lane keeps its steps up to the first one whose worker, page or columns are missing; the OpenJutsu preparation
-    and Object Swap lanes are left out because they target columns only the showcase seed adds. Returns None when no
-    step qualifies, so the caller keeps the template pipeline."""
+    and Object Swap lanes are left out because they target columns only the showcase seed adds. The main lane's steps
+    are the default steps of their columns (``PRIMARY_STEPS``). Returns None when no step qualifies, so the caller keeps
+    the template pipeline."""
     from project_assistant import flow_runner
     pages, tables = set(), {}
     for key in ("director-brief", "soul-cast", "cinema-studio", "openjutsu-lab"):
@@ -129,13 +143,15 @@ def studio_pipeline(conn, slug, workers):
                 edges.append({"source": previous, "target": node_id})
             previous = node_id
         lane_no += previous is not None
-    return flow_runner.validate_definition({"nodes": nodes, "edges": edges}) if nodes else None
+    return flow_runner.validate_definition(mark_primary({"nodes": nodes, "edges": edges})) if nodes else None
 
 
 def adopt_template_pipelines(conn, me, workers):
-    """Bind every production whose Comfy Pipeline is still the untouched studio template; edited ones stay as they are.
+    """Bind every production whose Comfy Pipeline is still an untouched seed; edited ones stay as they are.
 
-    The template's steps carry no worker, so before this they could not run on a local worker at all."""
+    An untouched seed is the studio template, whose steps carry no worker, so before this they could not run on a local
+    worker at all; or the bound studio pipeline as seeded before its main lane became the default step of its columns,
+    on which a shot's Run buttons and Run Pipeline found no single step (SPEC_20 R44-7)."""
     from project_assistant import flow_runner
     from project_docs import templates
     template = flow_runner.validate_definition(templates.flow_specs("zerofield_studio")["comfy-pipeline"])
@@ -144,11 +160,18 @@ def adopt_template_pipelines(conn, me, workers):
         rows = cur.fetchall()
     adopted = []
     for slug, definition, revision in rows:
-        if repo._loads(definition) != template:
-            continue
+        current = repo._loads(definition)
+        if current != template and (not isinstance(current, dict) or any(node.get("primary") for node in current.get("nodes", []))):
+            continue  # a seed from before the marker has none; the current seed and user choices are left alone
         graph = studio_pipeline(conn, slug, workers)
-        if not graph:
+        if not graph or current == graph:
             continue
+        if current != template:
+            # The seed as written at creation, from the local workers the production had then (the ones its steps name).
+            bound = {node.get("limb_id") for node in current.get("nodes", [])}
+            seeded = studio_pipeline(conn, slug, {stage: item for stage, item in workers.items() if item["id"] in bound})
+            if not seeded or current != without_primary(seeded):
+                continue
         try:
             flow_runner.save_definition(conn, me, slug, "comfy-pipeline", {"revision": revision, "definition": graph})
         except limbs.ExecutionError:

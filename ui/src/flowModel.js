@@ -128,7 +128,30 @@ export function readSelection(storage, slug) {
 
 export function redrawStart(definition, selection) {
   if (!selection?.capability) return "";
-  return definition.nodes.find((n) => n.capability === selection.capability && n.target?.tab_key === selection.target_tab && n.target?.col_index === selection.col_index)?.id || "";
+  const matches = definition.nodes.filter((n) => n.capability === selection.capability && n.target?.tab_key === selection.target_tab && n.target?.col_index === selection.col_index);
+  return (matches.find((n) => n.primary === true) || matches[0])?.id || "";
+}
+
+// SPEC_20 R44-7: whether two step outputs are the same column, as the server decides it (flow_runner.same_output): the same
+// page, a compatible worksheet (an unnamed one is the page's first) and the same column, by id when both name one.
+const cellOutput = (target) => !!target && typeof target === "object" && (target.kind || "table") !== "doc" && ("col_index" in target || !!target.column_id);
+export function sameOutput(a, b) {
+  if (!cellOutput(a) || !cellOutput(b) || a.tab_key !== b.tab_key) return false;
+  if (a.table_id && b.table_id && a.table_id !== b.table_id) return false;
+  if (a.column_id && b.column_id) return a.column_id === b.column_id;
+  return "col_index" in a && "col_index" in b && a.col_index === b.col_index;
+}
+
+// The other steps writing a step's column: with any, one of them can be the column's default step.
+export function columnRivals(definition, node) {
+  return node ? definition.nodes.filter((other) => other.id !== node.id && sameOutput(node.target, other.target)) : [];
+}
+
+// A column has one default step ("primary"): turning it on for a step turns it off for the others writing that column.
+export function setDefaultStep(definition, id, on) {
+  const rivals = new Set(columnRivals(definition, definition.nodes.find((node) => node.id === id)).map((node) => node.id));
+  const plain = ({ primary, ...node }) => node;
+  return { ...definition, nodes: definition.nodes.map((node) => node.id === id ? (on ? { ...node, primary: true } : plain(node)) : on && rivals.has(node.id) ? plain(node) : node) };
 }
 
 export function connectedWorker(worker, now = Date.now()) {

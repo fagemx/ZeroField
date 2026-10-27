@@ -389,11 +389,11 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
     known = [original, legacy, without_anchor, previous, without_anchor_previous]
     default = local_workers.studio_pipeline(conn, slug, registered)  # a showcase created while local workers existed
     if default:
-        known.append(default)
+        known += [default, local_workers.without_primary(default)]
     lanes = []  # (audit action, chain) appended once to a pipeline the user has rearranged
     if "motion" in registered:
         # Fourth lane: previs-driven shots (grey blockout -> motion pass -> look key -> look pass).
-        known.append(normalized)
+        known += [normalized, local_workers.mark_primary(normalized)]
         previs_chain = [node("motion", "Previs Motion Pass", "video_gen", "cinema-studio", 5),
                         node("lookkey", "Look Key", "image_gen", "cinema-studio", 4),
                         node("look", "Look Pass", "video_gen", "cinema-studio", 5)]
@@ -406,7 +406,7 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
         lanes.append(("studio_previs_lane_seed", previs_chain))
     if "swap" in registered and {"Jutsu Mode", "Remastered Video"} <= set(headers):
         # Fifth lane, Object Swap rows only: Klein swap key -> LTX matte, regenerate and composite over the source.
-        known.append(normalized)
+        known += [normalized, local_workers.mark_primary(normalized)]
         table_id = reference_table["attrs"]["bid"]
         swap_chain = [node("swapkey", "Swap Key", "image_gen", "openjutsu-lab", headers.index("Anchor Keyframe")),
                       node("swap", "OpenJutsu Swap", "video_gen", "openjutsu-lab", headers.index("Remastered Video"))]
@@ -422,7 +422,7 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
         lanes.append(("studio_swap_lane_seed", swap_chain))
     if "layout" in registered:
         # Sixth lane, from the 3D Stage like the fourth: Layout Key (Klein on previs frame 0, reviewed) -> Layout Render.
-        known.append(normalized)
+        known += [normalized, local_workers.mark_primary(normalized)]
         layout_chain = [node("layoutkey", "Layout Key", "image_gen", "cinema-studio", 4),
                         node("layout", "Layout Render", "video_gen", "cinema-studio", 5)]
         for depth, item in enumerate(layout_chain):
@@ -432,6 +432,11 @@ def seed_showcase_pipeline(conn, slug, registered, actor_id):
         graph = {"nodes": nodes, "edges": edges}
         normalized = flow_runner.validate_definition(graph)
         lanes.append(("studio_layout_lane_seed", layout_chain))
+    # SPEC_20 R44-7: the main lane is the default step of the Keyframe and Cinema Shot columns the previs and layout lanes also
+    # write, so a shot's Run buttons and Run Pipeline find one step. The same graph unmarked is the seed before the marker.
+    known.append(normalized)
+    graph = local_workers.mark_primary(graph)
+    normalized = flow_runner.validate_definition(graph)
     if current["definition"] != normalized and current["definition"] not in known and lanes:
         appended = [_append_lane(conn, slug, chain, actor_id, action) for action, chain in lanes]
         return any(appended)
