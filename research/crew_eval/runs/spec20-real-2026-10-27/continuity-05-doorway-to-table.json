@@ -1,0 +1,35 @@
+{
+  "score": 20,
+  "findings": [
+    {
+      "kind": "position",
+      "shots": [
+        "S19",
+        "S20"
+      ],
+      "subject": "@CAST-06",
+      "severity": "major",
+      "detail": "S19 ends with Tomas standing in the doorway; S20 begins with him seated at the pine table. S20's text states 'Still in the doorway' but its first_frame places him at the table. He has sat down and the camera has moved with no on-screen action to cover the transition."
+    },
+    {
+      "kind": "hair_makeup",
+      "shots": [
+        "S19",
+        "S20"
+      ],
+      "subject": "@CAST-06",
+      "severity": "major",
+      "detail": "S19 ends with wet grey hair plastered to his forehead and water dripping from his sleeves. S20 begins with his hair dry and combed back, implying a wash and restyle that was never shown on screen."
+    },
+    {
+      "kind": "wardrobe",
+      "shots": [
+        "S19",
+        "S20"
+      ],
+      "subject": "@CAST-06",
+      "severity": "major",
+      "detail": "S19 shows Tomas in his black oilskin coat streaming with water. S20 begins with the coat removed entirely, leaving no on-screen action to account for the removal."
+    }
+  ]
+}

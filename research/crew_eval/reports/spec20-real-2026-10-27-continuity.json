@@ -1,0 +1,387 @@
+{
+  "schema": "zerofield.crew_eval.report/1",
+  "label": "spec20-real-2026-10-27 continuity: qwen3.8:27b on local Ollama 0.40.11 (ctx 16384, RTX 4090), official adapter project_assistant.crew_continuity:run_eval_job (logging wrapper)",
+  "generatedAt": "2026-10-27T12:51:54+00:00",
+  "totals": {
+    "cases": 8,
+    "hard_pass": 2,
+    "hard_pass_rate": 0.25,
+    "points": 1.9429,
+    "max_points": 8,
+    "percent": 24.29,
+    "mean_soft": 0.5846
+  },
+  "types": {
+    "continuity": {
+      "cases": 8,
+      "hard_pass": 2,
+      "hard_pass_rate": 0.25,
+      "points": 1.9429,
+      "max_points": 8,
+      "percent": 24.29,
+      "mean_soft": 0.5846,
+      "results": [
+        {
+          "id": "continuity-01-tears-and-zipper",
+          "type": "continuity",
+          "title": "Tears vanish and the jacket opens between two continuous close-ups",
+          "hard_ok": true,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_invented",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "planted:E1",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "find the major body_state error on @CAST-01 at S08/S09"
+            },
+            {
+              "id": "planted:E2",
+              "weight": 2,
+              "value": 0.8,
+              "desc": "find the minor wardrobe error on @CAST-01 at S08/S09"
+            },
+            {
+              "id": "score_band",
+              "weight": 2,
+              "desc": "a seam with a major error scores 60 or lower",
+              "value": 1.0
+            }
+          ],
+          "soft_score": 0.9429,
+          "score": 0.9429
+        },
+        {
+          "id": "continuity-02-reverse-eyeline",
+          "type": "continuity",
+          "title": "The reverse shot looks the same way as the first: the eyeline is wrong",
+          "hard_ok": true,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_invented",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "planted:E1",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "find the major screen_direction error on @CAST-02 at S12/S13"
+            },
+            {
+              "id": "planted:E2",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "find the minor hair_makeup error on @CAST-02 at S12/S13"
+            },
+            {
+              "id": "score_band",
+              "weight": 2,
+              "desc": "a seam with a major error scores 65 or lower",
+              "value": 1.0
+            }
+          ],
+          "soft_score": 1.0,
+          "score": 1.0
+        },
+        {
+          "id": "continuity-03-key-vanishes-in-a-hand-swap",
+          "type": "continuity",
+          "title": "The brass key changes hands, then vanishes from the table",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": false,
+              "detail": "missed the planted error(s) ['E2']"
+            },
+            {
+              "id": "no_invented",
+              "ok": false,
+              "detail": "prop scene ['S15', 'S16']: matches no planted error"
+            }
+          ],
+          "soft": [
+            {
+              "id": "planted:E1",
+              "weight": 1,
+              "value": 0.8,
+              "desc": "find the minor prop error on @PROP-01 at S14/S15"
+            },
+            {
+              "id": "planted:E2",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "find the major prop error on @PROP-01 at S15/S16"
+            },
+            {
+              "id": "score_band",
+              "weight": 2,
+              "desc": "a run with a vanished prop scores 60 or lower",
+              "value": 1.0
+            }
+          ],
+          "soft_score": 0.4667,
+          "score": 0.0
+        },
+        {
+          "id": "continuity-04-night-becomes-daylight",
+          "type": "continuity",
+          "title": "Night turns to daylight mid-conversation and the lantern goes out",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_invented",
+              "ok": false,
+              "detail": "prop @PROP-02 ['S17', 'S18']: matches no planted error"
+            }
+          ],
+          "soft": [
+            {
+              "id": "planted:E1",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "find the major lighting error on @SET-03 at S17/S18"
+            },
+            {
+              "id": "planted:E2",
+              "weight": 1,
+              "value": 0.0,
+              "desc": "find the minor set_dressing error on @PROP-02 at S17/S18"
+            },
+            {
+              "id": "score_band",
+              "weight": 2,
+              "desc": "a seam that jumps from night to day scores 60 or lower",
+              "value": 1.0
+            }
+          ],
+          "soft_score": 0.8333,
+          "score": 0.0
+        },
+        {
+          "id": "continuity-05-doorway-to-table",
+          "type": "continuity",
+          "title": "He is dripping in the doorway, then dry and seated at the table",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_invented",
+              "ok": false,
+              "detail": "hair_makeup @CAST-06 ['S19', 'S20']: matches no planted error"
+            }
+          ],
+          "soft": [
+            {
+              "id": "planted:E1",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "find the major position error on @CAST-06 at S19/S20"
+            },
+            {
+              "id": "planted:E2",
+              "weight": 2,
+              "value": 0.0,
+              "desc": "find the major body_state error on @CAST-06 at S19/S20"
+            },
+            {
+              "id": "planted:E3",
+              "weight": 1,
+              "value": 0.8,
+              "desc": "find the minor wardrobe error on @CAST-06 at S19/S20"
+            },
+            {
+              "id": "score_band",
+              "weight": 2,
+              "desc": "a seam with three errors scores 45 or lower",
+              "value": 1.0
+            }
+          ],
+          "soft_score": 0.725,
+          "score": 0.0
+        },
+        {
+          "id": "continuity-06-two-hours-later-dye-job",
+          "type": "continuity",
+          "title": "A time jump excuses almost everything except her hair colour",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": false,
+              "detail": "missed the planted error(s) ['E1']"
+            },
+            {
+              "id": "no_invented",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "planted:E1",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "find the major hair_makeup error on @CAST-02 at S21/S22"
+            },
+            {
+              "id": "score_band",
+              "weight": 2,
+              "desc": "a run with a major error scores 70 or lower",
+              "value": 0.0
+            }
+          ],
+          "soft_score": 0.0,
+          "score": 0.0
+        },
+        {
+          "id": "continuity-07-clean-match-cut",
+          "type": "continuity",
+          "title": "A clean seam: the close-up matches the wide, nothing to report",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_invented",
+              "ok": false,
+              "detail": "body_state @CAST-05 ['S23', 'S24']: matches no planted error"
+            }
+          ],
+          "soft": [
+            {
+              "id": "score_band",
+              "weight": 3,
+              "desc": "a clean seam scores 85 or higher",
+              "value": 0.0
+            }
+          ],
+          "soft_score": 0.0,
+          "score": 0.0
+        },
+        {
+          "id": "continuity-08-torn-photograph-three-shots",
+          "type": "continuity",
+          "title": "Three shots, two seams, four planted errors, three explained differences",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "critical_found",
+              "ok": false,
+              "detail": "missed the planted error(s) ['E3']"
+            },
+            {
+              "id": "no_invented",
+              "ok": false,
+              "detail": "screen_direction scene ['S29', 'S30']: matches no planted error"
+            }
+          ],
+          "soft": [
+            {
+              "id": "planted:E1",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "find the major prop error on @PROP-06 at S28/S29"
+            },
+            {
+              "id": "planted:E2",
+              "weight": 1,
+              "value": 0.8,
+              "desc": "find the minor wardrobe error on @CAST-02 at S28/S29"
+            },
+            {
+              "id": "planted:E3",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "find the major position error on @CAST-01/@CAST-02/scene at S29/S30"
+            },
+            {
+              "id": "planted:E4",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "find the major gaze error on @CAST-01 at S29/S30"
+            },
+            {
+              "id": "score_band",
+              "weight": 2,
+              "desc": "two seams with four errors score 40 or lower",
+              "value": 1.0
+            }
+          ],
+          "soft_score": 0.7091,
+          "score": 0.0
+        }
+      ]
+    }
+  }
+}

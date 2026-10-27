@@ -1,0 +1,39 @@
+{
+  "setup": "One continuous 6-second shot at @SET-01, the circular glass-dome observatory at dawn, rain streaking the curved glass above a ring of brass consoles with amber instrument lights. Mira @CAST-02:coat stands center-right facing the lens; Kael @CAST-01 is a partial presence just past the left edge of frame, his face out of view.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1.5,
+      "camera": "Static on tripod, 85 mm; deep compression flattens the space between Mira and the left edge where Kael's shoulder barely intrudes.",
+      "action": "Mira @CAST-02:coat holds a fixed glare toward the lens, jaw clenched, brows drawn together. Kael's @CAST-01 charcoal jacket and edge of his jaw occupy the leftmost sliver of frame, motionless. Rain sheets the glass above; amber console lights rim her dark green coat collar."
+    },
+    {
+      "from": 1.5,
+      "to": 3,
+      "camera": "Static, 85 mm; Mira's forward lunge grows her face larger in the compressed frame.",
+      "action": "Mira @CAST-02:coat lunges forward, torso surging toward the lens, coat flaring. Her mouth tears open and the scream begins—eyes wide, nostrils flared, cheekbones sharp with fury. Kael's @CAST-01 shoulder at the left edge is brushed by the wind of her motion."
+    },
+    {
+      "from": 3,
+      "to": 4.5,
+      "camera": "Static, 85 mm; her face fills the upper two-thirds of frame at peak proximity.",
+      "action": "The scream peaks. Mira's @CAST-02:coat mouth is fully open, neck tendons standing; the expression is raw, uncontrolled rage. Kael's @CAST-01 sliver at the left edge remains still, absorbing the sound."
+    },
+    {
+      "from": 4.5,
+      "to": 6,
+      "camera": "Static, 85 mm; hold on Mira's face as she settles back.",
+      "action": "Mira @CAST-02:coat recoils, shoulders dropping, chest heaving in sharp ragged gasps. The furrow drains from her brows, her mouth falls slack, lips trembling. Her eyes still lock on Kael's @CAST-01 side of the lens but the fury has bled out, replaced by hollow shock at her own outburst. She holds the breathless stillness until the cut."
+    }
+  ],
+  "sound": "Continuous low hush of rain on the glass dome; a faint electrical hum from the amber consoles at @SET-01. At 1.5 s: whoosh of the coat and a sharp intake before the scream. 1.5–4.5 s: a long, raw, wordless scream cracking near its peak. 4.5–6 s: harsh shuddering gasps, the wet pull of breath, and a single raindrop striking brass.",
+  "constraints": [
+    "One continuous 6-second shot, no cuts",
+    "Static tripod throughout",
+    "85 mm only",
+    "Two people: Mira and a partial presence of Kael at frame edge",
+    "No spoken dialogue, only a scream",
+    "No text or graphics",
+    "Kael's face never fully enters frame"
+  ]
+}

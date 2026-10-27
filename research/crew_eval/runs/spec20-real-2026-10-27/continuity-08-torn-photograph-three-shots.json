@@ -1,0 +1,45 @@
+{
+  "score": 25,
+  "findings": [
+    {
+      "kind": "prop",
+      "shots": [
+        "S28",
+        "S29"
+      ],
+      "subject": "@PROP-06",
+      "severity": "major",
+      "detail": "In S28 last frame Kael holds the torn photograph in his right hand. In S29 first frame his right hand is empty at his side and the photograph lies on the console. S29's own text says 'he keeps the photograph out between them', contradicting its first_frame."
+    },
+    {
+      "kind": "wardrobe",
+      "shots": [
+        "S28",
+        "S29"
+      ],
+      "subject": "@CAST-02",
+      "severity": "major",
+      "detail": "In S28 last frame Mira's coat is belted at the waist. In S29 first frame her belt hangs loose. No action in S29's text explains her unbuckling the belt."
+    },
+    {
+      "kind": "screen_direction",
+      "shots": [
+        "S29",
+        "S30"
+      ],
+      "subject": "scene",
+      "severity": "major",
+      "detail": "In S29 last frame Kael is on the left and Mira on the right. In S30 first frame they have swapped: Kael is on the right and Mira on the left, with no camera move or action explaining the reversal."
+    },
+    {
+      "kind": "gaze",
+      "shots": [
+        "S29",
+        "S30"
+      ],
+      "subject": "@CAST-01",
+      "severity": "major",
+      "detail": "In S29 last frame Kael is looking at Mira. In S30 first frame he is looking down at the floor, not at Mira. S30's own text states 'still looking at her', contradicting its first_frame."
+    }
+  ]
+}

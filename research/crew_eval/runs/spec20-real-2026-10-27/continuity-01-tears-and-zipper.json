@@ -1,0 +1,25 @@
+{
+  "score": 35,
+  "findings": [
+    {
+      "kind": "body_state",
+      "shots": [
+        "S08",
+        "S09"
+      ],
+      "subject": "@CAST-01",
+      "severity": "major",
+      "detail": "S08 ends with Kael's face crumpled, tears running down both cheeks, eyes red. S09's first frame shows him calm with dry cheeks and clear eyes, yet the shot text explicitly states 'Kael keeps crying' — a direct contradiction."
+    },
+    {
+      "kind": "wardrobe",
+      "shots": [
+        "S08",
+        "S09"
+      ],
+      "subject": "@CAST-01",
+      "severity": "major",
+      "detail": "S08 ends with the charcoal field jacket zipped to the chest over a dark henley. S09 opens with the same jacket open at the chest. No script-justified change is indicated; the shot text says 'Without a cut in time.'"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "score": 30,
+  "findings": [
+    {
+      "kind": "lighting",
+      "shots": [
+        "S17",
+        "S18"
+      ],
+      "subject": "@SET-03",
+      "severity": "major",
+      "detail": "S17 ends at night with the window black; S18 opens with cold grey daylight pouring through the same window. No storm build, time jump, or scene change is indicated — the join is marked continuous."
+    },
+    {
+      "kind": "prop",
+      "shots": [
+        "S17",
+        "S18"
+      ],
+      "subject": "@PROP-02",
+      "severity": "major",
+      "detail": "S17 ends with the oil lantern lit and glowing amber on the table; S18 opens with the same lantern unlit. No action in either shot explains extinguishing or relighting."
+    }
+  ]
+}

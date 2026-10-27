@@ -1,0 +1,36 @@
+{
+  "setup": "One continuous 4-second shot picking up from @S23.end on the narrow stone stairwell landing of @SET-06, lit by one bare bulb. @CAST-05 Ines is centred-frame, backed against the heavy iron door, facing the lens at 35 mm with a handheld, urgent shake.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1,
+      "camera": "Handheld 35 mm, slight push-in, micro-shake; Ines fills the lower two-thirds of the frame, facing the lens.",
+      "action": "@CAST-05 Ines presses her back flat against the iron door, shoulders jerking; both hands rise into frame, fingers visibly trembling as she reaches for the lock."
+    },
+    {
+      "from": 1,
+      "to": 2,
+      "camera": "Handheld drifts a few centimetres right to keep the hands centred; shake intensifies with her movement.",
+      "action": "Ines fumbles the @PROP-05 brass key on its loop of string, thumb slipping off the bow twice before she grips the loop; her mouth parts, lips tight with effort."
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "camera": "Handheld tilts down a few degrees to follow the falling key, then snaps back up to her face; shake stays constant.",
+      "action": "The @PROP-05 brass key slides from her shaking fingers and drops; Ines' hands snap open, empty, and her whole body stiffens against the door."
+    },
+    {
+      "from": 3,
+      "to": 4,
+      "camera": "Handheld settles into a near-still hold at eye level, 35 mm, framing her face close; the last two seconds are a locked, breathing hold.",
+      "action": "Ines lifts her gaze straight into the lens; her tired dark eyes widen, the set of her jaw unclenches, and her lower lip trembles—a visible spike of terror held until the end of the take."
+    }
+  ],
+  "sound": "Rapid, shallow breathing under a low 60 Hz hum from the bare bulb; the soft metallic clatter of the @PROP-05 brass key hitting the stone floor at 2.8 s; a faint creak of the iron door behind her; silence holds over her wide-eyed stare.",
+  "constraints": [
+    "One person only.",
+    "No text or on-screen graphics.",
+    "One continuous handheld take, no cuts.",
+    "Lens restricted to 35 mm."
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "setup": "One continuous 8-second shot in the lighthouse kitchen at night (@SET-03): Odile (@CAST-03) faces the lens seated across the scrubbed pine table, the brass oil lantern (@PROP-02) burning low between them, rain lashing the window behind her. Slow dolly push-in on a 50 mm.",
+  "beats": [
+    {
+      "from": 0,
+      "to": 1.5,
+      "camera": "Medium two-shot framing; dolly begins a slow, imperceptible push toward Odile. 50 mm.",
+      "action": "Odile faces the lens directly, lips pressed tight, eyes fixed across the table. The @PROP-02 flickers low in the foreground. Rain streaks the window behind her. She swallows; her jaw sets."
+    },
+    {
+      "from": 1.5,
+      "to": 3,
+      "camera": "Dolly continues the slow push, closing roughly ten centimetres on her face.",
+      "action": "Odile exhales and opens her mouth: 'You knew the lamp was dark,' Her voice cracks on the last word and she tilts her chin slightly forward."
+    },
+    {
+      "from": 3,
+      "to": 4.5,
+      "camera": "Push-in deepens; her face fills more of the frame, the @PROP-02 flame visible at the frame's lower edge.",
+      "action": "Her breathing quickens. Both hands reach forward and grip the edge of the pine table, knuckles whitening. Her eyes glisten but no tear falls. A visible tightening across her brow."
+    },
+    {
+      "from": 4.5,
+      "to": 6.5,
+      "camera": "Dolly nearly at its closest; a subtle tilt lifts two degrees to meet her gaze as she looks slightly upward.",
+      "action": "She finishes the line, quieter: 'and you let him sail.' Her lower lip trembles. The expression shifts from accusation to a raw, exhausted bewilderment; her mouth parts as if to say more, then closes."
+    },
+    {
+      "from": 6.5,
+      "to": 8,
+      "camera": "Dolly holds at its final framing; no further movement. Lens fixed on her face.",
+      "action": "Odile remains still at the table edge, hands locked in their grip, staring at the lens. The lantern flame steadies. Rain continues. She does not blink for the full two seconds."
+    }
+  ],
+  "sound": "Steady rain on the lighthouse window and a faint coal-stove tick in the background. The low hiss of the @PROP-02 flame. Odile's voice, quiet and shaking: 'You knew the lamp was dark, and you let him sail.' After the line, only rain and the small crackle of the wick.",
+  "constraints": [
+    "One person on screen: Odile (@CAST-03)",
+    "No text or superimposition",
+    "Single continuous take, no cuts",
+    "No other cast member visible or heard",
+    "@PROP-02 stays within frame throughout"
+  ]
+}

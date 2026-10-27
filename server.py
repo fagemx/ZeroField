@@ -322,6 +322,39 @@ def _find_pg_bin() -> Path | None:
     return None
 
 
+EMBEDDED_PG_PORT = 55432
+
+
+def _loopback_port_free(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def _free_loopback_port(start: int, span: int = 100) -> int:
+    for candidate in range(start, min(start + span, 65536)):
+        if _loopback_port_free(candidate):
+            return candidate
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def _postmaster_port(data_dir: Path) -> int | None:
+    try:
+        lines = (data_dir / "postmaster.pid").read_text(encoding="utf-8", errors="replace").splitlines()
+        return int(lines[3])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
 def _start_local_postgres() -> tuple[str, object]:
     import subprocess
     pg_bin = _find_pg_bin()
@@ -332,7 +365,8 @@ def _start_local_postgres() -> tuple[str, object]:
         return srv.get_uri(), srv.cleanup
 
     data_dir = Path(os.environ.get("OPENBENCH_PG_DATA") or Path(__file__).resolve().parent / ".openbench_pg")
-    port = int(os.environ.get("OPENBENCH_PG_PORT", "55432"))
+    configured_port = os.environ.get("OPENBENCH_PG_PORT")
+    port = int(configured_port or EMBEDDED_PG_PORT)
     initdb = str(pg_bin / ("initdb.exe" if os.name == "nt" else "initdb"))
     pg_ctl = str(pg_bin / ("pg_ctl.exe" if os.name == "nt" else "pg_ctl"))
     if not (data_dir / "PG_VERSION").exists():
@@ -343,7 +377,13 @@ def _start_local_postgres() -> tuple[str, object]:
         )
     log_file = data_dir / "postgres.log"
     status = subprocess.run([pg_ctl, "-D", str(data_dir), "status"], capture_output=True)
-    if status.returncode != 0:
+    if status.returncode == 0:
+        # An earlier launch may have picked another port; connect where the cluster actually listens.
+        port = _postmaster_port(data_dir) or port
+    else:
+        if not configured_port and not _loopback_port_free(port):
+            # The default port is taken (for example by Docker Desktop): use the next free one.
+            port = _free_loopback_port(port + 1)
         subprocess.run(
             [pg_ctl, "-D", str(data_dir), "-l", str(log_file), "-o", f"-p {port} -h 127.0.0.1", "start"],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

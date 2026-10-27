@@ -1,0 +1,1063 @@
+{
+  "schema": "zerofield.crew_eval.report/1",
+  "label": "spec20-real-2026-10-27 beats: qwen3.8:27b on local Ollama 0.40.11 (ctx 16384, RTX 4090), official adapter project_assistant.crew_planning:run_eval_job (logging wrapper)",
+  "generatedAt": "2026-10-27T12:48:45+00:00",
+  "totals": {
+    "cases": 8,
+    "hard_pass": 2,
+    "hard_pass_rate": 0.25,
+    "points": 1.4849,
+    "max_points": 8,
+    "percent": 18.56,
+    "mean_soft": 0.7854
+  },
+  "types": {
+    "beats": {
+      "cases": 8,
+      "hard_pass": 2,
+      "hard_pass_rate": 0.25,
+      "points": 1.4849,
+      "max_points": 8,
+      "percent": 18.56,
+      "mean_soft": 0.7854,
+      "results": [
+        {
+          "id": "beats-01-tears-closeup",
+          "type": "beats",
+          "title": "Close-up: a man holds it together, then breaks into tears (6 s)",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": false,
+              "detail": "5 beats; this shot takes 3 to 4"
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "face_to_camera",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "the face is toward the lens"
+            },
+            {
+              "id": "no_back_views",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "no back, profile or silhouette view of the performer"
+            },
+            {
+              "id": "emotion_arc",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "restraint, then the crumple, then tears, in that order"
+            },
+            {
+              "id": "break_timing",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the face breaks between 1 s and 3 s"
+            },
+            {
+              "id": "face_in_every_beat",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "every beat says what the face does"
+            },
+            {
+              "id": "push_in",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the slow push-in of Camera Motion is kept"
+            },
+            {
+              "id": "one_person",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a one-person constraint (Mira stays off screen)"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a no-text constraint"
+            },
+            {
+              "id": "sound_breath",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the sound line has breath, sobs or rain"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 0.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.7778,
+          "score": 0.0
+        },
+        {
+          "id": "beats-02-scream-variant-tag",
+          "type": "beats",
+          "title": "Close-up: a woman screams at the man just past the lens (6 s, variant tag)",
+          "hard_ok": true,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "face_to_camera",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "the face is toward the lens"
+            },
+            {
+              "id": "no_back_views",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "no back, profile or silhouette view"
+            },
+            {
+              "id": "emotion_arc",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "glare, then the lunge and scream, then the pull back"
+            },
+            {
+              "id": "scream_timing",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the lunge starts between 1 s and 2.5 s"
+            },
+            {
+              "id": "offscreen_target",
+              "weight": 2,
+              "value": 0.0,
+              "desc": "Kael is kept just off camera"
+            },
+            {
+              "id": "face_in_every_beat",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "every beat says what the face does"
+            },
+            {
+              "id": "locked_off",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the Static Tripod motion is kept"
+            },
+            {
+              "id": "one_person",
+              "weight": 2,
+              "value": 0.0,
+              "desc": "a one-person constraint although two codes are tagged"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a no-text constraint"
+            },
+            {
+              "id": "sound_scream",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the sound line has the scream or breath"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.6667,
+          "score": 0.6667
+        },
+        {
+          "id": "beats-03-shove-two-shot",
+          "type": "beats",
+          "title": "Handheld two-shot: she shoves him into the console (4 s)",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": false,
+              "detail": "4 beats; this shot takes 2 to 3"
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "kael_face_to_camera",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "Kael's face is toward the lens"
+            },
+            {
+              "id": "no_back_views_of_kael",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "Kael is never seen from behind (Mira's back to the lens is fine)"
+            },
+            {
+              "id": "shove_timing",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "the shove lands between 0.5 s and 2 s"
+            },
+            {
+              "id": "stunned_reaction",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "Kael's stunned reaction is shown"
+            },
+            {
+              "id": "recorder_moves",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the recorder reacts to the impact"
+            },
+            {
+              "id": "handheld",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the handheld motion is kept"
+            },
+            {
+              "id": "sound_impact",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the impact is heard"
+            },
+            {
+              "id": "two_people",
+              "weight": 1,
+              "value": 0.0,
+              "desc": "a two-people constraint"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a no-text constraint"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.6111,
+          "score": 0.0
+        },
+        {
+          "id": "beats-04-accusation-dialogue",
+          "type": "beats",
+          "title": "Close-up: an old woman accuses, one spoken line, voice breaking (8 s)",
+          "hard_ok": true,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "face_to_camera",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "the face is toward the lens"
+            },
+            {
+              "id": "no_back_views",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "no back, profile or silhouette view"
+            },
+            {
+              "id": "line_kept",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "the spoken line survives word for word"
+            },
+            {
+              "id": "speech_timing",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "she starts to speak between 0.5 s and 3.5 s"
+            },
+            {
+              "id": "emotion_arc",
+              "weight": 3,
+              "value": 0.6667,
+              "desc": "control, then the shaking voice, then tears and silence"
+            },
+            {
+              "id": "grip",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the grip on the table edge is shown"
+            },
+            {
+              "id": "face_in_every_beat",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "every beat says what the face does"
+            },
+            {
+              "id": "push_in",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the slow push-in is kept"
+            },
+            {
+              "id": "no_dead_air",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "no beat longer than 3.5 s"
+            },
+            {
+              "id": "one_person",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a one-person constraint"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a no-text constraint"
+            },
+            {
+              "id": "sound_room",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the sound line has the room or the voice"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.8182,
+          "score": 0.8182
+        },
+        {
+          "id": "beats-05-radio-realization-10s",
+          "type": "beats",
+          "title": "Slow push-in: hope drains from a woman's face as the radio names the lost boat (10 s)",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": false,
+              "detail": "7 beats; this shot takes 4 to 6"
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "face_to_camera",
+              "weight": 3,
+              "value": 0.0,
+              "desc": "the face is toward the lens"
+            },
+            {
+              "id": "no_back_views",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "no back, profile or silhouette view"
+            },
+            {
+              "id": "emotion_arc",
+              "weight": 3,
+              "value": 0.75,
+              "desc": "hope, the drain, the hand over the mouth, then numbness"
+            },
+            {
+              "id": "hand_timing",
+              "weight": 2,
+              "value": 0.0,
+              "desc": "the hand goes to her mouth between 4 s and 8 s"
+            },
+            {
+              "id": "no_dead_air",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "no beat longer than 3.5 s"
+            },
+            {
+              "id": "face_in_every_beat",
+              "weight": 2,
+              "value": 0.8571,
+              "desc": "every beat says what the face does"
+            },
+            {
+              "id": "push_in",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the slow push-in is kept"
+            },
+            {
+              "id": "sound_radio",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the radio is heard"
+            },
+            {
+              "id": "one_person",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a one-person constraint"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a no-text constraint"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.6823,
+          "score": 0.0
+        },
+        {
+          "id": "beats-06-chapel-pull-out-reveal",
+          "type": "beats",
+          "title": "Pull-out reveal: a grieving sailor, then the empty flooded chapel (6 s)",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": false,
+              "detail": "5 beats; this shot takes 3 to 4"
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "face_to_camera",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "the face is toward the lens"
+            },
+            {
+              "id": "no_back_views",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "no back, profile or silhouette view"
+            },
+            {
+              "id": "start_tight",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the first beat is tight on the face"
+            },
+            {
+              "id": "pull_out",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "the camera pulls out"
+            },
+            {
+              "id": "reveal_timing",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "the empty chapel is revealed between 2.5 s and 5 s, not in the first beat"
+            },
+            {
+              "id": "empty_pews",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the empty pews are named"
+            },
+            {
+              "id": "end_wide",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the last beat is wide"
+            },
+            {
+              "id": "grief_arc",
+              "weight": 3,
+              "value": 0.5,
+              "desc": "rigid grief first, then tears"
+            },
+            {
+              "id": "one_person",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "a one-person constraint"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a no-text constraint"
+            },
+            {
+              "id": "sound_water",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the chapel is heard"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.94,
+          "score": 0.0
+        },
+        {
+          "id": "beats-07-stairwell-panic-4s",
+          "type": "beats",
+          "title": "Handheld: a woman against a locked door drops the key (4 s, take reference)",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": false,
+              "detail": "4 beats; this shot takes 2 to 3"
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "face_to_camera",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "the face is toward the lens"
+            },
+            {
+              "id": "no_back_views",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "no back, profile or silhouette view"
+            },
+            {
+              "id": "key_drops",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "the key falls between 1 s and 3 s"
+            },
+            {
+              "id": "terror_last",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the last beat ends in terror"
+            },
+            {
+              "id": "handheld",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the handheld motion is kept"
+            },
+            {
+              "id": "pick_up",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "the setup says where the shot picks up"
+            },
+            {
+              "id": "face_in_every_beat",
+              "weight": 1,
+              "value": 0.75,
+              "desc": "every beat says what the face does"
+            },
+            {
+              "id": "sound_key",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "breath or the key is heard"
+            },
+            {
+              "id": "one_person",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a one-person constraint"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "a no-text constraint"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.9875,
+          "score": 0.0
+        },
+        {
+          "id": "beats-08-torn-photograph-orbit-8s",
+          "type": "beats",
+          "title": "Orbit: from his pleading face to her furious one over a torn photograph (8 s)",
+          "hard_ok": false,
+          "hard": [
+            {
+              "id": "schema",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "starts_at_zero",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "contiguous",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "ends_at_duration",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_length",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "beat_count",
+              "ok": false,
+              "detail": "6 beats; this shot takes 3 to 5"
+            },
+            {
+              "id": "tags_kept",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_unknown_tags",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "no_camera_brands",
+              "ok": true,
+              "detail": ""
+            },
+            {
+              "id": "lens_in_lenses",
+              "ok": true,
+              "detail": ""
+            }
+          ],
+          "soft": [
+            {
+              "id": "face_to_camera",
+              "weight": 2,
+              "value": 0.0,
+              "desc": "the faces are toward the lens"
+            },
+            {
+              "id": "no_back_views",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "no silhouette or rear view of a face"
+            },
+            {
+              "id": "orbit",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "the camera orbits"
+            },
+            {
+              "id": "kael_then_mira",
+              "weight": 3,
+              "value": 1.0,
+              "desc": "Kael's pleading face first, Mira's fury second"
+            },
+            {
+              "id": "fury_timing",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "Mira's fury arrives between 3.5 s and 6.5 s"
+            },
+            {
+              "id": "stillness",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "neither performer moves"
+            },
+            {
+              "id": "photograph",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the photograph is in the picture"
+            },
+            {
+              "id": "no_dead_air",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "every beat between 1 s and 3.5 s"
+            },
+            {
+              "id": "two_people",
+              "weight": 2,
+              "value": 1.0,
+              "desc": "a two-people constraint"
+            },
+            {
+              "id": "no_text",
+              "weight": 1,
+              "value": 0.0,
+              "desc": "a no-text constraint (the photograph has no writing)"
+            },
+            {
+              "id": "sound_room",
+              "weight": 1,
+              "value": 1.0,
+              "desc": "the room is heard"
+            },
+            {
+              "id": "no_leakage",
+              "weight": 1,
+              "value": 0.0,
+              "desc": "no seed numbers, field labels or f-stops leak into the prompt"
+            }
+          ],
+          "soft_score": 0.8,
+          "score": 0.0
+        }
+      ]
+    }
+  }
+}

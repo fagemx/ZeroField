@@ -1,0 +1,25 @@
+{
+  "score": 55,
+  "findings": [
+    {
+      "kind": "screen_direction",
+      "shots": [
+        "S12",
+        "S13"
+      ],
+      "subject": "@CAST-02",
+      "severity": "major",
+      "detail": "In S12 Kael sits frame-left looking screen-right toward Mira. In the reverse S13, Mira is placed frame-left with eyes fixed on frame-right — the same direction Kael was looking. A correct 180° reverse would put Mira frame-right looking screen-left back at Kael. As written, both characters gaze in the same screen direction, breaking the eyeline and the 180-degree line."
+    },
+    {
+      "kind": "hair_makeup",
+      "shots": [
+        "S12",
+        "S13"
+      ],
+      "subject": "@CAST-02",
+      "severity": "minor",
+      "detail": "In S12 Mira's auburn hair is loose and soft at the right edge of frame, matching the character bible ('worn loose'). In S13's first frame her auburn hair is tucked behind her ear — a change with no script or action justification in a continuous join."
+    }
+  ]
+}

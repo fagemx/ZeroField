@@ -1,0 +1,25 @@
+{
+  "score": 40,
+  "findings": [
+    {
+      "kind": "prop",
+      "shots": [
+        "S14",
+        "S15"
+      ],
+      "subject": "@PROP-01",
+      "severity": "major",
+      "detail": "S14 ends with the brass key gripped in Odile's right fist (knuckles white). S15 begins with the key held in her left hand at chest height. The hand holding the key has switched between the cut with no action to account for it."
+    },
+    {
+      "kind": "prop",
+      "shots": [
+        "S15",
+        "S16"
+      ],
+      "subject": "scene",
+      "severity": "major",
+      "detail": "S15 ends with Odile's round glasses hanging on the chain at her chest and the brass key lying on the pine table. S16's first frame shows the glasses already on her nose and the table bare. Both the key vanishing and the glasses being pre-placed contradict the end of S15."
+    }
+  ]
+}
