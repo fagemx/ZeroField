@@ -183,7 +183,7 @@ def queue_cut_checks(conn, me, slug, episode_id, pairs=None):
 def on_adoption_changed(conn, slug, shot_id, owner_id):
     """Queue the (at most two) cuts next to a shot whose adoption or trim just changed, when auto grading is on.
 
-    SPEC_19 open question 8 is undecided, so nothing calls this yet. Off (the default ``auto_grade_takes`` setting):
+    SPEC_19 decision 8: the adoption and trim routes call this (story_openapi.auto_cut_checks). Off (the default ``auto_grade_takes`` setting):
     nothing happens. On: each neighbouring cut that is checkable and has no result for its current takes and points is
     queued as an automatic check; a cut whose take cannot be sent, or a masked production, is skipped quietly (as
     ``take_grader.on_take`` does). Returns how many were queued; the caller commits, then calls ``take_grader.kick()``.

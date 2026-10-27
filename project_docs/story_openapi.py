@@ -1338,6 +1338,14 @@ def notify(owner, task):
         action()
 
 
+def auto_cut_checks(conn, me, slug, shot_id, actions):
+    """SPEC_19 decision 8: with auto grading on, a new adoption or trim queues the cut checks next to the shot."""
+    from project_assistant import take_grader
+    from project_docs import story_cuts
+    if story_cuts.on_adoption_changed(conn, slug, shot_id, me.actor_id):
+        actions.append(take_grader.kick)
+
+
 def dispatch(conn, me, method, path, body, query, actions):
     """Return unwrapped data; callers own commit, rollback and post-commit launches."""
     from project_docs import story_alignment, story_estimates
@@ -1695,12 +1703,16 @@ def dispatch(conn, me, method, path, body, query, actions):
         if tail in ("selected-image", "selected-video") and method == "PUT":
             return select_candidate(conn, me, identifier, "image" if tail.endswith("image") else "video", body)
         if entity == "shot" and tail == "adoptions" and method == "POST":
-            return story_adoption.adopt(conn, me, identifier, body)
+            adopted = story_adoption.adopt(conn, me, identifier, body)
+            if "imageId" not in body:  # a first frame does not change the cut
+                auto_cut_checks(conn, me, slug, identifier, actions)
+            return adopted
         if entity == "shot" and tail == "adoption" and method == "DELETE":
             return story_adoption.unadopt(conn, me, identifier)
         if entity == "shot" and tail == "trim" and method == "PUT":
             from project_docs import story_trim
             story_trim.set_trim(conn, slug, identifier, row, body)
+            auto_cut_checks(conn, me, slug, identifier, actions)
             return view()
         if entity == "shot" and tail == "grades":
             from project_assistant import take_grader

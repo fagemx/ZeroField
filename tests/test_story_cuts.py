@@ -279,6 +279,19 @@ class StoryCutsTests(unittest.TestCase):
         self.adopt("S03", None, status="Retake")
         self.assertEqual(story_cuts.on_adoption_changed(self.conn, self.slug, self.shot("S03"), self.actor), 0)  # not checkable
 
+    def test_a_trim_through_the_route_queues_the_neighbouring_cuts_only_when_auto_grading_is_on(self):
+        for code in ("S01", "S02"):
+            self.adopt(code, self.video(code))
+        path, actions = f"/shots/{self.shot('S02')}/trim", []
+        story.dispatch(self.conn, self.me, "PUT", path, {"in": 0.2}, {}, actions)
+        self.conn.commit()
+        self.assertEqual((actions, story.records(self.conn, grader.CUT_KIND, self.slug)), ([], []))
+        grader.set_auto(self.conn, self.slug, True)
+        story.dispatch(self.conn, self.me, "PUT", path, {"in": 0.3}, {}, actions)
+        self.conn.commit()
+        self.assertEqual(actions, [grader.kick])
+        self.assertEqual([c["check"]["state"] for c in self.cuts()], ["queued", "none"])  # S02-S03: S03 is not adopted
+
 
 if __name__ == "__main__":
     unittest.main()

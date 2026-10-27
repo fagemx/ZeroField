@@ -391,7 +391,7 @@ shotState({status, adoption, takes, inFlight}) →
 | `project_assistant/studio/context_compiler.py` | B、C | `#` 標籤就地展開；`Film`／`Color`／`Lighting` 三行 |
 | `project_assistant/flow_runner.py` | C | 建立任務來源時附 `look`（`compile_look()` 的結果） |
 | `project_docs/story_take_refs.py`（新） | D | 引用語法、解析成快照、`stale` 判斷 |
-| `project_docs/story_cuts.py`（新） | D | 接點清單 `list_cuts()`、排檢查 `queue_cut_checks()`、路由 `dispatch()`、採用後自動排隊的掛鉤 `on_adoption_changed()`（待決 8，未接線）；和引用分開，兩邊可以並行實作 |
+| `project_docs/story_cuts.py`（新） | D | 接點清單 `list_cuts()`、排檢查 `queue_cut_checks()`、路由 `dispatch()`、採用後自動排隊的掛鉤 `on_adoption_changed()`（待決 8：採用影片或改剪裁後由路由呼叫）；和引用分開，兩邊可以並行實作 |
 | `project_assistant/studio/media_prep.py` | D | `extract_frame` 加 `source_url`（限本專案資產） |
 | `project_assistant/take_grader.py` | D | 第二套題目「接點」：兩格並排（前一鏡出點、後一鏡入點），回傳分數與問題；沿用佇列與 GPU 交接；結果存 `cut_check` 紀錄 |
 | `project_docs/writing_impact.py` | D | `storyProvenance` 多 `takeRefs` 欄位；`candidate_evidence` 的相等判斷把它算進去 |
