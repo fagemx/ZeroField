@@ -99,7 +99,11 @@ class LookSampleTests(unittest.TestCase):
                 self.assertEqual(option.get("preview", {}).get("poster"), item["poster"])
                 self.assertEqual(option.get("preview", {}).get("clip"), item["clip"])
                 self.assertTrue((ROOT / item["workflow"]).is_file(), item["workflow"])
-                self.assertIsInstance(item["seed"], int)
+                # A still comes from a seeded model; a move loop is a deterministic 3D Stage render with neither.
+                if item["clip"] is None:
+                    self.assertIsInstance(item["seed"], int)
+                else:
+                    self.assertEqual((item["model"], item["seed"]), (None, None))
                 self.assertEqual((item["license"], item["author"]), ("CC0-1.0", "ZeroField project (generated)"))
                 self.assertRegex(item["generatedAt"], r"^\d{4}-\d{2}-\d{2}")
                 prompt = item["prompt"]

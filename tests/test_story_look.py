@@ -204,7 +204,9 @@ class ApiItemTests(unittest.TestCase):
         self.assertEqual([i["group"] for i in look.api_items("camera")], [i["group"] for i in items("camera", "body") +
                                                                           items("camera", "lens") + items("camera", "aperture")])
         moves = look.api_items("move")
-        self.assertEqual(moves[1], {"id": "push-in", "kind": "move", "labelKey": "lookCatalog.move.pushIn", "promptText": PUSH, "preview": None})
+        self.assertEqual(moves[1], {"id": "push-in", "kind": "move", "labelKey": "lookCatalog.move.pushIn", "promptText": PUSH,
+                                    "preview": {"poster": "/projects/assets/look-samples/move/push-in.webp",
+                                                "clip": "/projects/assets/look-samples/move/push-in.mp4"}})
         self.assertTrue(all("group" not in i and "hex" not in i for i in moves))
 
     def test_package_c_kinds_list_their_options_with_colours_on_palettes_and_other_kinds_are_refused(self):
