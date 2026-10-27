@@ -32,8 +32,8 @@ Current actor, membership, scope, admin and version authority always remain serv
 
 | Wire page | Actual APIs | Visible result |
 | --- | --- | --- |
-| dashboard | GET C/dashboard | Current-owner counts/recent sessions, heartbeat metadata, aggregate usage, budget/Judge admissions |
-| api_keys | GET C/api-keys, /providers; POST /providers, /api-keys/default, /connections/health; GET /providers/{key}/history | Versioned references/default, server allowlist, explicit read-only probe result, not canned connectivity |
+| dashboard | GET C/dashboard, /automation, /gpu, /queue?days; POST /automation, /reservations/{key}/reconcile | Current-owner counts/recent sessions, heartbeat metadata, aggregate usage, budget/Judge admissions; SPEC_20 automation switch (R40), read-only local GPU panel (R38), project-wide queue and failures with admin reconcile (R39) |
+| api_keys | GET C/api-keys, /providers, /model-setup; POST /providers, /api-keys/default, /connections/health, /model-setup, /model-check; GET /providers/{key}/history | Versioned references/default, server allowlist, explicit read-only probe result, not canned connectivity; SPEC_20 R36 model setup (local Ollama preset) and a governed step-by-step health check (model, chat, tools, JSON schema, image, context length) |
 | playground | POST C/playground mode=dry_run or live | Real compiled instructions/tools/payload (no inference in dry-run); explicit saved live or raw Save-and-Run queues an existing M8 session |
 | skills | GET/POST C/skills; GET /skills/{key}/history | Versioned Markdown instructions and recommended tool IDs; no permission grant |
 | quickstart | GET C/quickstart; POST C/quickstart/draft | Exact twelve localized cards, blank or literal natural-language instruction draft; nothing saved/launched implicitly |
@@ -99,3 +99,12 @@ Aborted browser reads can produce existing server ConnectionAbortedError/duplica
 error-write log noise; this UI does not rewrite backend transport handling.
 Application controls are not an OS sandbox, calibrated hardware-cost guarantee,
 remote termination guarantee, model-quality assessment or overall acceptance.
+
+### SPEC_20 operations (R36, R38-R40)
+
+All four live inside the existing Dashboard and Providers & API Keys pages; no page or group is added.
+`/model-setup` and `/model-check` are showrunner-only; every model call in a check goes through
+`ProviderAdmission` (local endpoints unbilled). `/gpu` probes only loopback ComfyUI/Ollama with a 2 s
+timeout, no proxy and no redirects, and counts ComfyUI queue entries without returning them. `/queue`
+withholds other members' text, runs and sessions. `/automation` (setting `automation.paused`) stops
+automatic grading, crew pre-production and scheduled deployments; manual work is never blocked.

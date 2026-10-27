@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from project_assistant import agent_console_service as app, agent_console_store as resources
 from project_assistant import orchestration_store as db, orchestrator as cp, agent_registry as agents
+from project_assistant.automation import automation_paused
 from project_docs import repository as repo
 
 FIELDS = {'deployment_key', 'version', 'display_name', 'agent_key', 'env_key', 'initial_prompt', 'playbook',
@@ -165,6 +166,8 @@ def trigger(conn, me, slug, key, body, *, slot=None):
 def produce_due(conn, slug, *, instant=None):
     """Called within the existing worker tick. Atomic claims commit with M8 enqueue."""
     from project_assistant.worker import _identity
+    if automation_paused(conn, slug):  # SPEC_20 R40: paused slots are skipped, never caught up later
+        return 0
     instant = instant or cp.now()
     entries = db.many(conn, "SELECT to_jsonb(d) FROM projectops.agent_deployment d WHERE project_slug=%s AND enabled AND schedule_kind='cron' ORDER BY id LIMIT 100", (slug,))
     count = 0

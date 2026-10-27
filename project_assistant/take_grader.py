@@ -94,7 +94,8 @@ def enqueue(conn, slug, shot_id, asset_url, owner_id, *, auto=False):
 def on_take(conn, slug, tab_key, row_id, output, owner_id):
     """Auto-grade hook for a worker output that lands on a shot row (off unless the production opts in)."""
     url = (output or {}).get('asset_url')
-    if tab_key not in SHOT_TABS or not url or not auto_enabled(conn, slug):
+    from project_assistant.automation import automation_paused  # SPEC_20 R40: the Console's automation switch
+    if tab_key not in SHOT_TABS or not url or not auto_enabled(conn, slug) or automation_paused(conn, slug):
         return None
     try:
         return enqueue(conn, slug, f'sh_{slug}_{row_id}', url, owner_id, auto=True)
