@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SHOT_STATES, shotState, shotStateOf, newTakeCount, newTakeCountOf, isAdopted, adoptedCount, mergeTakes, nextNewTake, thumbOf, filmNeighbors, filmSegments, filmSummary, playlist,
-  adoptionBody, proposalTakeUrls, takeOnlyProposal} from '../src/takeModel.js';
+  adoptionBody, proposalTakeUrls, takeOnlyProposal, staleTakeRefs, takeRefChange, SEAM_STATES, seamState, filmSeams, seamPlaylist, adoptLatestPlan} from '../src/takeModel.js';
 import {rowProposals} from '../src/proposalModel.js';
 
 const at = minutes => new Date(Date.UTC(2026, 9, 27, 10, minutes)).toISOString();
@@ -362,4 +362,93 @@ test('the adopted count is shots with Approved and a video in the cell, legacy s
   assert.equal(adoptedCount([]), 0);
   assert.equal(adoptedCount(undefined), 0);
   assert.equal(isAdopted(adopted(1)), true);assert.equal(isAdopted(shot(1)), false);assert.equal(isAdopted(null), false);
+});
+
+// ---------- SPEC_19 package D: references, seams and adopting the newest takes ----------
+const ref = (extra = {}) => ({shotId: 'sh_demo_b2', shotIndex: 'S02', edge: 'end', takeUrl: '/take/2.mp4', at: 3.8, use: 'first_frame', stale: false, nowTakeUrl: '/take/2.mp4', frameUrl: '/frame/2.png', adopted: true, ...extra});
+const cut = (from, to, check = {}, extra = {}) => ({index: 0, fromShotId: 'sh_demo_b' + from, toShotId: 'sh_demo_b' + to, fromShotIndex: 'S0' + from, toShotIndex: 'S0' + to, checkable: true, blockedBy: [],
+  check: {state: 'none', checkId: null, score: null, passed: null, issues: [], feedback: null, frameSheetUrl: null, frames: null, error: null, auto: null, requestedAt: null, checkedAt: null, ...check}, ...extra});
+
+test('stale references: only the ones the server marked stale, and what changed upstream', () => {
+  const s3 = adopted(3, {takeRefs: [ref(), ref({edge: 'start', at: 0, stale: true, nowTakeUrl: '/take/2b.mp4'})]});
+  assert.deepEqual(staleTakeRefs(s3).map(item => item.edge), ['start']);
+  assert.deepEqual(staleTakeRefs(adopted(3)), [], 'no takeRefs: nothing stale');
+  assert.deepEqual(staleTakeRefs(null), []);
+  assert.deepEqual(staleTakeRefs({takeRefs: [ref({stale: 'yes'})]}), [], 'only a true stale counts');
+  const s2 = adopted(2, {trim: {in: 0.4, out: 3.2}});
+  assert.equal(takeRefChange(ref(), s2), null, 'not stale: nothing changed');
+  assert.deepEqual(takeRefChange(ref({stale: true, nowTakeUrl: '/take/2b.mp4'}), s2), {kind: 'take', url: '/take/2b.mp4'}, 'another adoption');
+  assert.deepEqual(takeRefChange(ref({stale: true, nowTakeUrl: null}), s2), {kind: 'gone'}, 'the quoted shot has no take now');
+  assert.deepEqual(takeRefChange(ref({stale: true}), s2), {kind: 'edge', seconds: 3.2}, 'same take, the out point moved');
+  assert.deepEqual(takeRefChange(ref({stale: true, edge: 'start', at: 0}), s2), {kind: 'edge', seconds: 0.4}, 'same take, the in point moved');
+  assert.deepEqual(takeRefChange(ref({stale: true, at: 3.2}), adopted(2, {trim: {in: 0, out: null}})), {kind: 'edge', seconds: null}, 'the out point is now the take end, not known here');
+  assert.deepEqual(takeRefChange(ref({stale: true, edge: 'start', at: 0.4}), adopted(2, {trim: {in: 0, out: null}})), {kind: 'edge', seconds: 0});
+  assert.deepEqual(takeRefChange(ref({stale: true})), {kind: 'edge', seconds: null}, 'the quoted shot is not in the list');
+});
+
+test('seam colours: a passed check holds, a failed pass has issues, queued and failed are their own, the rest is unchecked', () => {
+  assert.equal(seamState(cut(1, 2, {state: 'done', score: 84, passed: true})), 'pass');
+  assert.equal(seamState(cut(1, 2, {state: 'done', score: 41, passed: false, issues: ['Prop in the other hand']})), 'issue');
+  assert.equal(seamState(cut(1, 2, {state: 'queued'})), 'queued');
+  assert.equal(seamState(cut(1, 2, {state: 'failed', error: 'GPU busy'})), 'failed');
+  assert.equal(seamState(cut(1, 2)), 'none');
+  assert.equal(seamState(cut(1, 2, {}, {checkable: false, blockedBy: [{shotId: 'sh_demo_b2', reason: 'not_adopted'}]})), 'none', 'not checkable is grey too');
+  assert.equal(seamState(null), 'none');
+  assert.deepEqual(SEAM_STATES, ['pass', 'issue', 'queued', 'failed', 'none']);
+});
+
+test('film seams: one between each two neighbours of the film, matched to the server cut on both shot ids', () => {
+  const shots = [adopted(1), adopted(2), shot(3), adopted(4)];
+  const seams = filmSeams(shots, [cut(1, 2, {state: 'done', score: 90, passed: true}), cut(3, 4, {}, {checkable: false, blockedBy: [{shotId: 'sh_demo_b3', reason: 'not_adopted'}]}), cut(4, 1, {state: 'done', passed: false})]);
+  assert.deepEqual(seams.map(seam => [seam.key, seam.index, seam.fromShotIndex, seam.toShotIndex, seam.state, seam.checkable]),
+    [['sh_demo_b1>sh_demo_b2', 0, 'S01', 'S02', 'pass', true], ['sh_demo_b2>sh_demo_b3', 1, 'S02', 'S03', 'none', false], ['sh_demo_b3>sh_demo_b4', 2, 'S03', 'S04', 'none', false]],
+    'a pair the server does not list is unchecked; a cut in the wrong order is not this seam');
+  assert.equal(seams[0].check.score, 90);assert.equal(seams[1].cut, null);assert.deepEqual(seams[2].blockedBy, [{shotId: 'sh_demo_b3', reason: 'not_adopted'}]);
+  assert.deepEqual(filmSeams(shots).map(seam => seam.state), ['none', 'none', 'none'], 'cuts not loaded yet');
+  assert.deepEqual(filmSeams([adopted(1)], []), [], 'one shot has no seam');
+  assert.deepEqual(filmSeams(null, null), []);
+});
+
+test('cuts only: the last second before each seam and the first second after it, in film order, one clip at a time', () => {
+  const shots = [adopted(1, {trim: {in: 0.5, out: 3.5}}), adopted(2), shot(3, {selectedVideoUrl: '/take/3.mp4'}), shot(4), adopted(5, {trim: {in: 1, out: 1.6}})];
+  const items = playlist(shots, {fill: 'latest'});
+  const list = seamPlaylist(items, {measured: {'/take/2.mp4': 4.2}});
+  assert.deepEqual(list.map(item => [item.seam.key, item.side, item.url, item.in, item.out, item.tail ?? null]), [
+    ['sh_demo_b1>sh_demo_b2', 'out', '/take/1.mp4', 2.5, 3.5, null], ['sh_demo_b1>sh_demo_b2', 'in', '/take/2.mp4', 0, 1, null],
+    ['sh_demo_b2>sh_demo_b3', 'out', '/take/2.mp4', 4.2 - 1, 4.2, null], ['sh_demo_b2>sh_demo_b3', 'in', '/take/3.mp4', 0, 1, null],
+  ], 'S04 has nothing to play, so there is no seam across it (S03 and S05 are not neighbours)');
+  assert.deepEqual(list.map(item => item.seam.index), [0, 0, 1, 1]);
+  assert.equal(list[2].source, 'adopted');assert.equal(list[3].source, 'latest', 'each side keeps its clip source');
+  const unmeasured = seamPlaylist(items);
+  assert.deepEqual([unmeasured[2].in, unmeasured[2].out, unmeasured[2].tail], [0, null, 1], 'an untrimmed take of unknown length starts one second before its end');
+  assert.deepEqual(seamPlaylist(items, {only: 'sh_demo_b2>sh_demo_b3'}).map(item => [item.shotIndex, item.side]), [['S02', 'out'], ['S03', 'in']], 'one seam on its own');
+  assert.deepEqual(seamPlaylist(items, {only: 'nope'}), []);
+  const short = seamPlaylist(playlist([adopted(4, {trim: {in: 0.2, out: 0.7}}), adopted(5, {trim: {in: 1, out: 1.6}})]));
+  assert.deepEqual(short.map(item => [item.in, item.out]), [[0.2, 0.7], [1, 1.6]], 'a clip shorter than a second plays whole, never past its trim');
+  assert.deepEqual(seamPlaylist(items, {seconds: 0.5}).slice(0, 2).map(item => [item.in, item.out]), [[3, 3.5], [0, 0.5]]);
+  assert.deepEqual(seamPlaylist([]), []);assert.deepEqual(seamPlaylist(null), []);
+});
+
+test('cuts only follows the trial take, the fill and the order of the film it is given', () => {
+  const shots = [adopted(1, {trim: {in: 0, out: 2}}), adopted(2, {trim: {in: 0, out: 3}}), shot(3, {previsVideoUrl: '/previs/3.mp4'})];
+  const trial = {shotId: shots[1].shotId, url: '/take/2x.mp4'};
+  assert.deepEqual(seamPlaylist(playlist(shots, {fill: 'skip', trial})).map(item => [item.url, item.source, item.side]),
+    [['/take/1.mp4', 'adopted', 'out'], ['/take/2x.mp4', 'trial', 'in']], 'the trial stands in; skip leaves S03 out');
+  assert.deepEqual(seamPlaylist(playlist(shots, {fill: 'previs'})).map(item => item.url), ['/take/1.mp4', '/take/2.mp4', '/take/2.mp4', '/previs/3.mp4']);
+  assert.equal(adoptedCount(shots), 2, 'nothing about the cut changes');
+});
+
+test('adopt the newest take: through its proposal or as a candidate, and say why a shot is skipped', () => {
+  const single = rowProposals([mediaProposal(9, 'b1', [{column: 'Cinema Shot', before: '', after: '[Video](/take/9.mp4)'}])], 'b1');
+  const shared = mediaProposal(8, 'b1', [{column: 'Cinema Shot', before: '', after: '[Video](/take/8.mp4)'}]);
+  shared.review.groups.push({index: 1, row_id: 'b2', row_number: 2, label: 'Row 2', changes: [{column: 'Cinema Shot', before: '', after: '[Video](/take/8b.mp4)'}]});
+  assert.deepEqual(adoptLatestPlan(mergeTakes([take(1), take(3)], single, {status: 'Queued'})).body, {proposalId: 9}, 'the newest take is a pending pipeline take');
+  assert.deepEqual(adoptLatestPlan(mergeTakes([take(1), take(3)], [], {status: 'Queued'})).body, {videoId: 'vd_3'});
+  assert.equal(adoptLatestPlan(mergeTakes([take(1), take(3)], [], {status: 'Queued'})).take.number, 2);
+  const inCut = mergeTakes([take(1), take(3, {selected: true})], [], {status: 'Approved', adoption: adoption(3)});
+  assert.deepEqual(adoptLatestPlan(inCut), {skip: 'adopted', take: inCut[0]}, 'the newest take is already in the cut');
+  assert.deepEqual(adoptLatestPlan(mergeTakes([take(1, {selected: true}), take(3)], [], {status: 'Approved', adoption: adoption(1)})).body, {videoId: 'vd_3'}, 'a take newer than the adopted one is adopted');
+  assert.equal(adoptLatestPlan(mergeTakes([take(1)], rowProposals([shared], 'b1'), {status: 'Queued'})).skip, 'shared', 'a proposal across rows is a crew proposal');
+  assert.equal(adoptLatestPlan(mergeTakes([{url: '/take/x.mp4', createdAt: at(30)}], [], {status: 'Queued'})).skip, 'unavailable');
+  assert.deepEqual(adoptLatestPlan([]), {skip: 'none'});assert.deepEqual(adoptLatestPlan(null), {skip: 'none'});
 });

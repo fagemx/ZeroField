@@ -498,3 +498,154 @@ test('the composer reads in Traditional Chinese',async()=>{
     for(const text of ['鏡頭生成台','第 1 場','還沒採用','參考','攝影機','本鏡','提示詞','看送出的完整提示詞','儲存並生成','未儲存','S01 · 出點 · 當參考','#慢推','S03 還沒採用，會用最新的 Take。','1 支']) assert.ok(html.includes(text),text);
   }finally{await components.setLocale('en');}
 });
+// ---------- SPEC_19 package D: references, upstream changed, seams, cuts only, adopting latest takes, package A follow-ups ----------
+// The film/ components are bundled on their own (with their own i18n instance) the first time a test asks for them.
+import {filmSeams} from '../src/takeModel.js';
+import {readFile} from 'node:fs/promises';
+let filmBundle=null;
+const filmParts=()=>filmBundle||=build({stdin:{contents:"export {TakeRefsView,TakeRefsLine,focusShotPrompt} from './src/film/TakeRefsLine.jsx'; export {SeamDetail,SeamDot,PlayModeToggle,CheckCutsButton} from './src/film/Seams.jsx'; export {adoptLatestTakes,AdoptLatestButton,AdoptLatestReport} from './src/film/AdoptLatest.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-film.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}})
+  .then(async result=>{const output=join(temporary,'film.mjs');await writeFile(output,result.outputFiles[0].text);return import(pathToFileURL(output));});
+const renderPart=(parts,name,props)=>renderToStaticMarkup(React.createElement(parts[name],props));
+const quoted=(extra={})=>({shotId:'sh_demo_b1',shotIndex:'S01',edge:'end',takeUrl:'/t/1a.mp4',at:3.8,use:'first_frame',stale:false,nowTakeUrl:'/t/1a.mp4',frameUrl:'/f/1.png',adopted:true,number:2,nowNumber:2,change:null,...extra});
+const seamCut=(from,to,check={},extra={})=>({index:0,fromShotId:'sh_demo_b'+from,toShotId:'sh_demo_b'+to,fromShotIndex:'S0'+from,toShotIndex:'S0'+to,checkable:true,blockedBy:[],
+  check:{state:'none',checkId:null,score:null,passed:null,issues:[],feedback:null,frameSheetUrl:null,frames:null,error:null,auto:null,requestedAt:null,checkedAt:null,...check},...extra});
+
+test('the References line names each quoted shot, its take, the second and the use, and nothing at all without references',async()=>{
+  const parts=await filmParts();
+  const html=renderPart(parts,'TakeRefsView',{items:[quoted(),quoted({shotId:'sh_demo_b4',shotIndex:'S04',edge:'start',at:0,use:'reference',adopted:false,number:null,frameUrl:null})],writable:true});
+  assert.match(html,/<section class="take-refs" aria-label="References"><h3>References<\/h3>/);
+  assert.match(html,/<img class="take-ref-frame" src="\/f\/1\.png"[^>]*><span class="take-ref-text"><span><b class="num">S01<\/b><span>Take 2<\/span><span class="num">out @3\.8 s<\/span><em class="take-ref-use">as first frame<\/em>/);
+  assert.match(html,/<b class="num">S04<\/b><span class="num">in @0\.0 s<\/span><em class="take-ref-use">as reference<\/em><\/span><small>Its newest take then; nothing was adopted<\/small>/,'a quote of an unadopted take says so; an unknown take number is left out');
+  assert.doesNotMatch(html,/Upstream|Re-shoot with the new one|is-stale/,'nothing changed upstream: no warning and no re-shoot');
+  assert.equal(renderPart(parts,'TakeRefsView',{items:[],writable:true}),'');
+  assert.equal(renderPart(parts,'TakeRefsLine',{refs:[],shots:[],writable:true}),'','no references: no line and no request');
+});
+
+test('upstream changed: the reference says what it is now, a writer gets "Re-shoot with the new one", and the progress bar marks the shot',async()=>{
+  const parts=await filmParts();
+  const items=[quoted({stale:true,nowTakeUrl:'/t/1c.mp4',nowNumber:3,change:{kind:'take',url:'/t/1c.mp4'}}),quoted({shotId:'sh_demo_b4',shotIndex:'S04',edge:'start',at:0,stale:true,change:{kind:'edge',seconds:0.4}}),
+    quoted({shotId:'sh_demo_b5',shotIndex:'S05',stale:true,nowTakeUrl:null,change:{kind:'gone'}}),quoted({shotId:'sh_demo_b6',shotIndex:'S06',stale:true,nowNumber:null,nowTakeUrl:'/t/6x.mp4',change:{kind:'take',url:'/t/6x.mp4'}})];
+  const html=renderPart(parts,'TakeRefsView',{items,writable:true});
+  assert.match(html,/<section class="take-refs is-stale"/);
+  for(const text of ['Upstream now uses Take 3','Upstream in point is now 0.4 s','S05 has no take now','Upstream changed its take']) assert.ok(html.includes(text),text);
+  assert.equal((html.match(/<button/g)||[]).length,1,'one re-shoot for the line');
+  assert.match(html,/<button type="button" class="take-refs-reshoot" title="Puts the cursor in this shot&#x27;s prompt\. Nothing is sent[^"]*">[\s\S]*?Re-shoot with the new one<\/button>/);
+  assert.doesNotMatch(renderPart(parts,'TakeRefsView',{items,writable:false}),/<button/,'a reader sees the warning but cannot re-shoot');
+  // The film panel: the shot whose take quotes a changed upstream carries a yellow corner on its segment.
+  const view=render('ShotFilmView',{...filmFixture(),staleShots:new Set(['sh_demo_b3'])});
+  assert.match(view,/class="film-seg state-empty"[^>]*aria-label="S03 · Not shot · [\d.]+ s · Upstream changed"[^>]*><\/button><i class="film-seg-stale" title="Upstream changed" aria-hidden="true"><\/i>/);
+  assert.equal((view.match(/film-seg-stale/g)||[]).length,1,'only that shot');
+  await parts.setLocale('zh-TW');
+  try{
+    const zh=renderPart(parts,'TakeRefsView',{items,writable:true});
+    for(const text of ['引用','上游已換成 Take 3','上游入點已改為 0.4 秒','用新的重拍','當首幀','出點 @3.8 秒']) assert.ok(zh.includes(text),text);
+  }finally{await parts.setLocale('en');}
+});
+
+test('"Re-shoot with the new one" only puts the cursor in this shot\'s prompt and sends nothing',async()=>{
+  const parts=await filmParts();
+  const seen=[],requests=[],saved={document:globalThis.document,fetch:globalThis.fetch};
+  globalThis.fetch=(...args)=>{requests.push(args);return Promise.reject(new Error('no request expected'));};
+  globalThis.document={querySelector:selector=>{seen.push(selector);return selector==='[data-shot-prompt="b3"]'?{focus(){seen.push('focus');},scrollIntoView(){seen.push('scroll');}}:null;}};
+  try{
+    assert.equal(parts.focusShotPrompt('b3'),true);
+    assert.deepEqual(seen,['[data-shot-prompt="b3"]','scroll','focus']);
+    assert.equal(parts.focusShotPrompt('b9'),false,'no composer prompt on the page: nothing happens');
+    assert.deepEqual(requests,[],'no request of any kind');
+  }finally{globalThis.document=saved.document;globalThis.fetch=saved.fetch;}
+});
+
+test('seam dots sit between the progress segments: green holds, yellow has problems, grey unchecked, queued and failed marked apart',()=>{
+  const six=[1,2,3,4,5,6].map(n=>filmShot(n,{reviewStatus:'Approved',selectedVideoUrl:`/t/${n}.mp4`,adoption:{adopted:true,url:`/t/${n}.mp4`,at:filmAt(n),by:'u1'}}));
+  const cuts=[seamCut(1,2,{state:'done',score:88,passed:true}),seamCut(2,3,{state:'done',score:41,passed:false,issues:['S02 ends with the reel in his left hand, S03 opens with it in his right'],feedback:'Prop hand flips.',frameSheetUrl:'/sheet/23.png'}),
+    seamCut(3,4,{state:'queued'}),seamCut(4,5,{state:'failed',error:'The vision model timed out'}),seamCut(5,6,{},{checkable:false,blockedBy:[{shotId:'sh_demo_b6',reason:'not_adopted'}]})];
+  const seams=filmSeams(six,cuts);
+  const html=render('ShotFilmView',{...filmFixture(),segments:filmSegments(six),seams,seam:seams[1],onSeam(){},onCheckSeam(){}});
+  assert.deepEqual([...html.matchAll(/class="seam-dot is-(\w+)[^"]*" aria-pressed="(\w+)" aria-label="([^"]+)"/g)].map(match=>[match[1],match[2],match[3]]),[
+    ['pass','false','Cut S01 → S02 · Holds'],['issue','true','Cut S02 → S03 · Has problems'],['queued','false','Cut S03 → S04 · Checking…'],['failed','false','Cut S04 → S05 · Check failed'],['none','false','Cut S05 → S06 · Can&#x27;t check yet']],
+    'one dot per gap, none after the last shot; the pressed one is the seam shown');
+  assert.match(html,/<li style="flex-grow:[\d.]+"><button type="button" class="film-seg state-adopted"[^>]*><\/button><button type="button" class="seam-dot is-pass"/,'the dot sits in its segment\'s gap');
+  // The seam shown: its score, its problems, the two frames, and (for a writer) checking it again.
+  assert.match(html,/<section class="seam-detail is-issue" aria-label="Cut S02 → S03"><header><i class="seam-mark is-issue" aria-hidden="true"><\/i><b>Cut S02 → S03<\/b><span class="seam-state">Has problems<\/span><span class="num seam-score">Score 41<\/span>/);
+  for(const text of ['S02 ends with the reel in his left hand, S03 opens with it in his right','Prop hand flips.','Check again']) assert.ok(html.includes(text),text);
+  assert.match(html,/<img class="seam-frames" src="\/sheet\/23\.png" alt="The out frame of S02 beside the in frame of S03"/);
+  assert.doesNotMatch(render('ShotFilmView',{...filmFixture(),writable:false,segments:filmSegments(six),seams,seam:seams[0]}),/Check this cut|Check again/,'a reader cannot queue a check');
+  assert.match(render('ShotFilmView',{...filmFixture(),segments:filmSegments(six),seams,seam:seams[4],onCheckSeam(){}}),/S06 has no adopted take yet\./);
+  assert.doesNotMatch(render('ShotFilmView',{...filmFixture(),segments:filmSegments(six),seams,seam:seams[4],onCheckSeam(){}}),/Check this cut/,'a seam that cannot be checked offers no check');
+  const failed=render('ShotFilmView',{...filmFixture(),segments:filmSegments(six),seams,seam:seams[3],onCheckSeam(){}});
+  assert.match(failed,/<p class="seam-note">The check could not run: The vision model timed out<\/p>/);assert.match(failed,/>Check again<\/button>/,'a failed check can be queued again');
+  const queued=render('ShotFilmView',{...filmFixture(),segments:filmSegments(six),seams,seam:seams[2],onCheckSeam(){}});
+  assert.match(queued,/Waiting for the Continuity Supervisor/);assert.doesNotMatch(queued,/Check again|Check this cut/,'a queued check is not queued twice');
+  assert.doesNotMatch(render('ShotFilmView',filmFixture()),/seam-dot|seam-detail/,'without seams the bar is as before');
+});
+
+test('cuts only: "Play around" gets a Whole / Cuts only switch, and the film window has it too',async()=>{
+  let html=render('ShotFilmView',{...filmFixture(),canAround:true,aroundMode:'whole',onAroundMode(){}});
+  assert.match(html,/<div class="studio-segmented small film-mode" role="group" aria-label="What to play"><button type="button" aria-pressed="true">Whole<\/button><button type="button" aria-pressed="false">Cuts only<\/button><\/div><button type="button" class="film-around"[^>]*>[\s\S]*?Play around<\/button>/);
+  html=render('ShotFilmView',{...filmFixture(),canAround:true,aroundMode:'seams',onAroundMode(){}});
+  assert.match(html,/aria-pressed="true">Cuts only<\/button>[\s\S]*?Play the cuts<\/button>/);
+  const shots=[filmShot(1,{reviewStatus:'Approved',selectedVideoUrl:'/t/1a.mp4'}),filmShot(2,{reviewStatus:'Approved',selectedVideoUrl:'/t/2a.mp4'}),filmShot(3,{previsVideoUrl:'/p/3.mp4'})];
+  const film=render('FilmOverlay',{epId:'ep_demo_01',shots,writable:true,onClose(){}});
+  assert.match(film,/<div class="studio-film-fill" role="group" aria-label="Fill gaps with"><div class="studio-segmented small film-mode" role="group" aria-label="What to play"><button type="button" aria-pressed="true">Whole<\/button>/);
+  assert.equal((film.match(/<video/g)||[]).length,1,'one player whichever way it plays');
+  assert.deepEqual([...film.matchAll(/class="seam-dot is-(\w+)[^"]*"[^>]*aria-label="([^"]+)"/g)].map(match=>match[2]),['Cut S01 → S02 · Not checked','Cut S02 → S03 · Not checked'],'the strip has a dot in each gap');
+  await components.setLocale('zh-TW');
+  try{
+    const zh=render('ShotFilmView',{...filmFixture(),canAround:true,aroundMode:'seams',onAroundMode(){}});
+    for(const text of ['整段','只看接點','巡接點']) assert.ok(zh.includes(text),text);
+  }finally{await components.setLocale('en');}
+});
+
+test('the film window offers "Check cuts" as an outlined button to writers only, beside the export',()=>{
+  const shots=[filmShot(1,{reviewStatus:'Approved',selectedVideoUrl:'/t/1a.mp4'}),filmShot(2,{reviewStatus:'Approved',selectedVideoUrl:'/t/2a.mp4'})];
+  const html=render('FilmOverlay',{epId:'ep_demo_01',shots,writable:true,onClose(){}});
+  assert.match(html,/<button type="button" class="seam-check">Check cuts<\/button><span class="studio-note" role="status">0 of 1 cuts checked · 0 with problems<\/span>/);
+  assert.equal((html.match(/class="primary"/g)||[]).length,1,'export stays the one primary button');
+  const reader=render('FilmOverlay',{epId:'ep_demo_01',shots,writable:false,onClose(){}});
+  assert.doesNotMatch(reader,/Check cuts|seam-check/,'a reader does not see "Check cuts"');
+  assert.match(reader,/class="seam-dot is-none"/,'but still sees the seams');
+});
+
+test('"Adopt latest takes" adopts each picked shot\'s newest take as its ✓ would, one at a time, and says what it skipped and why',async()=>{
+  const parts=await filmParts();
+  const videos={
+    sh_demo_b1:[{videoId:'vd_1a',url:'/t/1a.mp4',createdAt:filmAt(1)},{videoId:'vd_1b',url:'/t/1b.mp4',createdAt:filmAt(3)}],
+    sh_demo_b2:[{videoId:'vd_2a',url:'/t/2a.mp4',createdAt:filmAt(1)}],
+    sh_demo_b3:[{videoId:'vd_3a',url:'/t/3a.mp4',createdAt:filmAt(2),selected:true}],
+    sh_demo_b4:[],
+    sh_demo_b5:[{videoId:'vd_5a',url:'/t/5a.mp4',createdAt:filmAt(2)}],
+  };
+  const proposal={id:77,action:'table_edit',status:'pending',created_at:filmAt(9),target:{tab_key:'cinema-studio'},review:{groups:[{index:0,row_id:'b2',row_number:2,label:'Row 2',changes:[{column:'Cinema Shot',before:'',after:'[Video](/t/2b.mp4)'}]}],partial_allowed:true,version:'v77'}};
+  const shotInfo={b1:filmShot(1),b2:filmShot(2),b3:filmShot(3,{reviewStatus:'Approved',selectedVideoUrl:'/t/3a.mp4',adoption:{adopted:true,url:'/t/3a.mp4',at:filmAt(5),by:'u1'}}),b4:filmShot(4),b5:filmShot(5)};
+  const sent=[];
+  const results=await parts.adoptLatestTakes({slug:'demo',tabKey:'cinema-studio',rowIds:['b1','b2','b3','b4','b5'],shotInfo,proposals:[proposal],
+    list:async path=>videos[path.split('/')[2]],request:async(path,method,body)=>{sent.push([path,method,body]);if(path.includes('b5'))throw new Error('Read-only crew members cannot modify a production.');return {};}});
+  assert.deepEqual(sent,[['/shots/sh_demo_b1/adoptions','POST',{videoId:'vd_1b'}],['/shots/sh_demo_b2/adoptions','POST',{proposalId:77}],['/shots/sh_demo_b5/adoptions','POST',{videoId:'vd_5a'}]],
+    'the newest candidate, the pending pipeline take through its proposal; in shot order');
+  assert.deepEqual(results.map(result=>[result.shot,result.adopted?'adopted':result.skip]),[['S01','adopted'],['S02','adopted'],['S03','adopted'],['S04','none'],['S05','failed']]);
+  const report=renderPart(parts,'AdoptLatestReport',{results});
+  for(const text of ['Adopted 2 shots · skipped 3','S03: its newest take is already in the cut','S04: no take yet','S05: Read-only crew members cannot modify a production.']) assert.ok(report.includes(text),text);
+  assert.equal(renderPart(parts,'AdoptLatestButton',{rowIds:['b1'],writable:false}),'','a reader gets no button');
+  const button=renderPart(parts,'AdoptLatestButton',{rowIds:['b1','b2'],writable:true,onWrite(){}});
+  assert.match(button,/<button type="button" class="adopt-latest-btn" title="Adopt the newest take of each picked shot, as its ✓ would">Adopt latest takes<\/button>/);
+  assert.doesNotMatch(button,/primary/,'outlined, not a primary button');
+  await parts.setLocale('zh-TW');
+  try{
+    assert.ok(renderPart(parts,'AdoptLatestButton',{rowIds:['b1'],writable:true}).includes('全部採用最新 Take'));
+    assert.ok(renderPart(parts,'AdoptLatestReport',{results}).includes('已採用 2 鏡 · 跳過 3 鏡'));
+  }finally{await parts.setLocale('en');}
+  const source=await readFile(join(root,'src/SheetWorkspace.jsx'),'utf8');
+  assert.match(source,/\{productionSheet&&mode==='gallery'&&<AdoptLatestButton /,'only on the overview, inside the bar that appears once shots are picked');
+});
+
+test('package A follow-ups: the overview cards read Adopted on the Shot Stage, Approved elsewhere; Review adopts through /adoptions',async()=>{
+  const row={rid:'brow',cells:[{value:'SC01-S01'},{value:'Approved'}]};
+  const parsed={headers:['Shot','Status'],rows:[row],table:{attrs:{column_types:[null,'status']}}};
+  const card={row,index:0,title:'SC01-S01',summary:[],assets:[],mediaChain:[]};
+  const props={model:{cards:[card],groupColumn:1,coverColumn:-1},mode:'gallery',selected:new Set(),parsed,writable:true};
+  assert.match(render('SheetCards',{...props,compact:true}),/<option value="Approved"[^>]*>Adopted<\/option>/,'on the Shot Stage');
+  assert.match(render('SheetCards',{...props,compact:false}),/<option value="Approved"[^>]*>Approved<\/option>/,'the table and other pages keep Approved');
+  const source=await readFile(join(root,'src/StoryWorkbenchModals.jsx'),'utf8');
+  assert.match(source,/storyRequest\(`\/shots\/\$\{id\}\/adoptions`, 'POST', kind === 'images' \? \{imageId:take\.imageId\} : \{videoId:take\.videoId\}\)/);
+  assert.doesNotMatch(source,/selected-\$\{kind/,'Review no longer picks a take with selected-video');
+});

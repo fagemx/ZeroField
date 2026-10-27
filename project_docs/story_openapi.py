@@ -56,9 +56,12 @@ _PROCESS = uuid.uuid4().hex
 
 
 class StoryError(ValueError):
-    def __init__(self, status, code, message, details=None):
+    """An API error. ``message_key`` (``errors.*``) and ``message_params`` let the interface translate the message; the
+    English ``message`` stays the fallback."""
+    def __init__(self, status, code, message, details=None, *, message_key=None, message_params=None):
         super().__init__(message)
         self.status, self.code, self.details = status, code, details
+        self.message_key, self.message_params = message_key, message_params
 
 
 def invalid(message):
@@ -152,8 +155,10 @@ def project(conn, identifier):
     found = repo.get_project(conn, slug)
     if not found:
         raise StoryError(404, "DRAMA_NOT_FOUND", "Production not found.")
+    from project_docs import story_adoption
     return {**found, "projectId": "pj_" + slug, "description": found["summary"],
-            "productionPolicy": production_policy(conn, slug)}
+            "productionPolicy": production_policy(conn, slug),
+            "autoVideoAfterFirstFrame": story_adoption.auto_video_enabled(conn, slug)}
 
 
 def episodes(conn, slug):
@@ -476,6 +481,30 @@ def film_cut(items, fill_previs=False):
     return [url for _, url in film_shots(items, fill_previs)]
 
 
+def film_segments(conn, ep, plan, trims):
+    """The ``segments`` an export records (SPEC_19 R6, D10): where every clip of this film came from, in film order.
+
+    ``[{shotId, source, takeUrl, in, out, takeRefs, cut}]``, frozen when the export is queued. ``source`` is "adopted",
+    "latest" or "previs"; ``takeUrl`` the clip played (the previs itself for "previs"); ``in``/``out`` the seconds of it
+    played (0 and null: all of it, as ``trims``); ``takeRefs`` the take reference snapshots that take froze when it was
+    rendered (``[]`` when it quoted nothing, its history is unknown, or it is a previs); ``cut`` the cut from this segment
+    to the next as ``GET /episodes/{id}/cuts`` lists it (without its ``index``), with its check, or null for the last
+    segment and for two segments that are not neighbours there (a shot between them is left out of this film).
+    """
+    from project_docs import story_adoption, story_cuts, story_take_refs
+    takes = story_adoption.Takes(conn, ep["slug"])
+    cuts = {(cut["fromShotId"], cut["toShotId"]): {k: v for k, v in cut.items() if k != "index"}
+            for cut in story_cuts.cuts(conn, ep)} if len(plan) > 1 else {}
+    result = []
+    for i, ((shot, url, source), trim) in enumerate(zip(plan, trims)):
+        following = plan[i + 1][0]["shotId"] if i + 1 < len(plan) else None
+        result.append({"shotId": shot["shotId"], "source": source, "takeUrl": url,
+                       "in": (trim or {}).get("in") or 0, "out": (trim or {}).get("out"),
+                       "takeRefs": [] if source == "previs" else story_take_refs.take_snapshots(conn, shot["shotId"], url, takes),
+                       "cut": cuts.get((shot["shotId"], following)) if following else None})
+    return result
+
+
 def film_options(body):
     """(selection, fill) of POST /episodes/{id}/films; without the new fields the RH request means exactly what it meant."""
     selection = body.get("selection", "selected")
@@ -772,12 +801,28 @@ def register_card(conn, me, body):
             "nodeInfoList": worker.build_node_info(card)}
 
 
+def app_code(card):
+    """A card's primary appCode: its first RH alias, else its card id."""
+    return next((a for a, cid in ALIASES.items() if cid == card["card_id"]), card["card_id"])
+
+
+def look_catalog(kind=None):
+    """GET /catalog/looks items (story_look.api_items): every kind, or one; 400 with a message key for an unknown kind."""
+    from project_docs import story_look
+    try:
+        return story_look.api_items(kind)
+    except story_look.LookCatalogError:
+        raise StoryError(400, "DRAMA_VALIDATION_FAILED", f"Unknown look kind {kind!r}; use one of {', '.join(story_look.API_KINDS)}.",
+                         {"kinds": list(story_look.API_KINDS)}, message_key="errors.unknownLookKind",
+                         message_params={"kind": kind, "kinds": ", ".join(story_look.API_KINDS)}) from None
+
+
 def catalog_entries():
     """(card, catalog item) pairs: the primary appCode of every registered card, then the card's other aliases."""
     result = []
     for card in worker.openapi_list_cards():
         ec = card.get("engine_config", {})
-        code = next((a for a, cid in ALIASES.items() if cid == card["card_id"]), card["card_id"])
+        code = app_code(card)
         item = {"appCode": code, "card_id": card["card_id"], "name": card["label"], "capability": card["output_mode"].upper(),
                 "webappId": str(ec.get("webappId", card["card_id"])), "skuId": str(ec.get("webappId", "0")),
                 "imageMode": "T2I" if card["card_id"] == "local-smoke" else "I2I", "nodes": card["nodes"],
@@ -844,7 +889,7 @@ def queue_task(conn, me, slug, kind, job, actions):
 
 
 def take_refs(conn, shot, episode_id, prompt, uses):
-    """SPEC_19 R15: snapshots of the @S02.end / @S02.start tags in a shot's prompt (story_take_refs.resolve)."""
+    """SPEC_19 R15: snapshots of the @SC01-S02.end / .start tags in a shot's prompt (story_take_refs.resolve)."""
     from project_docs import story_take_refs
     if not story_take_refs.tokens(prompt):
         return story_take_refs.resolve(prompt, [], shot, uses)  # no tag: only takeRefUses is checked
@@ -917,7 +962,7 @@ def generation_job(conn, me, identifier, kind, body):
         from project_docs import writing_impact, story_take_refs
         job['storyProvenance'] = writing_impact.freeze_for_shot(conn, me, identifier)
         writing_impact.validate_frozen_row(job['storyProvenance'], job['row']['cells'])
-        # SPEC_19 R15: @S02.end / @S02.start in the prompt sent are frozen now, into the job and the new take's provenance.
+        # SPEC_19 R15: @SC01-S02.end / .start in the prompt sent are frozen now, into the job and the new take's provenance.
         refs = take_refs(conn, shot, episode_id, prompt or shot['description'], body.get('takeRefUses'))
         if refs:
             job['storyProvenance'] = writing_impact.with_take_refs(job['storyProvenance'], refs)
@@ -953,9 +998,125 @@ def generation_job(conn, me, identifier, kind, body):
     return slug,job
 
 
+MAX_TAKES = 4  # SPEC_19 B7: takes one generation request may ask for
+
+
+def take_count(body):
+    """The ``count`` of a generation request: a whole number from 1 to MAX_TAKES, else 422."""
+    value = body["count"]
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_TAKES:
+        invalid(f"count must be a whole number from 1 to {MAX_TAKES}.")
+    return value
+
+
+def takes_so_far(conn, slug, identifier, kind):
+    """The number the next take of this row and kind gets: the takes it lists (``GET .../videos`` or ``/images``) plus the
+    Story renders of that kind still queued or running for it, so two batches sent back to back never share a seed."""
+    with conn.cursor() as cur:
+        cur.execute("""SELECT count(*) FROM projectops.story_record WHERE kind='task' AND project_slug=%s
+                         AND data->>'status' IN ('QUEUED','RUNNING') AND data->'_job'->>'entityId'=%s AND data->'_job'->>'kind'=%s""",
+                    (slug, identifier, kind))
+        in_flight = cur.fetchone()[0]
+    return len(candidate_list(conn, identifier, kind)) + in_flight
+
+
+def seed_take(job, take):
+    """``job`` for take number ``take`` (0 = the first take the row ever had): the card's seed input becomes the seed the
+    take would start from (an explicit modelParams seed, else the row's identity seed, else the card's default) plus
+    ``take``, the way a pipeline re-shoot advances it. A card without a seed input keeps its own seed."""
+    node = next((n for n in job["card"]["nodes"] if n.get("slot") == "seed"), None)
+    if node is None:
+        return job
+    key = f"{node['nodeId']}.{node['fieldName']}"
+    base = job["values"].get(key)
+    if base is None:
+        base = worker.resolve_studio_context({"input": job["input"], "capability": job["kind"] + "_gen"}).get("seed")
+    if base is None:
+        base = node.get("defaultValue", 0)
+    try:
+        seed = int(str(base).strip()) + take
+    except ValueError:
+        invalid("The seed must be a whole number for several takes to advance it.")
+    if node.get("max") is not None:
+        seed %= int(node["max"]) + 1
+    job["values"][key] = str(seed)
+    return job
+
+
 def generation(conn, me, identifier, kind, body, actions):
-    slug,job=generation_job(conn,me,identifier,kind,body)
-    return queue_task(conn, me, slug, ("SHOT_" if identifier.startswith("sh_") else "ASSET_") + kind.upper() + "_GENERATE", job, actions)
+    """POST /shots|assets/{id}/image-generations, video-generations.
+
+    Without ``count`` the request and its answer (one task) are exactly the RH ones. With ``count`` (1-4, SPEC_19 B7) it
+    queues that many tasks of the same job, each with the seed of its take number (``seed_take``), and answers
+    ``{tasks: [task, ...], count}``. An official Router card renders one take per request: its quote covers one set of
+    inputs, so a count above 1 is refused and its single take keeps the quoted seed.
+    """
+    task_type = ("SHOT_" if identifier.startswith("sh_") else "ASSET_") + kind.upper() + "_GENERATE"
+    if "count" not in body:
+        slug, job = generation_job(conn, me, identifier, kind, body)
+        return queue_task(conn, me, slug, task_type, job, actions)
+    count = take_count(body)
+    slug, job = generation_job(conn, me, identifier, kind, {k: v for k, v in body.items() if k != "count"})
+    if worker.card_execution_profile(job["card"])["driver"] == "comfy_router":
+        if count > 1:
+            invalid("An official Router card renders one take per request, as quoted; send count 1 and quote each take.")
+        return {"tasks": [queue_task(conn, me, slug, task_type, job, actions)], "count": 1}
+    first = takes_so_far(conn, slug, identifier, kind)
+    tasks = [queue_task(conn, me, slug, task_type, seed_take(copy.deepcopy(job), first + i), actions) for i in range(count)]
+    return {"tasks": tasks, "count": count}
+
+
+def worker_task(identifier, slug, job, refs):
+    """The Studio worker task of a Story generation job: execute_task sends it, prompt_preview compiles the same one."""
+    from project_docs import story_take_refs
+    # project_slug lets the worker check that media it is pointed at (extract_frame source_url) is this production's.
+    return {"id": identifier, "project_slug": slug, "capability": job["kind"] + "_gen",
+            "input": story_take_refs.worker_input(job["input"], refs),
+            "workflow": job["workflow"], "production_policy": job.get("production_policy")}
+
+
+def compile_card_form(task, card, values):
+    """(context, form values) the Studio worker compiles for ``card`` before it submits anything: the shot context
+    (``resolve_studio_context``: # move tags and quoted takes become their sentences there) and the card's form
+    (``_build_card_form_values``: which compiled text each prompt input gets, the explicit values over it). Pure: without a
+    worker head no media is read."""
+    ctx = worker.resolve_studio_context(task)
+    return ctx, worker._build_card_form_values(card, ctx, dict(card["engine_config"], card_values=values), task, None)
+
+
+def prompt_preview(conn, me, identifier, kind, body):
+    """POST /shots/{id}/prompt-previews (SPEC_19 B6): what a generation with this body would send, without sending it.
+
+    The body is a generation request (``count`` is validated and ignored). The job is built and validated exactly as for
+    a generation inside a savepoint that is always rolled back, so nothing is queued, reserved or written. Returns::
+
+        {compiledPrompt,   # the text the card's prompt input receives, word for word (null if the card has none)
+         references: [{kind: "asset", code, name, imageUrl} | {kind: "take", shotId, shotIndex, edge, takeUrl, at, frameUrl,
+                       use, adopted, lastFrameAt}],   # the pictured subjects, then the quoted takes as frozen on submit
+         look: {opticalRig, cameraMovement, moves}}   # the look inputs the compiler read; moves are catalog #ids in order
+
+    A quoted take's frame is cut by the worker after admission (frameUrl is null here); the sentence its tag becomes does
+    not depend on that frame.
+    """
+    import psycopg
+    from project_docs import story_take_refs
+    if "count" in body:
+        take_count(body)
+    with conn.transaction():
+        slug, job = generation_job(conn, me, identifier, kind, {k: v for k, v in body.items() if k != "count"})
+        raise psycopg.Rollback()
+    refs = story_take_refs.frozen(job)
+    # Until the worker cuts the frame, the quoted take stands in for it: the compiler only checks it is a production asset.
+    standing = [dict(ref, frameUrl=ref.get("frameUrl") or ref["takeUrl"]) for ref in refs]
+    ctx, form = compile_card_form(worker_task("tk_preview", slug, job, standing), job["card"], job["values"])
+    prompts = [form.get(f"{n['nodeId']}.{n['fieldName']}") for n in job["card"]["nodes"] if n.get("slot") == "prompt"]
+    compiled = next((str(p) for p in prompts if p is not None), None)
+    references = [{"kind": "asset", "code": a["asset_id"], "name": a["name"], "imageUrl": next(iter(a.get("reference_urls") or ()), None)}
+                  for a in ctx.get("resolved_assets") or [] if not a.get("take_ref")]
+    references += [{"kind": "take", **ref} for ref in refs]
+    return {"compiledPrompt": compiled, "references": references,
+            "look": {"opticalRig": ctx.get("optical_rig") or "", "cameraMovement": ctx.get("camera_motion") or "",
+                     "moves": list(ctx.get("camera_moves") or [])}}
 
 
 def router_quote(me, identifier, body):
@@ -1133,12 +1294,8 @@ def execute_task(identifier):
             with http.open_connection() as conn:
                 authorize(conn, me, slug, write=True)
                 authorize_card(conn, slug, job["card"])
-            from project_docs import story_take_refs
             refs = prepare_take_refs(identifier, slug, job, head)
-            # project_slug lets the worker check that media it is pointed at (extract_frame source_url) is this production's.
-            execution = {"id": identifier, "project_slug": slug, "capability": job["kind"] + "_gen",
-                         "input": story_take_refs.worker_input(job["input"], refs),
-                         "workflow": job["workflow"], "production_policy": job.get("production_policy")}
+            execution = worker_task(identifier, slug, job, refs)
             if job.get("allocation"):
                 from project_docs import story_allocation
                 output = story_allocation.execute_steps(execution, job["allocation"]["stages"], head, job["values"])
@@ -1394,6 +1551,8 @@ def dispatch(conn, me, method, path, body, query, actions):
                          and (not scope or options.in_scope(card, scope))], query)
         if path == "/catalog/styles":
             return page(STYLES, query)
+        if path == "/catalog/looks":
+            return page(look_catalog(query.get("kind")), query)
         if path == "/catalog/director-styles":
             return page([{"directorStyleId": str(i + 1), "name": name} for i, name in enumerate(["ARRI Alexa 65 / 35mm Anamorphic", "RED V-Raptor / 85mm Prime", "16mm Bolex"])], query)
         if path == "/catalog/aspect-ratios":
@@ -1448,10 +1607,15 @@ def dispatch(conn, me, method, path, body, query, actions):
             if method == "GET":
                 return p
             if method == "PATCH":
+                if "autoVideoAfterFirstFrame" in body and not isinstance(body["autoVideoAfterFirstFrame"], bool):
+                    invalid("autoVideoAfterFirstFrame must be true or false.")
                 update = {k: body[src] for k, src in (("title", "title"), ("summary", "description")) if src in body}
                 status, result = service.update_project(conn, me, slug, update)
                 if status != 200:
                     invalid(result["error"])
+                if "autoVideoAfterFirstFrame" in body:
+                    from project_docs import story_adoption
+                    story_adoption.set_auto_video(conn, slug, body["autoVideoAfterFirstFrame"])
                 return project(conn, slug)
             if method == "DELETE":
                 if not me.can_edit:
@@ -1651,9 +1815,10 @@ def dispatch(conn, me, method, path, body, query, actions):
                     raise StoryError(409, "DRAMA_STAGE_PRECONDITION", "Adopt at least one shot before exporting a film." if selection == "adopted"
                                      else "Select at least one shot video before exporting a film.")
                 clips = [(shot, url) for shot, url, _ in plan]
+                trims = story_trim.film_trims(clips)
                 return queue_task(conn, me, slug, "FILM_EXPORT", {"episodeId": ep["episodeId"], "urls": [url for _, url in clips],
-                                                                   "trims": story_trim.film_trims(clips), "config": {},
-                                                                   "segments": [{"shotId": shot["shotId"], "source": source} for shot, _, source in plan]}, actions)
+                                                                   "trims": trims, "config": {},
+                                                                   "segments": film_segments(conn, ep, plan, trims)}, actions)
     if parts[0] in ("assets", "shots") and len(parts) >= 2:
         identifier = parts[1]; entity = "asset" if parts[0] == "assets" else "shot"
         slug, row = find_row(conn, identifier, entity); tail = "/".join(parts[2:])
@@ -1689,6 +1854,12 @@ def dispatch(conn, me, method, path, body, query, actions):
             return options.describe(conn, slug, identifier, entity, row, query)
         if tail in ("image-generations", "video-generations") and method == "POST":
             return generation(conn, me, identifier, "image" if tail == "image-generations" else "video", body, actions)
+        if entity == "shot" and tail == "prompt-previews" and method == "POST":
+            # The body of a video-generations request; kind "image" previews an image-generations one (as router-quotes).
+            kind = body.get("kind", "video")
+            if kind not in ("image", "video"):
+                invalid("kind must be image or video.")
+            return prompt_preview(conn, me, identifier, kind, {k: v for k, v in body.items() if k != "kind"})
         if tail in ("images", "videos") and method == "GET":
             return page(candidate_list(conn, identifier, "image" if tail == "images" else "video"), query)
         if tail == "images" and method == "POST":
@@ -1703,8 +1874,14 @@ def dispatch(conn, me, method, path, body, query, actions):
         if tail in ("selected-image", "selected-video") and method == "PUT":
             return select_candidate(conn, me, identifier, "image" if tail.endswith("image") else "video", body)
         if entity == "shot" and tail == "adoptions" and method == "POST":
+            try:
+                before = media_url(row["cells"][media_column(row, "image")])
+            except StoryError:
+                before = None
             adopted = story_adoption.adopt(conn, me, identifier, body)
-            if "imageId" not in body:  # a first frame does not change the cut
+            if "imageId" in body:  # a first frame does not change the cut; it may start the shot's video (§7 decision 1)
+                adopted["autoVideo"] = story_adoption.follow_first_frame(conn, me, identifier, before, actions)
+            else:
                 auto_cut_checks(conn, me, slug, identifier, actions)
             return adopted
         if entity == "shot" and tail == "adoption" and method == "DELETE":
@@ -2051,6 +2228,8 @@ def handle(handler, parsed, method):
         payload = {"code": code, "message": message, "requestId": "req_" + uuid.uuid4().hex[:16]}
         if isinstance(exc, StoryError) and exc.details is not None:
             payload['details'] = exc.details
+        if isinstance(exc, StoryError) and exc.message_key:
+            payload['message_key'], payload['message_params'] = exc.message_key, dict(exc.message_params or {})
         handler.send_json(status, payload)
     finally:
         if conn:

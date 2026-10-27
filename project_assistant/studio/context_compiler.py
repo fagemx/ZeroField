@@ -348,9 +348,10 @@ def resolve_studio_context(task: dict) -> dict:
     still = task.get("capability") == "image_gen"
     # SPEC_19 R10: catalog #move tags become their sentences where they stand (a still drops them); once a prompt has
     # one, the tags are the shot's camera movement and the Camera Motion column no longer applies.
-    if story_look.move_tokens(action):
+    camera_moves = [item_id for _, item_id in story_look.move_tokens(action)]
+    if camera_moves:
         action, motion = story_look.expand_moves(action, still=still), ""
-    # SPEC_19 R15: a quoted take (@S02.end) becomes its sentence where it stands; its frame is bound below.
+    # SPEC_19 R15: a quoted take (@SC01-S02.end) becomes its sentence where it stands; its frame is bound below.
     take_refs = story_take_refs.compiler_refs(source)
     action = story_take_refs.expand(action, take_refs)
     # Text-to-image encoders read "Optical Rig: RED ..." / "Static Tripod" as props to draw; a still has no camera move.
@@ -435,7 +436,7 @@ def resolve_studio_context(task: dict) -> dict:
     ctx = {"compiled_prompt": compiled_prompt,
            "action_prompt": action,
            "seed": _take_seed(next((a["seed"] for a in resolved if a["seed"] is not None), None), source.get("take")),
-           "optical_rig": optical, "camera_motion": motion, "jutsu_mode": mode,
+           "optical_rig": optical, "camera_motion": motion, "camera_moves": camera_moves, "jutsu_mode": mode,
            "resolved_assets": resolved, "asset_map": asset_map,
            "excluded_refs": excluded_refs, "slot_plan": planned_slots,
            "asset_images": references, "reference_image_urls": references,

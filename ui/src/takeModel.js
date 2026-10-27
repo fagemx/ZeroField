@@ -247,3 +247,90 @@ export function playlist(shots, {fill = 'latest', trial = null} = {}) {
   });
   return items;
 }
+
+// ---------- SPEC_19 package D: references, seams, and adopting the newest takes of many shots ----------
+// Additions only: nothing above reads them.
+
+// R16: the references of a shot's adopted take whose upstream changed. takeRefs is the shot view's list (GET /episodes/{id}/shots or
+// GET /shots/{id}): [{shotId, shotIndex, edge: 'start'|'end', takeUrl, at, use: 'first_frame'|'reference', stale, nowTakeUrl, frameUrl,
+// adopted}], empty while nothing is adopted. The server decides stale; this only reads it.
+export const staleTakeRefs = shot => (Array.isArray(shot?.takeRefs) ? shot.takeRefs : []).filter(ref => ref?.stale === true);
+
+// What changed upstream of one stale reference, read with the quoted shot's current view (from the same shot list); null when the
+// reference still resolves to the frame it quoted.
+//   {kind: 'gone'}           the quoted shot has no take now (or is gone)
+//   {kind: 'take', url}      the tag resolves to another take now (url: nowTakeUrl)
+//   {kind: 'edge', seconds}  same take, the cut moved that edge: the new in point (0 untrimmed) or out point; null when the shot is not
+//                            known here or its out point is the take's own end (its length is not known here)
+export function takeRefChange(ref, shot = null) {
+  if (!ref?.stale) return null;
+  if (!ref.nowTakeUrl) return {kind: 'gone'};
+  if (ref.nowTakeUrl !== ref.takeUrl) return {kind: 'take', url: ref.nowTakeUrl};
+  const trim = shot?.trim || null;
+  const seconds = !trim ? null : ref.edge === 'start' ? (finite(trim.in) && trim.in > 0 ? trim.in : 0) : finite(trim.out) ? trim.out : null;
+  return {kind: 'edge', seconds};
+}
+
+// R17: the colour of a seam from its cut check (GET /episodes/{id}/cuts item, or null when the server lists no such pair):
+// 'pass' (green, it holds), 'issue' (yellow, the check found problems), 'queued' (in the grader's queue), 'failed' (the check could not
+// run) or 'none' (grey: never checked for these takes and points, or not checkable yet).
+export const SEAM_STATES = ['pass', 'issue', 'queued', 'failed', 'none'];
+export function seamState(cut) {
+  const check = cut?.check;
+  if (check?.state === 'done') return check.passed === true ? 'pass' : 'issue';
+  return check?.state === 'queued' || check?.state === 'failed' ? check.state : 'none';
+}
+
+// The seams of the film: one between each two neighbouring shots of `shots` (film order, as the progress bar draws them), with the
+// episode's cut for that pair matched on fromShotId and toShotId. A pair the server does not list (a lab clip sits between them in the
+// server's film, or the cuts are not loaded) is an unchecked seam. Each:
+//   {key ('fromShotId>toShotId'), index (of the shot before it), fromShotId, toShotId, fromShotIndex, toShotIndex,
+//    state (seamState), checkable, blockedBy [{shotId, reason}], check (the cut's check or null), cut (the server's item or null)}
+export function filmSeams(shots, cuts = []) {
+  const list = Array.isArray(shots) ? shots : [];
+  const byPair = new Map((Array.isArray(cuts) ? cuts : []).map(cut => [`${cut.fromShotId}>${cut.toShotId}`, cut]));
+  return list.slice(1).map((after, at) => {
+    const before = list[at], key = `${before.shotId}>${after.shotId}`, cut = byPair.get(key) || null;
+    return {key, index: at, fromShotId: before.shotId, toShotId: after.shotId, fromShotIndex: before.shotIndex, toShotIndex: after.shotIndex,
+      state: seamState(cut), checkable: Boolean(cut?.checkable), blockedBy: Array.isArray(cut?.blockedBy) ? cut.blockedBy : [], check: cut?.check || null, cut};
+  });
+}
+
+// R18: what "Cuts only" plays, in film order: for each seam, the last `seconds` of the clip before it and the first `seconds` of the
+// clip after it, so the whole episode's joins pass in a few seconds each, one clip at a time in the same player.
+//   items: playlist() / filmPlayback() output (one clip per shot, already cut, filled and with any trial take). Two clips make a seam
+//   only when their shots are neighbours in the film (index + 1): a shot left out leaves no seam across it.
+//   Each result is its clip's item narrowed to the seam, plus seam {key, index, fromShotId, toShotId} and side 'out' | 'in'. When the
+//   outgoing clip's end is not known (an untrimmed take whose file is not measured), its item has out null and tail: seconds, meaning
+//   "start that many seconds before the end".
+//   options: seconds (1), measured {url: file seconds}, only (a seam key: just that seam).
+export function seamPlaylist(items, {seconds = 1, measured = {}, only = null} = {}) {
+  const list = Array.isArray(items) ? items : [], span = finite(seconds) && seconds > 0 ? seconds : 1, result = [];
+  list.forEach((before, at) => {
+    const after = list[at + 1];
+    if (!after || after.index !== before.index + 1) return;
+    const seam = {key: `${before.shotId}>${after.shotId}`, index: before.index, fromShotId: before.shotId, toShotId: after.shotId};
+    if (only && only !== seam.key) return;
+    const from = finite(before.in) && before.in > 0 ? before.in : 0;
+    const end = finite(before.out) ? before.out : finite(measured?.[before.url]) ? measured[before.url] : null;
+    result.push(end === null ? {...before, in: from, out: null, tail: span, seam, side: 'out'}
+      : {...before, in: Math.max(from, end - span), out: end, seam, side: 'out'});
+    const start = finite(after.in) && after.in > 0 ? after.in : 0;
+    result.push({...after, in: start, out: finite(after.out) ? Math.min(after.out, start + span) : start + span, seam, side: 'in'});
+  });
+  return result;
+}
+
+// §7 decision 6, the overview's "Adopt latest takes": what to do for one shot. takes: mergeTakes() output (newest first).
+//   {body, take}  POST /shots/{id}/adoptions with body (adoptionBody(), as the shot column: through the proposal behind the take, else
+//                 the candidate)
+//   {skip}        'none' (no take yet), 'adopted' (the newest take is already in the cut), 'shared' (a pipeline proposal across several
+//                 rows: apply it as a crew proposal), 'unavailable' (nothing to adopt it by)
+export function adoptLatestPlan(takes) {
+  const latest = Array.isArray(takes) && takes.length ? takes[0] : null;
+  if (!latest) return {skip: 'none'};
+  if (latest.adopted) return {skip: 'adopted', take: latest};
+  const body = adoptionBody(latest);
+  if (body) return {body, take: latest};
+  return {skip: latest.entry && (latest.entry.size ?? 1) > 1 ? 'shared' : 'unavailable', take: latest};
+}

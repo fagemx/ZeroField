@@ -176,7 +176,8 @@
 .pc-popover header { display: flex; align-items: center; justify-content: space-between; }
 .pc-popover p { margin: 0; font-size: 12px; }
 .workbench-app.studio-shell .shot-composer .pc-popover header button { width: 22px; height: 22px; padding: 0; border: 0; background: transparent; color: var(--muted); }
-.workbench-app.studio-shell .shot-composer .pc-popover .studio-segmented > button { border: 0; }
+.workbench-app.studio-shell .shot-composer .pc-popover .studio-segmented > button { height: 24px; padding: 0 9px; border: 0; border-radius: 4px; font-size: 12px; }
+.workbench-app.studio-shell .shot-composer .pc-popover .studio-segmented > button[aria-pressed="true"] { background: var(--active); color: var(--text); }
 
 /* See the full prompt */
 .composer-preview { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--ground); }

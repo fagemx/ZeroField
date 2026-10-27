@@ -123,6 +123,39 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(look.load(path), CATALOG)
 
 
+class ApiItemTests(unittest.TestCase):
+    """GET /catalog/looks items: {id, kind, group?, labelKey, promptText, preview: {poster, clip} | null, hex?}."""
+
+    def test_items_follow_the_catalog_with_groups_only_where_a_kind_has_them(self):
+        listed = look.api_items()
+        self.assertEqual([(i["kind"], i["id"]) for i in listed], [(i["kind"], i["id"]) for i in CATALOG["items"]])
+        self.assertEqual(listed[0], {"id": "auto-body", "kind": "camera", "group": "body", "labelKey": "lookCatalog.camera.body.auto",
+                                     "promptText": "", "preview": None})
+        self.assertEqual([i["group"] for i in look.api_items("camera")], [i["group"] for i in items("camera", "body") +
+                                                                          items("camera", "lens") + items("camera", "aperture")])
+        moves = look.api_items("move")
+        self.assertEqual(moves[1], {"id": "push-in", "kind": "move", "labelKey": "lookCatalog.move.pushIn", "promptText": PUSH, "preview": None})
+        self.assertTrue(all("group" not in i and "hex" not in i for i in moves))
+
+    def test_kinds_not_in_the_catalog_yet_list_nothing_and_other_kinds_are_refused(self):
+        # Package C fills genre, era, tempo, palette and light; until then they are empty, not errors.
+        for kind in ("genre", "era", "tempo", "palette", "light"):
+            self.assertEqual(look.api_items(kind), [], kind)
+        self.assertEqual(look.API_KINDS, ("camera", "move", "genre", "era", "tempo", "palette", "light"))
+        for kind in ("colour", "Camera", "", "body"):
+            with self.subTest(kind=kind), self.assertRaises(look.LookCatalogError):
+                look.api_items(kind)
+
+    def test_sample_media_and_colours_are_passed_through(self):
+        base = {"id": "teal-night", "kind": "palette", "labelKey": "lookCatalog.palette.tealNight", "promptText": "Teal night."}
+        self.assertIsNone(look.api_item(dict(base, preview={}))["preview"])
+        self.assertEqual(look.api_item(dict(base, preview={"poster": "/a.webp"}))["preview"], {"poster": "/a.webp", "clip": None})
+        self.assertEqual(look.api_item(dict(base, preview={"poster": "/a.webp", "clip": "/a.mp4"}))["preview"],
+                         {"poster": "/a.webp", "clip": "/a.mp4"})
+        self.assertEqual(look.api_item(dict(base, hex=["#2E3A4A", "#5B6F86"]))["hex"], ["#2E3A4A", "#5B6F86"])
+        self.assertNotIn("group", look.api_item(base))
+
+
 class CameraTextTests(unittest.TestCase):
     def test_auto_parts_are_left_out_and_the_rest_join_in_body_lens_aperture_order(self):
         body, lens, aperture = (look.option("camera", i)["promptText"] for i in ("film-35mm", "anamorphic", "f1-4"))

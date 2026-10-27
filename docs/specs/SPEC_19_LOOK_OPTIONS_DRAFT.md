@@ -1,6 +1,6 @@
 # SPEC_19 附錄草稿 — 片型、年代、節奏、色調、燈光選項清單（待使用者確認）
 
-> **狀態**：已定稿（2026-10-27，使用者確認全部照建議，決定見第 6 節）。下一步：名稱原創性的網路查核，查完才產範例與寫目錄。對應 [`SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md`](./SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md) §7 待決第 5 項。
+> **狀態**：已定稿（2026-10-27，使用者確認全部照建議，決定見第 6 節）。名稱原創性已用網路搜尋查核，六個改名（見第 7 節）；下一步是包 C 寫目錄與產範例。對應 [`SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md`](./SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md) §7 待決第 5 項。
 > **定稿時的變更**：加入 `close-warmth`（近身暖意）、`dry-ochre`（乾土赭黃）；`tape-era` 中文名改「錄影帶年代」；介面上 `era` 類別寫成「影像年代」；`Film:` 串接規則已寫進 SPEC_19 §4.3；新增「精簡版」實測約定。
 > **參考來源**：Higgsfield Cinema Studio 4.0 的 Genre／Era／Tempo／Color palette／Lighting 分頁（`docs/HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md` 只記錄分頁存在，沒有列出選項值）。本清單只借「分哪幾類」，選項與名稱全部自擬。
 
@@ -39,7 +39,7 @@
 | `quiet-drama` | 靜默人情 | Quiet drama | one or two people in a plain room framed from the waist up, faces held in close view for long moments, everyday objects such as cups, coats and chairs behind them, almost no camera movement, a little empty space left beside whoever is speaking | 人物對話的基本盤；和雨夜謎案相比，是「亮、少動、靠臉」的一端。 |
 | `creeping-unease` | 暗處不安 | Creeping unease | wide frames with large empty areas of dark space, a doorway or corridor at the far end of the image, the subject small and off to one side, something partly hidden at the very edge of the frame, few low light sources, camera moving very slowly toward the dark area | 留白與邊緣構圖；適合等待信號那一類的鏡頭。 |
 | `instrument-room-sf` | 機房科幻 | Instrument-room sci-fi | rooms full of dials, screens and cables laid out in straight lines and symmetrical rows, a person small beside large machinery, light from screens falling across nearby surfaces, wide establishing frames followed by tight shots of hands and displays | 範例的天文台控制室與盤式錄音機這類儀器場景。 |
-| `long-road` | 長途遠行 | Long road | wide landscapes with a small figure or vehicle crossing the frame, horizon placed very low or very high so sky or ground fills most of the image, a road or ridge line leading into the distance, camera tracking beside or behind the traveler, dust or mist in the air | 補外景與大空間；例如信使前往天文台的路上。 |
+| `distant-miles` | 長途遠行 | Distant miles | wide landscapes with a small figure or vehicle crossing the frame, horizon placed very low or very high so sky or ground fills most of the image, a road or ridge line leading into the distance, camera tracking beside or behind the traveler, dust or mist in the air | 補外景與大空間；例如信使前往天文台的路上。 |
 | `field-record` | 田野紀錄 | Field record | camera held at shoulder height with a slight natural sway, only the light that already exists in the place, people going about a task while the frame follows a beat late, activity visible in the background, heads sometimes cut off at the frame edge | 手持、現場光的一端，和其他幾個穩定構圖形成對比；之後有人做紀錄式短片時也用得上。 |
 | `bright-caper` | 輕快鬧劇 | Bright caper | evenly lit sets in daylight, wide lens close to the subjects so edges stretch slightly, props and hand gestures large in the frame, centered or symmetrical compositions, quick small reactions held in tight shots, uncluttered backgrounds | 明亮、廣角、動作大的一端，避免整份清單都偏暗。 |
 | `close-warmth` | 近身暖意 | Close warmth | two people framed close together in tight shots, shallow depth of field melting the background into soft shapes, hands and faces filling most of the frame, one small lamp or window near them as the only bright area, slow small gestures, the camera staying at conversational distance | 定稿時加入；補上感情戲與家庭戲，是「近、淺景深、小動作」的一端。 |
@@ -67,7 +67,7 @@
 | `still-hold` | 靜止凝視 | Still hold | camera locked on a tripod for the whole shot, people moving slowly inside the frame, long pauses between small actions, no camera movement | 最靜的一端；等待、凝視的鏡頭。 |
 | `slow-drift` | 緩慢漂移 | Slow drift | camera creeping forward or sideways slower than a walking pace, people taking small steps one at a time, background objects sliding slowly across the frame | 最常用的慢節奏，對應運鏡裡的緩推、緩移。 |
 | `hold-then-burst` | 靜待突發 | Hold, then burst | almost no movement for most of the shot, then a sudden fast push of the camera or a quick movement by the subject in the last second | 單鏡內前靜後動的選項，適合 4–8 秒的短鏡頭；模型會不會照做不確定，要靠範例實測才知道。 |
-| `rush` | 急促連動 | Rush | camera moving fast with quick pans and push-ins, people acting at a fast pace, a new action starting about every second, tight framing with abrupt changes of direction | 最動的一端；追逐、爭執、混亂場面。 |
+| `staccato-run` | 急促連動 | Staccato run | camera moving fast with quick pans and push-ins, people acting at a fast pace, a new action starting about every second, tight framing with abrupt changes of direction | 最動的一端；追逐、爭執、混亂場面。 |
 
 ## 4. `palette` 色調（含 Auto 共 13 個）
 
@@ -82,12 +82,12 @@
 | `bone-ink` | 骨白墨黑 | Bone and ink | image reduced to black, warm paper white and greys with no other hue, large areas of solid black, bright areas limited to faces and light sources, a hard boundary between lit and shadowed zones | `#1A1A1A` `#E9E4D8` `#8C8780` `#4A4742` `#B8B3A8` | 單色一格；測試「幾乎沒有彩度」時模型是否真的去色，也最適合配頂光硬影。 |
 | `wet-glass-neon` | 濕玻璃霓光 | Wet-glass neon | background in near-black blue, magenta and cyan lights from signs and screens, reflections of those two colors stretched across wet ground and glass, faces split with magenta on one side and cyan on the other, small white points for lamps | `#101426` `#E0368B` `#28D3E6` `#5B3FA8` `#F2F2F7` | 雨夜街道的高彩度版本；和午夜石板形成「同一場戲的兩種拍法」。 |
 | `moss-fog` | 苔霧 | Moss fog | foliage and walls in muted olive and moss green, distant areas fading to pale grey-green as if behind thin fog, shadows in dark green-black, almost no saturated color except one small detail such as a lit window | `#6E7F63` `#3F4D3F` `#AEB8A5` `#D6DACD` `#232A24` | 低彩度的綠；外景、荒地、長途遠行的底色。 |
-| `salt-washed` | 鹽洗褪色 | Salt-washed | colors washed out to pale sand, grey and faded blue, bright overexposed sky and surfaces, skin slightly pale, dark areas lifted to mid-grey instead of black, thin traces of color only in clothing and objects | `#D9D6CC` `#B7B2A5` `#8E9AA0` `#5E6A70` `#E8D9B5` | 高調、褪色；和所有「暗」的選項相反，給白天、海邊、舊照片感。 |
-| `ember-red` | 炭火暗紅 | Ember red | most of the frame in black and deep maroon, bright areas in glowing orange-red as if lit by fire or heater coils, faces catching red-orange on the lit side, object edges outlined in thin orange, no green or blue | `#8E1F1F` `#3A0F10` `#D9593D` `#1A0C0C` `#F0B58A` | 單一強色加黑；警報、爭執、危險場面。 |
-| `glacier-blue` | 冰川藍白 | Glacier blue | bright pale blue and white across most of the frame, shadows in clear mid blue rather than grey, snow-white highlights, deep navy only in small dark objects, skin slightly cool | `#BFD9E8` `#6FA3C7` `#2E5C85` `#F2F7FA` `#0F2A43` | 冷色但明亮，和午夜石板（冷色但暗）對照；雪地、醫療、空曠室內。 |
-| `plum-twilight` | 梅紫暮色 | Plum twilight | sky and background in dusty purple, shadows in dark violet, highlights in pale pink, a thin band of peach near the horizon or around lamps, no pure black anywhere | `#5A3E6B` `#2A1F3A` `#A78BB8` `#E6C9D9` `#F0A58A` | 黃昏到夜之間的過渡色；例如從日落進到雨夜的轉場鏡頭。 |
+| `sea-bleached` | 海風褪色 | Sea-bleached | colors washed out to pale sand, grey and faded blue, bright overexposed sky and surfaces, skin slightly pale, dark areas lifted to mid-grey instead of black, thin traces of color only in clothing and objects | `#D9D6CC` `#B7B2A5` `#8E9AA0` `#5E6A70` `#E8D9B5` | 高調、褪色；和所有「暗」的選項相反，給白天、海邊、舊照片感。 |
+| `cinder-glow` | 炭火暗紅 | Cinder glow | most of the frame in black and deep maroon, bright areas in glowing orange-red as if lit by fire or heater coils, faces catching red-orange on the lit side, object edges outlined in thin orange, no green or blue | `#8E1F1F` `#3A0F10` `#D9593D` `#1A0C0C` `#F0B58A` | 單一強色加黑；警報、爭執、危險場面。 |
+| `floe-white` | 冰川藍白 | Floe white | bright pale blue and white across most of the frame, shadows in clear mid blue rather than grey, snow-white highlights, deep navy only in small dark objects, skin slightly cool | `#BFD9E8` `#6FA3C7` `#2E5C85` `#F2F7FA` `#0F2A43` | 冷色但明亮，和午夜石板（冷色但暗）對照；雪地、醫療、空曠室內。 |
+| `mulberry-hour` | 桑紫時分 | Mulberry hour | sky and background in dusty purple, shadows in dark violet, highlights in pale pink, a thin band of peach near the horizon or around lamps, no pure black anywhere | `#5A3E6B` `#2A1F3A` `#A78BB8` `#E6C9D9` `#F0A58A` | 黃昏到夜之間的過渡色；例如從日落進到雨夜的轉場鏡頭。 |
 | `sugar-paper` | 糖紙日光 | Sugar-paper daylight | bright daylight with pastel pink, sky blue, butter yellow and mint in broad even areas, white highlights, soft thin shadows in pale lilac, no black areas | `#F4B6C2` `#A8D8EA` `#FFE9A8` `#FFFFFF` `#7FB7A4` | 輕快、粉彩的一格，對應輕快鬧劇；避免整份色調都偏暗偏重。 |
-| `dry-ochre` | 乾土赭黃 | Dry ochre | ground, walls and dust in ochre and earthy yellow-brown, shadows in burnt umber, sky bleached to a pale dusty cream, skin sun-darkened with orange tones, no green and almost no blue | `#C68E3F` `#8A5A2B` `#4A3020` `#E6D3A8` `#A86B3C` | 定稿時加入；補上沙漠與荒地的顏色，`moss-fog`、`salt-washed` 原本只能勉強頂替。 |
+| `dry-ochre` | 乾土赭黃 | Dry ochre | ground, walls and dust in ochre and earthy yellow-brown, shadows in burnt umber, sky bleached to a pale dusty cream, skin sun-darkened with orange tones, no green and almost no blue | `#C68E3F` `#8A5A2B` `#4A3020` `#E6D3A8` `#A86B3C` | 定稿時加入；補上沙漠與荒地的顏色，`moss-fog`、`sea-bleached` 原本只能勉強頂替。 |
 
 ## 5. `light` 燈光（含 Auto 共 8 個）
 
@@ -118,7 +118,7 @@
 | 6 | 第一色是畫面佔比最大的色，每組 5–6 色；範例圖出來後依實際畫面微調色碼 |
 | 7 | 另寫約 15 字的精簡版，和完整版並排實測後決定 |
 | 8 | `Film:` 一行用 `; ` 串接，已寫進 SPEC_19 §4.3 |
-| 9 | 定稿後用網路搜尋查核全部名稱，特別是「苔霧」「糖紙日光」「梅紫暮色」；查到撞名就改名，結果記在這份文件 |
+| 9 | 定稿後用網路搜尋查核全部名稱，特別是「苔霧」「糖紙日光」「梅紫暮色」；查到撞名就改名，結果記在這份文件。→ 已查，六個改名，見第 7 節 |
 
 以下是當時提給使用者的原始問題，保留作紀錄。
 
@@ -136,3 +136,26 @@
 7. **提示詞長度。** 五類全選時，`Film:`、`Color:`、`Lighting:` 三行合計約 150–200 個英文字，再加上使用者自己寫的內容，LTX-2.5 的有效提示詞可能被稀釋。要不要在範例實測時，另外準備一組每條縮到 15 字左右的精簡版，由實測結果決定用哪一版？
 8. **`Film:` 一行的串接規則**（寫法約定第二條）：類型、年代、節奏用 `; ` 串成一行，這是我補的假設，SPEC_19 §4.3 沒有寫，要不要照這樣定？
 9. **名稱的原創性只靠我自己的比對。** 我沒有上網搜尋逐一檢查，只憑已知的作品名稱、人名、品牌名排除。你若要保險，可以在定稿前挑出最像專有名詞的幾個（例如「苔霧」「糖紙日光」「梅紫暮色」）再查一輪。
+
+## 7. 名稱原創性查核（2026-10-27）
+
+用一般網路搜尋（約 100 次）查了 36 個名稱的中文與英文：30 個沒有發現撞名，下面 6 個撞名或可能撞名，使用者確認照替代名改。替代名的中文或英文都另外查過，沒有命中。代號（`id`）還沒寫進任何資料，所以跟著新名字一起改。
+
+| 原代號 | 原名 | 問題 | 新代號 | 新名 |
+|---|---|---|---|---|
+| `rush` | 急促連動 / Rush | 英文是 2013 年電影片名，也是剪輯軟體 Premiere Rush 的名稱 | `staccato-run` | 急促連動 / Staccato run |
+| `long-road` | 長途遠行 / Long road | 英文是 Pearl Jam 的歌名，也有同名電影與遊戲 | `distant-miles` | 長途遠行 / Distant miles |
+| `glacier-blue` | 冰川藍白 / Glacier blue | 英文是 Lee Filters 燈光色紙名與模型漆色號 | `floe-white` | 冰川藍白 / Floe white |
+| `plum-twilight` | 梅紫暮色 / Plum twilight | 英文是睫毛膏色號；「暮色」易聯想到《暮光之城》 | `mulberry-hour` | 桑紫時分 / Mulberry hour |
+| `ember-red` | 炭火暗紅 / Ember red | 英文是 1963 年車色與油漆色號 | `cinder-glow` | 炭火暗紅 / Cinder glow |
+| `salt-washed` | 鹽洗褪色 / Salt-washed | 和塗料品牌 Saltwash 很接近 | `sea-bleached` | 海風褪色 / Sea-bleached |
+
+保留但有低風險註記的：
+
+- 午夜石板 / Midnight slate：只在色名資料庫裡出現，沒有查到油漆廠牌、LUT 或濾鏡用它當正式名稱。
+- 低角日光 / Low sun：和一張 EP 同名，但它是通用攝影用語。
+- 骨白墨黑 / Bone and ink：詞序相反的 *Ink and Bone* 是小說書名，不算同名。
+- 糖紙日光 / Sugar-paper daylight：英文裡含文具品牌 Sugar Paper 的名字，但整個名稱不同。
+- 緩慢漂移 / Slow drift：有連寫的遊戲名 Slowdrift，不算同名。
+
+查核的限制：只用一般網路搜尋，沒有查商標資料庫（USPTO、TIPO、WIPO），也沒有做 Steam、Bandcamp、書目等站內搜尋。「苔霧」「糖紙日光」「靜待突發」「濕玻璃霓光」「機房科幻」的搜尋結果雜訊多，只能說沒發現撞名。要正式保證，需要另外查商標。

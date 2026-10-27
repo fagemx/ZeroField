@@ -5,6 +5,8 @@ import { episodeId, storyList, storyRequest, waitStoryTask } from './storyModel.
 import { SHOT_FILTERS } from './studioModel.js';
 import { FILL_MODES, adoptedCount, filmSummary, playlist } from './takeModel.js';
 import { Icon } from './Icon.jsx';
+import { filmSeams, seamPlaylist } from './takeModel.js';
+import { CheckCutsButton, PlayModeToggle, SeamDetail, SeamDot, useEpisodeCuts } from './film/Seams.jsx';
 import './studio-shell.css';
 import { semanticEnumKey } from './writing/writingModel.js';
 
@@ -101,12 +103,14 @@ export function filmPlayback(shots, {fill = 'latest', trial = null} = {}) {
 
 // One clip of a playlist() item in one <video>: it starts at the item's in point and stops at its out point (the trim), then calls
 // onDone once. Keyed by the caller on the item, so a new clip is a new element and only one ever decodes (SPEC_19 1.2 I).
+// An item with tail (seamPlaylist(): a seam's outgoing side whose end is not known yet) starts that many seconds before its end.
 export function ClipVideo({item, onDone, onMeasured, ...rest}) {
   const done = useRef(false);
   const finish = video => {if (done.current) return; done.current = true; video?.pause(); onDone?.();};
   const from = Number.isFinite(item.in) && item.in > 0 ? item.in : 0, to = Number.isFinite(item.out) ? item.out : null;
+  const tail = Number.isFinite(item.tail) && item.tail > 0 ? item.tail : null;
   return <video src={item.url} autoPlay playsInline preload="metadata" {...rest}
-    onLoadedMetadata={event => {const video = event.currentTarget; onMeasured?.(item.url, video.duration); if (from > 0 && from < video.duration) video.currentTime = from;}}
+    onLoadedMetadata={event => {const video = event.currentTarget, start = tail === null ? from : Math.max(from, (to ?? video.duration) - tail); onMeasured?.(item.url, video.duration); if (start > 0 && start < video.duration) video.currentTime = start;}}
     onTimeUpdate={event => {if (to !== null && event.currentTarget.currentTime >= to) finish(event.currentTarget);}}
     onEnded={event => finish(event.currentTarget)}/>;
 }
@@ -253,6 +257,20 @@ export function FilmOverlay({epId, shots, writable, onClose, onTimeline}) {
   const differing = alignment?.items.filter(item => item.storyAlignment?.state !== 'in_sync' || item.storyAlignment?.mediaOutdated) || [];
   const box = useRef(null), alive = useRef(true);
   const current = cut[at], item = current ? items.get(current.shotId) || null : null;
+  // SPEC_19 R17, R18 (package D): the seams of the cut and their checks (GET /episodes/{id}/cuts). "Cuts only" plays a second either
+  // side of each seam in this same screen, one clip at a time (seamPlaylist() of what the whole film plays), and shows the check of
+  // the seam on screen; a seam dot on the strip plays from that seam. seamAt -1: a seam with nothing to play is shown, not played.
+  const cuts = useEpisodeCuts(epId, shots);
+  const seams = useMemo(() => filmSeams(cut, cuts.items), [cut, cuts.items]);
+  const seamAfter = new Map(seams.map(seam => [seam.fromShotId, seam]));
+  const seamItems = useMemo(() => seamPlaylist([...items.values()]), [items]);
+  const [playMode, setPlayMode] = useState('whole'), [seamAt, setSeamAt] = useState(0), [seamKey, setSeamKey] = useState(null);
+  const seamItem = playMode === 'seams' && !film && seamAt >= 0 ? seamItems[Math.min(seamAt, seamItems.length - 1)] || null : null;
+  const seamShown = seams.find(seam => seam.key === (seamItem?.seam.key || seamKey)) || null;
+  const shown = playMode === 'seams' ? seamItem : item;
+  const nextSeam = () => setSeamAt(i => (i + 1 < seamItems.length ? i + 1 : i));
+  const choosePlayMode = value => {setFilm(null); setPlayMode(value); setSeamAt(0); setSeamKey(null);};
+  const playSeam = seam => {setFilm(null); setPlayMode('seams'); setSeamKey(seam.key); setSeamAt(seamItems.findIndex(entry => entry.seam.key === seam.key));};
   useEffect(() => {alive.current = true; box.current?.focus(); return () => {alive.current = false;};}, []);
   // The next shot to play: the next one, or with "skip" the next one that has something to play.
   const advance = () => setAt(i => {
@@ -260,10 +278,10 @@ export function FilmOverlay({epId, shots, writable, onClose, onTimeline}) {
     return i;
   });
   useEffect(() => {
-    if (!current || item || film) return undefined;
+    if (!current || item || film || playMode === 'seams') return undefined;
     const timer = setTimeout(advance, 2000);
     return () => clearTimeout(timer);
-  }, [current, item, film, cut.length, fill]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, item, film, cut.length, fill, playMode]);  // eslint-disable-line react-hooks/exhaustive-deps
   const exportFilm = async () => {
     setExporting(true); setError(''); setSegments(null);
     try {
@@ -286,11 +304,15 @@ export function FilmOverlay({epId, shots, writable, onClose, onTimeline}) {
       {!!differing.length && <p role="status">{t('writing.integration.filmWarning', {shots:differing.map(entry => entry.shotIndex).join(', ')})}</p>}
       <div className="studio-film-screen">
         {film ? <video src={film} controls autoPlay playsInline preload="metadata" aria-label={t('story.episodeFilm')}/>
+          : playMode === 'seams' ? (seamItem ? <ClipVideo key={`seam:${seamAt}:${seamItem.shotId}:${seamItem.url}`} item={seamItem} controls onDone={nextSeam} aria-label={seamShown ? t('seam.title', {from:seamShown.fromShotIndex, to:seamShown.toShotIndex}) : String(seamItem.shotIndex)}/>
+            : <div className="studio-film-slate">{t(seamItems.length ? 'seam.notPlayable' : 'seam.none')}</div>)
           : item ? <ClipVideo key={current.shotId + ':' + item.url} item={item} controls onDone={advance} aria-label={current.shotIndex}/>
           : <div className="studio-film-slate">{current ? <><b>{current.shotIndex}</b><span>{t('shell.notShot')}</span></> : t('shell.noShots')}</div>}
-        {!film && item && item.source !== 'adopted' && <span className={'studio-film-tag is-' + item.source}>{t('film.tag_' + item.source)}</span>}
+        {!film && shown && shown.source !== 'adopted' && <span className={'studio-film-tag is-' + shown.source}>{t('film.tag_' + shown.source)}</span>}
       </div>
+      {playMode === 'seams' && !film && <SeamDetail seam={seamShown}/>}
       <div className="studio-film-fill" role="group" aria-label={t('film.fillLabel')}>
+        <PlayModeToggle mode={playMode} onMode={choosePlayMode}/>
         <span className="studio-note">{t('film.fillLabel')}</span>
         <div className="studio-segmented">{FILL_MODES.map(mode => <button key={mode} type="button" aria-pressed={fill === mode} onClick={() => setFill(mode)}>{t('film.fill_' + mode)}</button>)}</div>
       </div>
@@ -299,15 +321,17 @@ export function FilmOverlay({epId, shots, writable, onClose, onTimeline}) {
           const entry = items.get(shot.shotId);
           return <li key={shot.shotId}><button type="button" aria-current={index === at && !film ? 'true' : undefined}
             className={'shot' + (!entry ? ' empty' : entry.source !== 'adopted' ? ' fill' : '') + (entry?.source === 'trial' ? ' is-trial' : '')}
-            title={entry && entry.source !== 'adopted' ? t('film.tag_' + entry.source) : undefined} onClick={() => {setFilm(null); setAt(index);}}>
+            title={entry && entry.source !== 'adopted' ? t('film.tag_' + entry.source) : undefined} onClick={() => {setFilm(null); setPlayMode('whole'); setAt(index);}}>
             {shot.selectedImageUrl ? <img src={shot.selectedImageUrl} alt="" loading="lazy"/> : <span className="studio-film-blank"/>}
-            <span>{shot.shotIndex}</span></button></li>;
+            <span>{shot.shotIndex}</span></button>
+            {seamAfter.get(shot.shotId) && <SeamDot seam={seamAfter.get(shot.shotId)} active={playMode === 'seams' && seamShown?.key === seamAfter.get(shot.shotId).key} onPick={playSeam}/>}</li>;
         })}
       </ol>
       {filled.length > 0 && <p className="studio-note studio-film-filled" role="status">{t('film.exported', {shots:filled.map(segment => t('film.segmentFill', {shot:label(segment.shotId), source:t('film.tag_' + segment.source)})).join(', ')})}</p>}
       <footer>
         <label className="studio-note studio-fill">{t('film.exportFill')}<select value={exportFill} onChange={event => setExportFill(event.target.value)}>
           {['previs', 'latest', 'skip'].map(mode => <option key={mode} value={mode}>{t('film.fill_' + mode)}</option>)}</select></label>
+        {writable && <CheckCutsButton epId={epId} seams={seams} onQueued={cuts.reload}/>}
         {error && <span role="alert" className="canvas-error">{error}</span>}
         {film && <a className="icon-btn" href={film} download><Icon name="download" />{t('shell.downloadFilm')}</a>}
         <span className="spacer"/>

@@ -10,6 +10,10 @@ import { ClipVideo, filmPlayback, filmTrial, useFilmTrial } from './StudioShell.
 import { ShotProposals } from './ShotProposals.jsx';
 import { Icon } from './Icon.jsx';
 import { shotMonitor, useShotMonitor } from './composer/shotMonitor.js';
+import { episodeId as defaultEpisodeId } from './storyModel.js';
+import { filmSeams, seamPlaylist, staleTakeRefs } from './takeModel.js';
+import { TakeRefsLine, focusShotPrompt } from './film/TakeRefsLine.jsx';
+import { PlayModeToggle, SeamDetail, SeamDot, queueCutChecks, useEpisodeCuts } from './film/Seams.jsx';
 
 // SPEC_19 R3: the current shot's right column, "this shot in the cut". What it shows (3.2): the derived state and a "…" menu, the
 // previous / this / next shot with "Play around", the episode's progress bar, the Take list (✓ adopts: POST /shots/{id}/adoptions),
@@ -144,6 +148,27 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
     return () => {if (controlRef.current === control) controlRef.current = null;};
   });
 
+  // SPEC_19 package D. R17: the seams between the film's shots and their checks (GET /episodes/{id}/cuts, read again on another shot or
+  // a new revision). R18: "Cuts only" plays a second either side of every seam through the same player; a seam dot plays its own
+  // seam. The seam shown is the one playing, else the one last pressed. R16: shots whose adopted take quotes a changed upstream.
+  const epId = shot?.episodeId || defaultEpisodeId(slug);
+  const [aroundMode, setAroundMode] = useState('whole'), [seamKey, setSeamKey] = useState(null), [seamCheck, setSeamCheck] = useState({busy:false, error:''});
+  const cuts = useEpisodeCuts(epId, `${version}|${id}`);
+  const seams = filmSeams(film, cuts.items);
+  const seamQueue = only => seamPlaylist(filmPlayback(film, {fill:'latest', trial:tried}), {measured, only});
+  const seamShown = seams.find(seam => seam.key === (item?.seam?.key || seamKey)) || null;
+  useEffect(() => {setSeamKey(null); setSeamCheck({busy:false, error:''});}, [id]);
+  const pickSeam = seam => {setSeamKey(seam.key); setSeamCheck({busy:false, error:''}); play(seamQueue(seam.key));};
+  const checkSeam = async seam => {
+    if (!writable) return;
+    setSeamCheck({busy:true, error:''});
+    try {await queueCutChecks(epId, [[seam.fromShotId, seam.toShotId]]); setSeamCheck({busy:false, error:''}); cuts.reload();}
+    catch (error) {setSeamCheck({busy:false, error:error.message});}
+  };
+  const staleShots = new Set(film.filter(entry => staleTakeRefs(entry).length > 0).map(entry => entry.shotId));
+  const aroundQueue = () => (aroundMode === 'seams' ? seamQueue() : around());
+  const refsLine = <TakeRefsLine refs={shot?.takeRefs || []} shots={film} proposals={proposals} writable={writable} onReshoot={() => focusShotPrompt(rid)}/>;
+
   const blocked = normalizeStatus(status) === 'Blocked', approved = normalizeStatus(status) === 'Approved';
   const menuItems = [
     writable && canStatus && {id:'block', label:t(blocked ? 'shotMenu.unblock' : 'shotMenu.block'), write:true, run:() => onStatus?.(blocked ? 'Queued' : 'Blocked')},
@@ -158,8 +183,9 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
 
   const source = shot?.selectedVideoUrl ? measured[shot.selectedVideoUrl] : null;
   return <ShotFilmView label={label} sceneTitle={sceneTitle} state={shotStateOf(current)} newCount={newTakeCountOf(current)} writable={writable} disabled={disabled}
-    canStatus={canStatus} menuItems={menuItems} top={top} film={film} neighbours={neighbours} segments={filmSegments(film, {measured})} summary={filmSummary(film, {measured})}
-    currentId={id} trial={tried} playing={playing} item={item} canAround={around().length > 0} onAround={() => (playing?.around ? stop() : playAround())}
+    canStatus={canStatus} menuItems={menuItems} top={<>{refsLine}{top}</>} film={film} neighbours={neighbours} segments={filmSegments(film, {measured})} summary={filmSummary(film, {measured})}
+    seams={seams} staleShots={staleShots} seam={seamShown} seamBusy={seamCheck.busy} seamError={seamCheck.error} onSeam={pickSeam} onCheckSeam={checkSeam} aroundMode={aroundMode} onAroundMode={setAroundMode}
+    currentId={id} trial={tried} playing={playing} item={item} canAround={aroundQueue().length > 0} onAround={() => (playing?.around ? stop() : play(aroundQueue(), true))}
     onPlayCurrent={() => play(around().filter(entry => entry.shotId === id))} onPick={rowId => onPick?.(rowId)} onStop={stop} onDone={next} onMeasured={(url, seconds) => shotMonitor.measure(url, seconds)} monitorHosted={hosts > 0}
     output={output} hasFrame={hasFrame} onOutput={setOutput} takes={takes} frames={output === 'frame' && media.images ? framesOf(media.images) : null} loading={media.loading} error={media.error}
     grades={media.grades} fidelity={fidelity} showAll={showAll} onShowAll={setShowAll} playingUrl={playingTake?.url || null}
@@ -174,9 +200,12 @@ export function ShotFilmView({label, sceneTitle, state = 'empty', newCount = 0, 
   neighbours = {index:-1, total:0}, segments = [], summary = {shots:0, adopted:0, withTake:0, seconds:0}, currentId, trial = null, playing = null, item = null,
   canAround = false, onAround, onPlayCurrent, onPick, onStop, onDone, onMeasured, monitorHosted = false, output = 'video', hasFrame = false, onOutput, takes = [], frames = null,
   loading = false, error = '', grades = [], fidelity = {}, showAll = false, onShowAll, playingUrl = null, onPlay, onAdopt, onTry, onChooseFrame, onRetake, onDismiss,
-  trim = null, onTimeline, crew = [], onApplyProposal, onDismissProposal, onShowStage, failure = null, notes = null, cast = null, history = null}) {
+  trim = null, onTimeline, crew = [], onApplyProposal, onDismissProposal, onShowStage, failure = null, notes = null, cast = null, history = null,
+  seams = null, staleShots = null, seam = null, seamBusy = false, seamError = '', onSeam, onCheckSeam, aroundMode = 'whole', onAroundMode}) {
   useLocale();
   trial = trial && trial.shotId === currentId ? trial : null;  // a take tried on another shot is not marked here
+  // SPEC_19 package D: the seam after each segment (filmSeams(), keyed by the shot before it) and the shots with a stale reference.
+  const seamAfter = new Map((seams || []).map(entry => [entry.fromShotId, entry]));
   const list = output === 'frame' ? frames || [] : takes;
   const shown = showAll ? list : list.slice(0, SHOWN);
   return <aside className="shot-detail shot-film" aria-label={t('film.panel')}>
@@ -191,8 +220,9 @@ export function ShotFilmView({label, sceneTitle, state = 'empty', newCount = 0, 
     <section className="film-cut" aria-label={t('film.inTheCut')}>
       <header><h3>{t('film.inTheCut')}</h3>{neighbours.index >= 0 && <span className="studio-note">{t('film.position', {index:neighbours.index + 1, total:neighbours.total})}</span>}
         <span className="spacer"/>
+        {onAroundMode && <PlayModeToggle mode={aroundMode} onMode={onAroundMode}/>}
         <button type="button" className="film-around" aria-pressed={Boolean(playing?.around)} disabled={!canAround && !playing?.around} onClick={onAround}>
-          <Icon name={playing?.around ? 'pause' : 'play'} size={13}/>{t(playing?.around ? 'film.stop' : 'film.playAround')}</button></header>
+          <Icon name={playing?.around ? 'pause' : 'play'} size={13}/>{t(playing?.around ? 'film.stop' : aroundMode === 'seams' ? 'seam.playCuts' : 'film.playAround')}</button></header>
       <ol className="film-neighbours">{['prev', 'current', 'next'].map(key => {
         const entry = neighbours[key];
         if (!entry) return <li key={key} className="is-none"><span className="film-thumb is-blank"/><small>{t('film.noNeighbour')}</small></li>;
@@ -207,14 +237,17 @@ export function ShotFilmView({label, sceneTitle, state = 'empty', newCount = 0, 
     </section>
     <section className="film-progress" aria-label={t('film.progress')}>
       <ol>{segments.map(segment => {
-        const isCurrent = segment.shotId === currentId, tried = isCurrent && trial;
+        const isCurrent = segment.shotId === currentId, tried = isCurrent && trial, stale = Boolean(staleShots?.has(segment.shotId)), after = seamAfter.get(segment.shotId);
         return <li key={segment.shotId} style={{flexGrow:Math.max(segment.share, 0.0001)}}>
           <button type="button" className={'film-seg state-' + segment.state + (isCurrent ? ' is-current' : '') + (tried ? ' is-trial' : '')} aria-current={isCurrent ? 'true' : undefined}
-            aria-label={t('film.segment', {shot:segment.shotIndex, state:t('take.state_' + segment.state), seconds:tenth(segment.seconds)}) + (tried ? ' · ' + t('film.tag_trial') : '')}
+            aria-label={t('film.segment', {shot:segment.shotIndex, state:t('take.state_' + segment.state), seconds:tenth(segment.seconds)}) + (tried ? ' · ' + t('film.tag_trial') : '') + (stale ? ' · ' + t('refs.staleMark') : '')}
             title={t('film.segment', {shot:segment.shotIndex, state:t('take.state_' + segment.state), seconds:tenth(segment.seconds)})} onClick={() => !isCurrent && onPick?.(segment.rowId)}>
-            {tried && <em>{t('film.tag_trial')}</em>}</button></li>;
+            {tried && <em>{t('film.tag_trial')}</em>}</button>
+          {stale && <i className="film-seg-stale" title={t('refs.staleMark')} aria-hidden="true"/>}
+          {after && <SeamDot seam={after} active={seam?.key === after.key} onPick={onSeam}/>}</li>;
       })}</ol>
       <p className="studio-note">{t('film.summary', {adopted:summary.adopted, total:summary.shots, seconds:tenth(summary.seconds)})}</p>
+      {seam && <SeamDetail seam={seam} writable={writable} busy={seamBusy} error={seamError} onCheck={onCheckSeam}/>}
     </section>
     <section className="take-list" aria-label={t('take.list')}>
       <header><h3>{t('take.list')}</h3>
