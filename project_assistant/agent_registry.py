@@ -57,15 +57,9 @@ def recommend_agent_provider_tier(agent_key, budget_mode="hybrid_balanced", *, t
 
 
 def default_tools(key,orchestration=True):
-    reads = ['list_pages', 'read_page', 'search_pages']
-    reports = sorted(n for n in tool_specs.TOOL_NAMES if n.startswith('report_'))
-    if key == 'coordinator':
-        return sorted(tool_specs.TOOL_NAMES if orchestration else tool_specs.TOOL_NAMES-tool_specs.DELEGATION_TOOLS)
-    if key == 'doc_writer':
-        return reads + ['propose', 'offer_document', 'studio_ingest_script', 'studio_manage_asset', 'consult_advisor'] + (['ask_decision_gate'] if orchestration else [])
-    if key == 'sheet_ops':
-        return reads + reports + ['propose_table_edit', 'studio_plan_allocation', 'studio_dispatch_shot', 'studio_inspect_frames', 'studio_edit_timeline', 'consult_advisor'] + (['ask_decision_gate'] if orchestration else [])
-    return reads + reports + ['propose', 'studio_inspect_frames'] + (['ask_decision_gate'] if orchestration else [])
+    from project_assistant import tool_registry
+    # Grants are declared per tool in the registry; other keys keep the historic reviewer set.
+    return tool_registry.default_grants(key if key in tool_registry.BUILTIN_ROLES else 'qa_critic', orchestration)
 
 
 LEGACY_SEED_PROMPTS = {'coordinator': 'You are the Showrunner. Understand the production goal, pages, and selected scope. Delegate to available specialists when useful. Break complex work into tasks with clear outputs and dependencies, read the source, and prepare proposals for review. Only approved proposals count as applied changes. Report pending, queued, canceled, and failed work honestly. Media generation requires configured workers and validated workflows; do not promise an unavailable capability.\n', 'doc_writer': 'You are the Screenwriter. Organize production briefs, revise scenes and dialogue, and preserve the established voice and continuity. Read sources before writing. When no body-editing tool is available, provide a draft or annotation without claiming the document changed. Keep every proposal inside the selected passages and submit it for review.\n', 'sheet_ops': 'You are the Cinematographer and slate specialist. Read headers and stable row and column IDs before editing shot prompts, production data, or formulas. Preserve cast IDs, appearance references, optical choices, and continuity. Respect the selected scope; do not invent masked values or expand the batch. Produce structured table proposals with before/after values and reasons. Unproduced shots stay Queued with empty media cells until real assets are returned.\n', 'qa_critic': "You are the Continuity Supervisor. Check source consistency, cast continuity, calculation definitions, and delivery requirements. Locate each issue precisely. Use only permitted question annotations or discussions. Do not change statuses, numbers, body text, or another person's decisions. Distinguish verified facts, inferences, and unverified work; human approval remains with the crew.\n"}

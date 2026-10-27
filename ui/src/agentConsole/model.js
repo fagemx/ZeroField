@@ -3,6 +3,7 @@ import { t } from '../i18n/index.js';
 export const GROUPS = {workspace:['dashboard','api_keys'],build:['playground','skills'],managed_agents:['quickstart','agents','sessions','deployments','environments','memory_store'],analytics:['usage_cost','spend_rate_limits']};
 export const PAGES = Object.values(GROUPS).flat();
 export const TEMPLATES = ['script_breakdown_director','continuity_frame_grader','hybrid_budget_dispatcher','h3_context_ir_compiler','openjutsu_motion_rig','parallel_model_racer','offpeak_4090_batch_worker','twopass_4k_mastering','episode_rough_cut_assembler','asset_vault_curator','production_sheet_analyst','comfy_card_integrator'];
+// The ui=True tools of project_assistant/tool_registry.py, in registry order; tests/test_tool_registry.py fails on drift.
 export const STUDIO_TOOLS = ['studio_ingest_script','studio_manage_asset','studio_plan_allocation','studio_dispatch_shot','studio_inspect_frames','studio_edit_timeline','consult_advisor'];
 export const AGENT_FIELDS = ['agent_key','version','display_name','icon','role_kind','runtime_kind','description','system_prompt','knowledge_pack','capabilities','labels','allowed_tools','provider_config','bound_limb_id','max_concurrency','enabled','effort','skill_keys','tool_policies','multiagent_config','outcome_grader','memory_mounts','default_environment_key'];
 export const LIMIT_FIELDS = ['version','spend_limit_monthly_usd','spend_limit_session_usd','spend_limit_episode_usd','on_spend_limit','rate_limits','model_pricing','judge_trial_mode','comfy_router_budget_mode'];
