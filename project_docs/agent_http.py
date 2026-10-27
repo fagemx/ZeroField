@@ -82,7 +82,7 @@ def _admin(handler, slug, account_key, action, method, query=''):
         elif method == 'POST':
             payload = service_accounts.create(conn, me, slug, body)
         else:
-            payload = service_accounts.list_accounts(conn, me, slug)
+            payload = {**service_accounts.list_accounts(conn, me, slug), 'connect': _connect(handler)}
         conn.commit()
     except Exception as exc:  # noqa: BLE001
         conn.rollback()
@@ -91,6 +91,12 @@ def _admin(handler, slug, account_key, action, method, query=''):
     finally:
         conn.close()
     handler.send_json(200, payload)
+
+
+def _connect(handler):
+    """Where an agent on this machine reaches MCP over Streamable HTTP (R33), for the R41 setup snippet."""
+    host, port = (getattr(getattr(handler, 'server', None), 'server_address', None) or ('', 0))[:2]
+    return {'http': {'url': f"http://{'[::1]' if host == '::1' else '127.0.0.1'}:{port}/mcp"}} if port else {}
 
 
 def _local_only(handler):

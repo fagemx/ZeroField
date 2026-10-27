@@ -112,6 +112,7 @@ class AuditRouteTests(unittest.TestCase):
         by_name = {t['name']: t for t in listed['availableTools']}
         self.assertEqual(by_name['read_page']['label'], 'Production Page')
         self.assertEqual((by_name['request_generation']['generation'], by_name['request_generation']['category']), (True, 'generation'))
+        self.assertRegex(listed['connect']['http']['url'], r'^http://127\.0\.0\.1:\d+/mcp$')  # R33 endpoint for the R41 snippet
 
 
 if __name__ == '__main__':
