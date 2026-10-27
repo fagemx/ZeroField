@@ -1,10 +1,9 @@
 import { t } from './i18n/index.js';
+import { hasSceneHeadingLine } from './writing/sceneHeading.js';
 
 export const sourceDraft = (script = '') => ({sourceText:'', script, adaptationKey:null});
 
-export function hasSceneHeadings(content) {
-  return /^\s*(?:#{1,6}\s*)?(?:Scene\s*\d+\b|(?:場景|场景)\s*[一二三四五六七八九十\d]+|(?:INT|EXT|INT\.?\s*\/\s*EXT)\.)/im.test(content || '');
-}
+export const hasSceneHeadings = content => hasSceneHeadingLine(content);
 
 // A composition (SPEC_14 lenses and choice trace) is part of what was adapted; without one the key is SPEC_13's.
 const adaptationKey = (sourceMode, draft, targetScenes, composition) => JSON.stringify([sourceMode, draft.sourceText, targetScenes, ...(composition ? [composition] : [])]);

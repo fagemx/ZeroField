@@ -101,7 +101,7 @@ class SceneProjectionPureTests(unittest.TestCase):
         self.assertEqual(shot, before)
 
     def test_actual_js_persist_start_handoff_doc_reaches_python_scene_and_beat_planner(self):
-        # 非複製 plainDocument：呼叫真 helper，捕捉它實際送出的 atomic put node。
+        # 非複製版面：呼叫真 helper，捕捉它實際送出的同一筆 atomic put ops（R44-3：標題行自成一塊）。
         js = r'''
 import {persistStartHandoff} from './ui/src/writing/writingStartHandoff.js';
 const text = 'Scene 01: Room\r\n@CAST-01 faces the lens at @SET-07, fighting back tears.\r\n@CAST-02: "Tell me the truth."';
@@ -110,7 +110,7 @@ const transport=async(tail,method='GET',body)=>{
  if(tail==='workspace'&&method==='GET')return {doc:{type:'doc',content:[]},docHash:'empty',revision:1,structure:{initialized:true}};
  if(tail==='script/ops'&&method==='POST') {
   if(checkpoints.at(-1).stage!=='working-save')throw new Error('缺少 mutation 前 checkpoint');
-  saved={type:'doc',content:[body.ops[0].node]};
+  saved={type:'doc',content:body.ops.map(op=>op.node)};
   return {doc:saved,docHash:'saved',version:2,clientMutationId:body.clientMutationId,conflicts:[]};
  }
  throw new Error('未知合成路由 '+tail);
@@ -124,8 +124,11 @@ console.log(JSON.stringify({doc:saved,ref,stage:checkpoints.at(-1).stage}));
         generated = json.loads(result.stdout)
         self.assertEqual(generated['ref'], {'kind': 'working'})
         self.assertEqual(generated['stage'], 'done')
-        self.assertEqual(len(generated['doc']['content']), 1)
-        self.assertEqual(generated['doc']['content'][0]['type'], 'paragraph')
+        self.assertEqual(len(generated['doc']['content']), 2, '標題一塊、正文一塊；正文行內換行仍是 hardBreak')
+        self.assertTrue(all(node['type'] == 'paragraph' for node in generated['doc']['content']))
+        stable = structure.reconcile_structure(generated['doc'], {})
+        self.assertEqual(stable['scenes'][0]['title'], 'Scene 01: Room')
+        self.assertEqual(len(stable['scenes'][0]['blockBids']), 1)
         scenes = story.scenes_of_doc(EP, generated['doc'])
         plans = planner.beat_plans(scenes, 'auto')
         print(json.dumps({'case': 'actual-persistStartHandoff', 'scenes': scenes, 'plans': plans}, ensure_ascii=False))

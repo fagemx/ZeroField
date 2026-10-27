@@ -7,8 +7,16 @@ from contextlib import contextmanager
 from collections import Counter
 from project_docs import writing_store as store, repository as repo, story_openapi as story
 from project_docs.doc_schema import node_text, new_id
+from project_docs.scene_headings import HEADING  # the one shared rule (R44-3); re-exported for callers
 
-HEADING = re.compile(r'^\s*(?:#{1,6}\s*)?(?:Scene\s*\d+|場景\s*[一二三四五六七八九十\d]+|场景\s*[一二三四五六七八九十\d]+|INT\.|EXT\.)',re.I)
+
+def heading_line(node):
+    """A scene's title is its heading line: the block text before the first hard break."""
+    line=[]
+    for child in node.get('content') or []:
+        if child.get('type')=='hardBreak': break
+        line.append(node_text(child))
+    return ''.join(line)
 
 
 def identifier(scope):
@@ -120,7 +128,7 @@ def reconcile_structure(doc, previous, *, lineage=None):
         used_s.add(key)
         scene={k:copy.deepcopy(v) for k,v in (matched or {}).items() if k in ('summary','storyTime','act','plot','foreshadowing','payoff','authoredBoundary','authoredOrigin','materialized')}
         scene.update(sceneKey=key,headingBid=heading_bid,blockBids=[bid(n) for n in part['nodes']],
-            title=matched['title'] if matched and matched.get('authoredBoundary') else node_text(heading) if heading else 'Scene 01',order=i,contentHash=content_hash,
+            title=matched['title'] if matched and matched.get('authoredBoundary') else heading_line(heading) if heading else 'Scene 01',order=i,contentHash=content_hash,
             mapping='exact' if matched or not old else 'unresolved',beats=[])
         for node in part['nodes']:
             if not node_text(node).strip(): continue
