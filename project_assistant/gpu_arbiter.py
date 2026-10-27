@@ -532,6 +532,21 @@ def _resident(state):
             **({'comfy': state['comfy']} if state.get('comfy') else {})}
 
 
+def current_owner(conn, host_url):
+    """Who holds the GPU behind host_url, for the console GPU panel (SPEC_20 R38): {holder, purpose, since} or None.
+
+    Read-only; conn is unused because status() reads every process's holders through its own connection.
+    """
+    key = gpu_key(host_url)
+    if key is None:
+        return None
+    for entry in status().get('gpus', []):
+        owner = entry.get('owner') if entry.get('key') == key else None
+        if owner:
+            return {'holder': owner.get('label') or owner.get('workload'), 'purpose': owner.get('workload'), 'since': owner.get('since')}
+    return None
+
+
 def status(connect=None):
     """Read-only arbiter view per GPU host: current owner, waiters (oldest first), resident workload, since when.
 

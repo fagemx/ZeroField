@@ -181,6 +181,15 @@ class ArbiterUnitTests(ProcessCase):
         self.assertFalse(arbiter.held_in_process())
         arbiter.acquire(arbiter.LLM, 'http://127.0.0.1:1/v1', model='m', timeout=0).release()
 
+    def test_current_owner_feeds_the_console_gpu_slot(self):
+        self.assertIsNone(arbiter.current_owner(None, 'http://127.0.0.1:8188'))
+        with arbiter.hold(arbiter.LLM, 'http://127.0.0.1:1/v1', model='m', label='crew turn', timeout=1):
+            owner = arbiter.current_owner(None, 'http://127.0.0.1:8188')
+            self.assertEqual((owner['holder'], owner['purpose']), (arbiter._label('crew turn'), arbiter.LLM))
+            self.assertTrue(owner['since'])
+            self.assertIsNone(arbiter.current_owner(None, 'https://cloud.comfy.org'))  # hosted GPUs are not arbitrated
+        self.assertIsNone(arbiter.current_owner(None, 'http://127.0.0.1:8188'))
+
     def test_compatibility_lock_keeps_the_old_shape(self):
         from project_assistant import take_grader
         lock = take_grader.GPU_LOCK

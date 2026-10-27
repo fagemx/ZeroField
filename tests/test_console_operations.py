@@ -279,7 +279,7 @@ class GPUPanelTests(OperationsFixture):
         self.assertEqual((server['state'], server['port']), ('ok', self.fake.server.server_port))
         self.assertEqual(server['models'][0], {'name': MODEL, 'sizeBytes': 20_000_000_000, 'vramBytes': 20_000_000_000, 'gpuShare': 1.0,
             'contextLength': 4096, 'expiresAt': '2026-10-27T12:00:00Z', 'parameterSize': '27B', 'quantization': 'Q4_K_M'})
-        self.assertEqual(panel['gpuOwner'], {'available': False, 'owner': None}, 'the arbiter slot is empty until W2b merges')
+        self.assertEqual(panel['gpuOwner'], {'available': True, 'owner': None}, 'the arbiter is present and nobody holds the GPU')
         # A crew member reads it too; it is read-only.
         self.role('member')
         ops.forget()
@@ -316,9 +316,9 @@ class GPUPanelTests(OperationsFixture):
         self.assertEqual(panel['modelServers'], [])
 
     def test_gpu_owner_slot_lights_up_when_the_arbiter_module_exists(self):
-        arbiter = types.ModuleType('project_assistant.gpu_arbiter')
-        arbiter.current_owner = lambda conn, url: {'holder': 'take_grader', 'purpose': 'continuity grading', 'since': '2026-10-27T10:00:00Z', 'pid': 1}
-        with patch.dict(sys.modules, {'project_assistant.gpu_arbiter': arbiter}):
+        from project_assistant import gpu_arbiter
+        owner = lambda conn, url: {'holder': 'take_grader', 'purpose': 'continuity grading', 'since': '2026-10-27T10:00:00Z', 'pid': 1}
+        with patch.object(gpu_arbiter, 'current_owner', owner):
             panel = self.api('/gpu')
         self.assertEqual(panel['gpuOwner'], {'available': True, 'owner': {'holder': 'take_grader', 'purpose': 'continuity grading', 'since': '2026-10-27T10:00:00Z'}})
 
