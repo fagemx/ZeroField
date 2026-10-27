@@ -496,6 +496,13 @@ MESSAGES = (
     ('Shot {label} was deleted after this proposal was made. Nothing was applied; generate a new proposal.', 'shotProposalShotDeleted',
      'Shot\\ (?P<v0>[\\s\\S]*?)\\ was\\ deleted\\ after\\ this\\ proposal\\ was\\ made\\.\\ Nothing\\ was\\ applied;\\ generate\\ a\\ new\\ proposal\\.'),
     ('A shot proposal is applied as proposed; it cannot be edited first. Generate a new proposal.', 'shotProposalNotEditable', None),
+    # project_assistant.shot_meta / previs_ops (SPEC_20 R27): a 3D plan proposal made of operations, solved in the 3D Stage.
+    ('The 3D plan proposed for shot {label} is still operations only. Open it in the 3D Stage to solve and preview it before approving; nothing was applied.', 'shotProposalNeedsSolve',
+     'The\\ 3D\\ plan\\ proposed\\ for\\ shot\\ (?P<v0>[\\s\\S]*?)\\ is\\ still\\ operations\\ only\\.\\ Open\\ it\\ in\\ the\\ 3D\\ Stage\\ to\\ solve\\ and\\ preview\\ it\\ before\\ approving;\\ nothing\\ was\\ applied\\.'),
+    ("The 3D Stage's solve for shot {label} does not match the proposal's operations: {reason}. Nothing was attached; reload the proposal.", 'shotProposalSolveMismatch',
+     "The\\ 3D\\ Stage's\\ solve\\ for\\ shot\\ (?P<v0>[\\s\\S]*?)\\ does\\ not\\ match\\ the\\ proposal's\\ operations:\\ (?P<v1>[\\s\\S]*?)\\.\\ Nothing\\ was\\ attached;\\ reload\\ the\\ proposal\\."),
+    ('Only a 3D plan proposal made of operations can take a solve from the 3D Stage.', 'shotProposalSolveNotOps', None),
+    ('This proposal already carries a solved 3D plan.', 'shotProposalAlreadySolved', None),
     ('This proposal changes a shot field that cannot be proposed.', 'shotProposalUnknownField', None),
     ('Shot not found.', 'shotNotFound', None),
     ('query cannot be empty.', 'queryCannotBeEmpty', None),

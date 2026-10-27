@@ -17,8 +17,9 @@ camera  Shot size, angle, lens and move in the stage's vocabulary (ui/src/previs
 Both produce cell-scoped ``table_edit`` proposals on the shot's row (SPEC_20 R17), reviewed in ShotProposals; nothing
 is written until the director adopts one. The model-facing tools ``propose_shot_prompt`` and ``propose_camera`` check a
 sheet or a camera with the same validators and create the same proposals. The 3D ghost camera comes from the camera
-table proposal itself (proposalModel.ghostPlan); a §4.6 camera op for ``propose_previs_ops`` (R27, built separately)
-is kept in the job result as ``previsOps`` and handed to PREVIS_HOOK once that tool exists.
+table proposal itself (proposalModel.ghostPlan); the job's §4.6 camera op is kept in the job result as ``previsOps`` and
+handed to PREVIS_HOOK (R27, ``previs_ops.propose_from_job``), which proposes the solved, framed camera path as a
+``previsPlan`` proposal on the shot's 3D plan (``previsProposalId``; ``previsError`` when the plan cannot take it).
 
 Eval adapter: ``python -X utf8 scripts/crew_eval.py --job project_assistant.crew_planning:run_eval_job --type beats``
 runs the real beats job (one retry, rule fallback) on the R42 cases against the deployment's local model.
@@ -64,9 +65,16 @@ SIZE_TEXT = {'wide': 'wide shot', 'full': 'full shot', 'medium': 'medium shot', 
 ANGLE_TEXT = {'low': 'low angle', 'eye': 'eye level', 'high': 'high angle', 'overhead': 'overhead'}
 LENS_SIZE = {24: 'wide', 35: 'medium', 50: 'medium', 85: 'close'}
 FALLBACK_NOTE = '[Rule fallback, not model-written]'
-# R27 (propose_previs_ops) is built in a separate package. Once it is merged, set this to a callable
-# (ctx, conn, shot_id, ops) -> proposal id so the camera job also proposes its §4.6 camera op for the 3D plan.
-PREVIS_HOOK = None
+
+
+def _propose_previs(ctx, conn, shot_id, ops):
+    from project_assistant import previs_ops  # R27; imported late (previs_ops reads the story modules)
+    return previs_ops.propose_from_job(ctx, conn, shot_id, ops)
+
+
+# (ctx, conn, shot_id, ops) -> proposal id: the camera job also proposes its §4.6 camera op for the 3D plan (R27,
+# previs_ops.propose_from_job). None turns that off; a refusal (a ValueError) is kept in the result as previsError.
+PREVIS_HOOK = _propose_previs
 
 
 # ---------- shared shot facts ----------
@@ -552,7 +560,10 @@ def propose_camera_cells(ctx, conn, gathered, outcome, *, job_id=None):
     crew = {'jobId': job_id, 'kind': 'camera', 'source': outcome.source, 'role': ROLE}
     result['proposalIds'] = [propose_cells(ctx, conn, facts, changes, crew)]
     if PREVIS_HOOK is not None:
-        result['previsProposalId'] = PREVIS_HOOK(ctx, conn, shot['shotId'], [previs_op])
+        try:
+            result['previsProposalId'] = PREVIS_HOOK(ctx, conn, shot['shotId'], [previs_op])
+        except ValueError as exc:  # previs_ops.OpsRefusal: the 3D plan cannot take it; the cell proposal stands
+            result['previsError'] = str(exc)[:300]
     return result
 
 

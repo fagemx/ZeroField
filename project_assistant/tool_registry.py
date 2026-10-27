@@ -126,11 +126,16 @@ _KEYWORDS = {
     'object': {'properties', 'required', 'additionalProperties'},
     'string': {'minLength', 'maxLength', 'enum', 'pattern'},
     'integer': {'minimum', 'maximum', 'enum'},
+    'number': {'minimum', 'maximum'},  # a finite JSON number (int or float, never a boolean); SPEC_20 R27 offsets
     'boolean': set(),
     'array': {'items', 'minItems', 'maxItems', 'uniqueItems'},
 }
 _SCHEMA_ANNOTATIONS = {'type', 'description', 'title'}
 _FLAGS = ('mutating', 'console', 'ui', 'mcp', 'analysis_only', 'race_candidate', 'primary_only', 'external')
+
+
+def _finite(value):
+    return type(value) in (int, float) and value == value and value not in (float('inf'), float('-inf'))
 
 
 def _check_declaration(tool: Tool) -> None:
@@ -172,9 +177,9 @@ def _check_declaration(tool: Tool) -> None:
     if tool.proposal_only is not None and type(tool.proposal_only) is not bool:
         bad('proposal_only must be a boolean or None.')
     if tool.proposal_only and not _proposal_shape(tool):
-        # A proposal tool is journaled (mutating) yet runs in the shared transaction with an auto default, needs no
-        # switch or primary role, and is not a legacy, delegation, studio or generation tool (those write or spend).
-        bad('a proposal-only tool must be mutating, in-transaction, auto, and outside the writing categories.')
+        # A proposal tool is journaled (mutating) with an auto default, needs no switch or primary role, and is not a
+        # legacy, delegation, studio or generation tool (those write or spend directly).
+        bad('a proposal-only tool must be mutating, auto, need no switches or primary role, and sit outside the writing categories.')
     _check_schema(tool, tool.schema, 'inputSchema', top=True)
 
 
@@ -183,16 +188,17 @@ DIRECT_CATEGORIES = ('legacy', 'delegation', 'studio', 'advisor', 'generation')
 
 
 def _proposal_shape(tool) -> bool:
-    return (tool.mutating and not tool.external and tool.policy == 'auto' and not tool.requires
-            and not tool.primary_only and tool.category not in DIRECT_CATEGORIES)
+    # external is allowed: propose_previs_ops renders its preview outside the shared transaction, yet only proposes.
+    return (tool.mutating and tool.policy == 'auto' and not tool.requires and not tool.primary_only
+            and tool.category not in DIRECT_CATEGORIES)
 
 
 def proposal_only(tool) -> bool:
     """Whether a tool only creates proposals for review (SPEC_20 fixed decisions 8, 9).
 
     An explicit proposal_only wins. Otherwise a propose_* tool of the proposal shape counts: mutating (it records a
-    proposal), in the shared transaction, auto by default, no switches or primary role, and outside DIRECT_CATEGORIES,
-    so the crew planning tools (propose_shot_prompt, propose_camera, propose_asset_description, propose_look,
+    proposal), auto by default, no switches or primary role, and outside DIRECT_CATEGORIES, so the crew planning
+    tools (propose_shot_prompt, propose_camera, propose_previs_ops, propose_asset_description, propose_look,
     propose_cast) and any later propose_* tool declared the same way qualify, while propose_table_edit and propose
     (legacy) and every studio, delegation or generation tool never do."""
     if tool.proposal_only is not None:
@@ -242,6 +248,9 @@ def _check_schema(tool, schema, path, top=False):
             bad('bounds must be integers.')
         if 'enum' in schema and (not isinstance(schema['enum'], list) or not all(type(v) is int for v in schema['enum'])):
             bad('enum must list integers.')
+    elif kind == 'number':
+        if any(key in schema and not _finite(schema[key]) for key in ('minimum', 'maximum')):
+            bad('bounds must be finite numbers.')
     elif kind == 'array':
         if 'items' not in schema:
             bad('needs an items schema.')
@@ -295,6 +304,9 @@ def _validate(value, schema, messages):
     elif kind == 'integer':
         if (type(value) is not int or value < schema.get('minimum', value) or value > schema.get('maximum', value)
                 or 'enum' in schema and value not in schema['enum']):
+            raise ValueError(messages['option'])
+    elif kind == 'number':
+        if not _finite(value) or value < schema.get('minimum', value) or value > schema.get('maximum', value):
             raise ValueError(messages['option'])
     elif kind == 'boolean':
         if type(value) is not bool:
@@ -451,6 +463,44 @@ register(
 )
 
 
+# SPEC_20 R27, R28: 3D blocking as structured operations, solved by the 3D Stage's own plan code
+# (project_assistant/previs_ops.py, ui/src/previs/ops.js). The vocabulary mirrors previs_ops (tests compare them);
+# this module imports no handler module, so the lists are written out here.
+_CAMERA_KEY = {'type': 'string', 'pattern': '^K[0-9]{1,2}$'}
+_PREVIS_NAME = {'type': 'string', 'minLength': 1, 'maxLength': 40}
+_PREVIS_OP = _obj({
+    'op': {'type': 'string', 'enum': ['place', 'camera', 'retime']},
+    'cast': {'type': 'string', 'pattern': '^@CAST-[0-9]{1,4}$'}, 'relativeTo': _PREVIS_NAME,
+    'offset': {'type': 'array', 'items': {'type': 'number', 'minimum': -8, 'maximum': 8}, 'minItems': 2, 'maxItems': 2},
+    'facing': _PREVIS_NAME,
+    'size': {'type': 'string', 'enum': ['wide', 'full', 'medium', 'close', 'extreme_close']},
+    'angle': {'type': 'string', 'enum': ['low', 'eye', 'high', 'overhead']},
+    'lens': {'type': 'integer', 'enum': [24, 35, 50, 85]},
+    'move': {'type': 'string', 'enum': ['pushin', 'pullout', 'orbit', 'crane', 'track', 'static']},
+    'from': _CAMERA_KEY, 'to': _CAMERA_KEY,
+    'beat': {'type': 'integer', 'minimum': 1, 'maximum': 64}, 'at': {'type': 'number', 'minimum': 0, 'maximum': 1}}, ['op'])
+
+register(Tool(
+    'propose_previs_ops',
+    'Propose the 3D blocking of one shot as operations, never code. A deterministic solver (the 3D Stage\'s own plan '
+    'code) turns them into a plan, renders a contact-sheet preview and stores both as a proposal the director approves '
+    'in the 3D Stage; nothing is written before that. baseRevision is the planRevision read with read_shot (a stale one '
+    'is refused with DRAMA_PREVIS_REVISION_CONFLICT: read again and rebuild). Stage metres: +z toward the console and '
+    'glass, -z toward the camera side, the mark at [0, 0]. Ops: place {cast: a @CAST code from the cast sheet; '
+    'relativeTo: a set target (observatory: console, plinth, dial, recorder, console_edge, window_glass or window; '
+    'parallax: far, mid, near; empty: none), "mark" or someone already on set; offset [x, z] metres added to it; facing: '
+    'a target, a cast code, "camera" or "room"}; camera {size wide|full|medium|close|extreme_close, angle '
+    'low|eye|high|overhead, lens 24|35|50|85, move pushin|pullout|orbit|crane|track|static, from/to: the move\'s keys '
+    '(K1-K2; orbit K1-K3; static holds K1)}; retime {beat: the 3D Stage acting beat from 1, at: where it starts, 0-1 of '
+    'the shot}. One camera op at most; place each person once.',
+    _obj({'shotId': _ID, 'baseRevision': {'type': 'integer', 'minimum': 0},
+          'ops': {'type': 'array', 'items': _PREVIS_OP, 'minItems': 1, 'maxItems': 32}}, ['shotId', 'baseRevision', 'ops']),
+    'previs', 'project_assistant.previs_ops:propose_previs_ops',
+    annotations={'readOnlyHint': False, 'destructiveHint': False, 'idempotentHint': False, 'openWorldHint': False},
+    label='Propose 3D Blocking', mutating=True, analysis_only=False, external=True, ui=True, grants=('coordinator', 'sheet_ops'),
+    zerofield_mcp=True))
+
+
 def _context(name, description, schema, label):
     # SPEC_20 R16: structured, bounded, read-only reads of the story model (project_assistant/context_tools.py).
     # Every result is the §4.5 envelope {status, data, sources, warnings, limitations, hash} and every call is
@@ -521,7 +571,7 @@ register(
 
 # Crew planning proposals (SPEC_20 R7, R19, R20, §4.7): checked by the same validators as the crew jobs
 # (project_assistant/crew_planning.py) and written only as cell-scoped table proposals for the director to adopt.
-# The registry schema has no number type, so a beat's seconds are checked by the handler (§4.4).
+# A beat's seconds are checked by the handler (§4.4), with the rest of the sheet's rules.
 _CAMERA_LENSES = [24, 35, 50, 85]  # ui/src/previs/plan.js LENSES (tests cross-check)
 _CAMERA_MOVES = ['pushin', 'pullout', 'orbit', 'crane', 'track', 'static']  # plan.js MOVES
 _PROPOSAL = {'readOnlyHint': False, 'destructiveHint': False, 'idempotentHint': False, 'openWorldHint': False}

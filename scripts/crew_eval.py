@@ -69,7 +69,8 @@ ANGLES = ('low', 'eye', 'high', 'overhead')
 FACE_CAMERA = ('camera', 'room')      # a place op's facing toward the lens (plan.js: facing "room" is the camera side)
 ALIASES = {'window': 'window_glass'}  # SPEC_20 4.6 writes "window" for the observatory's window_glass anchor
 MAX_OPS, MAX_OFFSET = 32, 8.0
-RETIME_BEAT_BASE = 1                  # retime.beat counts the beat sheet's entries from 1 (assumption, see README)
+RETIME_BEAT_BASE = 1                  # retime.beat counts the 3D Stage's acting beats from 1 (SPEC_20 4.6)
+SKILLS = ('standIdle', 'walkTo', 'reachGrip', 'turnLook', 'kneelDown')  # plan.js compileMotionSkills: one acting beat each
 
 KINDS = ('position', 'wardrobe', 'prop', 'lighting', 'gaze', 'screen_direction', 'hair_makeup', 'set_dressing', 'body_state', 'weather')
 SEVERITIES = ('minor', 'major')
@@ -384,7 +385,7 @@ def validate_blocking(case, out):
     beats = inp.get('beats')
     for op in ops:
         if op['op'] == 'retime' and beats is not None and isinstance(op.get('beat'), int) and op['beat'] - RETIME_BEAT_BASE >= len(beats):
-            found.setdefault('retime_valid', []).append(f'retime beat {op["beat"]}: the shot has {len(beats)} beats')
+            found.setdefault('retime_valid', []).append(f'retime beat {op["beat"]}: the plan has {len(beats)} acting beats')
     for category in ('op_schema', 'camera_lens', 'camera_move', 'camera_keys', 'retime_valid'):
         checks.add(category, category not in found, '; '.join(found.get(category, [])[:4]))
     cameras = [op for op in ops if op['op'] == 'camera']
@@ -728,7 +729,13 @@ def _check_blocking_case(inp, expect, case):
         problems.append('base_revision is not a whole number')
     beats = inp.get('beats')
     if beats is not None and not (isinstance(beats, list) and beats and all(isinstance(b, dict) and _is_num(b.get('from')) and _is_num(b.get('to')) and _text(b.get('action')) for b in beats)):
-        problems.append('beats is not a list of {from, to, action}')
+        problems.append('beats is not a list of {from, to, skill, action}')
+    elif beats is not None:
+        # The 3D Stage's acting beats (SPEC_20 4.6 retime): the plan's own actor's skills, in order, inside the shot.
+        if any(b.get('skill') not in SKILLS for b in beats):
+            problems.append(f'each beat names its 3D Stage skill, one of {list(SKILLS)}')
+        if any(not 0 <= b['from'] < b['to'] <= inp['shot']['seconds'] for b in beats) or any(a['to'] > b['from'] for a, b in zip(beats, beats[1:])):
+            problems.append('beats run in order inside the shot without overlapping')
     hard = expect['hard']
     problems += _keys(hard, (), ('require_ops',))
     require = hard.get('require_ops', [])

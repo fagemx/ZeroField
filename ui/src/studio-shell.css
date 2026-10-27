@@ -300,6 +300,13 @@
 .previs-meta-summary { margin: 0; font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; }
 .previs-meta-changes { margin: 0; padding-left: 18px; display: grid; gap: 2px; color: var(--muted); font-size: 12px; }
 .previs-meta-stale { margin: 0; color: #f2b33d; font-size: 12px; }
+/* SPEC_20 R27, R28: the solved plan's contact sheet and the operations it came from. */
+.previs-meta-sheet { margin: 0; display: grid; gap: 4px; }
+.previs-meta-sheet img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line, #2a3240); background: #11151b; }
+.previs-meta-ops { font-size: 12px; color: var(--muted); }
+.previs-meta-ops summary { cursor: pointer; color: var(--text, inherit); }
+.previs-meta-ops ol, .previs-meta-ops ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+.previs-meta-vision { color: var(--text, inherit); }
 /* Where the proposal puts each person on the overhead plan: a dashed ring, never amber (amber is what you are touching). */
 .plan-ghosts { position: absolute; inset: 0; }
 .plan-ghost-mark { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border: 1.5px dashed #e6eaf0; border-radius: 50%; opacity: .85; }

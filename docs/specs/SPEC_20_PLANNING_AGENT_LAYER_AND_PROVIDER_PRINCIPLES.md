@@ -161,8 +161,8 @@
 | R | 名稱 | 內容 |
 |---|---|---|
 | R26 | 3D 計畫存後端 | 新增 `GET`／`PUT /aivideo/open/v1/shots/{id}/previs-plan`，存在 `meta_<shotId>.previsPlanFull`（`{plan, planRevision, updatedAt, updatedBy}`；`previsPlan` 是分鏡種子，重建分鏡會覆寫，所以另開欄位）。寫入要帶 `If-Match` 或 `baseRevision` 版本，版本不符回 409。瀏覽器暫存降級成未存檔的草稿；預演 WebM 裡的計畫只當備份。 |
-| R27 | 結構化操作與求解 | 操作格式見 §4.6。求解共用前端既有的計畫程式（`plan.js`、`blocking.js`），不在 Python 重寫一份。 |
-| R28 | 無頭算圖與看圖驗證 | 伺服器端以無頭瀏覽器跑同一套預演程式，輸出接觸表或 WebM（待決 6）。提案附預覽圖；可選擇交給視覺模型檢查，並由人確認。 |
+| R27 | 結構化操作與求解 | 操作格式見 §4.6。求解共用前端既有的計畫程式（`plan.js`、`blocking.js`），不在 Python 重寫一份。已實作：`propose_previs_ops`（`project_assistant/previs_ops.py`、`ui/src/previs/ops.js`）。 |
+| R28 | 無頭算圖與看圖驗證 | 伺服器端以無頭瀏覽器跑同一套預演程式，輸出接觸表或 WebM（待決 6）。提案附預覽圖；可選擇交給視覺模型檢查，並由人確認。已實作：無頭 Edge／Chromium 的接觸表（`headless_previs.py`、`previsRender.js`），WebM 未做。 |
 | R29 | 3D 與文字同步、角色代碼 | 存 3D 計畫時，用 `describePlan` 一併提議更新 Optical Rig 與 Camera Motion 欄。`plan.cast` 改帶 `@CAST` 代碼。 |
 
 **E. 對外介面（stdio 為 P1，其餘為 P2）**
@@ -266,7 +266,8 @@
 ### 4.5 結果信封（R16）
 每個讀取工具都回傳 `{"status", "data", "sources", "warnings", "limitations", "hash"}`，每次呼叫都寫一筆稽核。
 
-### 4.6 3D 操作（R27，P1 草稿）
+### 4.6 3D 操作（R27、R28，已定案）
+工具 `propose_previs_ops`（只產生提案）的參數：
 ```json
 {"shotId": "sh_…", "baseRevision": 7, "ops": [
   {"op": "place", "cast": "@CAST-01", "relativeTo": "console", "offset": [-1.0, 0.0], "facing": "window"},
@@ -274,7 +275,19 @@
   {"op": "retime", "beat": 2, "at": 0.6}
 ]}
 ```
-求解結果是既有格式的計畫（`plan.js`），連同預覽圖一起寫成提案。`baseRevision` 不符時回 409。
+- **欄位封閉**：請求只有 `shotId`、`baseRevision`、`ops`（1–32 個）；每種操作只收下表欄位，多一個就拒絕。
+- **單位與座標**：片場座標是站位為原點的公尺，+z 朝主控台與玻璃、-z 朝攝影機那一側，`offset` 是 `[x, z]` 公尺（各 ±8 以內）。朝向 0 是 +z。
+
+| 操作 | 欄位 | 規則 |
+|---|---|---|
+| `place` | `cast`、`relativeTo`、`offset`、`facing` | `cast` 是角色表上的 `@CAST` 代碼，每人一次。`relativeTo` 是場景目標（天文台：console、plinth、dial、recorder、console_edge、window_glass，`window` 是 window_glass 的別名；視差場景：far、mid、near；空場景沒有）、`mark`（原點），或已在場（存檔計畫裡或前面的操作放過）的代碼。`facing` 另可用 `camera`（鏡頭中段的攝影機位置）與 `room`（-z）。新代碼若計畫的主角還沒有代碼就成為主角（`plan.code`），否則加入 `plan.cast`；已在場的人移動。 |
+| `camera` | `size`、`angle`、`lens`、`move`，選填 `from`、`to` | `size`：wide、full、medium、close、extreme_close；`angle`：low、eye、high、overhead；`lens` 屬 `LENSES`、`move` 屬 `MOVES`。求解器從主角面向的那一側框住所有在場的人，寫出該運鏡的鍵 K1…Kn（static 1 個、orbit 3 個、其他 2 個）；`from`／`to`（預設第一與最後一個）選用其中一段，攤到整個鏡頭。最多一個。 |
+| `retime` | `beat`、`at` | `beat` 是 3D 片場的表演段落（`plan.use` 的技能；Walk in 動作算一段），從 1 數；`at` 是該段新的開始點，鏡頭長度的 0–1。前後段落與鏡頭邊界會擋住它，求解器會註明實際落點。 |
+
+- **求解**：前端 `ui/src/previs/ops.js`（共用 `plan.js`、`blocking.js`、`storyPlan.js`）依序處理放置、朝向、攝影機、朝向攝影機者、重排時間。同一份存檔計畫（或分鏡種子）加同一組操作，一定得到同一份計畫；`tests/fixtures/previs_ops_golden.json` 是 JS 的輸出，Python 與 JS 的驗證用同一份檔案對答案。伺服器以無頭 Edge／Chromium 跑同一支程式（`project_assistant/headless_previs.py`），不需要 Node；頁面只能讀這次建置的檔案與交給它的場景圖，其餘網址一律拒絕。
+- **提案**：`shot_meta` 的 `previsPlan` 提案，目標另帶 `ops`、`opsHash`、`solve`（`solved`／`ops_only`、求解者、警告）與 `preview`（6 格接觸表，存為專案資產）。`baseRevision` 不符時回 409 `DRAMA_PREVIS_REVISION_CONFLICT`（準備時與寫入提案前各查一次）；操作不合法回 422，並指出欄位路徑。
+- **沒有瀏覽器時**：提案只存操作（`value` 為 null）。審核的 3D 片場用同一支 `ops.js` 求解並顯示鬼影；按核准時先把這份結果附上（`POST /projects/api/{slug}/assistant/proposals/{id}/solution`，驗證角色表並檢查與操作一致），再套用。沒有求解結果的提案一律不能核准，不會寫入未求解的計畫。
+- **看圖檢查（選用）**：專案設定 `previs_vision_check` 為 `on` 時，提案建立後把接觸表交給連戲監督的視覺模型，走治理與 GPU 仲裁，只在提案上加註（`vision`），由人確認。算圖本身用 SwiftShader（CPU），不佔 GPU。
 
 ### 4.7 MCP 工具與權杖範圍（R30／R31，P1 草稿）
 - 讀取：R16 的情境工具。

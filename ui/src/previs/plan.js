@@ -71,7 +71,8 @@ export function cameraKeys(plan) {
   const k = (plan.lens || 35) / 35;
   return (PRESETS[plan.move] || PRESETS.pushin).map(([f, pos, aim]) => [f, insideDome(aim, pos.map((v, i) => (v - aim[i]) * k)), aim]);
 }
-function insideDome(aim, offset) {
+// The point along aim + offset nearest to the full offset that stays on the dome's open floor, under the glass (ops.js too).
+export function insideDome(aim, offset) {
   for (let t = 1; t > 0; t -= 0.02) {
     const p = aim.map((v, i) => v + offset[i] * t), d = Math.hypot(p[0] - DOME.x, p[2] - DOME.z);
     if (p[1] >= 0.3 && d <= DOME.floor && p[1] <= DOME.base + Math.sqrt(Math.max(0, DOME.radius ** 2 - d * d)) - 0.3) return p;

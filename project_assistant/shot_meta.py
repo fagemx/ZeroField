@@ -17,8 +17,13 @@ The fields a proposal may change are ``FIELDS``. ``previsPlan`` is the first. ``
 ``project_docs/story_look.py`` is on main: give it a ``Field`` with its revision reader, validator, revisioned writer
 and its own conflict and invalid sentences (each with a pattern in ``project_docs/error_messages.py``).
 
-Crew tools that create these proposals come with R27 (``propose_previs_ops``); until then ``propose`` (or
-``propose_from_tool`` with a tool context) is the one way in, and it validates the value when the proposal is made.
+``propose`` (or ``propose_from_tool`` with a tool context) is the one way in, and it validates the value when the
+proposal is made. The crew's way in is ``propose_previs_ops`` (SPEC_20 R27, ``project_assistant/previs_ops.py``): its
+proposals also carry ``details`` in the target, ``ops`` (the operations), ``opsHash``, ``solve`` ({status: "solved" |
+"ops_only", by: "headless" | "stage", version, warnings, ...}), ``preview`` (a contact sheet {url, assetId, width,
+height, frames} or null) and later ``vision`` (an optional model note). A ``previsPlan`` proposal made of operations
+without a headless browser has ``value`` null until the reviewer's 3D Stage attaches its solve
+(``previs_ops.attach_solution``); ``write`` refuses it until then, so an approval never writes an unsolved plan.
 """
 from __future__ import annotations
 
@@ -37,6 +42,9 @@ NOT_EDITABLE = "A shot proposal is applied as proposed; it cannot be edited firs
 UNKNOWN_FIELD = "This proposal changes a shot field that cannot be proposed."
 SHOT_NOT_FOUND = "Shot not found."
 SHOT_DELETED = "Shot {label} was deleted after this proposal was made. Nothing was applied; generate a new proposal."
+NEEDS_SOLVE = ("The 3D plan proposed for shot {label} is still operations only. Open it in the 3D Stage to solve and "
+               "preview it before approving; nothing was applied.")
+DETAIL_KEYS = ("ops", "opsHash", "solve", "preview", "vision")  # what a proposal made of 3D operations adds (R27, R28)
 
 
 class ProposalError(Exception):
@@ -125,13 +133,15 @@ def _author(conn, owner_id, message_id, agent_key, author_id):
 
 
 def propose(conn, slug, owner_id, shot_id, value, *, field=story_previs.FIELD, base_revision=None, summary="",
-            agent_key=None, author_id=None, message_id=None):
+            agent_key=None, author_id=None, message_id=None, details=None):
     """Create a pending ``shot_meta`` proposal for owner_id to decide, in the caller's transaction; return it.
 
     value is checked by the field's validator now, so a proposal is never made of something that could not be
     written. base_revision is the revision the value was worked out from (default: the stored one); a proposal
     already behind the stored field is refused. The author is the agent (agent_key, or the agent of message_id)
-    or a crew member (author_id); without either it is the owner. Raises ProposalError."""
+    or a crew member (author_id); without either it is the owner. details: the DETAIL_KEYS of a proposal made of
+    3D operations (previs_ops); with operations, a ``previsPlan`` value may be None (solved later in the 3D Stage).
+    Raises ProposalError."""
     spec = FIELDS.get(field)
     if spec is None:
         raise ProposalError(400, f"Shot proposals can change {', '.join(FIELDS)}, not {field!r}.")
@@ -146,16 +156,20 @@ def propose(conn, slug, owner_id, shot_id, value, *, field=story_previs.FIELD, b
     if base != current:
         raise ProposalError(409, f"The {spec.noun} of shot {where['label']} is at revision {current}, not {base}. "
                                  "Read it again before proposing.")
-    try:
-        spec.validate(conn, slug, value)
-    except story.StoryError as exc:
-        raise ProposalError(422, f"The proposed {spec.noun} for shot {where['label']} is not valid: {exc}") from None
+    extra = {key: details[key] for key in DETAIL_KEYS if isinstance(details, dict) and key in details}
+    if value is None and spec.name == story_previs.FIELD and isinstance(extra.get("ops"), list) and extra["ops"]:
+        pass  # operations only: solved and checked by the 3D Stage before anyone can approve it
+    else:
+        try:
+            spec.validate(conn, slug, value)
+        except story.StoryError as exc:
+            raise ProposalError(422, f"The proposed {spec.noun} for shot {where['label']} is not valid: {exc}") from None
     if not isinstance(summary, str) or len(summary.strip()) > MAX_SUMMARY:
         raise ProposalError(400, f"summary must be text of at most {MAX_SUMMARY} characters.")
     text = privacy.sanitize(summary.strip(), privacy.mode(conn, slug))
     author = _author(conn, owner_id, message_id, agent_key, author_id)
     target = {"shotId": shot_id, "field": spec.name, "baseRevision": base, "value": value, "shot": where,
-              "author": author, "display": where["label"]}
+              "author": author, "display": where["label"], **extra}
     proposal_id = store.create_proposal(conn, slug, owner_id, message_id, ACTION, target, text)
     if author["kind"] == "agent":
         with conn.cursor() as cur:
@@ -189,6 +203,8 @@ def write(conn, me, slug, target):
     if row is None:
         return 409, {"error": SHOT_DELETED.format(label=(target.get("shot") or {}).get("label") or shot_id)}
     label, base = _label(row, shot_id), target.get("baseRevision")
+    if target.get("value") is None:  # operations not solved yet (SPEC_20 R27): never write an unsolved plan
+        return 409, {"error": NEEDS_SOLVE.format(label=label)}
     try:
         revision = spec.write(conn, slug, shot_id, target.get("value"), base, me.actor_id)
     except story.StoryError as exc:
@@ -250,6 +266,7 @@ def listing(conn, me, slug, shot_id):
             "baseRevision": target.get("baseRevision"), "currentRevision": revisions.get(field), "value": target.get("value"),
             "summary": proposal.get("content") or "", "shot": target.get("shot") or _where(row, shot_id),
             "author": _author_view(conn, slug, target.get("author"), names, agents), "createdAt": proposal.get("created_at"),
+            **{key: target.get(key) for key in DETAIL_KEYS if key in target},
             "canDecide": bool(me.can_write and proposal["owner_id"] == me.actor_id and not proposal.get("race_group_task_id")),
         })
     return 200, {"shotId": shot_id, "shot": _where(row, shot_id), "revisions": revisions, "proposals": items}

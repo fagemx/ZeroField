@@ -32,11 +32,15 @@ HISTORIC_GRANTS = {
 EXTERNAL_ONLY = {'get_workflow', 'request_generation'}  # declared for zerofield-mcp; no built-in grant
 # SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
 CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
+# SPEC_20 R27: the Cinematographer proposes 3D blocking as operations (declared before the context tools).
+PREVIS = {'sheet_ops': ['propose_previs_ops']}
 # SPEC_20 R7/R19/R20: the Cinematographer's proposal tools, after the context tools (the Showrunner has every tool);
 # R21/R22: Art's proposal tools, on the Screenwriter until the roster has an Art role.
 CREW = {'sheet_ops': ['propose_shot_prompt', 'propose_camera'],
         'doc_writer': ['propose_asset_description', 'propose_look', 'propose_cast']}
-PROPOSAL_TOOLS = {'propose_shot_prompt', 'propose_camera', 'propose_asset_description', 'propose_look', 'propose_cast'}
+# Every proposal-only tool (tool_registry.proposal_only): what top_up_grants may add to existing crews.
+PROPOSAL_TOOLS = {'propose_previs_ops', 'propose_shot_prompt', 'propose_camera', 'propose_asset_description', 'propose_look',
+                  'propose_cast'}
 
 
 class ToolSurfaceAuditTests(unittest.TestCase):
@@ -126,7 +130,7 @@ class RegistryDerivationTests(unittest.TestCase):
                 self.assertIs(tools.HANDLERS[name], tool_registry.handler(name))
         self.assertEqual(set(studio_tools.HANDLERS), set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual(set(delegation_tools.HANDLERS), tool_specs.DELEGATION_TOOLS)
-        self.assertEqual(studio_tools.EXTERNAL_TOOLS, {'studio_plan_allocation', 'studio_inspect_frames', 'consult_advisor'})
+        self.assertEqual(studio_tools.EXTERNAL_TOOLS, {'studio_plan_allocation', 'studio_inspect_frames', 'consult_advisor', 'propose_previs_ops'})
         with self.assertRaises(LookupError):
             tool_registry.handlers('project_assistant.studio_tools', {})
 
@@ -140,8 +144,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertFalse(any(tool_registry.get(name).grants for name in EXTERNAL_ONLY))
         for key, grants in HISTORIC_GRANTS.items():
             with self.subTest(key=key):
-                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + CONTEXT + CREW.get(key, []))
-                self.assertEqual(agent_registry.default_tools(key, False), grants + CONTEXT + CREW.get(key, []))
+                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + PREVIS.get(key, []) + CONTEXT + CREW.get(key, []))
+                self.assertEqual(agent_registry.default_tools(key, False), grants + PREVIS.get(key, []) + CONTEXT + CREW.get(key, []))
         self.assertEqual(agent_registry.default_tools('custom_agent'), agent_registry.default_tools('qa_critic'))
 
     def test_ui_catalog_matches_console_model(self):
@@ -156,7 +160,8 @@ class RegistryDerivationTests(unittest.TestCase):
                     category='context', handler='fixture.module:fixture_tool', grants=['qa_critic'])
         self.assertEqual(tool_registry.declare(good).grants, ('qa_critic',))
         for change in ({'schema': tool_registry._obj({'q': {'type': 'string', 'format': 'uri'}})},
-                       {'schema': tool_registry._obj({'q': {'type': 'number'}})},
+                       {'schema': tool_registry._obj({'q': {'type': 'null'}})},
+                       {'schema': tool_registry._obj({'q': {'type': 'number', 'minimum': True}})},
                        {'schema': tool_registry._obj({'q': {'type': 'array'}})},
                        {'schema': {'type': 'object', 'properties': {}}},
                        {'schema': tool_registry._obj({}, ['q'])},
@@ -193,17 +198,18 @@ class RegistryDerivationTests(unittest.TestCase):
         good = dict(name='propose_fixture', description='Fixture.', schema=tool_registry._obj({'q': {'type': 'string'}}),
                     category='crew', handler='fixture.module:propose_fixture', mutating=True, grants=['sheet_ops'])
         only = lambda **change: tool_registry.proposal_only(tool_registry.declare({**good, **change}))  # noqa: E731
-        self.assertTrue(only(), 'a later propose_* tool of the same shape (e.g. propose_previs_ops) qualifies')
+        self.assertTrue(only(), 'a later propose_* tool of the same shape qualifies')
+        self.assertTrue(only(external=True), 'running outside the transaction (a render, as propose_previs_ops) still only proposes')
         self.assertFalse(only(name='write_fixture'))
         self.assertTrue(only(name='write_fixture', proposal_only=True))
         self.assertFalse(only(proposal_only=False))
         self.assertFalse(only(mutating=False))
         self.assertFalse(only(category='studio'))
         self.assertFalse(only(category='generation'))
-        self.assertFalse(only(external=True))
+        self.assertFalse(only(policy='always_ask'))
         for change in ({'proposal_only': 1}, {'proposal_only': True, 'mutating': False},
                        {'proposal_only': True, 'category': 'legacy'}, {'proposal_only': True, 'policy': 'always_ask'},
-                       {'proposal_only': True, 'requires': ['allow_subagents']}, {'proposal_only': True, 'external': True}):
+                       {'proposal_only': True, 'requires': ['allow_subagents']}, {'proposal_only': True, 'category': 'generation'}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 tool_registry.declare({**good, **change})
         from project_docs import story_openapi

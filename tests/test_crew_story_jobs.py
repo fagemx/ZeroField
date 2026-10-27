@@ -553,6 +553,8 @@ class ProposalTopUpTests(unittest.TestCase):
                 self.assertEqual(after[key]['version'], before[key] + (1 if added else 0))
         self.assertEqual(after['doc_writer']['allowed_tools'][-3:], ['propose_asset_description', 'propose_look', 'propose_cast'])
         self.assertEqual(after['sheet_ops']['allowed_tools'][-2:], ['propose_shot_prompt', 'propose_camera'])
+        if tool_registry.get('propose_previs_ops'):  # SPEC_20 R27 (W3b): registry-driven, so it reaches existing crews too
+            self.assertIn('propose_previs_ops', after['sheet_ops']['allowed_tools'])
         with self.conn.cursor() as cur:
             cur.execute("SELECT target, detail FROM projectops.audit_log WHERE project_slug=%s AND action=%s AND detail->>'category'='proposal' ORDER BY target",
                         (self.slug, context_tools.TOPUP_ACTION))
