@@ -56,7 +56,7 @@ npm run build --prefix ui
 python run_studio.py --port 3020 --no-worker
 ```
 
-Open [http://127.0.0.1:3020/projects/](http://127.0.0.1:3020/projects/). The launcher seeds the default development showcase and crew, registers separate workers, and fills only empty showcase media cells once. Subsequent launches preserve edits and custom pipeline definitions. Existing productions are preserved. Development mode binds to the local machine and includes a crew identity switcher.
+Open [http://127.0.0.1:3020/projects/](http://127.0.0.1:3020/projects/). The launcher seeds the default development showcase and crew, registers separate workers, and fills only empty showcase media cells once. Subsequent launches preserve edits and custom pipeline definitions. Existing productions are preserved. Development mode binds to the local machine and includes a crew identity switcher. This command is browse only (`--no-worker`); [Models](#models) shows how to turn the crew on.
 
 For local generation, install the models/nodes listed in [workflow setup](workflows/README.md), then run:
 
@@ -74,7 +74,39 @@ python run_studio.py --port 3020 --platform comfy_sdk
 
 Generation outputs are proposals for director review. The launcher uses `OPENBENCH_DB_URI` or `DATABASE_URL` when supplied, otherwise it starts the embedded development database. `OPENBENCH_PG_BIN` selects an installed PostgreSQL bin directory. Non-development authentication never seeds demo accounts or registers demo workers.
 
-`--no-worker` lets you explore the workspace without starting model calls. To use agents, configure an appropriate model and restart without that flag. Existing `OPENBENCH_*` environment variables and CLI entry points are retained for compatibility. Configure a local open-weights, OpenAI-compatible endpoint with `OPENBENCH_PROVIDER=openai_compat`, `OPENBENCH_API_BASE`, and `OPENBENCH_MODEL`; see [worker setup](docs/WORKERS.md) for the supported settings and ACP configuration. For contest workflows, use open-weights models and open-source nodes.
+`--no-worker` is browse only: it starts no workers, so nothing calls a model. To use the crew, set up a model as described in [Models](#models) and start without that flag. Existing `OPENBENCH_*` environment variables and CLI entry points are retained for compatibility.
+
+## Models
+
+The crew (Showrunner, Screenwriter, Cinematographer, Continuity Supervisor) uses a language model for chat, proposed edits and continuity grading; media generation runs on the Comfy workflows above. By default that model is local open weights: [Ollama](https://ollama.com) serving `qwen3.8:27b` at `http://127.0.0.1:11434/v1`. No `OPENBENCH_*` variable is needed.
+
+1. Install Ollama, then pull the model (about 18 GB):
+
+   ```powershell
+   ollama pull qwen3.8:27b
+   ```
+
+2. Start Ollama with a larger context. On GPUs with less than 24 GiB of VRAM, Ollama's default context is 4k tokens ([Ollama docs](https://docs.ollama.com/context-length)), which can truncate the crew's longer prompts. If the Ollama app is already running, quit it first (or raise the context length in its settings). Then start the server with at least 16384:
+
+   ```powershell
+   $env:OLLAMA_CONTEXT_LENGTH=16384; ollama serve
+   ```
+
+   ```bash
+   OLLAMA_CONTEXT_LENGTH=16384 ollama serve
+   ```
+
+   A larger context needs more VRAM. `ollama ps` shows the context in use and whether the model runs fully on the GPU.
+
+3. Start the studio without `--no-worker`:
+
+   ```powershell
+   python run_studio.py --port 3020
+   ```
+
+If the crew cannot work (the background worker is off, Ollama is unreachable, or the model has not been pulled), the Agent Board lists what is missing and how to fix it.
+
+The default and the contest demo path use local open weights only. To use a different local server that speaks the OpenAI chat-completions protocol (vLLM, llama.cpp server, LM Studio), set `OPENBENCH_API_BASE` (the base URL including `/v1`) and `OPENBENCH_MODEL`; see [worker setup](docs/WORKERS.md) for the supported settings and ACP configuration. Hosted endpoints such as OpenRouter and closed models (OpenAI, Anthropic, Gemini) are optional and outside the demo path: an admin has to allow the host in an environment and set a price ceiling for the model in the Agent Console, and closed models are for hybrid productions only. For contest workflows, use open-weights models and open-source nodes.
 
 ## External workflows and reference preparation
 

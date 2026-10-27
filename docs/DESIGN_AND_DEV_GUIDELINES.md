@@ -65,9 +65,16 @@
 ## 3. 競賽合規與模型規範（Contest Compliance & Open-Weights Purity）
 
 1. **100% Open-Weights 鐵律（鎖定 RTX 5090 + LTX \$2,000 現金獎）**：
-   - `workflows/` 目錄下的所有 ComfyUI API JSON **嚴禁包含任何閉源付費節點（No Partner Nodes / No Closed APIs）**。
+   - `workflows/` 目錄下的所有 ComfyUI API JSON **嚴禁包含任何閉源付費節點（No Partner Nodes / No Closed APIs）**。圖檔本身 100% 開放權重；`workflows/cards/` 裡的閉源與雲端卡片（`kling-v2-master`、`seedance-20-pro`、`rh-cloud-h3-burst`、`router-*.json`）和 `workflows/router/` 的 7 個 Comfy Router 模型定義不是圖檔，只在混合模式（`hybrid_studio` 製作政策）可用，預設的 `open_weights_only` 政策會擋住（`project_assistant/studio/model_router.py` 的 `effective_production_policy`）。
    - 影片生成與 V2V 改造一律以 **`LTX-2.5`** 為核心；首幀與角色資產一律以 **`FLUX 3 Image Klein (5.6B)`** 為核心。
-   - LLM 拆鏡預設支援本地開源權重模型（透過 Ollama / vLLM 的 `openai_compat` 介面，如 `qwen3` / `llama-3.3` / `deepseek`），同時相容任何 OpenAI-compatible 端點。
+   - **模型供應商五條原則**（SPEC_20 §0.3；規劃與對話代理、連戲評分、媒體生成都適用）：
+     1. **預設與展示路徑全部用本機開放權重。** 規劃與評分用 Ollama（`openai_compat` 介面，預設 `http://127.0.0.1:11434/v1`）＋`qwen3.8:27b`；生成用 ComfyUI＋LTX-2.5／FLUX 3。
+     2. **託管開放權重是選配。** 例如 OpenRouter 上的同一個模型，給沒有顯示卡的人；由管理者開啟，不在比賽展示路徑。
+     3. **閉源模型只在混合模式明確開啟時可用。** 包括 OpenAI、Anthropic、Gemini 與 Comfy Router 的閉源卡；混合模式即 `hybrid_studio` 製作政策。
+     4. **不使用 chatgpt.com 訂閱端點；所有模型呼叫都走治理。** 包括連戲評分與快速建立助手。
+     5. **非本機呼叫一律要價格上限，並記錄實際用到的模型。**
+   - 目前的落實：`openai_compat` 介面相容任何 OpenAI 相容端點，但預設環境只放行本機（`localhost`、`127.0.0.1`、`::1`）。要接託管端點或閉源模型，管理者必須先在 Agent Console 的 Environments & Bridges 放行該主機，並在 Spend & Rate Limits 設定該模型的價格上限，否則治理會拒絕。尚未完成（SPEC_20 R9、R11、R12）：託管開放權重的獨立開關與用量分級、連戲評分與快速建立助手走治理、帳本記錄回應裡的實際模型；在那之前，連戲評分與快速建立助手請只指向本機端點。
+   - 拆鏡（劇本到分鏡）預設由規則與範本產生，不呼叫模型（`project_docs/story_adaptation.py`；建立分鏡回傳 `"engine": "deterministic"`）。劇組產生拆鏡提案屬 SPEC_20 的規劃包（C 包），尚未實作。
 2. **SFW 與版權／肖像權合規（Official Rule: Legal, SFW, No Unauthorized IP/Likeness）**：
    - 預載於 `samples/` 與展示專案中的所有圖片、實拍原片（Driving Videos）、角色名稱與 Prompt：
      - **嚴禁使用真實名人／演員姓名或臉部照片**（例如不可寫 Keanu Reeves、Scarlett Johansson）。

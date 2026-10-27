@@ -29,7 +29,7 @@ OpenBench 源自實際運作良好的「專案工作台」介面：
    - 最關鍵的設計原則：**不同型態的畫布不各自造輪子，而是共用同一套標註 (`annotation`)、區塊鎖 (`block_lock`)、變更提案 (`ProposalCard`) 與歷史紀錄 (`revision`)**。
 2. **右側代理「頭與手腳分離」＋ 可換供應商**
    - 借鏡 `C:\ai_project\openab`（將協調中樞 Head 與執行器手腳 Limb 分離，有任務的代理不一定住在同一個進程或同一台機器）與 `C:\ai_project\orca`（多代理任務追蹤，但不做程式碼 IDE，而是聚焦任務與畫布協作）。
-   - 中間畫布上的工作都可以請右側代理完成，且代理可以隨時更換模型供應商（OpenAI、Gemini、Claude、OpenRouter、Ollama 本地模型）或外部 Worker 來源。
+   - 中間畫布上的工作都可以請右側代理完成，也可以改由外部 Worker 來源執行。代理的模型供應商可以更換，但依五條供應商原則（SPEC_20 §0.3）：(1) 預設與展示路徑全部用本機開放權重（Ollama＋`qwen3.8:27b`）；(2) 託管開放權重（例如 OpenRouter 上的同一個模型）是選配，不在展示路徑；(3) 閉源模型（OpenAI、Anthropic、Gemini）只在混合模式明確開啟時可用；(4) 不使用 chatgpt.com 訂閱端點，所有模型呼叫都走治理；(5) 非本機呼叫一律要價格上限，並記錄實際用到的模型。預設環境只放行本機，接其他端點要管理者在 Agent Console 放行該主機並設定價格上限。
 3. **多專案管理與專案生命週期狀態 (`Project Hub`)**
    - 從單一專案擴充為多專案架構，支援專案狀態（`planning` 規劃中、`active` 進行中、`recurring` 例行日報、`blocked` 卡關中、`archived` 已封存）。
 

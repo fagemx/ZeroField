@@ -8,7 +8,7 @@
 
 > **2026-10-19 SPEC_07 corrective verification:** The six accepted review defects at `dda463b271169f3ccee0f9539983e78917aab7ce` have bounded fixes and regression evidence in product candidate `956536dafff7832bcd1c765f459515d9ee536fe0`: live v2 authority/effective-default grants, input-ready allocation/contact-sheet propagation, and same-row review/approved-image handoff. Final integration RAN backend **389**, frontend **111**, build and newly installed-wheel checks; zero test skips. Three same-candidate browser interactions are READ evidence from the UI owner, not rerun by integration. Independent review of `4b77295904990561c59ac877a3cfd91a807b5b08` concluded **OK with notes**, resolving all six original findings with no new blocker identified; see the [durable review](./docs/SPEC07_REVIEW.md). Historical passing totals did not cover the original defects. See the current [receipt](./docs/spec07-verification.json). Live-provider quality, billing and remote cancellation remain unverified.
 
-> **2026-10-19 SPEC_07 integration:** Studio extraction, graphless routing, allocation-backed Story dispatch, explicit project policy, structural preparation and M8-reviewed media races/chains are implemented. See [`docs/SPEC07_STUDIO_ROUTING.md`](./docs/SPEC07_STUDIO_ROUTING.md) and [`docs/spec07-verification.json`](./docs/spec07-verification.json) for current contracts/evidence. Open weights remain the default; hybrid requires an explicit authorized choice. Synthetic provider/local inference tests do not establish real model quality. The approved SPEC_07 requirements below remain intact; historical “next” wording is not a request to redo completed components.
+> **2026-10-19 SPEC_07 integration:** Studio extraction, graphless routing, allocation-backed Story dispatch, explicit project policy, structural preparation and M8-reviewed media races/chains are implemented. See [`docs/SPEC07_STUDIO_ROUTING.md`](./docs/SPEC07_STUDIO_ROUTING.md) and [`docs/spec07-verification.json`](./docs/spec07-verification.json) for current contracts/evidence. Open weights remain the default (media generation and, since SPEC_20, the agent and grader models too); hybrid requires an explicit authorized choice. Synthetic provider/local inference tests do not establish real model quality. The approved SPEC_07 requirements below remain intact; historical “next” wording is not a request to redo completed components.
 
 > **2026-10-19 SPEC_06 implementation:** The RH STORY facade, five-entry workbench, script baseline lock, variants, scene grouping, candidate history, split/merge, card overrides, batches and FFmpeg film export are implemented. See [`docs/STORY_WORKBENCH.md`](./docs/STORY_WORKBENCH.md) and [`docs/story-workbench-verification.json`](./docs/story-workbench-verification.json). Backend 306 / frontend 108 tests and the UI build pass. Migration `162_story_workbench.sql` persists API metadata and uploads; collaborative tabs remain authoritative. GPU/provider inference and external webhook networking were not exercised. The older “SPEC_06 next” descriptions below are historical scope, not a request to implement it again.
 
@@ -20,8 +20,8 @@
 > 本專案 **`ZeroField`**（位於 `C:\ai_project\ZeroField`）是專為參加 ComfyUI **「Open Source Higgsfield Challenge」**（截止日：2026-10-30 09:00 PT）獨立出來的參賽專用 Repo。
 >
 > **動工前請務必依序閱讀以下 5 份核心文件**：
-> 1. **[`docs/HANDOFF_4090_PC.md`](./docs/HANDOFF_4090_PC.md)**（**電腦交接首頁**：`SPEC_01`～`SPEC_07` 歷史基底與目前 **`SPEC_08`** 整合交接）
-> 2. **[`docs/specs/SPEC_08_CLAUDE_CONSOLE_AGENT_PLATFORM.md`](./docs/specs/SPEC_08_CLAUDE_CONSOLE_AGENT_PLATFORM.md)**（**主規格／最新範圍優先**：獨立全螢幕 `Agent Console`，四組十二頁、12 範本／空白／自然語言草稿、7 個 Studio／advisor 工具、版本化 Skills／Memory、獨立 Outcome Grader、M8 Sessions、手動／Cron Deployments、Providers／Environments 與合併 Usage／Limits；不新增企業管理頁）
+> 1. **[`docs/HANDOFF_4090_PC.md`](./docs/HANDOFF_4090_PC.md)**（**電腦交接首頁**：`SPEC_01`～`SPEC_07` 歷史基底與 **`SPEC_08`** 整合交接，內容止於 `SPEC_08`；更新的規格見下一項）
+> 2. **[`docs/specs/`](./docs/specs/)**（**規格目錄，編號越大越新，最新範圍優先**；每份規格開頭的「狀態」列寫明是否已實作。目前最新的是 **[`SPEC_20`](./docs/specs/SPEC_20_PLANNING_AGENT_LAYER_AND_PROVIDER_PRINCIPLES.md)**（規劃代理層與**模型供應商五條原則**）與 **[`SPEC_19`](./docs/specs/SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md)**（鏡頭生成台、採用即成片、引用與接點）。**[`SPEC_08`](./docs/specs/SPEC_08_CLAUDE_CONSOLE_AGENT_PLATFORM.md)** 是 Agent Console 的基底規格，不再是最新範圍：獨立全螢幕 `Agent Console`，四組十二頁、12 範本／空白／自然語言草稿、7 個 Studio／advisor 工具、版本化 Skills／Memory、獨立 Outcome Grader、M8 Sessions、手動／Cron Deployments、Providers／Environments 與合併 Usage／Limits；不新增企業管理頁）
 > 3. **[`docs/SPEC07_STUDIO_ROUTING.md`](./docs/SPEC07_STUDIO_ROUTING.md)** 與 **[`docs/STORY_WORKBENCH.md`](./docs/STORY_WORKBENCH.md)**（已完成基底：`SPEC_07` 免開 ComfyUI 閉源路由與 `allocationId` 授權契約、`SPEC_06` RH STORY 漫劇工作台）
 > 4. **[`docs/DESIGN_AND_DEV_GUIDELINES.md`](./docs/DESIGN_AND_DEV_GUIDELINES.md)**（必讀！英文介面規範、`STATUSES` 白名單防呆、影片播放器、Open-Weights 與版權合規鐵律）
 > 5. **[`docs/ZEROFIELD_SPEC.md`](./docs/ZEROFIELD_SPEC.md)** 與 **[`docs/AGENT_ORCHESTRATION_SPEC.md`](./docs/AGENT_ORCHESTRATION_SPEC.md)**（參賽總體規格與多代理編排規格）
@@ -41,11 +41,13 @@
 - 在 [`ui/src/sheetViews.js`](./ui/src/sheetViews.js) 與 [`ui/src/SheetCards.jsx`](./ui/src/SheetCards.jsx) 中，`coverColumns` 必須同時納入 `image` 與 `video` 欄位，讓 `Gallery` 與 `Board` 視圖能直接顯示分鏡與 OpenJutsu 影片卡片。
 - 在 [`ui/src/assistant/ProposalRaceView.jsx`](./ui/src/assistant/ProposalRaceView.jsx) 中，當候選提案為影片時，必須渲染並排 `<video>` 播放器供盲測挑片。
 
-### ③ Comfy Developer Platform 合規（Comfy Router / SDK）＋ Open Weights 核心工作流
-- 比賽規定必須建構於 **Comfy Developer Platform（Comfy Router 和／或 Comfy SDK）** 之上，不可只依賴裸打本機 `127.0.0.1:8188/prompt`。
-  - 自架 GPU 的合規路徑（2026-10-21 實測通過）：官方 `comfy-api-proxy` 在 `127.0.0.1:8189` 把本機 ComfyUI 轉成 SDK 的 v2 API，`run_studio.py --platform comfy_sdk` 在未設 `COMFY_API_KEY` 時預設接它（`card_engine.comfy_base_url`）。Open Weights Only 組只能走這條，Router 是閉源模型的轉接。
+### ③ Comfy Developer Platform（Comfy Router / SDK）與 Open Weights 核心工作流
+- **「必須建構於 Comfy Developer Platform（Comfy Router 和／或 Comfy SDK）之上」是否為比賽規定：待確認**（SPEC_20 R6）。官方頁（comfy.org/open-source-higgsfield，2026-10-27 逐句核對）沒有這條，只寫可以在任何地方執行 ComfyUI，Developer Platform 只出現在導覽列；`docs/HIGGSFIELD_FEATURE_INVENTORY_2026-10-18.md` 寫過這句，但現行官方頁沒有。確認出處前**不要把它寫成比賽規定**，只當成建議。
+  - 啟動器預設是本機 ComfyUI：`run_studio.py --platform local`（`run_studio.py:486`；環境變數 `COMFY_PLATFORM` 可改預設值），未指定 `--comfy-url`／`COMFY_BASE_URL` 時工作流直接送到 `127.0.0.1:8188`（`card_engine.comfy_base_url`）。
+  - 要走 Developer Platform 才帶 `--platform comfy_sdk`（2026-10-21 自架 GPU 實測通過）：未設 `COMFY_API_KEY` 時接官方 `comfy-api-proxy`（`127.0.0.1:8189`，把本機 ComfyUI 轉成 SDK 的 v2 API），設了金鑰則接 Comfy Cloud。若 R6 確認是規定，展示啟動改用 `--platform comfy_sdk`。
+  - Open Weights Only 組的官方規則是不得使用夥伴節點（Partner Nodes）或閉源 API、只能用開放權重模型；本機 ComfyUI 跑開放權重同樣符合，不需要 comfy-api-proxy。Comfy Router 是託管模型（含閉源）的轉接，本專案只在混合模式使用。
   - 已知不相容：`comfy-api-proxy` 0.1.6 要求 `metadata` 是字串，`comfy-sdk` 0.5.0 送的是字典；worker 設定不要帶 `metadata`。
-- `workflows/` 內的預設工作流採用 100% 開放權重模型（**`LTX-2.5`** 作為核心影片模型以符合 LTX \$2,000 加碼獎資格 ＋ **`FLUX`** 作為角色／場景資產與首幀模型），同時符合 **Best Overall** 與 **Open Weights Only** 參賽條件。
+- `workflows/` 內的預設工作流採用 100% 開放權重模型（**`LTX-2.5`** 作為核心影片模型以符合 LTX \$2,000 加碼獎資格 ＋ **`FLUX`** 作為角色／場景資產與首幀模型），同時符合 **Best Overall** 與 **Open Weights Only** 參賽條件。**Open Weights Only 也看代理與評分模型，它們同樣須為開放權重**（預設為本機 Ollama＋`qwen3.8:27b`；SPEC_20 供應商原則 1）。
 - `samples/` 與預設專案素材必須 **100% SFW、無版權爭議、無真實名人姓名或肖像**。
 
 ### ④ 改完前端 `ui/src/` 必跑 `npm run build --prefix ui`
