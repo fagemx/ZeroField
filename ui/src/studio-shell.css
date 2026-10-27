@@ -287,6 +287,39 @@
 .crew-ask-candidates li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .crew-ask-candidates small { color: var(--faint); font-size: 11.5px; }
 .story-world .space-detail .crew-ask { margin-top: 12px; }
+/* SPEC_20 R24, R25: the crew's pre-production. Four stages in a column, the lock between each above the stage it opens. */
+.crew-flow { display: grid; gap: 8px; }
+.story-world .space-detail .crew-flow { margin-top: 12px; }
+.crew-flow > header { display: grid; gap: 2px; font-size: 12.5px; }
+.crew-flow > header small, .crew-flow small { color: var(--faint); font-size: 11.5px; }
+.crew-flow-card { padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); }
+.crew-flow-line { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.crew-flow-line.blocked, .crew-flow-line.stopped { color: #f0b46a; }
+.crew-flow-line.completed { color: var(--text); }
+.crew-flow-reasons { margin: 0; padding-left: 16px; font-size: 12px; color: var(--faint); }
+.crew-flow-note { color: #f0b46a !important; }
+.crew-flow-stages { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.crew-flow-stage { display: grid; gap: 3px; padding: 6px 8px; border-left: 2px solid var(--line-2); }
+.crew-flow-stage.current { border-left-color: var(--primary); }
+.crew-flow-stage.done { border-left-color: rgba(120, 200, 150, .7); }
+.crew-flow-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.crew-flow-chip { color: var(--faint); font-size: 11px; }
+.crew-flow-stage.running .crew-flow-chip { color: var(--text); }
+.crew-flow-lock { display: grid; gap: 3px; margin: 0 0 4px; font-size: 11.5px; color: var(--faint); }
+.crew-flow-lock p { margin: 0; }
+.crew-flow-lock.held { color: rgba(120, 200, 150, .9); }
+.crew-flow-lock.asking { padding: 6px 8px; border: 1px dashed rgba(255, 255, 255, .42); border-radius: 6px; color: var(--text); }
+.crew-flow-jobs { display: grid; gap: 2px; margin: 0; padding-left: 14px; font-size: 11.5px; }
+.crew-flow-skipped summary { cursor: pointer; color: var(--faint); font-size: 11.5px; }
+.crew-flow-skipped ul { margin: 2px 0 0; padding-left: 14px; font-size: 11.5px; color: var(--faint); }
+.crew-flow-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.workbench-app.studio-shell .crew-flow button { height: 28px; padding: 0 10px; font-size: 12px; }
+.workbench-app.studio-shell .crew-flow button.apply { border-color: var(--primary); background: var(--primary); color: var(--primary-ink); font-weight: 600; }
+/* The Continuity Supervisor's findings under its ask: breaks first catch the eye. */
+.crew-ask-findings { flex-basis: 100%; display: grid; gap: 6px; margin: 0; padding: 0 0 0 4px; list-style: none; }
+.crew-ask-findings li { display: grid; gap: 2px; padding-left: 8px; border-left: 2px solid var(--line-2); font-size: 12px; line-height: 1.4; }
+.crew-ask-findings li.major { border-left-color: #f0728a; }
+.crew-ask-findings small { color: var(--faint); font-size: 11.5px; }
 /* The same proposal inside the 3D Stage's inspector: the dashed camera is on the plan, these choose what to do with it. */
 .previs-proposal { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed rgba(255, 255, 255, .42); border-radius: 8px;
   background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .06) 0 5px, transparent 5px 10px), var(--surface); }

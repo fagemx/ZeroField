@@ -18,6 +18,7 @@ import { shortTime, statusClass, statusLabel } from './format.js';
 import { MediaLadder, ShotList, ShotCompare, ShotSourceBadge } from './ShotStage.jsx';
 import { ShotProposals } from './ShotProposals.jsx';
 import { CrewAsk } from './CrewAsk.jsx';
+import { PreproductionPanel } from './PreproductionPanel.jsx';
 import { rowProposals } from './proposalModel.js';
 import './sheet-workspace.css';
 import { SheetAgentRequest } from './assistant/SheetAgentRequest.jsx';
@@ -364,6 +365,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
         {action==='approve'&&writable&&<button type="button" disabled={busy||dirty} onClick={()=>setShotStatus(currentRow,'Retake')}>{uiText('stage.retakeKey')}</button>}</div>
       {failure&&<p className="sheet-save-error" role="alert">{failure.message}</p>}
       <ShotProposals items={rowProposals(proposals,currentRow.rid,tab.key)} writable={writable&&!busy&&!dirty} onApply={onApplyProposal} onDismiss={onDismissProposal} onShow={hasStage?()=>pickView('stage'):undefined}/>
+      {tab.key==='cinema-studio'&&<PreproductionPanel compact slug={slug} epId={epId} writable={writable} shots={parsed.rows.length}/>}{/* SPEC_20 R25: the card after the storyboard is built */}
       <CrewAsk slug={slug} shotId={info?.shotId||storyShotId(slug,currentRow.rid)} writable={writable} disabled={busy||dirty} onProposed={onReloadProposals}/>
       {actionCol>=0&&<ShotBindings rows={shotBindings(actionText,assetLookup)} lookup={assetLookup} elsewhere={codesElsewhere(parsed.headers,currentRow.cells,actionCol)} writable={writable} disabled={busy||dirty}
         onLook={(code,next)=>writeAction(replaceLook(actionText,code,next))} onRemove={code=>writeAction(removeBinding(actionText,code))} onAdd={code=>writeAction(addBinding(actionText,code))} onOpen={onOpenWorld}/>}

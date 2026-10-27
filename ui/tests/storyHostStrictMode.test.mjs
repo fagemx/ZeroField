@@ -55,6 +55,8 @@ window.fetch = async (url, options = {}) => {
   // The episode's crew jobs (SPEC_20 R23, the script view's "Ask the Screenwriter") are a plain read, outside the writing session.
   if (path === base+'/catalog/styles' || path === base+'/episodes/'+epId+'/assets' || path === base+'/episodes/'+epId+'/crew-jobs')
     return response({code:0, data:{items:[], nextCursor:null}});
+  // So is its pre-production flow (SPEC_20 R24, the script view's crew panel): none yet.
+  if (path === base+'/episodes/'+epId+'/preproduction') return response({code:0, data:{flow:null, next:null, canStart:true, canLock:true}});
   const tail = path.split('/episodes/'+epId+'/writing/')[1];
   if (tail) {
     if (call.actor !== actor.actor_id) throw new Error('Missing actor binding: '+path);

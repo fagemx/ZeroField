@@ -50,6 +50,8 @@ window.fetch = async (url, options={}) => {
   if(path === '/projects/api/r16' || path === '/projects/api/other') return response({me:actor});
   // The episode's crew jobs (SPEC_20 R23) are a plain read outside the writing session.
   if(path === '/aivideo/open/v1/catalog/styles' || /\/episodes\/(ep_r16_01|ep_other_01)\/(assets|crew-jobs)$/.test(path)) return response({code:0,data:{items:[],nextCursor:null}});
+  // So is its pre-production flow (SPEC_20 R24, the script view's crew panel): none yet.
+  if(/\/episodes\/(ep_r16_01|ep_other_01)\/preproduction$/.test(path) && method === 'GET') return response({code:0,data:{flow:null,next:null,canStart:true,canLock:true}});
   const match = /\/episodes\/(ep_r16_01|ep_other_01)\/writing\/(.+)$/.exec(path);
   if(match) {
     const [,epId,tail] = match;
