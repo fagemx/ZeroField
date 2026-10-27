@@ -29,6 +29,8 @@ HISTORIC_GRANTS = {
                                     'studio_inspect_frames', 'studio_edit_timeline', 'consult_advisor'],
     'qa_critic': READS + REPORTS + ['propose', 'studio_inspect_frames'],
 }
+# SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
+CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
 
 
 class ToolSurfaceAuditTests(unittest.TestCase):
@@ -112,8 +114,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(agent_registry.default_tools('coordinator', False), sorted(tool_specs.TOOL_NAMES - tool_specs.DELEGATION_TOOLS))
         for key, grants in HISTORIC_GRANTS.items():
             with self.subTest(key=key):
-                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'])
-                self.assertEqual(agent_registry.default_tools(key, False), grants)
+                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + CONTEXT)
+                self.assertEqual(agent_registry.default_tools(key, False), grants + CONTEXT)
         self.assertEqual(agent_registry.default_tools('custom_agent'), agent_registry.default_tools('qa_critic'))
 
     def test_ui_catalog_matches_console_model(self):

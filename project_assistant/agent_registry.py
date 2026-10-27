@@ -96,6 +96,8 @@ def ensure_default_agents(conn, slug):
                 cur.execute('''UPDATE projectops.agent_profile SET system_prompt=%s,allowed_tools=%s::jsonb,
                     skill_keys=%s::jsonb,multiagent_config=%s::jsonb,memory_mounts=%s::jsonb WHERE project_slug=%s AND agent_key=%s''',
                     (prompt,json.dumps(default_tools(key)),json.dumps(mounted['skill_keys']),json.dumps(mounted['multiagent_config']),json.dumps(mounted['memory_mounts']),slug,key))
+    from project_assistant.context_tools import top_up_grants
+    top_up_grants(conn, slug)  # existing crews get the read-only context tools once (SPEC_20 R16)
     from project_assistant.agent_console_store import ensure_defaults
     ensure_defaults(conn, slug)
 
