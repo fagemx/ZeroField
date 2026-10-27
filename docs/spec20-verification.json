@@ -1,0 +1,94 @@
+{
+ "date": "2026-10-27",
+ "stage": "SPEC_20 planning agent layer and provider principles (implementation, pending real-model acceptance)",
+ "base_commit": "3b8ca65",
+ "candidate_commit": "ec09fc4",
+ "branch": "feat/spec20-integration",
+ "spec": "docs/specs/SPEC_20_PLANNING_AGENT_LAYER_AND_PROVIDER_PRINCIPLES.md",
+ "requirement_status": {
+  "source": "SPEC_20 section 11",
+  "done": 33,
+  "partial": 10,
+  "deferred": 1,
+  "notes": [
+   "R19 composer entry, R23 story-API auto-grade, R25 generation-desk asks and R34 desk/film cards wait for SPEC_19 on main",
+   "R44 blank-project walk and GPU acceptance A14, A15, A17 and R42 real-model runs wait for an idle GPU",
+   "R13 arbiter is first-come-first-served; no planning-before-render priority",
+   "R28 renders a contact sheet only, no WebM",
+   "R41 tool labels are not translated in zh-TW",
+   "Self-hosted Ollama on a non-loopback host (Docker, LAN) is tiered closed; Compose crew path untested"
+  ]
+ },
+ "process": {
+  "packages": 25,
+  "parallel_agents": "complex packages Opus 5.5, simple packages Sonnet 5.5, one worktree each",
+  "test_tiers": [
+   "agents ran only their new tests and the test modules of files they changed",
+   "each merge ran only new tests and the tests of conflicting files, plus npm test when UI changed",
+   "one sharded full backend run at the end"
+  ]
+ },
+ "backend": {
+  "command": "python -X utf8 run_sharded.py <worktree> final 6 (each shard: python -X utf8 -m unittest <modules>, PYTHONPATH=tests)",
+  "shards": 6,
+  "passed": 1237,
+  "failed": 0,
+  "skipped": 0,
+  "wall_seconds": 333,
+  "slowest_shard_seconds": 328.681,
+  "database": "throwaway cluster 127.0.0.1:55471, fresh databases zf20_full1..6",
+  "real_model_calls": false,
+  "notes": "Tests that touch providers block port 11434 with a socket guard; all model, ComfyUI and ACP endpoints are fakes."
+ },
+ "frontend": {
+  "command": "npm test --prefix ui",
+  "passed": 592,
+  "failed": 0,
+  "skipped": 0
+ },
+ "build": {
+  "command": "npm run build --prefix ui",
+  "status": "passed",
+  "committed_in": "ec09fc4",
+  "includes": "static/projects/previs-solver.html for the headless 3D solve"
+ },
+ "checks": {
+  "A10_chatgpt_references": {
+   "command": "git grep -n -i -E \"chatgpt\\.com|codex/auth\\.json\" -- . ':!docs' ':!static' ':!*.md'",
+   "matches": 0
+  },
+  "R43_tool_surface": {
+   "command": "python -X utf8 scripts/audit_tool_surface.py",
+   "result": "matches snapshot: 38 tools; coordinator 36, doc_writer 17, sheet_ops 23, qa_critic 16; zerofield-mcp tokens propose_only 15, generate 16; ACP ceiling 38"
+  },
+  "R6_platform_rule": "Official App requirements item 1 (site translation bundle, checked 2026-10-27): built with ComfyUI, run anywhere incl. entirely local; Developer Platform is optional",
+  "headless_previs": "scripts/previs_headless_check.py run by the W3b agent: 9/9 plans match the JS solver, 26/26 refusal paths match, outside fetch refused",
+  "mcp_client": "Official MCP Python SDK client 1.26.0 connected to /mcp, negotiated 2025-11-25, listed and called tools (scratch run by the W4c agent)"
+ },
+ "ui_verification": {
+  "viewport": "1440x900",
+  "environment": "Headless Edge over CDP against throwaway databases and fake model/Comfy endpoints",
+  "checked_by_agents": [
+   "Agent Board readiness banner (en, zh-TW)",
+   "3D Stage stored plan, conflict and slate sync",
+   "Agent Console dashboard, GPU panel, queue, model setup (en, zh-TW)",
+   "3D Stage shot_meta review: preview, conflict, approve",
+   "Role x model matrix",
+   "External agents page with a token and audit trail",
+   "previs ops review with contact sheet"
+  ],
+  "not_checked_visually": [
+   "Crew ask section in shot detail",
+   "Pre-production flow panel and the let-the-crew-pre-produce card",
+   "StoryWorld description/look asks"
+  ]
+ },
+ "not_verified": [
+  "Any real language-model run (Ollama qwen3.8:27b) or GPU work: A14, A15, A17, R42 real-model scores, R44 blank-project walk",
+  "Real MCP hosts: MCP Inspector, Goose with Ollama, Claude Code, and an MCP Apps host for the 3D preview card",
+  "Real codex-acp / claude-code-acp under the ACP lock-down",
+  "Docker Compose crew path"
+ ],
+ "main_untouched": true,
+ "pushed": false
+}
