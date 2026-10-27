@@ -59,6 +59,14 @@ def public_dispatch(dispatch):
     return {k:v for k,v in dispatch.items() if k not in hidden}
 
 
+def _failure(dispatches,task):
+    """The plain-language failure class of a task's latest failed model call (SPEC_20 R12), if any."""
+    from project_assistant.model_client import FAILURE_CLASSES
+    failed=[d for d in dispatches if d['task_id']==task['id'] and d['status']=='failed' and not d['superseded_by']]
+    found=(max(failed,key=lambda d:d['admission_no']).get('output_json') or {}).get('failure') if failed else None
+    return found if found in FAILURE_CLASSES else None
+
+
 def task_target(task):
     scope=task.get('request_scope') or {}
     target={**task['target']}
@@ -184,7 +192,7 @@ def board(conn,me,slug,*,cursor=None,limit=50,counts_only=False):
                 groups['done'].append({'id':'task:'+task['id'],'kind':'task','run_id':task['run_id'],'task_id':task['id'],
                     'title':task['title'],'status':task['status'],'summary':task['result_summary'],'target':task_target(task),
                     'flow_bound':bool(task.get('flow_task_id') or task['input_snapshot'].get('flow_run_id')),
-                    'error':task['error'],'created_at':task['created_at']})
+                    'error':task['error'],'failure':_failure(dispatches,task) if task['status']=='failed' else None,'created_at':task['created_at']})
         for run in runs:
             if run['status'] in ('succeeded','failed','canceled'):
                 target=next((t['target'] for t in reversed(tasks) if t['run_id']==run['id'] and t['target'].get('tab_key')), {})

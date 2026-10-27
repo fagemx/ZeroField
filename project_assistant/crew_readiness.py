@@ -5,7 +5,9 @@ no redirects, then the configured model is looked up in that list. Non-local end
 reported by host only with reachable=None; a showrunner tests them in Agent Console. Keys,
 URLs and provider replies never leave this module. Payloads are cached per production for
 30 s and refresh forces a recheck at most once every 5 s. The roster reads the cache (or
-remembered probes) and never probes.
+remembered probes) and never probes. Each provider reports its catalog usage tier (SPEC_20 R9);
+a tier the effective production policy forbids is a network_policy blocker whose fix is
+enable_hosted_open (the showrunner's hosted open-weights switch) or use_hybrid_policy (closed).
 """
 from __future__ import annotations
 
@@ -34,7 +36,8 @@ FIXES = {
     'kind_removed': ('reconfigure_provider',),
     'cli_blocked': ('use_builtin_provider',),
     'auth_missing': ('set_api_key', 'configure_provider'),
-    'network_policy': ('enable_environment', 'allow_host', 'keep_local'),
+    # SPEC_20 R9: a usage tier the effective production policy forbids is a network-policy blocker too.
+    'network_policy': ('enable_environment', 'allow_host', 'keep_local', 'enable_hosted_open', 'use_hybrid_policy'),
     'pricing_missing': ('set_model_pricing',),
     'agent_disabled': ('enable_agent',),
     'reservations_stuck': ('reconcile_reservations',),
@@ -136,8 +139,9 @@ def _denied(environment, host):
 
 def _facts(conn, slug):
     """Database half of the check: everything except the network probes."""
-    from project_assistant import execution_governance as governance, orchestrator as cp, privacy, tools
+    from project_assistant import execution_governance as governance, orchestrator as cp, privacy, provider_catalog, tools
     from project_assistant.agent_runtime import provider_for
+    from project_docs import story_openapi as story
     seen = store.get_setting(conn, slug, 'builtin_worker_seen_at')
     try:
         seen = cp.instant(seen) if seen else None
@@ -156,6 +160,11 @@ def _facts(conn, slug):
     stuck_llm = db.one(conn, "SELECT count(*) FROM projectops.agent_usage_reservation WHERE category='llm' AND " + held, (slug, hold))
     environments = {e['env_key']: e for e in db.many(conn, 'SELECT to_jsonb(e) FROM projectops.agent_environment e WHERE project_slug=%s', (slug,))}
     masked = privacy.mode(conn, slug) == 'mask_numbers'
+    try:
+        production = story.production_policy(conn, slug)  # includes the OPENBENCH_PRODUCTION_POLICY ceiling
+    except Exception:  # an invalid deployment policy blocks like the strictest one
+        production = 'open_weights_only'
+    hosted_open = (settings.get('provider_policy') or {}).get('hosted_open_enabled') is True
     blockers, providers, checks = [], {}, []
     if not running:
         blockers.append(_blocker('worker_not_running', None))
@@ -193,8 +202,12 @@ def _facts(conn, slug):
             blockers.append(_blocker('auth_missing', key, 'configure_provider'))
             continue
         local = governance.local_url(config.base_url)
+        entry = provider_catalog.match(config)
+        tier_denied = provider_catalog.denial(entry.tier, production, hosted_open_enabled=hosted_open)
         environment = environments.get(agent['default_environment_key'])
         policy = (_blocker('network_policy', key, 'enable_environment') if not environment or not environment['enabled'] else
+                  _blocker('network_policy', key, 'enable_hosted_open' if tier_denied == 'hosted_open_disabled' else 'use_hybrid_policy',
+                           host=host, model=config.model, tier=entry.tier) if tier_denied else
                   _blocker('network_policy', key, 'allow_host', host=host) if _denied(environment, host) else
                   _blocker('network_policy', key, 'keep_local', host=host) if masked and not local else None)
         if policy:
@@ -214,10 +227,10 @@ def _facts(conn, slug):
             if ceiling is None:
                 blockers.append(_blocker('pricing_missing', key, model=config.model, host=host))
         ident = (local, host, port if local else None, config.model)
-        entry = providers.setdefault(ident, {'model': config.model, 'destination': 'local' if local else 'remote', 'host': host,
-            **({'port': port} if local else {}), 'tier': 'local_open' if local else 'closed',  # R9 splits hosted_open from closed
+        listed = providers.setdefault(ident, {'model': config.model, 'destination': 'local' if local else 'remote', 'host': host,
+            **({'port': port} if local else {}), 'tier': entry.tier, **({'catalogId': entry.id} if entry.matched else {}),
             'reachable': None, 'modelPresent': None, 'agents': []})
-        entry['agents'].append(key)
+        listed['agents'].append(key)
         if local and not policy:
             checks.append((config.base_url.rstrip('/'), key, ident))
     return {'worker': {'running': running, 'lastSeenAt': _stamp(seen) if seen else None}, 'blockers': blockers,

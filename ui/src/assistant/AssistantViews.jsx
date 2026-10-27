@@ -8,6 +8,7 @@ import { shortTime } from "../format.js";
 import { TableProposalReview } from "./TableProposalReview.jsx";
 import { AgentSelector } from './AgentSelector.jsx';
 import { AgentBoard, OrchestrationCounters } from './AgentBoard.jsx';
+import { providerFailureText } from './providerFailures.js';
 import { agentSuggestions, resolveAgentTarget, messagePersona } from './agentModel.js';
 import {
   appliedLabel, blocks, clip, currentFocus, documentUrl, inlineParts, isReportSource, lookedAt, progressCounts,
@@ -291,6 +292,8 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
     );
   }
   const { main, sources } = splitSources(message.body);
+  // A failed model call shows its plain-language failure class in the reader's language (SPEC_20 R12).
+  const failure = message.status === "failed" ? providerFailureText(message.error_kind) : "";
   const looked = lookedAt(message.tools);
   const download = documentUrl(slug, message);
   return (
@@ -298,8 +301,8 @@ function Message({ slug, message, proposals, tabs, compact, seconds, onOpenTab, 
       <div className={"msg-a" + (message.status === "failed" ? " failed" : "")}>
         <div className="who-a">{messagePersona(message)}</div>
         {looked.length > 0 && <div className="looked">{uiText("assistantViews.read", {v0: (looked.join("、"))})}</div>}
-        <div className="bubble"><Rich text={main} /></div>
-        {download && <a className="doc-dl" href={download} download>{uiText("assistantViews.downloadWord")}</a>}
+        <div className="bubble"><Rich text={failure || main} /></div>
+        {download &&<a className="doc-dl" href={download} download>{uiText("assistantViews.downloadWord")}</a>}
         <Sources items={sources} tabs={tabs} onOpenTab={onOpenTab} />
         {message.status === "done" && (
           <div className="msg-meta">

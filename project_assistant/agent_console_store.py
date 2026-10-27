@@ -28,7 +28,7 @@ RESOURCES = {
     'service_account': ('agent_service_account', 'account_key', {'display_name', 'limb_id', 'enabled'}),
 }
 JSON_FIELDS = {'recommended_tools', 'config', 'allowed_hosts', 'packages', 'provider_config', 'allowed_agent_keys',
-               'tags', 'rate_limits', 'retention_policy', 'otel_config', 'webhooks', 'model_pricing'}
+               'tags', 'rate_limits', 'retention_policy', 'otel_config', 'webhooks', 'model_pricing', 'provider_policy'}
 DEFAULTS = {
     'skill': dict(category='custom', summary='', instructions_md='', recommended_tools=[], enabled=True),
     'environment': dict(env_kind='local_sandbox', config={}, network_access='restricted', allowed_hosts=[], packages=[], enabled=True),
@@ -43,7 +43,13 @@ SETTINGS = {
     'rate_limits': {'rpm_per_agent': 30, 'max_concurrent_renders': 2, 'max_concurrent_llm': 4, 'uncertain_hold_seconds': 600},
     'retention_policy': {'session_logs_days': 90, 'temp_media_days': 14, 'zero_data_retention_notice': True},
     'otel_config': {'enabled': False, 'endpoint': '', 'service_name': 'zerofield-studio'}, 'webhooks': [],
+    # SPEC_20 R9: hosted open weights (e.g. OpenRouter) are a showrunner opt-in under open_weights_only.
+    'provider_policy': {'hosted_open_enabled': False},
 }
+
+
+# Agent model tiers (SPEC_20 R9) plus the legacy labels media generation and history still carry.
+USAGE_TIERS = ('local_open', 'hosted_open', 'closed', 'open_weights', 'closed_flagship', 'cloud_comfy')
 
 
 def bad(message='Invalid Console resource.'):
@@ -389,6 +395,8 @@ def get_settings(conn, me, slug):
     if row and isinstance(row.get('rate_limits'), dict):
         # Rows saved before a limit existed read its default.
         row['rate_limits'] = {**SETTINGS['rate_limits'], **row['rate_limits']}
+    if row is not None and not isinstance(row.get('provider_policy'), dict):
+        row['provider_policy'] = dict(SETTINGS['provider_policy'])
     return row
 
 
@@ -431,10 +439,12 @@ def save_settings(conn, me, slug, body):
             price[field] = float(money(price[field]))
         integer(price['max_input_tokens'], 1, 10000000)
         integer(price['max_output_tokens'], 1, 1000000)
-    for name in ('rate_limits', 'retention_policy', 'otel_config'):
+    for name in ('rate_limits', 'retention_policy', 'otel_config', 'provider_policy'):
         v = values[name]
         if not isinstance(v, dict) or set(v) != set(SETTINGS[name]):
             bad('Invalid settings object.')
+    if type(values['provider_policy']['hosted_open_enabled']) is not bool:
+        bad('provider_policy.hosted_open_enabled must be true or false.')
     for n, v in values['rate_limits'].items():
         integer(v, *((0, 86400) if n == 'uncertain_hold_seconds' else (1, 10000) if n == 'rpm_per_agent' else (1, 32)))
     retention = values['retention_policy']
@@ -484,7 +494,7 @@ def append_usage(conn, slug, event):
     text(v['event_key'], 160, required=True)
     if v['agent_key'] not in ('studio:prepare', 'studio:open', 'studio:closed'):
         key(v['agent_key'])
-    if v['usage_kind'] not in ('llm_turn', 'image_gen', 'video_gen', 'frame_prep', 'grader_check') or v['tier'] not in ('open_weights', 'closed_flagship', 'cloud_comfy'):
+    if v['usage_kind'] not in ('llm_turn', 'image_gen', 'video_gen', 'frame_prep', 'grader_check') or v['tier'] not in USAGE_TIERS:
         bad('Invalid usage category.')
     for n in ('provider_name', 'model_name'):
         if not isinstance(v[n], str) or not re.fullmatch(r'[a-zA-Z0-9_.:/-]{1,160}', v[n]):

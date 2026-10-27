@@ -238,6 +238,7 @@
 }
 ```
 - **阻擋代碼：** `worker_not_running`、`provider_unreachable`、`model_missing`、`auth_missing`、`network_policy`、`pricing_missing`、`reservations_stuck`、`agent_disabled`、`cli_blocked`、`kind_removed`。
+- **用量分級被政策擋下（R9）** 沿用 `network_policy`，修正方法為 `enable_hosted_open`（`hosted_open` 但管理者沒開 `provider_policy.hosted_open_enabled`）或 `use_hybrid_policy`（`closed` 但有效製作政策不是 `hybrid_studio`）；阻擋另帶 `model`、`host`、`tier`。`providers[].tier` 依供應商目錄判定，有對上目錄時另帶 `catalogId`。
 - **只會自動探測本機端點**（`GET {base}/models`，逾時 2 秒），並比對模型名稱。非本機端點回傳 `"reachable": null`，請管理者到中控台測試。
 - **不回傳金鑰；非本機端點只回傳主機名。**
 

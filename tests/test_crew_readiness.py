@@ -168,6 +168,13 @@ class ReadinessTests(ReadinessFixture):
             payload = self.check()
         self.assertEqual(payload['providers'], [{'model': 'hosted-model', 'destination': 'remote', 'host': 'models.example.test',
             'tier': 'closed', 'reachable': None, 'modelPresent': None, 'agents': CREW}])
+        # SPEC_20 R9: an endpoint the catalog doesn't know is closed, which open_weights_only forbids first.
+        self.assertEqual(self.found(payload, 'code', 'agentKey', 'fix', 'host'),
+            [('network_policy', k, 'use_hybrid_policy', 'models.example.test') for k in CREW] + [('pricing_missing', k, 'set_model_pricing', 'models.example.test') for k in CREW])
+        from project_docs import story_openapi as story
+        story.store(self.conn, 'policy_' + self.slug, 'policy', {'productionPolicy': 'hybrid_studio'}, self.slug)
+        with patch.object(crew_readiness, '_open', side_effect=AssertionError('non-local endpoints are never probed')):
+            payload = self.check()
         self.assertEqual(self.found(payload, 'code', 'agentKey', 'fix', 'host'),
             [('network_policy', k, 'allow_host', 'models.example.test') for k in CREW] + [('pricing_missing', k, 'set_model_pricing', 'models.example.test') for k in CREW])
         text = json.dumps(payload)

@@ -24,6 +24,8 @@ class Outcome:
     model: str = ''
     usage: dict | None = None
     scorecard: dict | None = None
+    failure: str = ''            # model_client.FAILURE_CLASSES for error/quota outcomes (SPEC_20 R12)
+    trimmed: dict | None = None  # what the context budget cut from this turn (SPEC_20 R10)
 
 
 class DecisionPending(Exception):
@@ -65,7 +67,34 @@ def run_cli(settings,host,prompt):
         shutil.rmtree(workdir,ignore_errors=True)
 
 
-def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on_tool=None,images=(),settings=None,on_round=None):
+def media_reader(ctx):
+    """Read studio image assets from storage for the model (never over HTTP), or None without a database."""
+    if not hasattr(ctx, 'connection_factory'):
+        return None
+    import re
+    from project_assistant import model_client, privacy
+    from project_docs import repository as repo
+    def read(url):
+        found = re.search(r'/projects/api/([^/?#]+)/assets/(pa_[0-9a-f]{32})$', url.split('?', 1)[0])
+        def load(conn):
+            from project_assistant import execution_governance as governance
+            governance.live(conn, ctx)
+            if not found or found[1] != ctx.slug or privacy.mode(conn, ctx.slug) != 'full_access':
+                return None
+            meta = repo.get_asset_meta(conn, ctx.slug, found[2])
+            if not meta or not str(meta[0]).startswith('image/') or not 0 < meta[1] <= 8 * 1024 * 1024:
+                return None
+            return repo.get_asset(conn, ctx.slug, found[2])
+        from project_assistant import execution_governance as governance
+        asset = governance.transaction(ctx, load)
+        if not asset:
+            raise model_client.ModelError('bad_request', 'That studio image is not available to the model.', 'provider')
+        return asset
+    return read
+
+
+def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on_tool=None,images=(),settings=None,on_round=None,
+                    history=(),reasoning_effort=None):
     if hasattr(ctx, 'connection_factory'):
         from project_assistant import prompting, agent_registry
         conn = ctx.connection_factory()
@@ -89,7 +118,8 @@ def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on
         # Configuration error before any approved action, admission or network call.
         removed=config.kind in providers.REMOVED_KINDS
         return Outcome('error',kind='kind_removed' if removed else 'configuration',
-            detail=providers.KIND_REMOVED if removed else 'Unsupported model runtime; configure kind openai_compat.',version=config.kind,model=config.model)
+            detail=providers.KIND_REMOVED if removed else 'Unsupported model runtime; configure kind openai_compat.',version=config.kind,model=config.model,
+            failure='provider')
     specs=agent_policy.tool_specs_for(profile)
     ctx.allowed_tools={s['name'] for s in specs}
     if getattr(ctx, 'dispatch_id', None) and not getattr(ctx, 'advisor_call', False):
@@ -157,7 +187,7 @@ def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on
             from project_assistant.worker import settings_from_env
             settings=settings_from_env()
         from dataclasses import replace
-        selected=replace(settings,model=config.model,effort=config.effort or settings.effort,timeout=timeout)
+        selected=replace(settings,model=config.model,effort=reasoning_effort or config.effort or settings.effort,timeout=timeout)
         host=ToolHost(ctx,on_call=on_tool)
         try:
             return run_cli(selected,host,instructions+'\n'+turn_text)
@@ -168,21 +198,27 @@ def _run_agent_once(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on
         from project_assistant import execution_governance as governance
         admission = governance.ProviderAdmission(ctx, profile, config)
     common=dict(instructions=instructions,turn_text=turn_text,call_tool=call_tool,timeout=timeout,
-                on_text=on_text,on_round=on_round,images=images,tool_specs=specs,**({'admission': admission} if admission else {}))
+                on_text=on_text,on_round=on_round,images=images,tool_specs=specs,**({'admission': admission} if admission else {}),
+                **({'history': history} if history else {}),**({'reasoning_effort': reasoning_effort} if reasoning_effort else {}),
+                **({'read_media': media_reader(ctx)} if hasattr(ctx, 'connection_factory') else {}))
     try:
         result=providers.run_openai_compat_turn(config=config,**common)
     except DecisionPending:
         return Outcome('awaiting_gate',answer='需要你的決定，問題已列在待你裁決。',version=config.kind,model=config.model)
     return Outcome(result.status,result.answer,result.blocked,result.error_kind or result.status,
-                   result.error,config.kind,config.model,result.usage)
+                   result.error,config.kind,result.model or config.model,result.usage,
+                   failure=result.failure,trimmed=result.trimmed or None)
 
 
-def run_agent(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on_tool=None,images=(),settings=None,on_round=None):
+def run_agent(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on_tool=None,images=(),settings=None,on_round=None,
+              history=(),reasoning_effort=None):
     """The shared per-turn envelope for daily chat and managed built-in dispatch.
 
     The caller supplies original_objective separately from history/hidden context.
     Graded proposal tools are staged, never reviewable until the isolated check
     passes. Revisions are tool-free and cannot repeat accepted external actions.
+    `history` is earlier chat turns as messages (the context budget drops the oldest
+    first); `reasoning_effort` overrides the profile's effort for this job only.
     """
     started = time.monotonic()
     graded = False
@@ -209,7 +245,8 @@ def run_agent(*,profile,ctx,instructions,turn_text,timeout,on_text=None,on_tool=
         ctx.graded_source_stamp = None
         ctx.candidate_images = []
     outcome = _run_agent_once(profile=profile, ctx=ctx, instructions=instructions, turn_text=turn_text,
-        timeout=timeout, on_text=None if hasattr(ctx, 'connection_factory') else on_text, on_tool=on_tool, images=images, settings=settings, on_round=on_round)
+        timeout=timeout, on_text=None if hasattr(ctx, 'connection_factory') else on_text, on_tool=on_tool, images=images, settings=settings, on_round=on_round,
+        history=history, reasoning_effort=reasoning_effort)
     if not graded or outcome.status != 'ok':
         if outcome.status == 'ok' and hasattr(ctx, 'connection_factory'):
             governance.transaction(ctx, lambda conn: governance.live(conn, ctx))
