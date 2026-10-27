@@ -6,13 +6,14 @@ import { api } from '../api.js';
 import { TableProposalReview } from './TableProposalReview.jsx';
 import { ProposalRaceView } from './ProposalRaceView.jsx';
 import { groupBoardItems } from './orchestrationModel.js';
+import { providerFailureText } from './providerFailures.js';
 import { AutomationPausedNote } from './AutomationPausedNote.jsx';
 import './orchestration.css';
 
 const statusLabel = { get queued() { return uiText("agentBoard.queued"); }, get running() { return uiText("agentBoard.running"); }, get completed() { return uiText("agentBoard.completed"); }, get succeeded() { return uiText("agentBoard.completed"); }, get failed() { return uiText("agentBoard.failed"); }, get canceled() { return uiText("agentBoard.canceled"); }, get online() { return uiText("agentBoard.available"); }, get busy() { return uiText("agentBoard.busy"); }, get offline() { return uiText("agentBoard.offline"); }, get needs_setup() { return uiText("agentBoard.needsSetup"); } };
 
 // Readiness fix hints (SPEC_20 §4.2) → crewReadiness messages; anything newer falls back to a generic line.
-const FIX_TEXT = { restart_without_no_worker: 'restartWithoutNoWorker', start_ollama: 'startOllama', start_model_server: 'startModelServer', check_endpoint: 'checkEndpoint', ollama_pull: 'ollamaPull', load_model: 'loadModel', set_api_key: 'setApiKey', configure_provider: 'configureProvider', allow_host: 'allowHost', enable_environment: 'enableEnvironment', keep_local: 'keepLocal', set_model_pricing: 'setModelPricing', reconcile_reservations: 'reconcileReservations', enable_agent: 'enableAgent', use_builtin_provider: 'useBuiltinProvider', reconfigure_provider: 'reconfigureProvider' };
+const FIX_TEXT = { restart_without_no_worker: 'restartWithoutNoWorker', start_ollama: 'startOllama', start_model_server: 'startModelServer', check_endpoint: 'checkEndpoint', ollama_pull: 'ollamaPull', load_model: 'loadModel', set_api_key: 'setApiKey', configure_provider: 'configureProvider', allow_host: 'allowHost', enable_environment: 'enableEnvironment', keep_local: 'keepLocal', set_model_pricing: 'setModelPricing', reconcile_reservations: 'reconcileReservations', enable_agent: 'enableAgent', use_builtin_provider: 'useBuiltinProvider', reconfigure_provider: 'reconfigureProvider', enable_hosted_open: 'enableHostedOpen', use_hybrid_policy: 'useHybridPolicy' };
 
 // One plain line per distinct problem and fix; the agents it stops are named once beneath it.
 export function readinessLines(readiness, agents = []) {
@@ -138,7 +139,7 @@ export function AgentBoard({ assistant, me, onOpenTarget }) {
     <section className="board-group"><h4>{uiText("agentBoard.resultsHistory")}<span>{board.counts?.done || 0}</span></h4>
       {!groups.done.length && <p className="board-empty">{uiText("agentBoard.completedTasksAppearHere")}</p>}
       {groups.done.map(item => <article className="board-item" key={item.id}><strong>{item.title}</strong><p className={item.status === 'failed' ? 'error' : ''}>{statusLabel[item.status]}</p>
-        {item.summary && <p>{item.summary}</p>}{item.error && <p className="error">{item.error}</p>}
+        {item.summary && <p>{item.summary}</p>}{providerFailureText(item.failure) && <p className="error">{providerFailureText(item.failure)}</p>}{item.error && <p className="error">{item.error}</p>}
         <div className="board-actions">{item.target?.tab_key && <button type="button" onClick={() => onOpenTarget(item.target)}>{uiText("agentBoard.viewResults")}</button>}
           {item.kind === 'task' && !item.flow_bound && ['failed', 'canceled'].includes(item.status) && <button type="button" disabled={busy !== null || !me.can_write} onClick={() => work(item.id, () => assistant.retryWork(item))}>{uiText("agentBoard.retry")}</button>}</div>
         {errors[item.id] && <p className="error" role="alert">{errors[item.id]}</p>}</article>)}

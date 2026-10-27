@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "notes": "SPEC_20 R8. Tier and capabilities per preset. Hosted and closed rates are never shipped: a showrunner sets the price ceiling in Agent Console (model_pricing); 'price' only names where the rates come from and the per-image token bound that makes vision requests priceable. Closed presets are listed only under the hybrid_studio production policy.",
+  "unknown": {
+    "capabilities": {"tools": true, "tool_choice": false, "json_schema": false, "vision": true, "image_url": false},
+    "context_tokens": 8192,
+    "image_tokens": 1024
+  },
+  "entries": [
+    {
+      "id": "ollama-qwen3.8-27b",
+      "label": "Qwen3.8 27B (local, Ollama)",
+      "kind": "openai_compat",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "model": "qwen3.8:27b",
+      "aliases": ["qwen3.8:27b-16k"],
+      "tier": "local_open",
+      "capabilities": {"tools": true, "tool_choice": false, "json_schema": true, "vision": true, "image_url": false},
+      "context_tokens": 16384,
+      "image_tokens": 1280,
+      "default_effort": "medium"
+    },
+    {
+      "id": "openrouter-qwen3.8-27b",
+      "label": "Qwen3.8 27B (hosted open weights, OpenRouter)",
+      "kind": "openai_compat",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "qwen/qwen3.8-27b",
+      "tier": "hosted_open",
+      "capabilities": {"tools": true, "tool_choice": true, "json_schema": true, "vision": true, "image_url": true},
+      "context_tokens": 32768,
+      "image_tokens": 1280,
+      "default_effort": "medium",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "price": {"reference": "https://openrouter.ai/qwen/qwen3.8-27b", "image_tokens_max": 16384}
+    },
+    {
+      "id": "openai-gpt-4.1",
+      "label": "GPT-4.1 (closed, OpenAI)",
+      "kind": "openai_compat",
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-4.1",
+      "tier": "closed",
+      "capabilities": {"tools": true, "tool_choice": true, "json_schema": true, "vision": true, "image_url": true},
+      "context_tokens": 1047576,
+      "image_tokens": 1536,
+      "default_effort": null,
+      "api_key_env": "OPENAI_API_KEY",
+      "price": {"reference": "https://openai.com/api/pricing/"}
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "label": "Gemini 2.5 Pro (closed, Google)",
+      "kind": "openai_compat",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "model": "gemini-2.5-pro",
+      "tier": "closed",
+      "capabilities": {"tools": true, "tool_choice": true, "json_schema": true, "vision": true, "image_url": false},
+      "context_tokens": 1048576,
+      "image_tokens": 1536,
+      "default_effort": "medium",
+      "api_key_env": "GEMINI_API_KEY",
+      "price": {"reference": "https://ai.google.dev/gemini-api/docs/pricing"}
+    }
+  ]
+}

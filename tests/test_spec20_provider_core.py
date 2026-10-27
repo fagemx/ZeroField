@@ -41,7 +41,7 @@ class Recorder:
     def before(self, payload):
         self.active = True
 
-    def after(self, usage, outcome='succeeded', *, known_terminated=False, observed_cost=None):
+    def after(self, usage, outcome='succeeded', *, known_terminated=False, observed_cost=None, model=None):
         if self.active:
             self.active = False
             self.settled.append((outcome, known_terminated, observed_cost))
@@ -192,9 +192,13 @@ class GovernedSettlementTests(unittest.TestCase):
 
     def remote_agent(self):
         import governance_fixture
+        from project_docs import story_openapi as story
         governance_fixture.authorize_synthetic_media(self)  # full-network environment
-        env = patch.dict(os.environ, {'OPENBENCH_AGENT_KEY_ENVS': 'SPEC20_FIXTURE_KEY', 'SPEC20_FIXTURE_KEY': 'synthetic-credential'})
+        env = patch.dict(os.environ, {'OPENBENCH_AGENT_KEY_ENVS': 'SPEC20_FIXTURE_KEY', 'SPEC20_FIXTURE_KEY': 'synthetic-credential',
+                                      'OPENBENCH_PRODUCTION_POLICY': 'hybrid_studio'})
         env.start(); self.addCleanup(env.stop)
+        # An endpoint the catalog doesn't know is closed (SPEC_20 R9): only a hybrid production may call it.
+        story.store(self.conn, 'policy_' + self.slug, 'policy', {'productionPolicy': 'hybrid_studio'}, self.slug)
         profile = agent_registry.save_agent(self.conn, self.me, self.slug, {'agent_key': 'coordinator', 'provider_config':
             {'kind': 'openai_compat', 'base_url': REMOTE, 'model': 'priced-fixture', 'api_key_env': 'SPEC20_FIXTURE_KEY'}})
         settings = console.get_settings(self.conn, self.me, self.slug)

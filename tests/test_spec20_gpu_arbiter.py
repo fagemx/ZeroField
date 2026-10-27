@@ -237,7 +237,7 @@ class GateTests(ProcessCase):
             result = self.turn('http://127.0.0.1:11434/v1', lambda request, timeout: sent.append(1) or reply({'content': 'x'}),
                                timeout=0.5, admission=admission)
             self.assertLess(time.monotonic() - started, 4)
-        self.assertEqual((result.status, result.error_kind, sent), ('error', 'timeout', []))
+        self.assertEqual((result.status, result.error_kind, result.failure, sent), ('error', 'gpu_busy', 'gpu_busy', []))  # SPEC_20 R12
         self.assertEqual(admission.settled, [('failed', True, 0)])  # local: finalized, never charged (§4.1)
         self.assertFalse(arbiter.held_in_process())
 

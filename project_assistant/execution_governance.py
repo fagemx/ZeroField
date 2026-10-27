@@ -18,7 +18,7 @@ from decimal import Decimal, ROUND_CEILING
 from urllib.parse import urlsplit
 
 from project_assistant import agent_console_store as resources, orchestration_store as db
-from project_assistant import orchestrator as cp, privacy, store
+from project_assistant import orchestrator as cp, privacy, provider_catalog, store
 from project_assistant.providers import local_url
 
 
@@ -161,16 +161,20 @@ def dispatched(conn, slug, request_key):
         raise AdmissionError('Reservation expired or was already submitted.')
 
 
-def finalize(conn, slug, request_key, *, outcome, usage=None, estimated_cost=None, observed_cost=None, fingerprint=None, known_terminated=False):
+def finalize(conn, slug, request_key, *, outcome, usage=None, estimated_cost=None, observed_cost=None, fingerprint=None, known_terminated=False, model=None):
     """Idempotent settlement, including after access/lease revocation. Never log errors.
 
     Provider-reported tokens are observations, configured-rate arithmetic remains an
     estimate. Missing metrics are not invented. Accepted/ambiguous effects retain the
     full reservation until an operator reconciles the provider, never free on cancel.
+    `model` is the model the provider reported answering with; the ledger records it and
+    keeps the configured one in meta when they differ (SPEC_20 R12).
     """
     cp.lock_project(conn, slug)
     if fingerprint is not None and (not isinstance(fingerprint,str) or not re.fullmatch('[a-f0-9]{64}',fingerprint)):
         raise AdmissionError('Invalid operation fingerprint.')
+    if model is not None and (not isinstance(model, str) or not re.fullmatch(r'[a-zA-Z0-9_.:/-]{1,160}', model)):
+        model = None  # an unusable report never replaces the configured identifier
     row = db.one(conn, 'SELECT to_jsonb(r) FROM projectops.agent_usage_reservation r WHERE project_slug=%s AND request_key=%s FOR UPDATE', (slug, request_key))
     if not row or row['state'] in ('finalized', 'released', 'uncertain'):
         return row
@@ -197,9 +201,10 @@ def finalize(conn, slug, request_key, *, outcome, usage=None, estimated_cost=Non
         (project_slug,event_key,session_key,episode_id,run_id,owner_id,agent_key,usage_kind,provider_name,model_name,tier,
          input_tokens,output_tokens,cached_tokens,estimated_cost_usd,observed_cost_usd,pricing_provenance,meta,fingerprint,reported_cost_usd)
         VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s) ON CONFLICT(project_slug,event_key) DO NOTHING''',
-        (slug, request_key, row['session_key'], row['episode_id'], row['run_id'], row['owner_id'], row['agent_key'], row['usage_kind'], row['provider_name'], row['model_name'], row['tier'],
+        (slug, request_key, row['session_key'], row['episode_id'], row['run_id'], row['owner_id'], row['agent_key'], row['usage_kind'], row['provider_name'], model or row['model_name'], row['tier'],
          values['input_tokens'], values['output_tokens'], values['cached_tokens'], row['ceiling_cost_usd'] if reported is not None else cost, observed_cost, row['pricing_provenance'],
-         json.dumps({'estimated': observed_cost is None, 'reservation_key': request_key, 'outcome': 'unknown' if uncertain else outcome, 'metrics_reported': bool(usage), 'quote_hard_bound': row['quote_hard_bound'], 'reported_cost_usd': str(reported) if reported is not None else None, 'reported_cost_is_invoice': False}), fingerprint, reported))
+         json.dumps({'estimated': observed_cost is None, 'reservation_key': request_key, 'outcome': 'unknown' if uncertain else outcome, 'metrics_reported': bool(usage), 'quote_hard_bound': row['quote_hard_bound'], 'reported_cost_usd': str(reported) if reported is not None else None, 'reported_cost_is_invoice': False,
+                     **({'model_reported': True} if model else {}), **({'configured_model': row['model_name']} if model and model != row['model_name'] else {})}), fingerprint, reported))
     return db.one(conn, 'SELECT to_jsonb(r) FROM projectops.agent_usage_reservation r WHERE project_slug=%s AND request_key=%s', (slug, request_key))
 
 
@@ -245,24 +250,51 @@ def normalized_usage(raw):
     return values
 
 
-def price_bound(settings, config, payload):
+def _without_images(payload):
+    """(payload with image parts emptied, image count): images are bounded per image, not by bytes."""
+    count = 0
+    def strip(content):
+        nonlocal count
+        if not isinstance(content, list):
+            return content
+        kept = []
+        for part in content:
+            if isinstance(part, dict) and part.get('type') in ('image_url', 'input_image'):
+                count += 1
+                kept.append({'type': part['type']})
+            else:
+                kept.append(part)
+        return kept
+    messages = payload.get('messages') if isinstance(payload, dict) else None
+    if not isinstance(messages, list):
+        return payload, 0
+    return {**payload, 'messages': [{**m, 'content': strip(m.get('content'))} if isinstance(m, dict) else m for m in messages]}, count
+
+
+def price_bound(settings, config, payload, entry=None):
     """Operator-maintained rates; UTF-8 byte ceiling for byte-tokenized models.
 
     Only explicitly attested byte-bounded models may use this estimate for hard
-    admission. Vision requests have no such bound here and pause if commercial.
+    admission. A vision request is priced only when the provider catalog publishes a
+    per-image token bound for this model (hosted open weights, SPEC_20 R9): the bound
+    adds image_tokens_max per image to the byte count. Other non-local vision pauses.
     """
     price = settings.get('model_pricing', {}).get(config.model)
     if not price:
         return None, None
     if price.get('base_url', config.base_url).rstrip('/') != model_destination(config).rstrip('/') or price.get('kind', config.kind) != config.kind:
         raise AdmissionError('Needs You: price configuration does not bind this provider endpoint.')
-    text = json.dumps(payload, ensure_ascii=False)
-    # shortcut: conservative vision markers can reject text mentions; replace with native vision pricing when supported.
-    if 'image_url' in text or 'input_image' in text:
+    stripped, images = _without_images(payload)
+    text = json.dumps(stripped, ensure_ascii=False)
+    size = len(text.encode('utf-8'))
+    if images:
         if local_url(model_destination(config)):
             return None, None
-        raise AdmissionError('Needs You: commercial vision pricing has no enforceable bound in this adapter.')
-    size = len(text.encode('utf-8'))
+        entry = entry or provider_catalog.match(config)
+        per_image = (entry.price or {}).get('image_tokens_max') if entry.matched else None
+        if not per_image:
+            raise AdmissionError('Needs You: commercial vision pricing has no enforceable bound in this adapter.')
+        size += images * per_image
     if size > price['max_input_tokens']:
         raise AdmissionError('Needs You: request exceeds the configured conservative input-token ceiling.')
     cost = (Decimal(price['max_input_tokens']) * Decimal(str(price['input_usd_per_million'])) + Decimal(price['max_output_tokens']) * Decimal(str(price['output_usd_per_million']))) / 1000000
@@ -273,6 +305,20 @@ def model_destination(config):
     return config.base_url
 
 
+def tier_check(conn, ctx, config, settings, entry=None):
+    """The usage tier of this model and whether the effective production policy allows it (SPEC_20 R9).
+
+    The effective policy already applies the OPENBENCH_PRODUCTION_POLICY ceiling.
+    """
+    from project_docs import story_openapi as story
+    tier = (entry or provider_catalog.match(config)).tier
+    hosted = ((settings or {}).get('provider_policy') or {}).get('hosted_open_enabled') is True
+    reason = provider_catalog.denial(tier, story.production_policy(conn, ctx.slug), hosted_open_enabled=hosted)
+    if reason:
+        raise AdmissionError(provider_catalog.DENIALS[reason])
+    return tier
+
+
 class ProviderAdmission:
     def __init__(self, ctx, profile, config, kind='llm_turn', purpose=None):
         self.ctx, self.profile, self.config, self.kind = ctx, profile, config, kind
@@ -281,6 +327,8 @@ class ProviderAdmission:
         self.ordinal = 0
         self.purpose = purpose or getattr(ctx, 'governance_phase', 'worker')
         self.destination = model_destination(config)
+        self.entry = provider_catalog.match(config)
+        self.tier = self.entry.tier
 
     def before(self, payload):
         from project_assistant.agent_runtime import provider_for
@@ -299,7 +347,9 @@ class ProviderAdmission:
             credential_binding(conn, self.ctx, current, actual, binding['environment'])
             if actual != self.config:
                 raise AdmissionError('Provider or credential changed; start a new authorized turn.')
-            ceiling, self.price = price_bound(resources.get_settings(conn, self.ctx.me, self.ctx.slug), self.config, payload)
+            settings = resources.get_settings(conn, self.ctx.me, self.ctx.slug)
+            tier_check(conn, self.ctx, self.config, settings, self.entry)
+            ceiling, self.price = price_bound(settings, self.config, payload, self.entry)
             if self.price:
                 payload['max_completion_tokens'] = self.price['max_output_tokens']
             self.ordinal += 1
@@ -309,13 +359,12 @@ class ProviderAdmission:
             reserve(conn, self.ctx, request_key=request_key, agent_key=current['agent_key'], usage_kind=self.kind,
                 provider_name=self.config.kind, model_name=self.config.model, ceiling=ceiling,
                 provenance='configured_byte_token_ceiling' if self.price else 'unknown',
-                commercial=not local_url(self.destination), destination=self.destination,
-                tier='open_weights' if local_url(self.destination) else 'closed_flagship')
+                commercial=not local_url(self.destination), destination=self.destination, tier=self.tier)
             dispatched(conn, self.ctx.slug, request_key)
             return request_key
         self.active = transaction(self.ctx, admit)
 
-    def after(self, usage, outcome='succeeded', *, known_terminated=False, observed_cost=None):
+    def after(self, usage, outcome='succeeded', *, known_terminated=False, observed_cost=None, model=None):
         if self.active is None:
             return
         usage = normalized_usage(usage)
@@ -323,7 +372,7 @@ class ProviderAdmission:
         if self.price and usage and 'input_tokens' in usage and 'output_tokens' in usage:
             cost = ((Decimal(usage['input_tokens']) * Decimal(str(self.price['input_usd_per_million'])) + Decimal(usage['output_tokens']) * Decimal(str(self.price['output_usd_per_million']))) / 1000000).quantize(Decimal('.0001'), rounding=ROUND_CEILING)
         transaction(self.ctx, lambda conn: finalize(conn, self.ctx.slug, self.active, outcome=outcome, usage=usage, estimated_cost=cost,
-                                                    known_terminated=known_terminated, observed_cost=observed_cost))
+                                                    known_terminated=known_terminated, observed_cost=observed_cost, model=model))
         self.active = None
         if outcome == 'succeeded':
             def revalidate(conn):

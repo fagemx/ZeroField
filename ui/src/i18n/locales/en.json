@@ -298,7 +298,19 @@
     "enableAgent": "This crew member is turned off. Turn it on in Agent Console → Agents.",
     "useBuiltinProvider": "A CLI runtime can't run here. Switch to a built-in model in Agent Console → Agents.",
     "reconfigureProvider": "The ChatGPT connection was removed, and nothing was sent. Choose a model again in Agent Console → Agents.",
+    "enableHostedOpen": "{{model}} runs on a hosted open-weights service ({{host}}), which is off for this production. The showrunner can turn on hosted open weights in Agent Console settings, or you can switch back to the local model.",
+    "useHybridPolicy": "{{model}} on {{host}} is a closed model, and this production allows open weights only. Switch back to the local model, or the showrunner can choose the hybrid production policy.",
     "unknown": "Something is blocking the crew ({{code}}). The showrunner can check Agent Console."
+  },
+  "providerFailures": {
+    "local": "The local model isn't answering. Start Ollama (or the local model server) on the studio computer, then try again.",
+    "quota": "The model service is out of quota or is rate-limiting this studio. Wait a little, then try again.",
+    "auth": "The model service rejected the API key. The showrunner can check the key in Agent Console.",
+    "provider": "The model service had a problem and didn't finish. Try again; if it keeps happening, the showrunner can check Agent Console.",
+    "timeout": "The model took too long to answer. Try again, or ask for something smaller.",
+    "empty": "The model sent back an empty answer. Try again, or rephrase your request.",
+    "output": "The model's answer couldn't be used (it was malformed or kept calling tools). Try again, or rephrase your request.",
+    "gpuBusy": "The GPU is busy with a render, so the local model couldn't start. Try again shortly."
   },
   "agentModel": {
     "noUniqueAgentFoundFor": "No unique agent found for @{{v0}}",

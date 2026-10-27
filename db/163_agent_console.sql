@@ -320,3 +320,10 @@ ALTER TABLE projectops.agent_memory_entry ADD COLUMN IF NOT EXISTS archived BOOL
 
 -- SQL's historical medium default is not opt-in to a new provider wire parameter.
 ALTER TABLE projectops.agent_profile ADD COLUMN IF NOT EXISTS effort_configured BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- SPEC_20 R9: agent usage tiers local_open / hosted_open / closed (legacy labels stay valid for history and media);
+-- hosted open-weights models are a showrunner opt-in, off by default.
+ALTER TABLE projectops.agent_usage_ledger DROP CONSTRAINT IF EXISTS agent_usage_ledger_tier_check;
+ALTER TABLE projectops.agent_usage_ledger ADD CONSTRAINT agent_usage_ledger_tier_check
+ CHECK (tier IN ('open_weights','closed_flagship','cloud_comfy','local_open','hosted_open','closed'));
+ALTER TABLE projectops.agent_console_settings ADD COLUMN IF NOT EXISTS provider_policy JSONB NOT NULL DEFAULT '{"hosted_open_enabled": false}';
