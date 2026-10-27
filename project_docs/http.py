@@ -241,6 +241,7 @@ POST_ROUTES = [
     (re.compile(rf"/projects/api/{SLUG}/assistant/messages"), "assistant_send"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/proposals/(\d{{1,18}})/apply"), "assistant_apply"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/proposals/(\d{{1,18}})/dismiss"), "assistant_dismiss"),
+    (re.compile(rf"/projects/api/{SLUG}/assistant/proposals/(\d{{1,18}})/solution"), "assistant_solution"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/notes"), "assistant_note"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/notes/(\d{{1,18}})/done"), "assistant_note_done"),
     (re.compile(rf"/projects/api/{SLUG}/assistant/forwards/(\d{{1,18}})/answer"), "assistant_answer"),
@@ -291,6 +292,8 @@ def _assistant_call(name, conn, me, args, body, raw=b""):
         return assistant_service.dismiss_proposal(conn, me, slug, int(args[1]))
     if name == "assistant_shot_proposals":
         return assistant_service.shot_proposals(conn, me, slug, args[1])
+    if name == "assistant_solution":
+        return assistant_service.attach_shot_solution(conn, me, slug, int(args[1]), body)
     if name == "assistant_note":
         return assistant_service.add_note(conn, me, slug, body)
     if name == "assistant_note_done":

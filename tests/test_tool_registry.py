@@ -31,6 +31,8 @@ HISTORIC_GRANTS = {
 }
 # SPEC_20 R16: the read-only context tools every built-in role receives, after the historic list.
 CONTEXT = ['read_episode', 'read_scene', 'read_shot', 'read_cast', 'list_takes']
+# SPEC_20 R27: the Cinematographer proposes 3D blocking as operations (declared before the context tools).
+PREVIS = {'sheet_ops': ['propose_previs_ops']}
 
 
 class ToolSurfaceAuditTests(unittest.TestCase):
@@ -74,7 +76,7 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(tool_specs.DELEGATION_TOOLS, {'list_agents', 'spawn_agent', 'check_delegation', 'cancel_delegation',
                                                        'ask_decision_gate', 'trigger_flow_run'})
         self.assertEqual(tool_specs.MUTATING_TOOLS, {'propose', 'propose_table_edit', 'spawn_agent', 'cancel_delegation',
-                                                     'ask_decision_gate', 'trigger_flow_run'} | set(tool_specs.STUDIO_SCHEMAS))
+                                                     'ask_decision_gate', 'trigger_flow_run', 'propose_previs_ops'} | set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual({n for n, p in tool_specs.DEFAULT_POLICIES.items() if p != 'auto'},
                          {'studio_ingest_script', 'studio_manage_asset', 'studio_dispatch_shot', 'studio_edit_timeline'})
         self.assertEqual(agent_console_store.STUDIO_TOOLS, set(tool_specs.STUDIO_SCHEMAS))
@@ -89,7 +91,7 @@ class RegistryDerivationTests(unittest.TestCase):
                                                       'check_delegation', 'list_agents'})
         self.assertEqual(tool_registry.ANALYSIS_ONLY_DENIED, {'propose', 'propose_table_edit', 'trigger_flow_run',
                                                               'studio_ingest_script', 'studio_manage_asset',
-                                                              'studio_dispatch_shot', 'studio_edit_timeline'})
+                                                              'studio_dispatch_shot', 'studio_edit_timeline', 'propose_previs_ops'})
         self.assertEqual(tool_registry.RACE_DENIED, {'studio_ingest_script', 'studio_manage_asset',
                                                      'studio_dispatch_shot', 'studio_edit_timeline'})
         self.assertEqual(dict(tool_registry.REQUIRES), {'spawn_agent': ('allow_subagents',),
@@ -103,7 +105,7 @@ class RegistryDerivationTests(unittest.TestCase):
                 self.assertIs(tools.HANDLERS[name], tool_registry.handler(name))
         self.assertEqual(set(studio_tools.HANDLERS), set(tool_specs.STUDIO_SCHEMAS))
         self.assertEqual(set(delegation_tools.HANDLERS), tool_specs.DELEGATION_TOOLS)
-        self.assertEqual(studio_tools.EXTERNAL_TOOLS, {'studio_plan_allocation', 'studio_inspect_frames', 'consult_advisor'})
+        self.assertEqual(studio_tools.EXTERNAL_TOOLS, {'studio_plan_allocation', 'studio_inspect_frames', 'consult_advisor', 'propose_previs_ops'})
         with self.assertRaises(LookupError):
             tool_registry.handlers('project_assistant.studio_tools', {})
 
@@ -114,8 +116,8 @@ class RegistryDerivationTests(unittest.TestCase):
         self.assertEqual(agent_registry.default_tools('coordinator', False), sorted(tool_specs.TOOL_NAMES - tool_specs.DELEGATION_TOOLS))
         for key, grants in HISTORIC_GRANTS.items():
             with self.subTest(key=key):
-                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + CONTEXT)
-                self.assertEqual(agent_registry.default_tools(key, False), grants + CONTEXT)
+                self.assertEqual(agent_registry.default_tools(key), grants + ['ask_decision_gate'] + PREVIS.get(key, []) + CONTEXT)
+                self.assertEqual(agent_registry.default_tools(key, False), grants + PREVIS.get(key, []) + CONTEXT)
         self.assertEqual(agent_registry.default_tools('custom_agent'), agent_registry.default_tools('qa_critic'))
 
     def test_ui_catalog_matches_console_model(self):
@@ -130,7 +132,8 @@ class RegistryDerivationTests(unittest.TestCase):
                     category='context', handler='fixture.module:fixture_tool', grants=['qa_critic'])
         self.assertEqual(tool_registry.declare(good).grants, ('qa_critic',))
         for change in ({'schema': tool_registry._obj({'q': {'type': 'string', 'format': 'uri'}})},
-                       {'schema': tool_registry._obj({'q': {'type': 'number'}})},
+                       {'schema': tool_registry._obj({'q': {'type': 'null'}})},
+                       {'schema': tool_registry._obj({'q': {'type': 'number', 'minimum': True}})},
                        {'schema': tool_registry._obj({'q': {'type': 'array'}})},
                        {'schema': {'type': 'object', 'properties': {}}},
                        {'schema': tool_registry._obj({}, ['q'])},

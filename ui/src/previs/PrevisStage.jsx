@@ -12,7 +12,8 @@ import { drawSkeleton, poseKeypoints } from './skeleton.js';
 import { createMotionDemoPlan } from './demoPlan.js';
 import { applyOptions, ghostsFor } from '../proposalModel.js';
 import { api } from '../api.js';
-import { loadShotProposals, shotMetaKey, shotMetaReview } from './shotMetaModel.js';
+import { loadShotProposals, shotMetaKey, shotMetaReview, solutionPath } from './shotMetaModel.js';
+import { OPS_VERSION, solveRequest } from './ops.js';
 import { GhostMarks, ShotMetaReview } from './ShotMetaReview.jsx';
 import { moveCameraKey, moveDummy } from './blocking.js';
 import { PlanHandles } from './PlanHandles.jsx';
@@ -78,9 +79,13 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
   const metaShotId = !showDemo && shot && storable(shot) ? shot.shotId : null;
   const metaError = metaFailure && metaFailure.shotId === metaShotId
     ? (proposals || []).find(p => p.id === metaFailure.id)?.error || metaFailure.message || uiText('stage.metaFailed') : '';
+  // SPEC_20 R27: operations a server could not solve (no headless browser) are solved here, by the same ops.js, on the stored plan.
+  const storedLoaded = shot && (saved[shot.rid] ? saved[shot.rid].revision >= (shot.previsRevision ?? 0) : !shot.previsStored);
+  const stageSolve = proposal => (storedLoaded ? solveRequest({ stored: saved[shot.rid]?.plan ?? null, shot, ops: proposal.ops,
+    castCodes: castOptions ? castOptions.map(option => option.code) : null }).plan : null);
   const metaReview = metaShotId ? shotMetaReview(metaLists[metaShotId], { plan: ownPlan, revision: saved[shot.rid]?.revision ?? shot.previsRevision ?? 0,
-    writable: writable && Boolean(onApplyProposal && onDismissProposal), draft: Boolean(drafts[shot.rid]), error: metaError }) : null;
-  const previewing = Boolean(previewMeta && metaReview);
+    writable: writable && Boolean(onApplyProposal && onDismissProposal), draft: Boolean(drafts[shot.rid]), error: metaError, solve: stageSolve }) : null;
+  const previewing = Boolean(previewMeta && metaReview?.plan);
   const plan = previewing ? metaReview.plan : ownPlan, frames = framesOf(plan);
   // A crew member's proposed camera for this shot: dashed on the plan, and one click puts the lens through it (a comparison, not a change).
   const ghost = showDemo || !shot || !proposals?.length ? null : ghostsFor(proposals, shots.filter(s => s.rid === shot.rid), tabKey, planOf)[0] || null;
@@ -178,14 +183,14 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
   const motionKey = JSON.stringify([shot?.rid, plan.set, plan.mood, plan.use, plan.pins, plan.acts, plan.action, plan.facing, plan.seconds, plan.mark, plan.turn, plan.figure, plan.fix]);
   useEffect(() => { const ctx = live.current; if (ctx?.stage) setQa(ctx.stage.motion(plan).qa); }, [motionKey]);
   const guideKey = JSON.stringify(showDemo ? [['Motion demo', plan, true]] : [...shots.map(s => [s.shot, planOf(s), s.rid === shot?.rid]), ...(ghost ? [[ghost.label, ghost.plan, 'ghost']] : []),
-    ...(metaReview ? [[metaReview.label, metaReview.plan, 'meta']] : []), plan.set]);
+    ...(metaReview?.plan ? [[metaReview.label, metaReview.plan, 'meta']] : []), plan.set]);
   useEffect(() => {  // every shot camera that shares this set, and the proposed cameras as dashed ghosts
     const ctx = live.current; if (!ctx?.stage) return;
     if (ctx.guides) { ctx.guides.group.removeFromParent(); ctx.guides.dispose(); }
     ctx.guides = shotGuides(showDemo ? [{ id: uiText('previs.demoTitle'), plan, selected: true }]
       : [...shots.filter(s => planOf(s).set === plan.set).map(s => ({ id: s.shot, plan: planOf(s), selected: s.rid === shot.rid })),
         ...(ghost ? [{ id: ghost.label + ' ✦', plan: ghost.plan, selected: false, ghost: true }] : []),
-        ...(metaReview ? [{ id: (metaReview.label || shot.shot) + ' ✦', plan: metaReview.plan, selected: false, ghost: true }] : [])]);
+        ...(metaReview?.plan ? [{ id: (metaReview.label || shot.shot) + ' ✦', plan: metaReview.plan, selected: false, ghost: true }] : [])]);
     ctx.stage.scene.add(ctx.guides.group);
   }, [guideKey]);
 
@@ -396,6 +401,8 @@ export default function PrevisStage({ slug, tabKey, proposals, onApplyProposal, 
     if (!review || metaBusy) return;
     setMetaBusy(verb); setMetaFailure(null); setError(''); setNotice('');
     try {
+      // SPEC_20 R27: operations-only proposals carry this stage's solve first, so the approval writes a solved plan.
+      if (verb === 'approve' && review.opsOnly) await api.post(solutionPath(slug, review.id), { plan: review.plan, version: OPS_VERSION });
       const result = await (verb === 'approve' ? onApplyProposal(review.proposal, undefined, {}) : onDismissProposal(review.proposal));
       const outcome = result?.proposal?.status;
       if (!result || (verb === 'approve' ? outcome !== 'applied' : outcome !== 'dismissed')) {

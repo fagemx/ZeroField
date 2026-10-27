@@ -7,7 +7,7 @@ import {mkdtemp, writeFile, rm} from 'node:fs/promises';
 import {join, dirname, resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {defaultPlan} from '../src/previs/plan.js';
-import {ghostMarks, loadShotProposals, planChanges, shotMetaKey, shotMetaReview, shotProposalsPath} from '../src/previs/shotMetaModel.js';
+import {ghostMarks, loadShotProposals, opLines, planChanges, shotMetaKey, shotMetaReview, shotProposalsPath, solutionPath} from '../src/previs/shotMetaModel.js';
 import {ACTION_LABEL} from '../src/format.js';
 import {setLocale as setModelLocale} from '../src/i18n/index.js';
 
@@ -143,4 +143,49 @@ test('the review reads in Traditional Chinese', async () => {
       '已存的計畫現在是第 2 版', '預覽提案', '核准', '拒絕']) assert.ok(html.includes(text), text);
     assert.equal(ACTION_LABEL.shot_meta, '3D 計畫提案');
   } finally {await components.setLocale('en'); await setModelLocale('en');}
+});
+
+// SPEC_20 R27, R28: a proposal made of 3D operations carries the server's contact sheet and the operations; without a server solve
+// (no headless browser) the stage solves them with the same ops.js and approving attaches that solve first.
+const OPS = [{op: 'place', cast: '@CAST-01', relativeTo: 'console', offset: [0, -0.55], facing: 'camera'},
+  {op: 'camera', size: 'close', angle: 'eye', lens: 50, move: 'pushin', from: 'K1', to: 'K2'}, {op: 'retime', beat: 2, at: 0.6}];
+const sheet = {kind: 'contact_sheet', url: '/projects/api/demo/assets/pa_' + 'b'.repeat(32), width: 1944, height: 818, frames: [0, 19, 38, 58, 77, 96].map(frame => ({frame}))};
+
+test('operations-only proposals are kept for the stage to solve, and the stage\'s solve is the ghost', async () => {
+  const opsOnly = item(7, null, {ops: OPS, solve: {status: 'ops_only', reason: 'no_browser'}, preview: null});
+  const list = await loadShotProposals(async () => ({proposals: [opsOnly, item(8, null, {ops: []}), item(9, null)]}), 'demo', 'sh_demo_b1');
+  assert.deepEqual(list.map(p => p.id), [7], 'operations without a plan are kept; nothing at all is not');
+  const asked = [];
+  const review = shotMetaReview(list, {plan: current, revision: 2, writable: true, solve: proposal => {asked.push(proposal.id); return proposed;}});
+  assert.deepEqual(asked, [7]);
+  assert.deepEqual([review.opsOnly, review.plan.lens, review.blockedBySolve, review.preview, review.solveError], [true, 85, false, null, '']);
+  assert.deepEqual(review.ops.map(line => line.key), ['metaOpPlace', 'metaOpCamera', 'metaOpRetime']);
+  assert.deepEqual(review.ops[0].params, {cast: '@CAST-01', where: 'console 0, -0.55 m', facing: 'camera'});
+  assert.equal(solutionPath('demo', 7), '/projects/api/demo/assistant/proposals/7/solution');
+  const failed = shotMetaReview(list, {plan: current, writable: true, solve: () => {throw new Error('ops[2].beat must be an acting beat from 1 to 1.');}});
+  assert.deepEqual([failed.plan, failed.blockedBySolve, failed.marks, failed.same], [null, true, [], false]);
+  const html = render('ShotMetaReview', {review: failed, onPreview: noop, onApprove: noop, onReject: noop});
+  assert.match(html, /role="alert">This stage could not solve the operations: ops\[2\]\.beat must be an acting beat from 1 to 1\.<\/p>/);
+  assert.match(html, /<button type="button" aria-pressed="false" disabled="">Preview the proposal<\/button><button type="button" class="apply" disabled="">Approve<\/button>/);
+  const waiting = shotMetaReview(list, {plan: current, writable: true, solve: () => null});
+  assert.deepEqual([waiting.plan, waiting.solveError, waiting.blockedBySolve], [null, '', true], 'the stored plan is still loading');
+  const solved = render('ShotMetaReview', {review, onPreview: noop, onApprove: noop, onReject: noop});
+  assert.match(solved, /Operations only: the server rendered no preview\. This stage solved them; approving stores this solve\./);
+  assert.match(solved, /class="apply">Approve<\/button>/);
+});
+
+test('a solved proposal shows its contact sheet, its operations, the solver\'s notes and a model note to check', () => {
+  const solved = item(3, proposed, {ops: OPS, preview: sheet, solve: {status: 'solved', by: 'headless', warnings: ['Camera key K1 was pulled in toward the subject to stay inside the stage.']},
+    vision: {status: 'checked', model: 'qwen3.8:27b', note: 'Face reads from 1.6 s.', issues: ['K1 starts behind his head']}});
+  const review = shotMetaReview([solved], {plan: current, revision: 2, writable: true});
+  assert.deepEqual([review.opsOnly, review.preview.url, review.warnings.length], [false, sheet.url, 1]);
+  const html = render('ShotMetaReview', {review, onPreview: noop, onApprove: noop, onReject: noop});
+  assert.match(html, new RegExp(`<figure class="previs-meta-sheet"><a href="${sheet.url}" target="_blank" rel="noreferrer"><img src="${sheet.url}" alt="Contact sheet of the proposed 3D plan" loading="lazy" width="1944" height="818"/></a>`));
+  assert.match(html, /Rendered from the solved plan: 6 frames through the shot camera/);
+  assert.match(html, /<details class="previs-meta-ops"><summary>Operations \(3\)<\/summary><ol><li>@CAST-01 at console 0, -0\.55 m, facing camera<\/li><li>Camera: close, eye angle, 50mm pushin K1→K2<\/li><li>Acting beat 2 starts at 60% of the shot<\/li><\/ol><\/details>/);
+  assert.match(html, /<summary>Solver notes \(1\)<\/summary><ul><li>Camera key K1 was pulled in toward the subject to stay inside the stage\.<\/li><\/ul>/);
+  assert.match(html, /Model note \(qwen3\.8:27b\), check it yourself: Face reads from 1\.6 s\. Issues it saw: K1 starts behind his head/);
+  assert.doesNotMatch(html, /Operations only/);
+  assert.deepEqual(opLines([{op: 'camera', size: 'extreme_close', angle: 'low', lens: 85, move: 'static'}, {op: 'camera', size: 'wide', angle: 'high', lens: 24, move: 'orbit'}])
+    .map(line => line.params.keys + '|' + line.params.size), ['|extreme close', ' K1→K3|wide']);
 });

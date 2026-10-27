@@ -118,11 +118,16 @@ _KEYWORDS = {
     'object': {'properties', 'required', 'additionalProperties'},
     'string': {'minLength', 'maxLength', 'enum', 'pattern'},
     'integer': {'minimum', 'maximum', 'enum'},
+    'number': {'minimum', 'maximum'},  # a finite JSON number (int or float, never a boolean); SPEC_20 R27 offsets
     'boolean': set(),
     'array': {'items', 'minItems', 'maxItems', 'uniqueItems'},
 }
 _SCHEMA_ANNOTATIONS = {'type', 'description', 'title'}
 _FLAGS = ('mutating', 'console', 'ui', 'mcp', 'analysis_only', 'race_candidate', 'primary_only', 'external')
+
+
+def _finite(value):
+    return type(value) in (int, float) and value == value and value not in (float('inf'), float('-inf'))
 
 
 def _check_declaration(tool: Tool) -> None:
@@ -201,6 +206,9 @@ def _check_schema(tool, schema, path, top=False):
             bad('bounds must be integers.')
         if 'enum' in schema and (not isinstance(schema['enum'], list) or not all(type(v) is int for v in schema['enum'])):
             bad('enum must list integers.')
+    elif kind == 'number':
+        if any(key in schema and not _finite(schema[key]) for key in ('minimum', 'maximum')):
+            bad('bounds must be finite numbers.')
     elif kind == 'array':
         if 'items' not in schema:
             bad('needs an items schema.')
@@ -254,6 +262,9 @@ def _validate(value, schema, messages):
     elif kind == 'integer':
         if (type(value) is not int or value < schema.get('minimum', value) or value > schema.get('maximum', value)
                 or 'enum' in schema and value not in schema['enum']):
+            raise ValueError(messages['option'])
+    elif kind == 'number':
+        if not _finite(value) or value < schema.get('minimum', value) or value > schema.get('maximum', value):
             raise ValueError(messages['option'])
     elif kind == 'boolean':
         if type(value) is not bool:
@@ -407,6 +418,43 @@ register(
             category='advisor', read_only=True, external=True, requires=('advisor_agent_key',),
             grants=('coordinator', 'doc_writer', 'sheet_ops')),
 )
+
+
+# SPEC_20 R27, R28: 3D blocking as structured operations, solved by the 3D Stage's own plan code
+# (project_assistant/previs_ops.py, ui/src/previs/ops.js). The vocabulary mirrors previs_ops (tests compare them);
+# this module imports no handler module, so the lists are written out here.
+_CAMERA_KEY = {'type': 'string', 'pattern': '^K[0-9]{1,2}$'}
+_PREVIS_NAME = {'type': 'string', 'minLength': 1, 'maxLength': 40}
+_PREVIS_OP = _obj({
+    'op': {'type': 'string', 'enum': ['place', 'camera', 'retime']},
+    'cast': {'type': 'string', 'pattern': '^@CAST-[0-9]{1,4}$'}, 'relativeTo': _PREVIS_NAME,
+    'offset': {'type': 'array', 'items': {'type': 'number', 'minimum': -8, 'maximum': 8}, 'minItems': 2, 'maxItems': 2},
+    'facing': _PREVIS_NAME,
+    'size': {'type': 'string', 'enum': ['wide', 'full', 'medium', 'close', 'extreme_close']},
+    'angle': {'type': 'string', 'enum': ['low', 'eye', 'high', 'overhead']},
+    'lens': {'type': 'integer', 'enum': [24, 35, 50, 85]},
+    'move': {'type': 'string', 'enum': ['pushin', 'pullout', 'orbit', 'crane', 'track', 'static']},
+    'from': _CAMERA_KEY, 'to': _CAMERA_KEY,
+    'beat': {'type': 'integer', 'minimum': 1, 'maximum': 64}, 'at': {'type': 'number', 'minimum': 0, 'maximum': 1}}, ['op'])
+
+register(Tool(
+    'propose_previs_ops',
+    'Propose the 3D blocking of one shot as operations, never code. A deterministic solver (the 3D Stage\'s own plan '
+    'code) turns them into a plan, renders a contact-sheet preview and stores both as a proposal the director approves '
+    'in the 3D Stage; nothing is written before that. baseRevision is the planRevision read with read_shot (a stale one '
+    'is refused with DRAMA_PREVIS_REVISION_CONFLICT: read again and rebuild). Stage metres: +z toward the console and '
+    'glass, -z toward the camera side, the mark at [0, 0]. Ops: place {cast: a @CAST code from the cast sheet; '
+    'relativeTo: a set target (observatory: console, plinth, dial, recorder, console_edge, window_glass or window; '
+    'parallax: far, mid, near; empty: none), "mark" or someone already on set; offset [x, z] metres added to it; facing: '
+    'a target, a cast code, "camera" or "room"}; camera {size wide|full|medium|close|extreme_close, angle '
+    'low|eye|high|overhead, lens 24|35|50|85, move pushin|pullout|orbit|crane|track|static, from/to: the move\'s keys '
+    '(K1-K2; orbit K1-K3; static holds K1)}; retime {beat: the 3D Stage acting beat from 1, at: where it starts, 0-1 of '
+    'the shot}. One camera op at most; place each person once.',
+    _obj({'shotId': _ID, 'baseRevision': {'type': 'integer', 'minimum': 0},
+          'ops': {'type': 'array', 'items': _PREVIS_OP, 'minItems': 1, 'maxItems': 32}}, ['shotId', 'baseRevision', 'ops']),
+    'previs', 'project_assistant.previs_ops:propose_previs_ops',
+    annotations={'readOnlyHint': False, 'destructiveHint': False, 'idempotentHint': False, 'openWorldHint': False},
+    label='Propose 3D Blocking', mutating=True, analysis_only=False, external=True, ui=True, grants=('coordinator', 'sheet_ops')))
 
 
 def _context(name, description, schema, label):

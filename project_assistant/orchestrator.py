@@ -888,6 +888,23 @@ def snapshot_tab(conn,slug,dispatch_id,key):
     return copy.deepcopy(snapshots['tabs'][key])
 
 
+def _shot_meta_in_scope(conn,dispatch,task,expected,target):
+    """A shot_meta proposal changes one shot's meta field (a 3D plan). It fits a task whose output is the shot's page or
+    the shot's row, or a request scope that selected the shot's row; a document task or a task narrowed to one cell does
+    not take it. Returns the shot's page key (target.shot is written by shot_meta.propose from the shot's own row)."""
+    shot=target.get('shot') or {}
+    if expected.get('kind')=='doc' or 'col_index' in expected:
+        raise OrchestrationError(403,"This task outputs a document passage or one cell; a shot’s 3D plan is outside it.",'POLICY_DENIED')
+    if expected.get('tab_key') and shot.get('tabKey')!=expected['tab_key']:
+        raise OrchestrationError(403,"Proposals cannot modify content outside the task’s output page.",'POLICY_DENIED')
+    if expected.get('row_id') and shot.get('rowId')!=expected['row_id']:
+        raise OrchestrationError(403,"The proposal exceeds the task’s output rows or columns.",'POLICY_DENIED')
+    scope=effective_scope(conn,dispatch,task)
+    if scope and (scope.get('kind')=='doc' or shot.get('tabKey')!=scope.get('target_tab') or shot.get('rowId') not in (scope.get('row_ids') or [])):
+        raise OrchestrationError(403,"The proposal exceeds the selected rows or columns.",'POLICY_DENIED')
+    return shot.get('tabKey')
+
+
 def attach_proposal(conn,ctx,proposal_id):
     from project_assistant import store,proposal_review
     dispatch=leased_dispatch(conn,ctx.worker_id,f'dsp_{ctx.dispatch_id}_{ctx.admission_no}',ctx.lease_token)
@@ -903,6 +920,20 @@ def attach_proposal(conn,ctx,proposal_id):
     expected=copy.deepcopy(task['target'])
     if dispatch.get('row_id') and expected.get('row_id'):
         expected['row_id']=dispatch['row_id']
+    if proposal['action']=='shot_meta':
+        # SPEC_20 R18, R27: pinned by the shot field's own revision, never by the shot's page; other inputs stay pinned.
+        own=_shot_meta_in_scope(conn,dispatch,task,expected,target)
+        snapshot=task['input_snapshot']
+        sources=snapshot.get('source_revisions') or {key:tab['revision'] for key,tab in snapshot['tabs'].items()}
+        sources={key:revision for key,revision in sources.items() if key!=own}
+        if sources:
+            target['source_revisions']=sources
+        if snapshot.get('source_scopes'):
+            target['source_scopes']=snapshot['source_scopes']
+        store.revise_pending_proposal(conn,proposal_id,target,proposal['content'])
+        db.execute(conn,'UPDATE projectops.assistant_proposal SET agent_key=%s,dispatch_id=%s,race_group_task_id=%s WHERE id=%s',
+                   (dispatch['agent_key'],dispatch['id'],task['id'] if task['strategy']=='race' else None,proposal_id))
+        return
     if expected.get('tab_key') and target.get('tab_key')!=expected['tab_key']:
         raise OrchestrationError(403,"Proposals cannot modify content outside the task’s output page.",'POLICY_DENIED')
     if expected.get('tab_key') and proposal['action']=='table_edit':
@@ -1031,7 +1062,8 @@ def on_proposal_decided(conn,proposal_id,applied,*,source_before=None):
                         repo.field_values(conn,slug).get(changed_key,{}))
                     changed=True
             if changed:
-                target['review']=proposal_review.describe(target,repo.get_tab(conn,slug,target['tab_key']),partial_allowed=False)
+                if item.get('action')!='shot_meta':  # a shot's 3D plan has no page to describe (SPEC_20 R18)
+                    target['review']=proposal_review.describe(target,repo.get_tab(conn,slug,target['tab_key']),partial_allowed=False)
                 store.revise_pending_proposal(conn,item['id'],target,item['content'])
         _advance_dependent_sources(conn,task,source_before)
         question_open=db.one(conn,"SELECT id FROM projectops.orchestration_gate WHERE dispatch_id=%s AND gate_kind='question' AND status='open'",(dispatch['id'],))
