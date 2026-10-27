@@ -1,6 +1,6 @@
 {
  "date": "2026-10-27",
- "stage": "SPEC_20 planning agent layer and provider principles (implementation, pending real-model acceptance)",
+ "stage": "SPEC_20 planning agent layer and provider principles (implementation; real-model and GPU acceptance run 2026-10-27, see real_acceptance)",
  "base_commit": "3b8ca65",
  "candidate_commit": "ec09fc4",
  "branch": "feat/spec20-integration",
@@ -12,7 +12,7 @@
   "deferred": 1,
   "notes": [
    "R19 composer entry, R23 story-API auto-grade, R25 generation-desk asks and R34 desk/film cards wait for SPEC_19 on main",
-   "R44 blank-project walk and GPU acceptance A14, A15, A17 and R42 real-model runs wait for an idle GPU",
+   "A14, A15 and A17 passed on the 4090 (2026-10-27); R42 ran for beats and continuity (no blocking adapter); the R44 walk reached an exported cut only with UI workarounds for two blocking break points (real_acceptance)",
    "R13 arbiter is first-come-first-served; no planning-before-render priority",
    "R28 renders a contact sheet only, no WebM",
    "R41 tool labels are not translated in zh-TW",
@@ -84,11 +84,152 @@
   ]
  },
  "not_verified": [
-  "Any real language-model run (Ollama qwen3.8:27b) or GPU work: A14, A15, A17, R42 real-model scores, R44 blank-project walk",
   "Real MCP hosts: MCP Inspector, Goose with Ollama, Claude Code, and an MCP Apps host for the 3D preview card",
   "Real codex-acp / claude-code-acp under the ACP lock-down",
-  "Docker Compose crew path"
+  "Docker Compose crew path",
+  "R42 blocking set (no crew job or adapter); R44 blocking break points R44-3 and R44-7 are open"
  ],
  "main_untouched": true,
- "pushed": false
+ "pushed": false,
+ "real_acceptance": {
+  "date": "2026-10-27",
+  "branch": "worktree-agent-a514a9407bc43994c (from feat/spec20-integration e43c1f2)",
+  "fix_commits": [
+   "714eac3"
+  ],
+  "machine": "RTX 4090 24 GiB, Windows 11; Ollama 0.40.11; ComfyUI 0.42.1 portable at E:/AITool/ZeroField_ComfyUI (run_nvidia_gpu.bat command plus --disable-auto-launch); headless Edge 156 over CDP at 1440x900 for every UI step",
+  "model_server": "own `ollama serve` with OLLAMA_CONTEXT_LENGTH=16384 and OLLAMA_MODELS set to the Ollama app's model folder (see A17); the tray app was quit for the runs and restarted afterwards",
+  "A17": {
+   "result": "pass after one launcher fix and one README note",
+   "steps": "quit the tray app, `ollama serve` with OLLAMA_CONTEXT_LENGTH=16384 (detached), `python run_studio.py --port 3047` with no OPENBENCH_* variables (embedded database, dev mode, workers on)",
+   "readiness": "GET /agents/readiness: ready=true, blockers=[], qwen3.8:27b local_open reachable modelPresent; Agent Board (Studio Assistant > Agent Tasks) shows no banner and Showrunner, Screenwriter, Cinematographer and Continuity Supervisor \"Available 0/2\"",
+   "readme_breaks": [
+    {
+     "what": "The embedded database's default port 55432 was held by Docker Desktop; the launcher died with an uncaught CalledProcessError traceback",
+     "status": "fixed in 714eac3: without OPENBENCH_PG_PORT a taken default port moves to the next free loopback port, a running cluster is reached on the port in postmaster.pid, and a failed pg_ctl start is a readable launcher error; tests/test_embedded_pg_port.py"
+    },
+    {
+     "what": "Quitting the Ollama app and running `ollama serve` used the user variable OLLAMA_MODELS (another folder) instead of the app's model location, so the banner said qwen3.8:27b is not installed and suggested `ollama pull` (a needless 17 GB download)",
+     "status": "README Models step 2 now says to point OLLAMA_MODELS at the app's model folder; the banner itself reported the state correctly"
+    }
+   ],
+   "not_rerun": "venv creation, pip install and npm ci/build (no network allowed); the existing Python 3.13 environment and the committed static/projects were used",
+   "screenshots": [
+    "docs/research/screenshots/spec20/a17-banner-model-missing.jpg",
+    "docs/research/screenshots/spec20/a17-agent-board-ready.jpg"
+   ]
+  },
+  "A14": {
+   "result": "pass",
+   "prompts": "three prompts of 6,468, 8,588 and 11,133 tokens through /v1/chat/completions (reasoning_effort medium): every answer quotes the code word and the name from the prompt's first line and the right log number",
+   "ollama_ps": "qwen3.8:27b 17 GB, PROCESSOR 100% GPU, CONTEXT 16384; about 20.5 GB VRAM in use; prompt eval about 1.8k tokens/s, generation about 107 tokens/s",
+   "note": "A 17,922-token prompt (over the 16k context) was cut by Ollama to 8,194 tokens, keeping only the first 4, with a warning in the server log only; the API result looked normal and the model said the opening line had no code word. Only the client-side context budget (R10) guards against this. Ollama logged a VRAM-based default of 32768 for this 24 GiB card."
+  },
+  "A15": {
+   "result": "pass",
+   "setup": "default settings: the Continuity Supervisor (qa_critic) on local qwen3.8:27b, grading from shot review > Candidate Takes > Grade",
+   "grades": [
+    "SC01-S03 take 1 (Nora, 85 mm dolly in): 90/100 pass in 30.7 s; ComfyUI freed (VRAM 84% free) before the model loaded; \"GPU handed off from ComfyUI\"",
+    "SC02-S02 take 1 (Eli running at the lens): 64/100 retake in 38.1 s; it found the duplicate runner the keyframe introduced (\"one person only\" broken), the non-monotonic approach and the missing sodium-orange light",
+    "SC02-S02 take 2 from \"Retake with this prompt\": 58/100 retake; the second figure is still in frame 1 because the retake reuses the same keyframe"
+   ],
+   "note": "After a grade the model stays loaded until a render needs the GPU (R13 switching); docs/PHASE2_PROGRESS.md still says grading unloads it at once.",
+   "screenshots": [
+    "docs/research/screenshots/spec20/a15-grade-sc01-s03-90-pass.jpg",
+    "docs/research/screenshots/spec20/a15-grade-sc02-s02-64-retake.jpg"
+   ]
+  },
+  "R42": {
+   "runs": "research/crew_eval/runs/spec20-real-2026-10-27/ (16 outputs); reports research/crew_eval/reports/spec20-real-2026-10-27-beats.json and -continuity.json; the official adapters (crew_planning.run_eval_job, crew_continuity.run_eval_job) run through a scratch wrapper that only logged each case's source and attempts",
+   "reference_self_check": "100%, 24/24",
+   "beats": {
+    "percent": 18.56,
+    "hard_pass": "2/8",
+    "soft_mean": 0.79,
+    "job_level": "8/8 answered by the model (one retry: a dropped @SET-01 tag), no rule fallback; 14-32 s per case",
+    "failure_pattern": "All six failures are the set's beat_count check: the model writes 4-7 beats where the cases allow 2-3 (4 s), 3-4 (6 s) or 4-6 (10 s). The job prompt asks for \"about 1 to 1.5 seconds per beat\", so the prompt and the set disagree; not tuned."
+   },
+   "continuity": {
+    "percent": 24.29,
+    "hard_pass": "2/8",
+    "soft_mean": 0.58,
+    "job_level": "7 model answers and 1 rule fallback; 4 of 8 needed the retry (a fix that leaves the text unchanged, two fixes on one field); 11-37 s per case",
+    "failure_pattern": "no_invented failed 5 times (for example the lit/unlit lantern reported as kind \"prop\", major, where the set plants \"set_dressing\", minor on @PROP-02; a mouth open/closed change flagged on the clean match cut) and critical_found 3 times (03 E2, 06 E1, 08 E3). In case 06 both answers were rejected for a no-op \"fix\", so the rule fallback reported nothing and missed the planted hair-colour change."
+   },
+   "blocking": "not run: blocking has no crew job or eval adapter (3D blocking is the propose_previs_ops tool inside the agent loop, without a job prompt); an adapter would need a new prompt, so it is left as a gap"
+  },
+  "R44": {
+   "result": "walked to an exported cut with workarounds; two blocking break points (R44-3, R44-7) needed UI workarounds, none fixed in code",
+   "script": "original 3-scene SFW screenplay \"Spillway\" (Nora and Eli Vesk at a dam at night), front-facing, high tension",
+   "path": "New Production > From a story > Screenplay > adopt the private draft > crew shot breakdown (crew 11 shots vs rule 10, crew version adopted) > Let the crew pre-produce: Screenwriter, script lock, Art (7 jobs, 4 proposals, 1 rule fallback), list lock, Cinematographer (22 jobs, all model), storyboard lock, Continuity (3 scene jobs, 2 proposals, 1 rule fallback) > reviewed descriptions, cast, beat sheets, cameras and two 3D plans (one approved, one rejected) > 5 FLUX 3 Klein references > keyframe and LTX-2.5 video for SC01-S03 and SC02-S02 > grades (A15) > Retake with this prompt > Episode film export",
+   "timings": "crew calls 6-34 s each, one at a time; pre-production stages 16 s, 1.5 min, 6.4 min, 1.7 min; FLUX references 10-15 s each; keyframes 11-14 s; LTX-2.5 4 s shots 42-50 s; grades 31-38 s",
+   "cut": "Export Episode MP4: 8.10 s, 1280x720 H.264 + AAC, the two shot takes",
+   "gpu_arbiter": "A 5 s timeline (344 samples) never shows the language model loaded while ComfyUI ran: the model was unloaded before each render batch and loaded again for grading; peak VRAM about 23.3 GB during LTX-2.5; no OOM or stall in ComfyUI or Ollama. The Agent Console GPU panel showed no owner in any sample, renders included.",
+   "break_points": [
+    {
+     "id": "R44-7",
+     "blocking": true,
+     "status": "open",
+     "what": "\"Shoot This Shot\", the Keyframe/Cinema Shot \"Run\" buttons and \"Run Pipeline\" all fail with \"No unambiguous pipeline step matches this shot and media column\". The new production's pipeline (the showcase line) has three unfiltered steps writing Keyframe and four writing Cinema Shot (ui/src/studioModel.js studioRunInput needs one). \"Preview allocation\" routes both shots to h3-short-video-v3 (not installed), one \"Dispatch blocked: Required media is missing\". Workaround: Comfy Pipeline > step > Test Sample > Test This Step, then apply the proposal."
+    },
+    {
+     "id": "R44-3",
+     "blocking": true,
+     "status": "open",
+     "what": "A screenplay pasted in New Production is saved as one paragraph with hard breaks (writingStartHandoff.js plainDocument), and scenes are split per block, so the 3-scene script was one scene (\"Split scene\" disabled). Numbered headings (\"1. INT. ...\") never count as scene headings (six copies of the HEADING rule). Workaround: delete the numbers, then Backspace + Enter at each heading in the editor."
+    },
+    {
+     "id": "R44-4",
+     "blocking": false,
+     "status": "open",
+     "what": "No cast cards for the screenplay's people: character detection knows \"Character:\" lines, \"NAME: line\" cues and names followed by said/asked/turned/ran, not standard cues (a name alone on a line). The crew breakdown also folds cue lines into the paragraph. All 11 shots were B-roll with no cast. Workaround: add the characters on the Cast & sets wall, then \"Who is in this shot\" (it added Nora; for \"Eli runs toward us\" it answered \"no change\", Eli was added by hand)."
+    },
+    {
+     "id": "R44-1",
+     "blocking": false,
+     "status": "open",
+     "what": "The new production's working screenplay is the template's \"The Last Signal\" brief, so the user's screenplay lands as a private draft; adopting it takes Versions > Compare > Preview adopting whole manuscript > Adopt > Apply."
+    },
+    {
+     "id": "R44-2",
+     "blocking": false,
+     "status": "open",
+     "what": "Template content leaks into a production made from a story: Kael @CAST-01, Observatory @SET-01, three Kael shot rows (kept by the storyboard build, \"The 4 shots you have are kept\") and an OpenJutsu row VFX-01 in the film's provenance warning."
+    },
+    {
+     "id": "R44-5",
+     "blocking": false,
+     "status": "open",
+     "what": "Scene 1 (no @SET tag) got SET-01 by scene index, which is the template's Observatory; scene 3 at the same location got a separate SET-03. Art then folded scene-1 text into the Observatory description. Fixed by hand on the shot."
+    },
+    {
+     "id": "R44-6",
+     "blocking": false,
+     "status": "open",
+     "what": "The pre-production panel froze at \"6 of 22 jobs finished\" for about 9 minutes although all 22 jobs finished by 21:39:43: no GET /preproduction reached the server after 21:34:59 until the panel was remounted, and the stage was settled only by that next GET. Suspect: the poll re-arms only on a state change, so one failed load stops it (PreproductionPanel.jsx)."
+    },
+    {
+     "id": "R44-8",
+     "blocking": false,
+     "status": "open",
+     "what": "The grade panel stayed on \"Grading...\" with \"Connection lost or session expired\" while the grade (90/100) was already stored; its 3 s poll stopped after one failed fetch. A 40-request burst returned 40/40, so the server backlog is not the cause; the failed fetch was not explained."
+    },
+    {
+     "id": "minor",
+     "blocking": false,
+     "status": "open",
+     "what": "Chinese strings in the English UI (\"第 N 列\" in proposal reviews, the step-test warning, \"![圖片](...)\" image cells shown as raw markdown); the Needs You list labels every Art proposal \"Soul Cast\"; the 3D plan for a dam walkway says \"lateral tracking along the console\" (observatory vocabulary) and was rejected; Camera Motion gets the raw solver word (\"track\", \"dolly in\"); the \"Let the crew pre-produce\" card and \"Proposal ready above.\" hints stay after the flow and the proposals are done; pipeline-made takes are labelled \"unknown manuscript\"; the SC02-S02 keyframe put a second runner in frame (FLUX), which the grader caught."
+    }
+   ],
+   "not_done": "deleting template rows and cards, cast for the other 9 shots, the 18 unreviewed Cinematographer proposals, Timeline trims",
+   "screenshots": [
+    "docs/research/screenshots/spec20/r44-preproduction-cinematographer-done.jpg",
+    "docs/research/screenshots/spec20/r44-3d-plan-proposal-contact-sheet.jpg",
+    "docs/research/screenshots/spec20/r44-break-shoot-this-shot-ambiguous-step.jpg",
+    "docs/research/screenshots/spec20/r44-episode-film-export.jpg"
+   ],
+   "database": "the worktree's own embedded cluster (.openbench_pg, port 55433 after the A17 fix); the showcase cluster (55440) and the throwaway clusters were not touched"
+  },
+  "machine_restored": "studio, embedded PostgreSQL, ComfyUI, own ollama serve and headless Edge stopped; Ollama tray app restarted (its own server on 11434); nvidia-smi 1,064 MiB used by the desktop, no compute process"
+ }
 }

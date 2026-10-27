@@ -1,6 +1,6 @@
 # SPEC_20 規劃代理層：劇組真的會規劃、對內對外分工、供應商原則
 
-> **狀態：** 已實作，待驗收（2026-10-27）。使用者指示不受參賽截止時間限制、R1–R44 全部完整實作；各項實作已併入整合分支 `feat/spec20-integration`，R44 與部分項目尚未完成，逐項狀態與未完成處見 §11。目前所有檢查都用假的模型端點、假的 ACP 代理與窄範圍測試；完整分片測試、真實模型與 GPU 驗收（A14、A15、A17、R42 實跑、R44）、真實 MCP 主機檢查都還沒做。
+> **狀態：** 已實作，待驗收（2026-10-27）。使用者指示不受參賽截止時間限制、R1–R44 全部完整實作；各項實作已併入整合分支 `feat/spec20-integration`，R44 與部分項目尚未完成，逐項狀態與未完成處見 §11。完整分片測試已跑（收據 `docs/spec20-verification.json`：後端 1237、前端 592 項全過）。2026-10-27 在使用者的 4090 上做了實機驗收（收據的 `real_acceptance`）：A14、A15、A17 通過；R42 以本機模型跑了分拍與接點，分數偏低；R44 只用介面走到匯出成片，但靠介面上的變通繞過兩個阻擋斷點，斷點未修。真實 MCP 主機檢查還沒做。
 > **依據：** [`docs/research/2026-10-27-planning-agent-layer.md`](../research/2026-10-27-planning-agent-layer.md)（研究備忘，含查證狀態）。
 > **相關：** SPEC_08（中控台）、SPEC_13／14／16（故事與拆鏡）、SPEC_18（R4 階梯、R8 生成列）、SPEC_19（生成台、採用即成片、引用與接點；另一個工作階段在 `feat/spec19-integration` 平行實作，見 §10）。
 > **截止：** 參賽截止 2026-10-30 09:00 PT（台灣 10/31 00:00）。「P0／P1／P2」只代表先後與重要性，不再是截止前後的切分。
@@ -404,8 +404,8 @@ R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 | R1 修鎖死 | done | `project_assistant/providers.py`、`execution_governance.py`（`reserve`、`finalize`、`reconcile`）、`agent_console_store.py`（`uncertain_hold_seconds`）、`project_docs/console_http.py`（對帳路由） | 測試 `tests/test_spec20_provider_core.py` |
 | R2 預設本機模型與劇組就緒 | done | `providers.py`（`provider_from_env`）、`crew_readiness.py`、`agent_registry.py`（`needs_setup`）、`project_docs/http.py`（`/agents/readiness`）、`ui/src/assistant/AgentBoard.jsx` | `OPENBENCH_REASONING_EFFORT` 見 `docs/WORKERS.md` |
 | R3 移除 chatgpt.com | done | `model_client.py`（只留共用型別）、`agent_runtime.py`、`outcome_grader.py`、`agent_registry.py`、`execution_governance.py` | `responses`／`direct` 回報 `kind_removed`，不發出連線 |
-| R4 Ollama 相容 | done | `providers.py` | 不送 `tool_choice`，第 16 輪不帶 `tools` 並附 `LAST_ROUND_NOTE`；A14 實機待辦 |
-| R5 文件對齊 | partial | `README.md`、`AGENTS.md`、`docs/DESIGN_AND_DEV_GUIDELINES.md`、`docs/ZEROFIELD_SPEC.md`、`docs/WORKERS.md`、`docs/DEPLOYMENT.md`、`docs/STORY_WORKBENCH.md` | `docker-compose.yml` 仍預設 `api.openai.com` 與 `gpt-4.1`（閉源，預設政策會擋），文件已註明但檔案未改；A17 乾淨環境實測待辦 |
+| R4 Ollama 相容 | done | `providers.py` | 不送 `tool_choice`，第 16 輪不帶 `tools` 並附 `LAST_ROUND_NOTE`；A14 實機通過（6.5k–11k token 的提示都引用到開頭，`ollama ps` 為 100% GPU、情境 16384）；超過情境的提示會被 Ollama 默默截斷，只有 R10 的預算擋得住 |
+| R5 文件對齊 | partial | `README.md`、`AGENTS.md`、`docs/DESIGN_AND_DEV_GUIDELINES.md`、`docs/ZEROFIELD_SPEC.md`、`docs/WORKERS.md`、`docs/DEPLOYMENT.md`、`docs/STORY_WORKBENCH.md` | `docker-compose.yml` 仍預設 `api.openai.com` 與 `gpt-4.1`（閉源，預設政策會擋），文件已註明但檔案未改；A17 實測通過（2026-10-27）：內建資料庫預設埠被 Docker 占用時啟動器會當掉，已修成改用下一個空埠（`server._start_local_postgres`）；README 補上 Ollama 程式的模型資料夾要設進 `OLLAMA_MODELS` |
 | R6 確認平台規定 | done | （不改程式） | 已確認不是比賽規定，見 §7 第 1 條 |
 | R7 分拍提示詞提案 | done | `crew_planning.py`（`BEATS`）、`crew_jobs.py`、`project_docs/story_crew.py`（`beat-proposals`） | 沒有可用模型回 409 `DRAMA_CREW_NOT_READY`，不寫入 |
 | R8 供應商目錄與能力旗標 | done | `provider_catalog.json`、`provider_catalog.py`、`providers.py` | 目錄有 Ollama、OpenRouter、OpenAI、Gemini 四筆 |
@@ -413,7 +413,7 @@ R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 | R10 情境預算 | done | `providers.py`（修剪歷史與工具輸出）、`crew_jobs.py`（每個工作自己的強度） | |
 | R11 評分與快速建立助手走治理 | done | `take_grader.py`、`agent_console_service.py` | |
 | R12 失敗分類與實際模型 | done | `model_client.py`（`FAILURE_CLASSES`，含 `gpu_busy`）、`providers.py`、`execution_governance.py`、`ui/src/assistant/providerFailures.js` | 八個類別，帳本記錄實際回應的模型 |
-| R13 GPU 仲裁器 | partial | `gpu_arbiter.py`、`take_grader.py`、`studio/card_engine.py`、`studio/openapi_v2_hub.py`、`limb_worker.py` | 跨程序鎖與工作階段切換已做；沒有「規劃先於算圖」的優先序，等待者先到先得（FIFO）；真實 4090 上未驗收 |
+| R13 GPU 仲裁器 | partial | `gpu_arbiter.py`、`take_grader.py`、`studio/card_engine.py`、`studio/openapi_v2_hub.py`、`limb_worker.py` | 跨程序鎖與工作階段切換已做；沒有「規劃先於算圖」的優先序，等待者先到先得（FIFO）；4090 實走（R44）時每 5 秒取樣 344 次，語言模型從未與 ComfyUI 算圖同時常駐，算圖前卸載、評分前釋放 ComfyUI，沒有記憶體不足；中控台的 GPU 面板在算圖時也沒顯示占用者 |
 | R14 新專案的管線工人 | done | `local_workers.py`、`run_studio.py`、`project_docs/service.py`（`create_project`） | |
 | R15 宣告式工具登記 | done | `tool_registry.py`（`tool_specs`、`agent_policy`、`tool_host` 等由它產生） | |
 | R16 情境工具 | done | `context_tools.py`（`read_episode`、`read_scene`、`read_shot`、`read_cast`、`list_takes`） | |
@@ -442,12 +442,12 @@ R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 | R39 工作佇列與失敗 | done | `console_ops.py`、`ConsoleOpsViews.jsx`（`QueuePanel`）、`execution_governance.py`（`reconcile`） | |
 | R40 自動工作總開關 | done | `automation.py`、`ConsoleOpsViews.jsx`（`AutomationSwitch`、`PausedBanner`） | |
 | R41 外部代理連線頁 | partial | `ui/src/agentConsole/ConsoleExternalAgents.jsx`、`externalAgentsModel.js`、`project_docs/agent_http.py` | 工具標籤由伺服器的工具登記提供（英文），zh-TW 沒有翻譯 |
-| R42 劇組評測集 | partial | `research/crew_eval/`、`scripts/crew_eval.py`、`crew_planning.py`（`eval_adapter`） | 分拍、走位、接點各 8 題與評分器完成；真實工作的轉接器只有分拍，走位與接點沒有；真實模型實跑待使用者的 GPU |
+| R42 劇組評測集 | partial | `research/crew_eval/`、`scripts/crew_eval.py`、`crew_planning.py`、`crew_continuity.py`（`run_eval_job`） | 分拍、走位、接點各 8 題與評分器完成。2026-10-27 在 4090 上以本機 `qwen3.8:27b` 實跑（`research/crew_eval/reports/spec20-real-2026-10-27-*.json`）：分拍 18.56%（硬性 2/8，軟分 0.79；8 題都由模型回答，失分全在拍數：工作提示詞要每拍約 1–1.5 秒，題目允許的拍數較少，兩邊不一致，未改提示詞）；接點 24.29%（硬性 2/8，軟分 0.58；多報 5 次、漏報 3 次，一題兩次回答都因「修正沒改到文字」被擋下，規則退路什麼都沒報）。走位沒有劇組工作與轉接器（3D 走位是代理迴圈裡的 `propose_previs_ops` 工具），未跑 |
 | R43 離線工具清單檢查 | done | `scripts/audit_tool_surface.py`、`tests/fixtures/tool_surface.json`、`tests/test_tool_registry.py` | 含 ACP 可見工具 |
-| R44 空白專案實走 | deferred | （收據 `docs/spec20-verification.json` 尚未建立） | 等使用者確認 GPU 空檔 |
+| R44 空白專案實走 | partial | `docs/spec20-verification.json`（`real_acceptance.R44`）、`docs/research/screenshots/spec20/` | 2026-10-27 只用介面（無頭 Edge 1440×900）與本機模型走完一集：新專案貼三場劇本 → 劇組拆鏡（採用）→ 前製流程與三道鎖 → 審核描述、出場、分拍、運鏡與 3D 計畫 → 兩鏡的首幀與 LTX-2.5 影片 → 連戲評分 → 匯出 8.1 秒成片。兩個阻擋斷點靠變通繞過、未修：新專案的管線有多個步驟寫同一欄，「拍這鏡」、Run 與 Run Pipeline 都失敗，只能從 Comfy Pipeline 的單步測試生成（R44-7）；貼上的劇本存成一段，三場變一場（R44-3）。其他斷點：劇本角色抓不到、範本內容混入新專案、場景代碼撞到範本、流程面板與評分面板輪詢停住，見收據 |
 
 **未完成的驗收**
-- 完整後端測試只在最後分片跑一次，這一次還沒跑；前端完整測試與建置也一樣。各工作包只跑了自己新增與直接改到的測試，全部用假的模型端點、假的 ComfyUI 與 GPU 探測、假的 ACP 代理。
-- 實機驗收（A14、A15、A17、R42 實跑、R44）要使用者的 GPU，都還沒做；`docs/spec20-verification.json` 收據尚未建立。
+- 完整後端測試在最後分片跑了一次（1237 項全過），前端 592 項與建置也通過，見 `docs/spec20-verification.json`；這些測試全部用假的模型端點、假的 ComfyUI 與 GPU 探測、假的 ACP 代理。
+- 實機驗收（2026-10-27，收據的 `real_acceptance`）：A14、A15、A17 通過；R42 的分拍與接點分數低（18.56%、24.29%），走位沒跑；R44 走到成片但兩個阻擋斷點（R44-3、R44-7）與數個非阻擋斷點未修。
 - MCP 用 MCP Inspector、Goose＋Ollama、Claude Code 各接一次的檢查沒做；MCP Apps 卡片只在模擬主機頁（無頭 Edge）看過。
 - 等 SPEC_19 併入才能補的項目：R19 的生成台入口、R23 的故事 API 自動評分、R18 的質感提案、R34 的生成台與成片接點兩張卡片。
