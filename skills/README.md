@@ -11,11 +11,11 @@ This folder holds the workflow manuals (SPEC_20 R32): short step-by-step instruc
 
 ## How agents get them
 
-The `get_workflow` tool returns a manual by name, for example `crew-preproduction`. It reads `skills/<name>/SKILL.md` from a checkout, or `openbench_data/skills/<name>/SKILL.md` from an installed wheel (`openbench_data.resource_path("skills", name, "SKILL.md")` finds either). The tool is being built; a manual must still be readable as a plain file.
+The `get_workflow` tool returns a manual by name, for example `crew-preproduction`. It reads `skills/<name>/SKILL.md` from a checkout, or `openbench_data/skills/<name>/SKILL.md` from an installed wheel (`openbench_data.resource_path("skills", name, "SKILL.md")` finds either). `get_workflow` is registered in `project_assistant/tool_registry.py` and handled by `project_assistant/external_tools.py`; a manual must still be readable as a plain file.
 
 ## What the manuals are not
 
-A manual is guidance. It is not a security boundary. Scope, revision checks, production policy, spend limits and the rule that crew output is a proposal are enforced inside the tools, whether or not an agent read or followed a manual (SPEC_20 fixed decisions 8 to 10). If a manual and a tool disagree, the tool wins. Some tools named in the manuals are still under construction; the tool list the server returns is the truth, and every manual tells the agent not to call a tool that is not listed.
+A manual is guidance. It is not a security boundary. Scope, revision checks, production policy, spend limits and the rule that crew output is a proposal are enforced inside the tools, whether or not an agent read or followed a manual (SPEC_20 fixed decisions 8 to 10). If a manual and a tool disagree, the tool wins. A tool named in a manual may not be offered to every agent (a token lists its tools, and a built-in role gets only its own); the tool list the server returns is the truth, and every manual tells the agent not to call a tool that is not listed.
 
 ## Conventions
 

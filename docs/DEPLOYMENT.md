@@ -82,7 +82,9 @@ docker compose up --build -d
 docker compose ps
 ```
 
-啟動後開啟 [登入頁](http://127.0.0.1:3020/login)。Compose 的新資料庫從 token 對照表第一個 UUID 建立管理者。右側對話助理預設為 `OPENBENCH_PROVIDER=openai_compat`，啟用時另設定 `OPENBENCH_API_BASE`、`OPENBENCH_API_KEY` 與 `OPENBENCH_MODEL`；未設定有效模型服務時，對話助理回報錯誤，不會自動改走 CLI。若要使用 CLI，必須明確設定 `OPENBENCH_PROVIDER=codex_cli` 並安裝／登入相應執行器。Python package 包含外部 Worker 執行器；模型、ComfyUI、FFmpeg／ffprobe 及 Codex CLI 由各 Worker 主機另外安裝。
+啟動後開啟 [登入頁](http://127.0.0.1:3020/login)。Compose 的新資料庫從 token 對照表第一個 UUID 建立管理者。右側對話助理與劇組的預設模型是本機 Ollama（`http://127.0.0.1:11434/v1`、`qwen3.8:27b`），不必設任何 `OPENBENCH_*`；`OPENBENCH_PROVIDER` 預設 `openai_compat`，換端點或模型時設定 `OPENBENCH_API_BASE`、`OPENBENCH_MODEL`（金鑰用 `OPENBENCH_API_KEY` 或在 Agent Console 指定允許的金鑰變數）。託管或閉源端點要先過治理：管理者放行主機、設價格上限，閉源模型只在混合模式可用（見 [DESIGN_AND_DEV_GUIDELINES.md](DESIGN_AND_DEV_GUIDELINES.md) 第 3.1 節）。模型服務連不上或模型沒下載時，劇組看板列出缺什麼與怎麼修，對話助理回報錯誤，不會自動改走 CLI；舊的 `responses`（ChatGPT 訂閱端點）類型已移除。若要使用 CLI，必須明確設定 `OPENBENCH_PROVIDER=codex_cli` 並安裝／登入相應執行器。
+
+**Compose 目前沒有可用的本機模型路徑，劇組在 Compose 下尚未驗證：** `docker-compose.yml` 仍把 `OPENBENCH_API_BASE` 預設成 `https://api.openai.com/v1`、`OPENBENCH_MODEL` 預設成 `gpt-4.1`，那是閉源模型，預設的 `open_weights_only` 政策會擋住；容器裡的 `127.0.0.1` 是容器自己，不是主機上的 Ollama，而目錄沒有列出的非本機端點一律算閉源。要在 Compose 用劇組，需要自己讓容器連得到模型服務並通過治理，這個組合沒有測過。Python package 包含外部 Worker 執行器；模型、ComfyUI、FFmpeg／ffprobe 及 Codex CLI 由各 Worker 主機另外安裝。
 
 HTTP `/healthz` 是 liveness；它回應成功不代表資料庫、登入或生成服務已完成驗證。請另外登入、建立測試分頁，並以真實 Worker 執行一次可審核的任務。Compose 設定可在未啟動 engine 時解析，但 image build／container 啟動必須有可用的 Docker daemon；目前本機驗證狀態見 [發佈驗證紀錄](packaging-report.md)。
 
@@ -90,7 +92,7 @@ HTTP `/healthz` 是 liveness；它回應成功不代表資料庫、登入或生�
 
 ## Worker 與生成服務
 
-`--no-worker` 只關閉右側對話助理的內建背景執行緒；DAG 外部 Worker 可獨立運作。管理者從工作台設定註冊能力與允許的專案，取得只顯示一次的 Worker token。保持 `OPENBENCH_LIMB_TOKEN` 與應用 token 分開。
+`--no-worker` 只關閉右側對話助理的內建背景執行緒；DAG 外部 Worker 可獨立運作。沒有內建背景執行緒時劇組不會做事：就緒 API 回報 `worker_not_running`，劇組名單顯示 `needs_setup`。管理者從工作台設定註冊能力與允許的專案，取得只顯示一次的 Worker token。保持 `OPENBENCH_LIMB_TOKEN` 與應用 token 分開。
 
 ```powershell
 $env:OPENBENCH_LIMB_TOKEN = '<issued-worker-token>'
