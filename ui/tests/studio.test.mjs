@@ -46,7 +46,7 @@ test('single-cell execution uses exactly one saved node and never broadens missi
   assert.deepEqual(input,{execution_mode:'single_step',node_id:'movie',input_mode:'current_sources',sample_row_id:'r1',definition_revision:7});
   for(const forbidden of ['row_ids','target_tab','start_node_id'])assert.ok(!(forbidden in input));
   assert.throws(()=>studioRunInput(flow,{...scope,col_index:1}),/No unambiguous/);
-  assert.throws(()=>studioRunInput({...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[2],id:'duplicate'}]}},scope),/No unambiguous/);
+  assert.throws(()=>studioRunInput({...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[2],id:'duplicate'}]}},scope),/2 pipeline steps write this column: “movie”, “duplicate”/);
   const foreign=structuredClone(flow);foreign.definition.nodes[2].row_source.tab_key='other';assert.throws(()=>studioRunInput(foreign,scope),/No unambiguous/);
   const legacy=structuredClone(flow);delete legacy.definition.nodes[2].scope;assert.throws(()=>studioRunInput(legacy,scope),/No unambiguous/);
   // Two steps write the same column: a node predicate names one (the 3D stage runs the previs motion pass this way).
@@ -57,7 +57,7 @@ test('single-cell execution uses exactly one saved node and never broadens missi
   const swap={...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[2],id:'swap',row_source:{tab_key:'cinema',table_id:'shots',status_col:1,status:['Object Swap']}}]}};
   assert.equal(studioRunInput(swap,{...scope,row:['VFX-02','Object Swap']}).node_id,'swap');
   assert.equal(studioRunInput(swap,{...scope,row:['VFX-01','Motion Transfer']}).node_id,'movie');
-  assert.throws(()=>studioRunInput(swap,scope),/No unambiguous/);
+  assert.throws(()=>studioRunInput(swap,scope),/write this column: “movie”, “swap”/);
   const onlySwap={...swap,definition:{...swap.definition,nodes:swap.definition.nodes.filter(node=>node.id!=='movie')}};
   assert.throws(()=>studioRunInput(onlySwap,{...scope,row:['VFX-01','Motion Transfer']}),/No unambiguous/);
 });
@@ -67,7 +67,7 @@ test('batch execution starts with the matching sheet rather than unrelated upstr
   // The 3D stage's layout render: a named first step of a lane whose key column other steps also write; the run continues downstream.
   const lane={...flow,definition:{...flow.definition,nodes:[...flow.definition.nodes,{...flow.definition.nodes[1],id:'layoutkey',title:'Layout Key'},{...flow.definition.nodes[2],id:'layout',title:'Layout Render'}]}};
   assert.equal(studioRunInput(lane,{...scope,singleStep:false,capability:'image_gen',col_index:undefined,match:node=>node.id==='layoutkey'}).start_node_id,'layoutkey');
-  assert.throws(()=>studioRunInput(lane,{...scope,singleStep:false,capability:'image_gen',col_index:undefined}),/No unambiguous/);
+  assert.throws(()=>studioRunInput(lane,{...scope,singleStep:false,capability:'image_gen',col_index:undefined}),/write this column: “frame”, “Layout Key”/);
 });
 
 test('queue preserves reviewed revisions and never runs a failed or stale preflight',async()=>{
@@ -100,7 +100,7 @@ test('reference preparation selects exact-column media workers for image and mot
   assert.equal(studioRunInput(prepared,{...scope,capability:'video_gen',col_index:9}).node_id,'motion');
   assert.throws(()=>studioRunInput(prepared,{...scope,capability:'image_gen',col_index:10}),/No unambiguous/);
   const duplicate=structuredClone(prepared);duplicate.definition.nodes.push({...duplicate.definition.nodes.at(-2),id:'other-first',capability:'image_gen'});
-  assert.throws(()=>studioRunInput(duplicate,{...scope,capability:'image_gen',col_index:8}),/No unambiguous/);
+  assert.throws(()=>studioRunInput(duplicate,{...scope,capability:'image_gen',col_index:8}),/write this column: “first”, “other-first”/);
 });
 
 test('appended reference stages display before outputs while preserving action columns and unknown slots',()=>{
