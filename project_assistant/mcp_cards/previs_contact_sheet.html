@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZeroField 3D preview</title>
+<!--
+  ZeroField 3D preview contact sheet: an MCP Apps view (SPEC_20 R34; project_assistant/mcp_apps.py).
+  Self-contained on purpose: no external script, style, font or image, and no network of any kind (the policy above
+  and the resource's empty _meta.ui.csp). Everything reaches it through the host: the tool result
+  (ui/notifications/tool-result), the contact sheet as an image content block or a resources/read the host forwards
+  to ZeroField with its own token, and the actions ui/open-link and tools/call read_shot.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --zf-bg: var(--color-background-primary, #ffffff);
+    --zf-panel: var(--color-background-secondary, #f3f5f8);
+    --zf-text: var(--color-text-primary, #141a22);
+    --zf-muted: var(--color-text-secondary, #5b6676);
+    --zf-line: var(--color-border-primary, #d6dce4);
+    --zf-accent: #2f6fb0;
+    --zf-warn: #9a5b00;
+    --zf-font: var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
+    --zf-radius: var(--border-radius-md, 8px);
+  }
+  :root[data-theme="dark"] {
+    --zf-bg: var(--color-background-primary, #151b24);
+    --zf-panel: var(--color-background-secondary, #1d2531);
+    --zf-text: var(--color-text-primary, #e6eaf0);
+    --zf-muted: var(--color-text-secondary, #9aa4b2);
+    --zf-line: var(--color-border-primary, #2c3644);
+    --zf-accent: #7fb2e5;
+    --zf-warn: #e0a84a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --zf-bg: var(--color-background-primary, #151b24);
+      --zf-panel: var(--color-background-secondary, #1d2531);
+      --zf-text: var(--color-text-primary, #e6eaf0);
+      --zf-muted: var(--color-text-secondary, #9aa4b2);
+      --zf-line: var(--color-border-primary, #2c3644);
+      --zf-accent: #7fb2e5;
+      --zf-warn: #e0a84a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--zf-bg); color: var(--zf-text); font: 14px/1.45 var(--zf-font); }
+  main { padding: 12px 14px 14px; display: grid; gap: 10px; }
+  header { display: grid; gap: 2px; }
+  .title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+  .title h1 { margin: 0; font-size: 16px; font-weight: 650; }
+  .pill { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--zf-line); color: var(--zf-muted); }
+  .pill[data-state="pending"] { color: var(--zf-accent); border-color: currentColor; }
+  .pill[data-state="applied"] { color: #2d8a4e; border-color: currentColor; }
+  .facts { color: var(--zf-muted); font-size: 13px; }
+  .frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .frames figure { margin: 0; display: grid; gap: 2px; }
+  .tile { width: 100%; border-radius: 4px; background-color: #11151b; background-repeat: no-repeat; border: 1px solid var(--zf-line); }
+  .frames figcaption { font-size: 12px; color: var(--zf-muted); font-variant-numeric: tabular-nums; }
+  .sheet { width: 100%; height: auto; border-radius: var(--zf-radius); border: 1px solid var(--zf-line); }
+  .status { margin: 0; color: var(--zf-muted); }
+  .status[data-kind="error"] { color: var(--zf-warn); }
+  section h2 { margin: 0 0 4px; font-size: 13px; font-weight: 650; color: var(--zf-muted); text-transform: uppercase; letter-spacing: .04em; }
+  ol, ul { margin: 0; padding-left: 20px; }
+  .warnings { color: var(--zf-warn); font-size: 13px; }
+  .note { margin: 0; padding: 8px 10px; border-radius: var(--zf-radius); background: var(--zf-panel); font-size: 13px; }
+  footer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: var(--zf-radius); border: 1px solid var(--zf-line);
+           background: var(--zf-panel); color: var(--zf-text); cursor: pointer; }
+  button:hover { border-color: var(--zf-accent); }
+  .link { font-size: 12px; color: var(--zf-muted); word-break: break-all; }
+  [hidden] { display: none !important; }
+  @media (max-width: 420px) { .frames { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<main id="card" aria-live="polite">
+  <header>
+    <div class="title"><h1 id="label">3D preview</h1><span id="pill" class="pill" hidden></span></div>
+    <div id="facts" class="facts"></div>
+  </header>
+  <section id="frames" class="frames" aria-label="Contact sheet frames" hidden></section>
+  <img id="sheet" class="sheet" alt="3D previs contact sheet" hidden>
+  <p id="status" class="status">Waiting for the tool result…</p>
+  <section id="ops" hidden><h2>Operations</h2><ol id="opsList"></ol></section>
+  <ul id="warnings" class="warnings" hidden></ul>
+  <p id="note" class="note" hidden></p>
+  <footer>
+    <button id="open" type="button" hidden>Open in ZeroField</button>
+    <button id="refresh" type="button" hidden>Refresh</button>
+    <span id="link" class="link" hidden></span>
+  </footer>
+</main>
+<script>
+(() => {
+  'use strict';
+  const PROTOCOL = '2026-01-26';            // MCP Apps specification version
+  const CARD_META = 'zerofield/card';       // the card's data on the tool result's _meta
+  const MAX_BASE64 = 16 * 1024 * 1024;
+  const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+  const LOCAL_LINK = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?\/projects\/[a-z0-9][a-z0-9-]{0,40}\/(#[a-z0-9][a-z0-9-]{0,40})?$/;
+  const $ = id => document.getElementById(id);
+  const pending = new Map();
+  let nextId = 1, generation = 0;
+
+  // ---------- the host bridge (JSON-RPC over postMessage to the host's sandbox) ----------
+  const send = message => window.parent.postMessage(message, '*');
+  const notify = (method, params) => send({ jsonrpc: '2.0', method, params: params || {} });
+  const request = (method, params) => new Promise((resolve, reject) => {
+    const id = nextId++;
+    pending.set(id, { resolve, reject });
+    send({ jsonrpc: '2.0', id, method, params: params || {} });
+    setTimeout(() => { if (pending.delete(id)) reject(new Error(method + ' timed out')); }, 60000);
+  });
+  const reply = (id, result) => send({ jsonrpc: '2.0', id, result: result || {} });
+
+  window.addEventListener('message', event => {
+    if (event.source !== window.parent) return;
+    const message = event.data;
+    if (!message || typeof message !== 'object' || message.jsonrpc !== '2.0') return;
+    if (message.method === undefined) {
+      const waiting = pending.get(message.id);
+      if (waiting) { pending.delete(message.id); message.error ? waiting.reject(message.error) : waiting.resolve(message.result); }
+      return;
+    }
+    const params = message.params || {};
+    switch (message.method) {
+      case 'ui/notifications/tool-input': onInput(params.arguments); break;
+      case 'ui/notifications/tool-input-partial': break;
+      case 'ui/notifications/tool-result': onResult(params); break;
+      case 'ui/notifications/tool-cancelled': status('The tool call was cancelled.', 'error'); break;
+      case 'ui/notifications/host-context-changed': applyContext(params); break;
+      case 'ui/resource-teardown': if (message.id !== undefined) reply(message.id); break;
+      case 'ping': if (message.id !== undefined) reply(message.id); break;
+      default:
+        if (message.id !== undefined) send({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not found' } });
+    }
+  });
+
+  // ---------- host context: theme and the host's CSS variables (text values only) ----------
+  function applyContext(context) {
+    if (!context || typeof context !== 'object') return;
+    if (context.theme === 'dark' || context.theme === 'light') document.documentElement.dataset.theme = context.theme;
+    const variables = context.styles && context.styles.variables;
+    if (variables && typeof variables === 'object') {
+      for (const [name, value] of Object.entries(variables)) {
+        if (/^--[A-Za-z0-9-]{1,64}$/.test(name) && typeof value === 'string' && value.length <= 200 && !/url\s*\(|expression\s*\(/i.test(value)) {
+          document.documentElement.style.setProperty(name, value);
+        }
+      }
+    }
+  }
+
+  // ---------- drawing ----------
+  const show = (id, visible) => { $(id).hidden = !visible; };
+  function status(text, kind) { $('status').textContent = text || ''; $('status').dataset.kind = kind || ''; show('status', !!text); }
+  function clear() {
+    $('frames').replaceChildren(); show('frames', false);
+    $('sheet').removeAttribute('src'); show('sheet', false);
+    $('opsList').replaceChildren(); show('ops', false);
+    $('warnings').replaceChildren(); show('warnings', false);
+    show('note', false); show('open', false); show('refresh', false); show('link', false); show('pill', false);
+  }
+  function pill(text, state) { $('pill').textContent = text; $('pill').dataset.state = state || ''; show('pill', !!text); }
+  function note(text) { $('note').textContent = text || ''; show('note', !!text); }
+  const num = value => (typeof value === 'number' && isFinite(value) ? value : null);
+  const signed = value => (value > 0 ? '+' : '') + Math.round(value * 100) / 100;
+
+  function describe(op) {
+    if (!op || typeof op !== 'object') return '';
+    if (op.op === 'place') {
+      const offset = Array.isArray(op.offset) ? op.offset : [0, 0];
+      const moved = (offset[0] || offset[1]) ? ` ${signed(offset[0])}, ${signed(offset[1])} m` : '';
+      return `${op.cast} at ${op.relativeTo}${moved}, facing ${op.facing}`;
+    }
+    if (op.op === 'camera') {
+      const keys = op.move === 'static' ? '' : (op.from || op.to ? ` ${op.from || 'K1'}→${op.to || 'last key'}` : '');
+      return `${String(op.size || '').replace('_', ' ')} ${op.angle}-angle ${op.lens}mm ${op.move}${keys}`;
+    }
+    if (op.op === 'retime') return `acting beat ${op.beat} at ${Math.round((num(op.at) || 0) * 100)}%`;
+    return String(op.op || '');
+  }
+
+  function facts(card) {
+    const parts = [];
+    if (num(card.planRevision) !== null) parts.push(`Plan revision ${card.planRevision}`);
+    const plan = card.plan;
+    if (plan && typeof plan === 'object') {
+      if (plan.lens || plan.move) parts.push(`${plan.lens ? plan.lens + 'mm ' : ''}${plan.move || ''}`.trim());
+      if (num(plan.seconds) !== null) parts.push(`${plan.seconds} s`);
+      if (plan.set) parts.push(plan.set);
+      if (Array.isArray(plan.cast) && plan.cast.length) parts.push(plan.cast.join(', '));
+    }
+    return parts.join(' · ');
+  }
+
+  function dataUrl(mimeType, base64) {
+    if (mimeType !== 'image/png' || typeof base64 !== 'string' || base64.length > MAX_BASE64 || !BASE64.test(base64)) return null;
+    return 'data:image/png;base64,' + base64;
+  }
+
+  function drawSheet(url, sheet) {
+    const frames = (sheet && Array.isArray(sheet.frames)) ? sheet.frames : [];
+    const layout = sheet && sheet.layout;
+    if (layout && num(sheet.width) && num(sheet.height) && frames.length && frames.length <= layout.columns * layout.rows) {
+      const { columns, gap, header, caption, tileWidth: tw, tileHeight: th } = layout;
+      const width = sheet.width, height = sheet.height;
+      frames.forEach((frame, index) => {
+        const x = gap + (index % columns) * (tw + gap), y = header + gap + Math.floor(index / columns) * (th + caption + gap);
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.setAttribute('role', 'img');
+        tile.setAttribute('aria-label', `Frame ${frame.frame}`);
+        tile.style.aspectRatio = `${tw} / ${th}`;
+        tile.style.backgroundImage = `url("${url}")`;
+        tile.style.backgroundSize = `${(width / tw) * 100}% ${(height / th) * 100}%`;
+        tile.style.backgroundPosition = `${(x / (width - tw)) * 100}% ${(y / (height - th)) * 100}%`;
+        const figure = document.createElement('figure');
+        const label = document.createElement('figcaption');
+        label.textContent = `${(num(frame.seconds) || 0).toFixed(2)} s · f${frame.frame}`;
+        figure.append(tile, label);
+        $('frames').append(figure);
+      });
+      show('frames', true);
+    } else {
+      $('sheet').src = url;
+      show('sheet', true);
+    }
+  }
+
+  async function loadSheet(sheet, image, mine) {
+    const inline = image ? dataUrl(image.mimeType, image.data) : null;
+    if (inline) { drawSheet(inline, sheet); return; }
+    if (!sheet || typeof sheet.uri !== 'string') return;
+    status('Loading the contact sheet…');
+    try {
+      const result = await request('resources/read', { uri: sheet.uri });
+      if (mine !== generation) return;
+      const item = (result && Array.isArray(result.contents) ? result.contents : []).find(c => c && c.uri === sheet.uri);
+      const url = item ? dataUrl(item.mimeType, item.blob) : null;
+      if (!url) throw new Error('not a PNG');
+      drawSheet(url, sheet);
+      status('');
+    } catch (error) {
+      if (mine === generation) status('The contact sheet could not be loaded: ' + ((error && error.message) || 'the host refused the request') + '.', 'error');
+    }
+  }
+
+  function render(card, image) {
+    const mine = ++generation;
+    clear();
+    const shot = card.shot || {};
+    $('label').textContent = `${shot.label || shot.shotId || 'Shot'} · 3D plan`;
+    const proposal = card.proposal;
+    if (proposal && card.source === 'propose_previs_ops') pill(`Proposal #${proposal.id} · ${proposal.status}`, proposal.status);
+    else if (card.stored) pill('Stored plan', 'applied');
+    else pill('No stored plan', '');
+    $('facts').textContent = facts(card);
+    if (proposal && Array.isArray(proposal.ops) && proposal.ops.length) {
+      for (const op of proposal.ops) { const li = document.createElement('li'); li.textContent = describe(op); $('opsList').append(li); }
+      $('ops').querySelector('h2').textContent = card.source === 'read_shot' ? `Operations of approved proposal #${proposal.id}` : 'Operations';
+      show('ops', true);
+    }
+    const solve = proposal && proposal.solve;
+    const warnings = (solve && Array.isArray(solve.warnings)) ? solve.warnings : [];
+    if (solve && solve.status === 'ops_only') warnings.unshift('Operations only: no headless browser solved them here; the director solves and previews them in the 3D Stage.');
+    for (const warning of warnings) { const li = document.createElement('li'); li.textContent = warning; $('warnings').append(li); }
+    show('warnings', warnings.length > 0);
+    note(card.note || '');
+    status(card.contactSheet ? '' : (card.stored || proposal ? 'No contact sheet image for this plan.' : ''));
+    if (card.contactSheet) loadSheet(card.contactSheet, card.source === 'propose_previs_ops' ? image : null, mine);
+    const link = card.open && card.open.url;
+    if (typeof link === 'string' && LOCAL_LINK.test(link)) {
+      $('open').onclick = () => request('ui/open-link', { url: link }).catch(() => { $('link').textContent = link; show('link', true); });
+      show('open', true);
+    }
+    if (card.source === 'read_shot' && shot.shotId) {
+      $('refresh').onclick = () => refresh(shot.shotId);
+      show('refresh', true);
+    }
+  }
+
+  // Without the card's data (a host that drops result _meta): what the result itself shows.
+  function fallback(result, text, image) {
+    const mine = ++generation;
+    clear();
+    const data = result.structuredContent && result.structuredContent.data;
+    if (data && data.shot && data.previs) {
+      $('label').textContent = `${data.shot.shotIndex || data.shot.shotId} · 3D plan`;
+      pill(data.previs.stored ? 'Stored plan' : 'No stored plan', data.previs.stored ? 'applied' : '');
+      $('facts').textContent = `Plan revision ${data.previs.planRevision}`;
+      status('');
+    } else {
+      $('label').textContent = '3D preview';
+      status((text || '').slice(0, 800));
+    }
+    const url = image ? dataUrl(image.mimeType, image.data) : null;
+    if (url && mine === generation) drawSheet(url, null);
+  }
+
+  function onInput(input) {
+    const count = input && Array.isArray(input.ops) ? input.ops.length : 0;
+    status(count ? `Solving ${count} operation${count === 1 ? '' : 's'} in the 3D Stage's solver…` : 'Reading the shot…');
+  }
+
+  function onResult(result) {
+    if (!result || typeof result !== 'object') return;
+    const content = Array.isArray(result.content) ? result.content : [];
+    const text = content.filter(c => c && c.type === 'text' && typeof c.text === 'string').map(c => c.text).join('\n');
+    const image = content.find(c => c && c.type === 'image' && c.mimeType === 'image/png' && typeof c.data === 'string');
+    if (result.isError) { clear(); generation++; status(text.slice(0, 800) || 'The tool refused the request.', 'error'); return; }
+    const card = result._meta && result._meta[CARD_META];
+    if (card && typeof card === 'object' && card.kind === 'previs_contact_sheet') render(card, image);
+    else fallback(result, text, image);
+  }
+
+  async function refresh(shotId) {
+    status('Reading the shot again…');
+    try {
+      onResult(await request('tools/call', { name: 'read_shot', arguments: { shot_id: shotId } }));
+    } catch (error) {
+      status('Refresh failed: ' + ((error && error.message) || 'the host refused the request') + '.', 'error');
+    }
+  }
+
+  // ---------- size and start ----------
+  // The card's own size, not the frame's: a host that sized the frame generously can shrink it again.
+  if (typeof ResizeObserver === 'function') {
+    let last = '';
+    new ResizeObserver(() => {
+      const box = $('card').getBoundingClientRect();
+      const size = { width: Math.ceil(box.width), height: Math.ceil(box.height) };
+      const key = size.width + 'x' + size.height;
+      if (key !== last) { last = key; notify('ui/notifications/size-changed', size); }
+    }).observe($('card'));
+  }
+  request('ui/initialize', { protocolVersion: PROTOCOL, appInfo: { name: 'zerofield-previs-card', version: '1.0.0' },
+                             appCapabilities: { availableDisplayModes: ['inline'] } })
+    .then(result => applyContext(result && result.hostContext))
+    .catch(() => {})
+    .finally(() => notify('ui/notifications/initialized'));
+})();
+</script>
+</body>
+</html>

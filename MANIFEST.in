@@ -3,6 +3,7 @@ recursive-include db *.sql
 recursive-include static/projects *
 recursive-include project_assistant/prompts *.md
 include project_assistant/provider_catalog.json
+recursive-include project_assistant/mcp_cards *.html
 recursive-include openbench_data *.py
 recursive-include examples *.py *.json
 recursive-include scripts *.py

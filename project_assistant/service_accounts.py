@@ -272,7 +272,7 @@ def audit_entries(conn, me, slug, account_key, limit=None) -> dict:
         if action == CALL_ACTION:
             client = detail.get('client') if isinstance(detail.get('client'), dict) else None
             item.update({'tool': detail.get('tool'), 'outcome': detail.get('outcome'), 'code': detail.get('code'),
-                         'client': client, 'requestId': detail.get('requestId'),
+                         'client': client, 'requestId': detail.get('requestId'), 'resource': detail.get('resource'),
                          'proposalIds': [n for n in detail.get('proposalIds') or [] if type(n) is int],
                          'allocationId': detail.get('allocationId')})
         elif action == 'service_account_create':
@@ -413,8 +413,11 @@ def _client(value):
     return {k: value[k][:80] for k in ('name', 'version') if isinstance(value.get(k), str)} or None
 
 
-def call_tool(connection_factory, account, name, args, *, client=None) -> dict:
-    """Run one tool for an authenticated account; the result says whether the tool refused or failed."""
+def call_tool(connection_factory, account, name, args, *, client=None, card=False) -> dict:
+    """Run one tool for an authenticated account; the result says whether the tool refused or failed.
+
+    card: the client renders MCP Apps cards (SPEC_20 R34); a successful call of a tool with a card also returns the
+    card's data ("card"), read after the tool's transaction and never failing the call (mcp_apps.card_for)."""
     from project_assistant import tools
     if name not in {spec['name'] for spec in visible_specs(account)}:
         _audit_call(connection_factory, account, name, 'denied', code='NOT_IN_SCOPE', args=args, client=client)
@@ -443,7 +446,49 @@ def call_tool(connection_factory, account, name, args, *, client=None) -> dict:
         except (ValueError, TypeError):
             pass
     _audit_call(connection_factory, account, name, 'error' if is_error else 'ok', code=code, args=args, client=client, extra=extra)
-    return {'text': text, 'isError': is_error, 'code': code, 'images': images}
+    reply = {'text': text, 'isError': is_error, 'code': code, 'images': images}
+    if card and not is_error:
+        from project_assistant import mcp_apps
+        data = mcp_apps.card_for(connection_factory, account, name, args, text)
+        if data:
+            reply['card'] = data
+    return reply
+
+
+# ---------- MCP Apps resources (SPEC_20 R34) ----------
+
+RESOURCE_READ = 'resources/read'  # the "tool" of a resource read in the audit log and the rate limit
+
+
+def visible_resources(account) -> list[dict]:
+    """The card resources a token may list: those whose related tools it sees (mcp_apps.RESOURCE_TOOLS)."""
+    from project_assistant import mcp_apps
+    return mcp_apps.resources_for(spec['name'] for spec in visible_specs(account))
+
+
+def read_resource(connection_factory, account, uri, *, client=None) -> dict:
+    """Read one resource for an authenticated account: {"contents": [...]}, else AgentError 404 RESOURCE_NOT_FOUND
+    (outside the token's scope or not there; both look the same). Audited like a tool call, with the resource."""
+    from project_assistant import mcp_apps
+    names = [spec['name'] for spec in visible_specs(account)]
+    extra = {'resource': str(uri)[:300]}
+    conn = connection_factory()
+    try:
+        contents = mcp_apps.read(conn, account, uri, names)
+    except mcp_apps.NotFound as exc:
+        conn.rollback()
+        _audit_call(connection_factory, account, RESOURCE_READ, 'denied', code=exc.code, client=client, extra=extra)
+        raise AgentError(404, 'Resource not found.', 'RESOURCE_NOT_FOUND') from None
+    except Exception:
+        conn.rollback()
+        _audit_call(connection_factory, account, RESOURCE_READ, 'error', code='UNAVAILABLE', client=client, extra=extra)
+        raise
+    else:
+        conn.rollback()  # read only
+    finally:
+        conn.close()
+    _audit_call(connection_factory, account, RESOURCE_READ, 'ok', client=client, extra=extra)
+    return {'contents': contents}
 
 
 def _audit_call(connection_factory, account, name, outcome, *, code=None, args=None, client=None, extra=None):
