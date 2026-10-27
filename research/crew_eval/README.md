@@ -85,9 +85,14 @@ In JSON write a regex word boundary as `\\b`: a single `\b` is a backspace and `
 ## Assumptions to confirm when the real jobs land
 
 - The input shapes above are this set's; the later crew-job adapter maps its own job inputs onto them.
-- 4.6 is a P1 draft: `size` (wide, full, medium, close, extreme_close) and `angle` (low, eye, high, overhead) are this set's
-  vocabulary, `retime.beat` counts from 1 (`RETIME_BEAT_BASE`) and `retime.at` is where that beat now starts, as a fraction of the
-  shot. Change the constants at the top of `scripts/crew_eval.py` if the solver decides otherwise.
+- 4.6 is final since R27 (`project_assistant/previs_ops.py`, `ui/src/previs/ops.js`) and keeps this set's choices: `size` (wide,
+  full, medium, close, extreme_close), `angle` (low, eye, high, overhead), offsets in metres within ±8, at most 32 ops,
+  `retime.beat` counted from 1 (`RETIME_BEAT_BASE`) and `retime.at` the fraction of the shot where the beat now starts
+  (`tests/test_previs_ops.py` checks the constants here against the solver). Two solver rules the scorer does not model: a
+  `retime` names one of the 3D Stage's **acting beats** (the skills of `plan.use`, or the Walk in action's walk), so a case's
+  `beats` stand for those, and a plan without acting beats refuses a retime (blocking-03's reference would be refused on a
+  plan with one acting beat); camera keys belong to the move (static K1, orbit K1-K3, the others K1-K2), so `to` beyond the
+  move is refused.
 - "Camera within LENSES/MOVES" is checked on the blocking `camera` op and, for beats, on every lens named in the text; a beat's
   `camera` is free text, so its move is only scored softly.
 - Soft criteria are lexical. Spot-check a real run by eye, and add synonyms to a case's patterns when a good answer loses marks
