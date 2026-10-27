@@ -20,7 +20,8 @@ import { createActorBoundRequest } from './writing/writingTransport.js';
 import { Icon } from './Icon.jsx';
 import { CrewAsk } from './CrewAsk.jsx';
 import { ShotProposals } from './ShotProposals.jsx';
-import { ASSET_CREW_KINDS, EPISODE_CREW_KINDS, assetProposals } from './crewJobModel.js';
+import { ASSET_CREW_KINDS, CONTINUITY_KINDS, EPISODE_CREW_KINDS, assetProposals } from './crewJobModel.js';
+import { PreproductionPanel } from './PreproductionPanel.jsx';
 
 const focusedSceneOf = (shots, rid) => (rid && shots.find(shot => shot.rowId === rid)?.sceneId) || null;
 const renderTools = props => <WritingToolsPanel {...props}/>;
@@ -424,6 +425,10 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
           {/* SPEC_20 R23: the Screenwriter's adaptation and breakdown candidates open in the script view's preview. */}
           <CrewAsk slug={slug} targetId={epId} kinds={EPISODE_CREW_KINDS} title="shotProposal.askWriter" hint="shotProposal.askWriterHint"
             writable={writable} disabled={busy || loading} onCandidate={candidate => control.current?.openCandidate?.(candidate)}/>
+          {/* SPEC_20 R24, R25: the crew's pre-production of the episode, with the director's locks; and a continuity check on demand. */}
+          <PreproductionPanel slug={slug} epId={epId} writable={writable} shots={shots.length}/>
+          {shots.length > 1 && <CrewAsk slug={slug} targetId={epId} kinds={CONTINUITY_KINDS} title="shotProposal.askContinuityTitle" hint="shotProposal.askContinuityHint"
+            writable={writable} disabled={busy || loading} onProposed={onReloadProposals}/>}
           <WorldList items={items} kind={kind} onKind={setKind} focusCode={focus.assetCode} onOpen={openAsset}/>
           {missing.length > 0 && <button type="button" disabled={!writable || busy || assetGroupActive(group) || ep?.scriptDirty} onClick={generateMissing}
             title={ep?.scriptDirty ? t('world.confirmFirst') : undefined}>{t('story.generateMissingAssets')} ({missing.length})</button>}

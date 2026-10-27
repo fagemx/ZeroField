@@ -9,11 +9,16 @@ export const SHOT_CREW_KINDS = ['beats', 'camera', 'appearances'];
 export const ASSET_CREW_KINDS = ['description', 'look'];
 export const EPISODE_CREW_KINDS = ['adaptation', 'breakdown'];
 export const ART_KINDS = ['description', 'look', 'appearances'];
-export const ALL_CREW_KINDS = [...SHOT_CREW_KINDS, ...ASSET_CREW_KINDS, ...EPISODE_CREW_KINDS];
+export const CONTINUITY_KINDS = ['continuity'];  // R24: the Continuity Supervisor, on a scene or an episode
+export const ALL_CREW_KINDS = [...SHOT_CREW_KINDS, ...ASSET_CREW_KINDS, ...EPISODE_CREW_KINDS, ...CONTINUITY_KINDS];
+// R25 hook: SPEC_19's generation desk (R9) puts an "Ask the crew" button on each of its groups. Once the desk lands, each
+// group mounts <CrewAsk shotId=… kinds={GENERATION_DESK_CREW[group]}/>; the routes, the jobs and the crew board are these.
+// A new look is asked on the cast member's card (ASSET_CREW_KINDS), not on the shot.
+export const GENERATION_DESK_CREW = {prompt: ['beats'], camera: ['camera'], cast: ['appearances']};
 export const CREW_NOT_READY = 'DRAMA_CREW_NOT_READY';
 
 const TAIL = {beats: 'beat', camera: 'camera', appearances: 'appearance', description: 'description', look: 'look',
-  adaptation: 'adaptation', breakdown: 'breakdown'};
+  adaptation: 'adaptation', breakdown: 'breakdown', continuity: 'continuity'};
 const ENTITY = {sh_: 'shots', as_: 'assets', sc_: 'scenes', ep_: 'episodes'};
 
 // A target id's route base: its prefix says what it is (sh_, as_, sc_, ep_).
@@ -36,13 +41,22 @@ export function crewJobLine(job) {
   const named = {queued: 'crewQueued', running: 'crewRunning', canceled: 'crewCanceled'}[job.status];
   if (named) return {key: named};
   if (job.status === 'failed') return {key: 'crewFailed', failure: job.failure || '', error: job.error || ''};
+  if (Array.isArray(job.result?.findings)) {
+    const count = job.result.findings.length;
+    return {key: !count ? 'crewFindingsNone' : job.source === 'rule_fallback' ? 'crewFindingsFallback' : 'crewFindings', params: {count}};
+  }
   if (Array.isArray(job.result?.candidates)) return {key: job.source === 'rule_fallback' ? 'crewCandidatesFallback' : 'crewCandidates'};
   if (job.result?.unchanged) return {key: 'crewUnchanged'};
   return {key: job.source === 'rule_fallback' ? 'crewFallback' : 'crewProposed'};
 }
 
-// Who is working, for the running line: the Cinematographer, Art (on the Screenwriter's profile) or the Screenwriter.
-export const crewRunningKey = job => job?.role === 'sheet_ops' ? 'crewRunning' : ART_KINDS.includes(job?.kind) ? 'crewRunningArt' : 'crewRunningWriter';
+// Who is working, for the running line: the Cinematographer, Art (on the Screenwriter's profile), the Screenwriter or the
+// Continuity Supervisor.
+export const crewRunningKey = job => job?.role === 'sheet_ops' ? 'crewRunning' : job?.role === 'qa_critic' ? 'crewRunningContinuity'
+  : ART_KINDS.includes(job?.kind) ? 'crewRunningArt' : 'crewRunningWriter';
+
+// A finished continuity check's findings (R24): what differs on which shots, how sure, and the proposal a field fix made.
+export const crewFindings = job => job?.status === 'succeeded' && Array.isArray(job.result?.findings) ? job.result.findings : [];
 
 // The Screenwriter's candidates of a finished job: the crew's (when the model answered) and the rule version. A candidate
 // without a preview is the rule breakdown as the script stands: nothing to adopt, Build storyboard does it.

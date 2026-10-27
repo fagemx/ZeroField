@@ -12,7 +12,7 @@ Four roles run in a fixed order: Screenwriter (script), Art (characters, sets, p
 
 ## When to use
 
-- The director says "pre-produce this episode" or "let the crew plan it", or accepts the "Let the crew prepare" card that appears after a storyboard is built.
+- The director says "pre-produce this episode" or "let the crew plan it", or accepts the "Let the crew pre-produce" card that appears after a storyboard is built.
 - You are an outside agent connected over MCP and the director asks you to plan an episode in ZeroField.
 - Not for one shot: use `shot-beats`, `previs-blocking` or `continuity-check` directly.
 
@@ -40,21 +40,23 @@ Read first (`read_episode`, `read_cast`), then ask only what is still missing, i
 ## Steps
 
 **Stage 0 - Orient.** `read_episode` for scenes, shots, cast and which locks are set (if the server does not report locks, ask the director and note the answer). Report in three lines: what exists, which locks are set, what is missing. Remember the result's `hash`.
+- Inside ZeroField the crew runs this manual as the episode's pre-production flow (the crew panel in Story & World, started from that card): the server asks a stage's jobs only after its lock, records who set each lock, when, and the hash of what it covers, and stops the flow, naming what changed, when locked content changes later. Only the director or the showrunner sets a lock there. An outside agent has no lock tool: the director's words are the lock.
 - Keep one stage note and repeat it after every stage: locks set (with the `hash` at that moment), proposals open, proposals adopted, findings open. If the conversation restarts, rebuild the note from `read_episode`, not from memory.
 
 **Stage 1 - Screenwriter. Gate: SCRIPT LOCK.**
 - Produce the script as scene-by-scene text with a numbered scene list. There is no script-writing tool in the shared set: the internal crew uses the authoring preview's candidates (the rule-based version is always one of them); an outside agent hands the draft over as text in the chat and does not write it anywhere.
-- Gate: the director confirms the scene list and script. Record the `hash` of `read_episode` at that moment.
+- Gate: the director confirms the scene list and script. Record the `hash` of `read_episode` at that moment. The script is confirmed and the storyboard built before this lock: Art reads the extracted cast, the Cinematographer the shots.
 
 **Stage 2 - Art. Gate: LIST LOCK.**
 - `read_cast` first. For each character, set and prop the locked script needs: `propose_asset_description` (appearance only), `propose_cast` (who appears in which scene; resolve "he" and "she" from the scene's characters), `propose_look` (an outfit change is a new variant such as `@CAST-01:night`, never an overwrite).
-- Gate: every `@` tag the script needs resolves to an asset with a description, and the director confirms the list.
+- Who is in each shot is settled here, before the list lock, so the Cinematographer's beat sheets keep tags that no longer move (both write the same prompt).
+- Gate: every `@` tag the script needs resolves to an asset with a description, and the director confirms the list. The LIST LOCK covers every card the episode names and the tags of every shot.
 
 **Stage 3 - Cinematographer. Gate: STORYBOARD LOCK.**
 - `read_scene` and `read_shot` for each shot. A rule-based breakdown is the starting point; offer a different split or merge only as a candidate beside it, with reasons.
 - Per shot: `get_workflow` for `shot-beats`, then `propose_shot_prompt`; `propose_camera` for lens (24, 35, 50, 85) and move (pushin, pullout, orbit, crane, track, static). Use `previs-blocking` and `propose_previs_ops` only where staging needs it (two or more people, a prop interaction, a multi-key move, or the director asks).
 - Craft defaults, which the director may override: neighbouring shots differ in size or angle; do not open every scene wide; avoid more than two shots in a row from the same angle.
-- Gate: each shot has an adopted or explicitly skipped prompt, a camera and a length; the director confirms.
+- Gate: each shot has an adopted or explicitly skipped prompt, a camera and a length; the director confirms. The STORYBOARD LOCK covers every shot's prompt, camera and stored 3D plan.
 
 **Stage 4 - Continuity.**
 - `get_workflow` for `continuity-check`, run it over the locked storyboard (plan-level joins; take-level once takes exist). Output findings with proposals; change nothing.

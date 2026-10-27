@@ -133,7 +133,7 @@ export function AgentBoard({ assistant, me, onOpenTarget }) {
       {groups.working.map(item => <article className="board-item" key={item.id}><strong>{item.title}</strong><p>{statusLabel[item.status]}{item.agent_key ? ` · ${item.agent_key}` : ''}</p>
         {item.tools_trace?.length > 0 && <small>{item.tools_trace.at(-1).label} {item.tools_trace.at(-1).detail}</small>}
         <div className="board-actions">{item.target?.tab_key && <button type="button" onClick={() => onOpenTarget(item.target)}>{uiText("agentBoard.viewSource")}</button>}
-          {(item.kind !== 'flow' || item.can_cancel) && <button type="button" disabled={busy !== null || !me.can_write} onClick={() => work(item.id, () => assistant.cancelWork(item))}>{uiText("agentBoard.cancel")}</button>}</div>
+          {(!['flow', 'crew_flow'].includes(item.kind) || item.can_cancel) && <button type="button" disabled={busy !== null || !me.can_write} onClick={() => work(item.id, () => assistant.cancelWork(item))}>{uiText("agentBoard.cancel")}</button>}</div>
         {errors[item.id] && <p className="error" role="alert">{errors[item.id]}</p>}</article>)}
     </section>
     <section className="board-group"><h4>{uiText("agentBoard.resultsHistory")}<span>{board.counts?.done || 0}</span></h4>
