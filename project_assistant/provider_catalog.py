@@ -183,7 +183,8 @@ def allowed(tier, policy, *, hosted_open_enabled=False):
 
 DENIALS = {
     'hosted_open_disabled': 'Needs You: hosted open-weights models are off for this production. A showrunner can turn on '
-                            'provider_policy.hosted_open_enabled in Agent Console settings, or keep the local model.',
+                            'the hosted open-weights switch in Agent Console → Providers & API Keys → Roles and models, '
+                            'or keep the local model.',
     'closed_needs_hybrid': 'Needs You: closed models need the hybrid_studio production policy; this production (or the '
                            'deployment) is open_weights_only. Nothing was sent.',
     'unknown_tier': 'Needs You: this model has no usage tier; nothing was sent.',
