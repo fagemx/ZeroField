@@ -118,7 +118,9 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3020/projects/api/<producti
 claude mcp add zerofield -e ZEROFIELD_MCP_TOKEN=zfsa_... -e ZEROFIELD_PROJECT=<production> -- zerofield-mcp
 ```
 
-`ZEROFIELD_URL` selects another local port (default `http://127.0.0.1:3020`). Everything the agent writes is a proposal that a crew member adopts in ZeroField. `request_generation` submits only free local open-weights renders and refuses closed or paid plans. `GET .../service-accounts` lists tokens with their call counts; `POST .../service-accounts/<accountKey>/revoke` revokes one. Every call is audited under the service account.
+`ZEROFIELD_URL` selects another local port (default `http://127.0.0.1:3020`). Everything the agent writes is a proposal that a crew member adopts in ZeroField. `request_generation` submits only free local open-weights renders and refuses closed or paid plans. `GET .../service-accounts` lists tokens with their call counts; `POST .../service-accounts/<accountKey>/revoke` revokes one; `GET .../service-accounts/<accountKey>/audit?limit=25` returns its recent calls. Every call is audited under the service account.
+
+A showrunner can do all of this without the request above: the Agent Console page **Environments & Bridges** has an **External agents** section that creates the token (name, tools, write mode, expiry), shows it once with a ready-to-paste `zerofield-mcp` setup, lists each agent with its scope, expiry, last use and call counts, revokes it after a confirmation and shows its recent activity.
 
 ## External workflows and reference preparation
 

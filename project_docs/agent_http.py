@@ -4,6 +4,7 @@ Admin token management (signed-in project showrunners):
   GET  /projects/api/{slug}/service-accounts                 accounts, usage and the tools a token may list
   POST /projects/api/{slug}/service-accounts                 issue a token (returned once)
   POST /projects/api/{slug}/service-accounts/{key}/revoke    revoke it
+  GET  /projects/api/{slug}/service-accounts/{key}/audit     recent calls, issue and revoke of one account (?limit=1..100)
 
 Agent API for zerofield-mcp (Bearer service-account token, loopback clients only, no browser origin):
   GET  /agent-mcp/v1/tools                                   the tools this token sees
@@ -11,12 +12,13 @@ Agent API for zerofield-mcp (Bearer service-account token, loopback clients only
 An optional X-ZeroField-Project header refuses a token issued for another production.
 """
 import re
+from urllib.parse import parse_qs
 
 from project_assistant import service_accounts
 from project_assistant.agent_registry import AgentError
 from project_docs import service
 
-ADMIN = re.compile(r'^/projects/api/([a-z0-9][a-z0-9-]{0,40})/service-accounts(?:/([a-z][a-z0-9_-]{0,47})/(revoke))?$')
+ADMIN = re.compile(r'^/projects/api/([a-z0-9][a-z0-9-]{0,40})/service-accounts(?:/([a-z][a-z0-9_-]{0,47})/(revoke|audit))?$')
 AGENT = re.compile(r'^/agent-mcp/v1/tools(?:/([a-z][a-z0-9_]{0,63}))?$')
 LOOPBACK = {'127.0.0.1', '::1', '::ffff:127.0.0.1'}
 
@@ -29,7 +31,7 @@ def handle(handler, parsed, method):
         return True
     admin = ADMIN.fullmatch(parsed.path)
     if admin:
-        _admin(handler, *admin.groups(), method)
+        _admin(handler, *admin.groups(), method, parsed.query)
         return True
     return False
 
@@ -42,14 +44,14 @@ def _fail(handler, exc):
         handler.send_json(503, {'error': 'Service accounts are temporarily unavailable.', 'code': 'UNAVAILABLE'})
 
 
-def _admin(handler, slug, account_key, action, method):
+def _admin(handler, slug, account_key, action, method, query=''):
     from project_docs import http
     identity, problem = handler.project_docs_identity()
     me = service.identity_from(identity) if not problem else None
     if not me:
         handler.send_json(401, {'error': 'Sign in with an active crew account.', 'code': 'AUTH_REQUIRED'})
         return
-    if method not in (('POST',) if action else ('GET', 'POST')):
+    if method not in {'revoke': ('POST',), 'audit': ('GET',)}.get(action, ('GET', 'POST')):
         handler.send_json(405, {'error': 'Unsupported method.'})
         return
     body = {}
@@ -65,7 +67,9 @@ def _admin(handler, slug, account_key, action, method):
     conn = http.open_connection()
     try:
         http._ensure_schema(conn)
-        if action:
+        if action == 'audit':
+            payload = service_accounts.audit_entries(conn, me, slug, account_key, (parse_qs(query).get('limit') or [None])[0])
+        elif action:
             payload = service_accounts.revoke(conn, me, slug, account_key)
         elif method == 'POST':
             payload = service_accounts.create(conn, me, slug, body)

@@ -404,7 +404,7 @@ class ServiceAccountDatabaseTests(unittest.TestCase):
         item = listed['items'][0]
         self.assertEqual((item['accountKey'], item['tools'], item['writeMode'], item['status']), ('claude', ['read_page', 'get_workflow'], 'propose_only', 'active'))
         self.assertEqual(item['usage']['calls'], 0)
-        self.assertIn({'name': 'request_generation', 'generation': True}, listed['availableTools'])
+        self.assertIn(('request_generation', True), [(t['name'], t['generation']) for t in listed['availableTools']])
         self.refused(409, 'ACCOUNT_EXISTS', self.issue)
         crew = self.member('member')
         self.refused(403, 'POLICY_DENIED', service_accounts.create, self.conn, crew, self.slug, {'accountKey': 'mine', 'tools': ['read_page']})
