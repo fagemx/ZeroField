@@ -30,8 +30,10 @@ export function settleRun(runs, assetId, task) {
 // that list, decides what the bar may say, and shapes the request so what is sent is what is shown.
 export const FALLBACK_APP = 'flux-soul-cast';
 // When the list cannot be read the bar offers the one workflow the page always used, so generating is never blocked by it (SPEC_18 4.3).
-export const fallbackOptions = () => ({apps: [{appCode: FALLBACK_APP, name: FALLBACK_APP, tier: null, configured: true, reason: null, outputs: [], slots: {}, estimate: null, quotable: false}],
-  defaultAppCode: FALLBACK_APP, style: null, degraded: true});
+// A shot's video falls back to the studio's video card the same way (SPEC_19 R9).
+export const FALLBACK_SHOT_APP = 'ltx25-cinema';
+export const fallbackOptions = (appCode = FALLBACK_APP) => ({apps: [{appCode, name: appCode, tier: null, configured: true, reason: null, outputs: [], slots: {}, estimate: null, quotable: false}],
+  defaultAppCode: appCode, style: null, degraded: true});
 export const appFor = (options, appCode) => options?.apps?.find(app => app.appCode === appCode) || null;
 // The workflow the bar starts on: the one asked for if it can run, else the server's default if it can, else the first that can.
 export const startingApp = (options, wanted) => [appFor(options, wanted), appFor(options, options?.defaultAppCode), ...(options?.apps || [])].find(app => app?.configured) || null;
@@ -69,3 +71,65 @@ export function requestBody(app, controls = []) {
 // The reason a card is greyed out, as a message key (unknown codes get the plain one).
 const REASON_KEYS = {blocked_by_policy: 'reason_blocked_by_policy', blocked_by_privacy: 'reason_blocked_by_privacy', not_configured: 'reason_not_configured'};
 export const reasonKey = reason => REASON_KEYS[reason] || 'reason_unavailable';
+
+// ---- SPEC_19 R9: the shot composer's parameter row (GenerationBar kind="shot"). A shot makes a video from its video cards
+// (GET /shots/{id}/generation-options) or a first frame from the image cards (GET /catalog/apps?capability=IMAGE: the options of a shot
+// list its video cards only). The catalog item of a card also lists its inputs, which give the row two controls the options do not:
+// the seconds (a "duration" slot) and the sound (a generate_audio list). What is sent is still what is shown.
+export const MAX_TAKES = 4;
+export const clampCount = value => Math.max(1, Math.min(MAX_TAKES, Math.round(Number(value)) || 1));
+export const SECOND_CHOICES = [4, 6, 8];  // the lengths the 3D Stage plans a shot in
+
+const tierOf = item => item?.driver === 'comfy_router' ? 'router' : item?.driver === 'comfy_local' && item?.tier === 'open_weights' ? 'open_weights' : 'closed';
+// A catalog item as a generation-options app. Availability is the card's provider configuration only: the policy and privacy checks
+// of generation-options are not applied to image cards here (the server still refuses what the policy blocks when it is sent).
+export function frameOptions(items, defaultAppCode = FALLBACK_APP) {
+  const seen = new Set(), apps = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item?.appCode || seen.has(item.card_id || item.appCode)) continue;
+    seen.add(item.card_id || item.appCode);
+    const configured = item.configuration?.configured !== false;
+    apps.push({appCode: item.appCode, name: item.name || item.appCode, tier: tierOf(item), configured, reason: configured ? null : 'not_configured',
+      outputs: ['IMAGE'], estimate: null, quotable: item.driver === 'comfy_router'});
+  }
+  const preferred = apps.find(app => app.appCode === defaultAppCode && app.configured) || apps.find(app => app.configured);
+  return {apps, defaultAppCode: preferred?.appCode || null, style: null};
+}
+
+// The seconds and sound inputs of a card, from its catalog item's nodes: {duration: {key, options} | null, audio: {key} | null}.
+//   duration: the card's visible "duration" slot (its options when it is a list); audio: a visible generate_audio list of true / false.
+export function nodeControls(item) {
+  const nodes = (item?.nodes || []).filter(node => !node.hidden), key = node => `${node.nodeId}.${node.fieldName}`;
+  const duration = nodes.find(node => node.slot === 'duration');
+  const audio = nodes.find(node => /generate_audio/i.test(node.fieldName) && (node.options || []).map(String).includes('true'));
+  const listed = duration?.fieldType === 'LIST' && duration.options?.length ? duration.options.map(Number).filter(Number.isFinite) : null;
+  return {duration: duration ? {key: key(duration), options: listed} : null, audio: audio ? {key: key(audio)} : null};
+}
+// The seconds the row offers for a card with a duration input: its own list, else 4, 6 and 8 with the shot's planned length.
+export function secondChoices(control, planned) {
+  if (!control) return [];
+  if (control.options?.length) return control.options;
+  const list = new Set(SECOND_CHOICES);
+  if (Number.isFinite(planned) && planned > 0) list.add(Math.round(planned));
+  return [...list].sort((a, b) => a - b);
+}
+// The value shown first: the shot's planned length when the card offers it, else the nearest offered one.
+export function startingSeconds(choices, planned) {
+  if (!choices.length) return null;
+  if (!Number.isFinite(planned)) return choices[0];
+  return choices.reduce((best, value) => Math.abs(value - planned) < Math.abs(best - planned) ? value : best, choices[0]);
+}
+// The shot row's request: the asset row's body, plus the seconds and the sound inputs when the card has them.
+export function shotRequestBody(app, controls = [], {inputs = {}, seconds = null, audio = null} = {}) {
+  const body = requestBody(app, controls), modelParams = {...(body.modelParams || {})};
+  if (inputs.duration && Number.isFinite(seconds)) modelParams[inputs.duration.key] = seconds;
+  if (inputs.audio && typeof audio === 'boolean') modelParams[inputs.audio.key] = audio ? 'true' : 'false';
+  return {appCode: body.appCode, ...(Object.keys(modelParams).length ? {modelParams} : {})};
+}
+// The main button's words: "Save & generate" while the prompt has unsaved changes; else "Generate n", with the time when this
+// production has measured the card (n takes take about n times as long: they run one after another). -> {key, params}
+export function generateLabel({output = 'video', count = 1, estimate = null, dirty = false}) {
+  if (dirty) return {key: 'composer.saveAndGenerate', params: {count}};
+  const kind = output === 'frame' ? 'frame' : 'video';
+  return estimate ? {key: 'composer.generateTime_' + kind, params: {count, seconds: estimate.seconds * count}} : {key: 'composer.generate_' + kind, params: {count}};
+}

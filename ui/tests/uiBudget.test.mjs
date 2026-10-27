@@ -14,7 +14,7 @@ const uiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 let components, temporary;
 before(async () => {
   temporary = await mkdtemp(join(uiRoot, 'tests/.budget-render-'));
-  const result = await build({ stdin: { contents: "export {StudioTopBar} from './src/StudioShell.jsx'; export {default as PrevisStage} from './src/previs/PrevisStage.jsx'; export {ShotFilmView} from './src/ShotFilmPanel.jsx'; export {mergeTakes, filmNeighbors, filmSegments, filmSummary} from './src/takeModel.js';", resolveDir: uiRoot, sourcefile: 'budget-render.jsx', loader: 'jsx' },
+  const result = await build({ stdin: { contents: "export {StudioTopBar} from './src/StudioShell.jsx'; export {default as PrevisStage} from './src/previs/PrevisStage.jsx'; export {ShotFilmView} from './src/ShotFilmPanel.jsx'; export {mergeTakes, filmNeighbors, filmSegments, filmSummary} from './src/takeModel.js'; export {ShotComposer} from './src/composer/ShotComposer.jsx'; export {StageViewMenu} from './src/ShotStage.jsx';", resolveDir: uiRoot, sourcefile: 'budget-render.jsx', loader: 'jsx' },
     bundle: true, write: false, platform: 'node', format: 'esm', jsx: 'automatic', packages: 'external', loader: { '.css': 'empty' } });
   const output = join(temporary, 'components.mjs'); await writeFile(output, result.outputFiles[0].text); components = await import(pathToFileURL(output));
 });
@@ -76,4 +76,36 @@ test('SPEC_19 A7: the Shot Stage no longer picks a primary action by status', as
   const source = await readFile(join(uiRoot, 'src/SheetWorkspace.jsx'), 'utf8');
   assert.doesNotMatch(source, /primaryShotAction|studio-primary|stage\.primary_/);
   assert.match(source, /className=\{productionSheet\?undefined:"primary"\}/, 'the crew fill button stays outlined on a production sheet');
+});
+
+// SPEC_19 B1: the Shot Stage's toolbar had seven standing view buttons (overview, 3D, review, compare, table, canvas, board); they are
+// one View menu now, with the composer as an eighth view. The composer and the shot column together hold one primary button.
+const stageViews = ['composer', 'gallery', 'stage', 'review', 'compare', 'grid', 'canvas', 'kanban'].map(key => ({key, label: key, icon: 'board'}));
+test('SPEC_19 B1: the Shot Stage toolbar stands one View button instead of seven view buttons', async () => {
+  const html = renderToStaticMarkup(React.createElement(components.StageViewMenu, {views: stageViews, mode: 'composer', onPick() {}}));
+  const shown = controls(html);
+  assert.equal(shown.length, 1, `${shown.length} standing view controls: ${shown.map(c => c.label).join(', ')}`);
+  assert.ok(!shown[0].disabled);
+  const source = await readFile(join(uiRoot, 'src/SheetWorkspace.jsx'), 'utf8');
+  assert.match(source, /\{productionSheet\?<StageViewMenu views=\{stageViews\}/, 'a production sheet uses the View menu');
+  assert.doesNotMatch(source, /\['gallery',uiText\('stage\.view_gallery'\)\],/, 'no standing view buttons on a production sheet');
+  assert.doesNotMatch(source, /\{\['gallery','kanban'\]\.includes\(mode\)&&<div className="sheet-card-settings">/, 'cover and grouping are in the View menu on a production sheet');
+});
+
+test('SPEC_19 B1, B9: the composer holds the stage\'s one primary button, and stays in budget', () => {
+  const ltx = {appCode: 'ltx25-cinema', name: 'LTX-2.5 Cinema', tier: 'open_weights', configured: true, reason: null, outputs: ['VIDEO'], estimate: null, quotable: false};
+  const shot = {shotId: 'sh_demo_b2', rowId: 'b2', shotIndex: 'S02', tabKey: 'cinema-studio', reviewStatus: 'Queued', selectedVideoUrl: null, trim: {in: 0, out: null}, adoption: null};
+  const props = {slug: 'demo', tabKey: 'cinema-studio', rid: 'b2', shot, shots: [shot], label: 'S02', status: 'Queued', text: 'Kael waits.', promptColumn: true, rig: {text: '', column: true, onWrite() {}},
+    ladder: [{key: 'frame', stage: {column: 2}, media: null}, {key: 'video', stage: {column: 3}, media: null}], writable: true,
+    preloaded: {catalog: {camera: [], moves: []}, bar: {status: 'ready', options: {apps: [ltx], defaultAppCode: 'ltx25-cinema'}, catalog: []}}, onDraft() {}, onSave() {}, onGenerate() {}};
+  for (const dirty of [false, true]) {
+    const html = renderToStaticMarkup(React.createElement(components.ShotComposer, {...props, dirty}));
+    const primaries = html.match(/<button[^>]*class="primary[^"]*"[^>]*>[^<]*<\/button>/g) || [];
+    assert.equal(primaries.length, 1, `one primary: ${primaries.join(' ')}`);
+    assert.match(primaries[0], dirty ? />Save &amp; generate</ : />Generate ×1</);
+    const shown = controls(html);
+    assert.ok(shown.length <= 16, `${shown.length} standing controls in the composer: ${shown.map(c => c.label).join(', ')}`);
+    const labels = shown.map(c => c.label).filter(Boolean);
+    assert.equal(new Set(labels).size, labels.length, `no duplicate control: ${labels.join(', ')}`);
+  }
 });

@@ -1,0 +1,223 @@
+/* SPEC_19 R7-R9: the shot composer (the Shot Stage's middle when a shot is chosen), its example walls, the prompt and the parameter row,
+   and the stage's View menu. 6C midnight blue-grey tokens from studio-shell.css; amber only marks what is chosen or focused; the one
+   light solid button is the composer's Generate.
+   studio.css styles every button inside .canvas at specificity (0,2,2) (32 px pill, outline): the composer's buttons are written under
+   .workbench-app.studio-shell .shot-composer (0,3,0 and up) so they keep their own shape. */
+
+/* ---------- The stage's View menu (R7) ---------- */
+.stage-view-menu { position: relative; flex: none; }
+.workbench-app.studio-shell .sheet-workspace-toolbar .stage-view-menu button.stage-view-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+  border: 0; border-radius: 6px; background: var(--ground); color: var(--text); font: 500 12.5px/1 var(--font, inherit); cursor: pointer; }
+.workbench-app.studio-shell .sheet-workspace-toolbar .stage-view-menu button.stage-view-btn:hover:not(:disabled) { background: var(--active); }
+.stage-view-label { color: var(--faint); font-weight: 400; }
+.stage-view-list { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; min-width: 220px; }
+.workbench-app.studio-shell .stage-view-list button[role="menuitemradio"] { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; height: 32px; padding: 0 10px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; }
+.workbench-app.studio-shell .stage-view-list button[role="menuitemradio"]:hover, .workbench-app.studio-shell .stage-view-list button[role="menuitemradio"]:focus-visible { background: var(--hover-bg); }
+.workbench-app.studio-shell .stage-view-list button[aria-checked="true"] { box-shadow: inset 2px 0 0 var(--accent); background: var(--active); }
+.stage-view-settings { display: grid; gap: 6px; margin-top: 6px; padding: 8px 10px 4px; border-top: 1px solid var(--line); }
+.stage-view-settings label { display: grid; gap: 3px; color: var(--faint); font-size: 11.5px; }
+.stage-view-settings small { color: var(--faint); font-size: 11px; }
+
+/* ---------- The composer ---------- */
+.shot-composer { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.composer-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 13px; }
+.composer-head > b { font-size: 16px; }
+.composer-scene { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.composer-head .studio-note { white-space: nowrap; }
+.composer-top { position: relative; display: grid; gap: 6px; min-width: 0; }
+.composer-view, .shot-composer .film-monitor video { height: clamp(180px, 34vh, 520px); width: 100%; aspect-ratio: auto; }
+.composer-view { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: #000; }
+.composer-view > img, .composer-view > video { width: 100%; height: 100%; object-fit: contain; }
+.composer-empty { display: grid; justify-items: center; gap: 6px; color: var(--faint); font-size: 13px; }
+.workbench-app.studio-shell .shot-composer button.composer-play { position: absolute; inset: auto; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(14, 18, 23, .7); color: var(--text); cursor: pointer; }
+.workbench-app.studio-shell .shot-composer button.composer-play:hover { background: rgba(14, 18, 23, .9); }
+
+/* The play bar: Take 3 new | Take 2 ✓ | Take 1, then ✓ and ↻ */
+.composer-takes { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.composer-takes ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.workbench-app.studio-shell .shot-composer .composer-takes ol button { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border: 1px solid var(--line);
+  border-radius: 6px; background: transparent; color: var(--muted); font: 500 12px/1 ui-monospace, Consolas, monospace; cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .composer-takes ol button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); color: var(--text); }
+.workbench-app.studio-shell .shot-composer .composer-takes ol button.is-playing { color: var(--text); }
+.composer-takes ol em { color: #f5b656; font-style: normal; font-size: 11px; }
+.composer-takes ol svg { color: #3fc07a; }
+.workbench-app.studio-shell .shot-composer .composer-takes button.take-check { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--control); border-radius: 50%;
+  background: transparent; color: var(--text); cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .composer-takes button.take-check:hover:not(:disabled) { border-color: #3fc07a; color: #3fc07a; }
+.shot-composer .composer-takes .take-check.is-on { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #3fc07a; color: #0e1217; }
+.workbench-app.studio-shell .shot-composer .composer-takes button.take-retake { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid var(--line);
+  border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+
+/* ---------- Look buttons ---------- */
+.look-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.workbench-app.studio-shell .shot-composer button.look-button { display: flex; align-items: center; gap: 8px; height: auto; min-width: 0; max-width: 280px; padding: 5px 10px 5px 5px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); color: var(--text); text-align: left; cursor: pointer; white-space: normal; }
+.workbench-app.studio-shell .shot-composer button.look-button:hover { background: var(--hover-bg); }
+.workbench-app.studio-shell .shot-composer button.look-button.is-open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.look-button-thumb { position: relative; flex: none; display: grid; place-items: center; width: 40px; height: 28px; overflow: visible; border-radius: 5px; background: var(--active); color: var(--muted); }
+.look-button-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+.look-dot { position: absolute; top: -3px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: #e5566f; }
+.look-button-text { display: grid; gap: 1px; min-width: 0; }
+.look-button-head { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.look-button-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11.5px; }
+.look-scope { padding: 1px 5px; border-radius: 4px; background: var(--active); color: var(--faint); font-size: 10.5px; font-style: normal; }
+.look-scope.is-shot { color: var(--muted); }
+
+/* ---------- Example wall: covers the top half ---------- */
+.example-wall { display: flex; flex-direction: column; min-height: calc(clamp(180px, 34vh, 520px) + 34px); max-height: 62vh; border: 1px solid var(--line-2); border-radius: 10px;
+  background: var(--bg-2); outline: none; overflow: hidden; }
+.example-wall > header { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--line); }
+.example-wall > header h3 { margin: 0; font-size: 13px; }
+.workbench-app.studio-shell .shot-composer .example-wall > header button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .example-wall > header button:hover { background: var(--active); color: var(--text); }
+.example-wall-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); min-height: 0; flex: 1; }
+.example-wall-nav { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-right: 1px solid var(--line); overflow: auto; }
+.workbench-app.studio-shell .shot-composer .example-wall-nav > button { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 6px; height: 30px; padding: 0 8px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12.5px; text-align: left; cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .example-wall-nav > button[aria-current="true"] { background: var(--active); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.example-wall-nav > button .num { margin-left: auto; color: var(--faint); font-size: 11px; }
+.example-wall-nav > button .look-dot { position: static; flex: none; width: 6px; height: 6px; background: var(--accent); }
+.example-wall-aside { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.example-wall-aside h4 { margin: 0; color: var(--faint); font-size: 11px; font-weight: 500; }
+.example-wall-aside ol { display: grid; gap: 3px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; }
+.example-wall-aside li { display: flex; gap: 6px; align-items: center; }
+.example-wall-aside .num { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; background: var(--accent); color: #14110a; font-size: 10px; font-weight: 700; }
+.workbench-app.studio-shell .shot-composer .example-wall-aside > button { justify-content: flex-start; gap: 6px; height: auto; min-height: 28px; padding: 4px 6px; border: 0;
+  background: transparent; color: var(--muted); font-size: 12px; white-space: normal; text-align: left; }
+.example-wall-main { min-width: 0; min-height: 0; padding: 10px 12px 12px; overflow: auto; display: grid; align-content: start; gap: 10px; }
+.example-wall-main .studio-note { margin: 0; font-size: 12px; }
+
+/* Tiles: 16:9 examples; amber outline when chosen; the clip plays only under the pointer. */
+.look-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 1600px) { .look-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .look-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.workbench-app.studio-shell .shot-composer button.look-tile { display: grid; gap: 5px; align-content: start; height: auto; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text); text-align: left; cursor: pointer; white-space: normal; }
+.look-frame { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: var(--active); box-shadow: 0 0 0 1px var(--line); }
+.look-frame > img, .look-frame > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.workbench-app.studio-shell .shot-composer button.look-tile:hover .look-frame { box-shadow: 0 0 0 1px var(--control); }
+.workbench-app.studio-shell .shot-composer button.look-tile.is-selected .look-frame { box-shadow: 0 0 0 2px var(--accent); }
+.look-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.look-tile.is-selected .look-name { color: var(--text); }
+.look-order { position: absolute; top: 6px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: var(--accent); color: #14110a;
+  font: 700 11px/18px ui-monospace, Consolas, monospace; text-align: center; }
+/* An option with no example media: an abstract texture, told apart by colour. Auto is its own neutral texture. */
+.look-texture { position: absolute; inset: 0; display: grid; place-items: center;
+  background: radial-gradient(120% 90% at 20% 15%, hsl(var(--look-hue, 210) 38% 34% / .9), transparent 60%),
+    repeating-linear-gradient(calc(var(--look-hue, 210) * 1deg), hsl(var(--look-hue, 210) 22% 20%) 0 6px, hsl(var(--look-hue, 210) 22% 15%) 6px 12px); }
+.look-texture.is-auto { background: repeating-linear-gradient(135deg, rgba(220, 235, 255, .07) 0 4px, transparent 4px 9px), var(--active); }
+.look-texture.is-auto b { color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+
+/* Body, lens and aperture: three columns, each scrolling on its own */
+.look-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-height: 0; }
+.look-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; min-width: 0; }
+.look-column h4 { margin: 0; color: var(--faint); font-size: 11.5px; font-weight: 500; }
+.look-column-list { display: grid; gap: 8px; max-height: 40vh; overflow: auto; padding: 2px; }
+
+/* References: the cast, sets and props of the shot, and other shots to quote */
+.ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ref-tile, .ref-continue { display: grid; gap: 6px; min-width: 0; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.ref-tile.is-missing .ref-picture, .ref-tile.is-unknown .ref-picture { box-shadow: inset 0 0 0 1px rgba(229, 86, 111, .6); color: #f0728a; }
+.ref-tile.is-elsewhere { opacity: .75; }
+.ref-picture { display: grid; place-items: center; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; background: var(--active); color: var(--faint); }
+.ref-picture > img, .ref-picture > video { width: 100%; height: 100%; object-fit: cover; }
+.ref-picture.is-small { width: 48px; aspect-ratio: 4 / 3; }
+.ref-text { display: grid; gap: 1px; min-width: 0; font-size: 12.5px; }
+.ref-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font-size: 11.5px; }
+.ref-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ref-actions select { max-width: 120px; height: 26px; font-size: 12px; }
+.workbench-app.studio-shell .shot-composer .ref-actions button { height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .ref-actions button.icon-btn { width: 26px; padding: 0; }
+.workbench-app.studio-shell .shot-composer .ref-actions button.look-act { border-color: var(--accent); color: var(--text); }
+.ref-continue { grid-template-columns: 160px minmax(0, 1fr); align-items: center; border-color: rgba(242, 179, 61, .4); }
+.ref-continue .ref-actions { grid-column: 1 / -1; }
+.ref-add h4 { margin: 4px 0 6px; color: var(--faint); font-size: 11.5px; font-weight: 500; }
+.ref-add ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.workbench-app.studio-shell .shot-composer .ref-add button { display: flex; align-items: center; gap: 8px; height: auto; padding: 4px 10px 4px 4px; border: 1px dashed var(--control);
+  border-radius: 8px; background: transparent; color: var(--text); font-size: 12px; text-align: left; cursor: pointer; white-space: nowrap; }
+.ref-add button small { display: block; color: var(--faint); font-size: 11px; }
+
+/* ---------- The prompt: the biggest box ---------- */
+.prompt-box { display: grid; gap: 8px; padding: 10px 12px 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-2); }
+.prompt-box:focus-within { border-color: var(--control); }
+.prompt-box > header { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12.5px; }
+.prompt-box > header .studio-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.workbench-app.studio-shell .shot-composer .prompt-box > header button { height: 24px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; gap: 4px; cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .prompt-box > header button:hover { background: var(--active); color: var(--text); }
+.studio-note.warn { color: #f5b656; }
+.pc-wrap { position: relative; }
+.pc-field { position: relative; }
+.pc-editor { min-height: 132px; max-height: 40vh; overflow: auto; padding: 4px 2px; color: var(--text); font-size: 14px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; caret-color: var(--accent); }
+.pc-editor[data-empty="true"]::before { content: attr(data-placeholder); color: var(--faint); pointer-events: none; }
+.pc-editor[contenteditable="false"] { cursor: default; }
+.pc-tag { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; height: 22px; margin: 0 1px; padding: 0 7px 0 2px; vertical-align: -5px; border-radius: 5px;
+  background: var(--active); color: var(--text); font-size: 12.5px; line-height: 22px; white-space: nowrap; user-select: all; cursor: default; }
+.pc-tag .pc-label { overflow: hidden; text-overflow: ellipsis; }
+.pc-tag .pc-thumb { flex: none; width: 18px; height: 18px; border-radius: 4px; object-fit: cover; background: #000; }
+.pc-tag .pc-icon { display: grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 4px; background: var(--raised); color: var(--muted); font-size: 11px; }
+.pc-tag.is-move { padding-left: 2px; background: rgba(110, 168, 254, .14); color: #a9c8ff; }
+.pc-tag.is-take { background: rgba(242, 179, 61, .12); color: var(--text); cursor: pointer; }
+.pc-tag.is-take .pc-thumb { width: 32px; }
+.pc-tag.is-missing .pc-label { color: var(--muted); }
+.pc-tag.is-warn { background: rgba(229, 86, 111, .16); color: #f0728a; }
+.pc-tag.is-take.is-warn { box-shadow: inset 0 0 0 1px rgba(229, 86, 111, .5); }
+.pc-menu { position: absolute; z-index: 30; display: grid; gap: 1px; min-width: 240px; max-width: 360px; max-height: 260px; margin: 0; padding: 4px; overflow: auto; list-style: none;
+  border: 1px solid var(--line-2); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-float); }
+.pc-menu li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; font-size: 12.5px; cursor: pointer; }
+.pc-menu li[aria-selected="true"] { background: var(--active); box-shadow: inset 2px 0 0 var(--accent); }
+.pc-menu li small { margin-left: auto; color: var(--faint); font: 11px ui-monospace, Consolas, monospace; }
+.pc-menu-thumb { display: grid; place-items: center; flex: none; width: 24px; height: 18px; overflow: hidden; border-radius: 4px; background: var(--active); color: var(--muted); }
+.pc-menu-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pc-popover { position: absolute; z-index: 30; top: 8px; right: 8px; display: grid; gap: 8px; width: min(320px, 100%); padding: 10px 12px; border: 1px solid var(--line-2);
+  border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-float); font-size: 12.5px; }
+.pc-popover header { display: flex; align-items: center; justify-content: space-between; }
+.pc-popover p { margin: 0; font-size: 12px; }
+.workbench-app.studio-shell .shot-composer .pc-popover header button { width: 22px; height: 22px; padding: 0; border: 0; background: transparent; color: var(--muted); }
+.workbench-app.studio-shell .shot-composer .pc-popover .studio-segmented > button { border: 0; }
+
+/* See the full prompt */
+.composer-preview { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--ground); }
+.composer-preview pre { margin: 0; max-height: 220px; overflow: auto; color: var(--muted); font: 12px/1.6 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.composer-preview-refs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.composer-preview-refs li { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 2px; border-radius: 5px; background: var(--active); color: var(--muted); }
+.composer-preview-refs img { width: 20px; height: 20px; border-radius: 4px; object-fit: cover; }
+.composer-preview dl { display: grid; gap: 4px; margin: 0; font-size: 12px; }
+.composer-preview dl > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; }
+.composer-preview dt { color: var(--faint); }
+.composer-preview dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.composer-preview-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 12px; }
+
+/* ---------- The parameter row (GenerationBar kind="shot") inside the prompt box ---------- */
+.gen-bar.is-shot { padding: 8px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.gen-bar.is-shot .gen-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; }
+.gen-bar.is-shot .gen-end { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.gen-bar.is-shot select { height: 28px; min-width: 0; padding: 0 22px 0 8px; font-size: 12px; }
+.gen-bar.is-shot .gen-workflow { max-width: 170px; }
+.gen-bar.is-shot .gen-static { flex: none; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.gen-bar.is-shot .gen-cost { flex-wrap: nowrap; white-space: nowrap; }
+.pc-triggers { display: inline-flex; gap: 2px; flex: none; }
+.workbench-app.studio-shell .shot-composer .pc-triggers button { width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: transparent;
+  color: var(--muted); font: 600 13px/1 ui-monospace, Consolas, monospace; cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .pc-triggers button:hover:not(:disabled) { color: var(--text); border-color: var(--control); }
+.studio-segmented.shot-output { flex: none; }
+.workbench-app.studio-shell .shot-composer .studio-segmented.shot-output > button { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border: 0;
+  border-radius: 4px; font-size: 12px; }
+.shot-output-made { color: #3fc07a; }
+.workbench-app.studio-shell .shot-composer .gen-bar button.gen-toggle { flex: none; height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: transparent;
+  color: var(--muted); font-size: 12px; cursor: pointer; }
+.workbench-app.studio-shell .shot-composer .gen-bar button.gen-toggle[aria-pressed="true"] { color: var(--text); border-color: var(--control); }
+.gen-more { position: relative; flex: none; }
+.gen-more > summary { display: inline-flex; align-items: center; height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 12px; cursor: pointer; list-style: none; }
+.gen-more > summary::-webkit-details-marker { display: none; }
+.gen-more[open] > summary { color: var(--text); border-color: var(--control); }
+.gen-more-list { position: absolute; z-index: 30; bottom: calc(100% + 6px); left: 0; display: grid; gap: 8px; min-width: 180px; padding: 10px; border: 1px solid var(--line-2); border-radius: 8px;
+  background: var(--raised); box-shadow: var(--shadow-float); }
+.gen-more-list label { display: grid; gap: 3px; color: var(--faint); font-size: 11.5px; }
+/* The Shot Stage's one primary: light solid, over the stage's rule that turns primaries in its middle to outlines. */
+.workbench-app.studio-shell .studio-rails .sheet-main-view .shot-composer button.primary.composer-go.composer-go { height: 32px; padding: 0 16px; border: 1px solid var(--primary); border-radius: 8px;
+  background: var(--primary); color: var(--primary-ink); font-weight: 600; white-space: nowrap; }
+.workbench-app.studio-shell .studio-rails .sheet-main-view .shot-composer button.primary.composer-go.composer-go:hover:not(:disabled) { background: #fff; border-color: #fff; }
+.workbench-app.studio-shell .studio-rails .sheet-main-view .shot-composer button.primary.composer-go.composer-go:disabled { opacity: .45; }

@@ -6,18 +6,19 @@ import { columnName, evaluate, mediaOf, parseTSV, tableEditPayload, tableCSV, ta
 import { MediaCell } from './MediaCell.jsx';
 import { SheetDialog } from './SheetDialog.jsx';
 import { SheetCards } from './SheetCards.jsx';
-import { buildAssetLookup, assetReferences, resolveAssetReference, mediaStages, stageShots, presetsFor, presetLabel, applyPreset, studioRunInput, queueStudioRun, SHOT_FILTERS } from './studioModel.js';
-import { actionColumn, addBinding, codesElsewhere, removeBinding, replaceLook, shotBindings } from './bindingModel.js';
-import { BindingText, ShotBindings } from './ShotBindings.jsx';
+import { buildAssetLookup, assetReferences, resolveAssetReference, mediaStages, mediaLadder, stageShots, presetsFor, presetLabel, applyPreset, studioRunInput, queueStudioRun, SHOT_FILTERS } from './studioModel.js';
+import { actionColumn } from './bindingModel.js';
+import { BindingText } from './ShotBindings.jsx';
 import { SheetReview } from './SheetReview.jsx';
 import { StoryBatchBar, ShotProduction } from './StoryWorkbenchModals.jsx';
-import { episodeId, replaceAssetVariant, storyList, storyRequest, waitStoryTask } from './storyModel.js';
+import { episodeId, replaceAssetVariant, shotId as storyShotId, storyList, storyRequest, waitStoryTask } from './storyModel.js';
 import { freezeSheetScope, historyForRow, inverseOperation, rangeTSV, rebaseOperation, selectionRange, sheetRequest, visiblePastePayload } from './sheetInteraction.js';
-import { restoreViewPreferences, sheetViewModel, statusOptions, viewPreferences } from './sheetViews.js';
+import { restoreViewPreferences, sheetViewModel, statusOptions, viewMode, viewPreferences } from './sheetViews.js';
 import { shortTime, statusClass, statusLabel } from './format.js';
-import { ShotList, ShotCompare, ShotSourceBadge } from './ShotStage.jsx';
+import { ShotList, ShotCompare, ShotSourceBadge, StageViewMenu } from './ShotStage.jsx';
 import { ShotFilmPanel } from './ShotFilmPanel.jsx';
 import { TIMELINE_VIEW, inSlateOrder } from './StudioShell.jsx';
+import { ShotComposer } from './composer/ShotComposer.jsx';
 import './sheet-workspace.css';
 import { SheetAgentRequest } from './assistant/SheetAgentRequest.jsx';
 import { ShotBench, ShotStrip } from './ShotBench.jsx';
@@ -46,8 +47,12 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
   // SPEC_19 4.1: rows with a pipeline task still queued or running (from the task poll below) are generating; the shot panel's
   // A and Esc go through filmControl.
   const [running,setRunning]=useState('');
-  const inFlight=useMemo(()=>new Set(running?running.split('|'):[]),[running]);
-  const filmControl=useRef(null);
+  // SPEC_19 R9: story tasks the shot composer sent from this page, per row (they count as generating until they end), and a counter
+  // that moves when one ends, so the takes and the episode's shots are read again even when the cell did not change (an adopted shot).
+  const [storyRuns,setStoryRuns]=useState({}),[takesNonce,setTakesNonce]=useState(0);
+  const inFlight=useMemo(()=>new Set([...(running?running.split('|'):[]),...Object.keys(storyRuns)]),[running,storyRuns]);
+  const filmControl=useRef(null),composerControl=useRef(null),storyWaits=useRef(new Set());
+  useEffect(()=>()=>{storyWaits.current.forEach(controller=>controller.abort());storyWaits.current.clear();},[]);
   const productionSheet=['cinema-studio','openjutsu-lab'].includes(tab.key);
   const epId=storyEpisode||episodeId(slug);
   useEffect(()=>{if(productionSheet){setEpisodeRows(new Set());setSelected(new Set());setPanel(null);setPreview(null);}},[epId,productionSheet]);
@@ -57,7 +62,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
       if(alive){setStoryScenes(scenes);setShotInfo(Object.fromEntries(shots.map(shot=>[shot.rowId,shot])));setEpisodeRows(new Set(shots.filter(shot=>shot.tabKey===tab.key).map(shot=>shot.rowId)));}
     }).catch(()=>{if(alive){setStoryScenes([]);setEpisodeRows(new Set());}});
     return()=>{alive=false;};
-  },[epId,productionSheet,tab.updated_at]);
+  },[epId,productionSheet,tab.updated_at,takesNonce]);
   const assetLookup=useMemo(()=>buildAssetLookup([{...tab,values},...assetDocuments]),[tab.doc,values,assetDocuments]);
   const grid=useRef(null),editor=useRef(null),dragging=useRef(false),composing=useRef(false),busyRef=useRef(false),upload=useRef(null),uploadTarget=useRef(null);
   const reload=useRef(onReloadTab),outputs=useRef(null);
@@ -133,7 +138,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
 
   if(!parsed)return <div className="canvas sheet-empty"><h2>{tab.title}</h2><p>{uiText("sheetWorkspace.addATableToStartPlanningYourProduction")}</p><button onClick={onSwitchDocMode}>{uiText("sheetWorkspace.editThisPage")}</button></div>;
   const attrs=parsed.table.attrs,types=attrs.column_types||[],columnIds=attrs.column_ids||[];
-  const preferences=restoreViewPreferences(localPreference?.key===preferenceKey?localPreference.raw:storedPreference,parsed,productionSheet?'gallery':'grid');
+  const preferences=restoreViewPreferences(localPreference?.key===preferenceKey?localPreference.raw:storedPreference,parsed,productionSheet?'composer':'grid');
   const visibleColumns=parsed.headers.map((_,i)=>i).filter(c=>!hidden.includes(c));
   const isStatus=c=>types[c]==='status'||parsed.rows.some(row=>row.cells[c]?.kind==='status');
   // Untouched text columns flex to the canvas (88px floor); media, status, numbers and resized columns keep their width.
@@ -144,7 +149,9 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
   if(sort)visibleRows.sort((a,b)=>String(a.cells[sort.c]?.value??'').localeCompare(String(b.cells[sort.c]?.value??''),'zh-Hant',{numeric:true})*(sort.direction==='desc'?-1:1));
   const rowIndices=visibleRows.map(row=>parsed.rows.indexOf(row)),visibleIds=visibleRows.map(row=>row.rid);
   const range=selectionRange(anchor,active,rowIndices,visibleColumns);
-  const view=sheetViewModel(parsed,visibleRows,preferences,assetLookup),hasStage=parsed.headers.some(h=>/previs|blockout/i.test(h)),mode=(['stage','compare'].includes(preferences.mode)&&!hasStage)||(['review','compare'].includes(preferences.mode)&&!productionSheet)?(productionSheet?'gallery':'grid'):preferences.mode;
+  // SPEC_19 R7: on a production sheet a chosen shot opens on its composer; with no shot chosen yet the stage is the overview grid.
+  const selectedRow=productionSheet?visibleRows.find(item=>item.rid===rowOpen)||null:null;
+  const view=sheetViewModel(parsed,visibleRows,preferences,assetLookup),hasStage=parsed.headers.some(h=>/previs|blockout/i.test(h)),mode=viewMode(preferences.mode,{productionSheet,selected:Boolean(selectedRow),hasStage});
   const flows=tabs.filter(t=>t.surface_type==='flow');
   // SPEC_15 Shot Stage: on a production sheet the shot list and the current shot's detail stand beside every view
   // except the table, canvas and 3D stage (which carries its own list), and Review shows the current shot.
@@ -325,7 +332,9 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
 
   // Shot Stage: one current shot across views. The list, up/down, A and R act on it; leaving Review drops its open stage.
   const pickShot=rid=>{if(!guardDraft())return;if(previewState&&visibleRows.some(item=>item.rid===rid))stepPreview(0,rid);else setRowOpen(rid);setStageFocus({rid});onShotFocus?.(rid);};
-  const pickView=key=>{if(!guardDraft())return;if(key!=='review')setPreview(null);if(key==='stage'&&currentRow)setStageFocus({rid:currentRow.rid});setView({mode:key});};
+  const pickView=key=>{if(!guardDraft())return;if(key!=='review')setPreview(null);if(key==='stage'&&currentRow)setStageFocus({rid:currentRow.rid});if(key==='composer'&&!selectedRow&&currentRow)setRowOpen(currentRow.rid);setView({mode:key});};
+  // A shot chosen from the overview (a card or the shot list) opens on its composer (R7); elsewhere choosing a shot keeps the view.
+  const openShot=rid=>{if(!guardDraft())return;pickShot(rid);if(productionSheet&&mode==='gallery')setView({mode:'composer'});};
   const backToOverview=()=>{if(!guardDraft())return;setPreview(null);setView({mode:'gallery'});};
   // The shell's focus and this view's current shot are one thing: arrive on the shot you were on in another space, or report the one shown first.
   useEffect(()=>{
@@ -336,7 +345,50 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
   const setShotStatus=(item,value)=>statusCol>=0&&commit(parsed.rows.indexOf(item),statusCol,value);
   // R (SPEC_19 3.5): the shot goes to Retake and the focus to its prompt input, when one is on the page (the shot composer's, marked
   // data-shot-prompt with the row id); with none on the page only the status is written.
-  const retakeShot=async item=>{if(!writable||statusCol<0||!guardDraft())return;if(await setShotStatus(item,'Retake'))requestAnimationFrame(()=>document.querySelector(`[data-shot-prompt="${item.rid}"]`)?.focus());};
+  const retakeShot=async item=>{if(!writable||statusCol<0||!guardDraft())return;if(await setShotStatus(item,'Retake')){if(productionSheet&&mode!=='composer'){setRowOpen(item.rid);setView({mode:'composer'});}
+    requestAnimationFrame(()=>requestAnimationFrame(()=>document.querySelector(`[data-shot-prompt="${CSS.escape(item.rid)}"]`)?.focus()));}};
+  // SPEC_19 R9: the composer edits the prompt cell through the sheet's own draft (editing, marked source 'composer'), so every guard of a
+  // cell draft holds (no shot switch, no adoption, no A/R over unsaved text) and saving is the same guarded cell edit. Typing back to
+  // the saved text ends the draft.
+  const draftComposer=(item,c,next)=>{
+    if(!writable||c<0)return;
+    const mine=editing?.source==='composer'&&editing.rid===item.rid&&editing.c===c;
+    if(editing&&!mine&&dirty){fail(new Error(uiText("sheetWorkspace.saveOrCancelTheCurrentDraftFirst")));return;}
+    const original=String(item.cells[c]?.value??'');
+    if(next===original){if(editing){setEditing(null);setSaveState("saved");}return;}
+    if(!mine){setFailure(null);setEditing({r:parsed.rows.indexOf(item),c,rid:item.rid,value:original,table:parsed,revision:tab.revision,source:'composer'});setSaveState("editing");}
+    setText(next);
+  };
+  const saveComposer=async()=>{
+    if(editing?.source!=='composer')return true;
+    if(!dirty){setEditing(null);setSaveState("saved");return true;}
+    const current=editing;let payload;
+    try{payload={...payloadCell(current.r,current.c,text,current.table),base_revision:current.revision};}catch(e){fail(e);return false;}
+    const ok=await submit(payload);if(ok){setEditing(null);setSaveState("saved");}return ok;
+  };
+  const revertComposer=()=>{if(busy||editing?.source!=='composer')return;setEditing(null);setFailure(null);setSaveState("saved");};
+  // Generate from the composer: an unsaved prompt is saved first ("Save & generate"), so the takes are made from the text on screen; each
+  // task the server creates (count 1-4) is followed until it ends, then the takes are read again.
+  const followStory=(rid,tasks)=>{
+    if(!tasks.length)return;
+    setStoryRuns(old=>({...old,[rid]:(old[rid]||0)+tasks.length}));
+    for(const task of tasks){
+      const controller=new AbortController();storyWaits.current.add(controller);
+      waitStoryTask(task,{signal:controller.signal}).catch(error=>{if(error?.name!=='AbortError')onError?.(uiText('composer.taskFailed',{message:error.message}));})
+        .finally(()=>{storyWaits.current.delete(controller);if(controller.signal.aborted)return;
+          setStoryRuns(old=>{const left=(old[rid]||1)-1,next={...old};if(left>0)next[rid]=left;else delete next[rid];return next;});setTakesNonce(n=>n+1);reload.current?.();});
+    }
+  };
+  const generateShot=async(item,{output,body})=>{
+    if(!writable)return false;
+    if(editing&&editing.source!=='composer'){guardDraft();return false;}
+    if(!(await saveComposer()))return false;
+    let tasks=[];
+    const ok=await run(async()=>{const result=await storyRequest(`/shots/${shotInfo[item.rid]?.shotId||storyShotId(slug,item.rid)}/${output==='frame'?'image':'video'}-generations`,'POST',body);
+      tasks=Array.isArray(result?.tasks)?result.tasks:result?.taskId?[result]:[];});
+    if(!ok)return false;
+    followStory(item.rid,tasks);onToast?.(uiText('composer.queued',{count:tasks.length||body.count||1}));return true;
+  };
   // A story write from the shot panel (adopt, un-adopt, first frame): never over an open cell draft, one write at a time, and the row is
   // reloaded afterwards instead of patched here (SPEC_19 1.2 B); an applied pipeline proposal also reloads the proposal list.
   const storyWrite=(fn,{proposals:reloadProposals=false}={})=>{if(!writable||!guardDraft())return Promise.resolve(false);
@@ -345,7 +397,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
   const stageKeys=e=>{
     if(!studioRails||!currentRow||editing||e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey||e.target.closest('input,textarea,select,video,[contenteditable=true]'))return;
     const key=e.key.toLowerCase();
-    if(key==='escape'){if(filmControl.current?.escape())e.preventDefault();return;}
+    if(key==='escape'){if(composerControl.current?.escape()||filmControl.current?.escape())e.preventDefault();return;}
     if(key==='arrowdown'||key==='arrowup'){const next=listedRows[listedRows.findIndex(item=>item.rid===currentRow.rid)+(key==='arrowdown'?1:-1)];if(next){e.preventDefault();pickShot(next.rid);}return;}
     // A adopts (the take being tried, else the one playing, else the newest) and moves on; R sends the shot to Retake. Readers: neither.
     if((key==='a'||key==='r')&&writable&&!busy&&!dirty){
@@ -360,19 +412,14 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
     </section>:null)}{discussion}</>;};
   const review=preview&&<SheetReview onClose={productionSheet?backToOverview:closePanel} onStep={stepPreview}><header><button ref={reviewFocus} onClick={productionSheet?backToOverview:closePanel}>{productionSheet?uiText("stage.view_gallery"):uiText("sheetWorkspace.backToTable")}</button><h2>{previewRow?.cells[0]?.value||preview.label||uiText("sheetWorkspace.assetReview")}</h2><span className="spacer"/><button aria-label={uiText("sheetWorkspace.previousAsset")} disabled={!previewTargetValid||visibleRows.findIndex(r=>r.rid===previewRow?.rid)<=0} onClick={()=>stepPreview(-1)}>{uiText("sheetWorkspace.previous")}</button><button aria-label={uiText("sheetWorkspace.nextAsset")} disabled={!previewTargetValid||visibleRows.findIndex(r=>r.rid===previewRow?.rid)>=visibleRows.length-1||!previewRow} onClick={()=>stepPreview(1)}>{uiText("sheetWorkspace.next")}</button></header><div className="sheet-review-body"><div className="sheet-review-image">{rowMediaCols.length>1?<ShotBench stages={rowMediaCols} assets={previewAssets} activeColumn={preview.c} writable={writable} busy={busy} onSelect={stage=>setPreview({...stage.media,r:preview.r,c:stage.column,label:stage.label,value:stage.value})} onUpload={stage=>pickUpload(preview.r,stage.column)} onPrevis={()=>openStage(previewRow.rid)} onRun={stage=>runStage(previewRow.rid,stage)} onBundle={stage=>run(()=>api.download(`${stage.media.url}/bundle`,`${previewRow.cells[0]?.value||'take'}-take-bundle.zip`))}/>:preview.url?<MediaCell value={previewRow?.cells[preview.c]?.value||preview.value||preview.url} type={types[preview.c]||preview.kind} label={preview.label}/>:<p>{uiText('studio.emptyStage')}</p>}{productionSheet&&previewRow&&<ShotProduction key={previewRow.rid} slug={slug} actorId={me?.actor_id} rid={previewRow.rid} source={reviewSource} writable={writable} disabled={busy||dirty} beforeRun={guardDraft} onChanged={refresh}/>}{historyContent}</div>{!productionSheet&&<aside><h3>{preview.label}</h3>{failure&&<p className="sheet-save-error" role="alert">{failure.message}</p>}{previewRow&&shotControls(preview.r,previewRow,preview.c)}</aside>}</div>{!productionSheet&&visibleRows.length>1&&<ShotStrip rows={visibleRows} parsed={parsed} currentRid={previewRow?.rid} onJump={rid=>stepPreview(0,rid)}/>}</SheetReview>;
   // SPEC_19 R3: the current shot's right column is the shot in the cut (ShotFilmPanel): no approve button, the ✓ on a take adopts it.
-  // Status, the less frequent actions and the cell editors live in its "…" menu (the editors through "Open in table" until the shot
-  // composer); the cast stays at the bottom, folded.
+  // Status and the less frequent actions live in its "…" menu; the prompt, camera and cast are edited in the shot composer (R8, R9).
   const shotDetail=studioRails&&currentRow&&(()=>{
     const r=parsed.rows.indexOf(currentRow),info=shotInfo[currentRow.rid],status=shotStatus(currentRow),missing=info?.readiness?.missingAssets||[];
     const shotCol=parsed.headers.findIndex(h=>/cinema shot|remaster|output/i.test(h)),col=previewRow?.rid===currentRow.rid?preview.c:Math.max(shotCol,0);
     const valid=Number.isInteger(col)&&col>=0&&col<parsed.headers.length,capability=types[col]==='video'?'video_gen':'image_gen';
-    // SPEC_18 R2: the cast the sentence names. A binding edit is a new text for the prompt cell, written through the same cell commit as
-    // any edit (so undo, locks and conflicts behave), and it changes only the code it was asked about.
-    const actionText=actionCol>=0?String(currentRow.cells[actionCol]?.value??''):'',bindings=actionCol>=0?shotBindings(actionText,assetLookup):[];
-    const writeAction=next=>{if(actionCol>=0&&next!==actionText)commit(r,actionCol,next);};
     const film=inSlateOrder(Object.values(shotInfo).filter(item=>item.tabKey===tab.key));
     return <ShotFilmPanel slug={slug} tabKey={tab.key} rid={currentRow.rid} shot={info||null} shots={film} label={String(currentRow.cells[0]?.value||'—')}
-      sceneTitle={storyScenes.find(scene=>scene.sceneId===info?.sceneId)?.title} status={status} proposals={proposals} version={tab.revision} inFlight={inFlight}
+      sceneTitle={storyScenes.find(scene=>scene.sceneId===info?.sceneId)?.title} status={status} proposals={proposals} version={`${tab.revision}:${takesNonce}`} inFlight={inFlight}
       writable={writable} disabled={busy||dirty} canStatus={statusCol>=0} hasFrame={parsed.headers.some(h=>/keyframe|reference.*image|anchor/i.test(h))} controlRef={filmControl}
       onWrite={storyWrite} onStatus={value=>setShotStatus(currentRow,value)} onRetake={()=>retakeShot(currentRow)} onPick={pickShot}
       onTimeline={()=>{if(guardDraft())window.location.hash=TIMELINE_VIEW;}}
@@ -385,15 +432,39 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
         {missing.length>0&&<p className="shot-missing">{uiText('stage.missing',{codes:missing.map(code=>'@'+code).join(', ')})}{onOpenWorld&&<button type="button" className="quiet" onClick={()=>onOpenWorld(missing[0])}>{uiText('stage.addReferences')}</button>}</p>}</>}
       failure={failure&&<p className="sheet-save-error" role="alert">{failure.message}</p>}
       notes={{messages:notesFor(currentRow.rid),node:discussionFor(currentRow.rid)}}
-      cast={actionCol>=0?{count:bindings.length,node:<ShotBindings rows={bindings} lookup={assetLookup} elsewhere={codesElsewhere(parsed.headers,currentRow.cells,actionCol)} writable={writable} disabled={busy||dirty}
-        onLook={(code,next)=>writeAction(replaceLook(actionText,code,next))} onRemove={code=>writeAction(removeBinding(actionText,code))} onAdd={code=>writeAction(addBinding(actionText,code))} onOpen={onOpenWorld}/>}:null}
       history={mode!=='review'&&historyContent}/>;
+  })();
+
+  // The overview's cover and grouping columns: the foot of the View menu on a production sheet, their own row elsewhere.
+  const cardSettings=<>{view.coverColumns.length>0&&<label>{uiText("sheetWorkspace.cover")}<select aria-label={uiText("sheetWorkspace.cardCoverColumn")} value={view.coverColumn} onChange={e=>setView({coverColumn:Number(e.target.value)})}><option value={-1}>{uiText("sheetWorkspace.none")}</option>{view.coverColumns.map(c=><option key={c.index} value={c.index}>{c.label}</option>)}</select></label>}{view.statusColumns.length>0&&<label>{uiText("sheetWorkspace.group")}<select aria-label={uiText("sheetWorkspace.boardGroupingColumn")} value={view.groupColumn} onChange={e=>setView({groupColumn:Number(e.target.value)})}>{view.statusColumns.map(c=><option key={c.index} value={c.index}>{c.label}</option>)}</select></label>}<small>{uiText("sheetWorkspace.viewSettingsApplyToThisBrowserOnly")}</small></>;
+  // SPEC_19 R7: the Shot Stage's views, the composer first (it is the default once a shot is chosen).
+  const stageViews=[{key:'composer',label:uiText('composer.view_composer'),icon:'sparkle'},{key:'gallery',label:uiText('stage.view_gallery'),icon:'board'},
+    ...(hasStage?[{key:'stage',label:uiText('previs.stage'),icon:'cube'}]:[]),{key:'review',label:uiText('stage.view_review'),icon:'play'},
+    ...(hasStage?[{key:'compare',label:uiText('stage.view_compare'),icon:'layers'}]:[]),{key:'grid',label:uiText("sheetWorkspace.table"),icon:'table'},
+    {key:'canvas',label:uiText('sheetWorkspace.canvas'),icon:'flow'},{key:'kanban',label:uiText("sheetWorkspace.board"),icon:'board'}];
+  // SPEC_19 R8, R9: the chosen shot's composer. The prompt is the Action & Audio Prompt cell (its draft while one is open), the camera
+  // the Optical Rig cell (written at once, undone with the sheet's undo); generating goes through generateShot.
+  const composer=productionSheet&&mode==='composer'&&currentRow&&(()=>{
+    const r=parsed.rows.indexOf(currentRow),info=shotInfo[currentRow.rid],scene=storyScenes.find(item=>item.sceneId===info?.sceneId);
+    const rigCol=parsed.headers.findIndex(h=>/optical|rig/i.test(h)),motionCol=parsed.headers.findIndex(h=>/camera.*motion/i.test(h));
+    const mine=editing?.source==='composer'&&editing.rid===currentRow.rid,cell=actionCol>=0?String(currentRow.cells[actionCol]?.value??''):'';
+    return <ShotComposer slug={slug} tabKey={tab.key} rid={currentRow.rid} shot={info||null} shots={inSlateOrder(Object.values(shotInfo).filter(item=>item.tabKey===tab.key))}
+      label={String(currentRow.cells[0]?.value||'—')} scene={scene?{index:scene.sceneIndex,title:scene.title}:null} status={shotStatus(currentRow)}
+      text={mine?text:cell} dirty={mine&&dirty} promptColumn={actionCol>=0} onDraft={next=>draftComposer(currentRow,actionCol,next)} onSave={saveComposer} onRevert={revertComposer}
+      rig={{text:rigCol>=0?String(currentRow.cells[rigCol]?.value??''):'',column:rigCol>=0,onWrite:next=>{if(rigCol>=0)commit(r,rigCol,next);}}}
+      motionText={motionCol>=0?String(currentRow.cells[motionCol]?.value??''):''} undo={{can:undo.length>0&&!editing&&!busy,run:()=>travelHistory('undo')}}
+      ladder={mediaLadder(parsed,currentRow)} lookup={assetLookup} headers={parsed.headers} cells={currentRow.cells} actionCol={actionCol}
+      proposals={proposals} version={`${tab.revision}:${takesNonce}`} inFlight={inFlight.has(currentRow.rid)} generating={storyRuns[currentRow.rid]||0}
+      writable={writable} disabled={busy} canStatus={statusCol>=0} controlRef={composerControl}
+      onWrite={storyWrite} onRetake={()=>retakeShot(currentRow)} onShowStage={hasStage?()=>pickView('stage'):undefined} onOpenWorld={onOpenWorld}
+      onGenerate={payload=>generateShot(currentRow,payload)}/>;
   })();
 
   return <section className="canvas sheet-canvas sheet-v2 sheet-workspace" onPaste={paste} onCopy={copy} onKeyDown={productionSheet?stageKeys:undefined}>
     <header className="sheet-workspace-heading"><h1>{tab.title}</h1><span className="sheet-count">{uiText("sheetWorkspace.rows", {v0: (parsed.rows.length)})}</span><div className="sheet-save-state" role="status">{busy?uiText("sheetWorkspace.saving"):dirty?uiText("sheetWorkspace.notSubmitted"):uiText("sheetWorkspace." + saveState)}</div><button aria-label={uiText("sheetWorkspace.undoCellEdit")} title={uiText("sheetWorkspace.undoCtrlZ")} disabled={!undo.length||busy||!!editing} onClick={()=>travelHistory('undo')}>↶</button><button aria-label={uiText("sheetWorkspace.redoCellEdit")} title={uiText("sheetWorkspace.redoCtrlShiftZ")} disabled={!redo.length||busy||!!editing} onClick={()=>travelHistory('redo')}>↷</button><details className="sheet-more"><summary aria-label={uiText("sheetWorkspace.moreTableActions")}>⋯</summary><div className="sheet-dropdown"><button disabled={busy||dirty} onClick={switchDocument}>{uiText("sheetWorkspace.documentAnnotations")}</button><button disabled={busy||dirty} onClick={()=>downloadWorkbook("original_patch")}>{uiText("sheetWorkspace.exportExcelPreserveSourceFormat")}</button><button disabled={busy||dirty} onClick={()=>downloadWorkbook("new_workbook")}>{uiText("sheetWorkspace.saveAsNewWorkbook")}</button><button disabled={busy||dirty} onClick={exportCSV}>{uiText("sheetWorkspace.exportWorksheetCSV")}</button><button disabled={busy} onClick={()=>run(()=>api.download(`/projects/api/${slug}/takes/export`,`${slug}-approved-takes.zip`))}>{uiText("sheetWorkspace.exportApprovedTakes")}</button></div></details></header>
     {tables.length>1&&<div className="sheet-tabs" role="tablist">{tables.map(t=><button role="tab" key={t.tableId} aria-selected={t.tableId===parsed.tableId} disabled={busy||dirty||!!pendingPaste} onClick={()=>{setEditing(null);setTableId(t.tableId);}}>{t.name}</button>)}</div>}
-    <div className="sheet-workspace-toolbar"><div className="sheet-view-switch" role="group" aria-label={uiText("sheetWorkspace.tableView")}>{(productionSheet?[['gallery',uiText('stage.view_gallery')],...(hasStage?[['stage',uiText('previs.stage')]]:[]),['review',uiText('stage.view_review')],...(hasStage?[['compare',uiText('stage.view_compare')]]:[]),['grid',uiText("sheetWorkspace.table"),true],['canvas',uiText('sheetWorkspace.canvas'),true],['kanban',uiText("sheetWorkspace.board"),true]]:[['grid',uiText("sheetWorkspace.table")],...(hasStage?[['stage',uiText('previs.stage')]]:[]),['gallery',uiText("sheetWorkspace.gallery")],['kanban',uiText("sheetWorkspace.board"),true]]).map(([key,label,quiet])=><button key={key} className={quiet?'quiet-view':undefined} aria-pressed={mode===key} disabled={dirty} onClick={()=>pickView(key)}>{label}</button>)}</div>
+    <div className="sheet-workspace-toolbar">{productionSheet?<StageViewMenu views={stageViews} mode={mode} disabled={dirty} onPick={pickView} settings={['gallery','kanban'].includes(mode)?cardSettings:null}/>
+      :<div className="sheet-view-switch" role="group" aria-label={uiText("sheetWorkspace.tableView")}>{[['grid',uiText("sheetWorkspace.table")],...(hasStage?[['stage',uiText('previs.stage')]]:[]),['gallery',uiText("sheetWorkspace.gallery")],['kanban',uiText("sheetWorkspace.board"),true]].map(([key,label,quiet])=><button key={key} className={quiet?'quiet-view':undefined} aria-pressed={mode===key} disabled={dirty} onClick={()=>pickView(key)}>{label}</button>)}</div>}
       <input className="sheet-search" aria-label={uiText("sheetWorkspace.searchTable")} placeholder={uiText("sheetWorkspace.search")} value={query} disabled={dirty} onChange={e=>{setQuery(e.target.value);setSelected(new Set());setAnchor({r:-1,c:-1});}}/>
       {!!statusValues.length&&<select aria-label={uiText("sheetWorkspace.filterByStatus")} value={statusFilter} disabled={dirty} onChange={e=>{setStatusFilter(e.target.value);setSelected(new Set());setAnchor({r:-1,c:-1});}}><option value="">{uiText("sheetWorkspace.allStatuses")}</option>{statusValues.map(s=><option key={s} value={s}>{statusLabel(s)}</option>)}</select>}
       {(query||statusFilter)&&<button className="quiet" onClick={()=>{setQuery('');setStatusFilter('');}}>{uiText("sheetWorkspace.clearFiltersRows", {v0: (visibleRows.length)})}</button>}
@@ -401,14 +472,14 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
       <span className="spacer"/><button disabled={busy||dirty} onClick={()=>{setColumnDraft(null);setPanel(panel==='columns'?null:'columns');}}>{uiText("sheetWorkspace.column", {v0: (hidden.length?` · hidden ${hidden.length}`:'')})}</button>
       {writable&&<><button disabled={busy||dirty} onClick={()=>{if(productionSheet&&epId!==episodeId(slug)){if(!storyScenes[0]){onError?.(uiText('story.confirmScript'));return;}run(async()=>{await storyRequest(`/scenes/${storyScenes[0].sceneId}/shots`,'POST');await refresh();});return;}const payload=tableEditPayload(parsed,parsed.rows.length,0,[parsed.headers.map(()=>'')]);if(imported){setSchemaPlan({addRow:payload});setNewWorkbook(false);}else submit(payload);}}>{uiText("sheetWorkspace.row")}</button>{onAskAgent&&<button className={productionSheet?undefined:"primary"} disabled={!visibleRows.length||dirty} onClick={()=>productionSheet?ask(selected.size?[...selected]:visibleIds,uiText('studio.crewFillBrief'),true):ask()}>{productionSheet?uiText('studio.crewFill'):uiText("sheetWorkspace.assignToAgent")}</button>}</>}
     </div>
-    {['gallery','kanban'].includes(mode)&&<div className="sheet-card-settings">{view.coverColumns.length>0&&<label>{uiText("sheetWorkspace.cover")}<select aria-label={uiText("sheetWorkspace.cardCoverColumn")} value={view.coverColumn} onChange={e=>setView({coverColumn:Number(e.target.value)})}><option value={-1}>{uiText("sheetWorkspace.none")}</option>{view.coverColumns.map(c=><option key={c.index} value={c.index}>{c.label}</option>)}</select></label>}{view.statusColumns.length>0&&<label>{uiText("sheetWorkspace.group")}<select aria-label={uiText("sheetWorkspace.boardGroupingColumn")} value={view.groupColumn} onChange={e=>setView({groupColumn:Number(e.target.value)})}>{view.statusColumns.map(c=><option key={c.index} value={c.index}>{c.label}</option>)}</select></label>}<small>{uiText("sheetWorkspace.viewSettingsApplyToThisBrowserOnly")}</small></div>}
+    {!productionSheet&&['gallery','kanban'].includes(mode)&&<div className="sheet-card-settings">{cardSettings}</div>}
     {productionSheet&&<StoryBatchBar slug={slug} epId={epId} rowIds={[...selected]} writable={writable} disabled={busy||dirty||!!pendingPaste} beforeRun={guardDraft} onChanged={refresh}/>}
     {selected.size>0&&<div className="batch-bar"><b>{uiText("sheetWorkspace.selectedRows", {v0: (selected.size)})}</b><button disabled={!onAskAgent||!writable} onClick={()=>ask([...selected])}>{uiText("sheetWorkspace.assignToAgent")}</button>{flows.length>0&&<><select aria-label={uiText("sheetWorkspace.selectAPipeline")} value={workflow||flows[0].key} onChange={e=>setWorkflow(e.target.value)}>{flows.map(t=><option key={t.key} value={t.key}>{t.title}</option>)}</select><button disabled={!writable||busy||dirty||selected.size>200} onClick={()=>runInPlace([...selected])}>{uiText("sheetWorkspace.runPipeline")}</button><button className="quiet" disabled={busy||dirty} onClick={()=>toFlow([...selected])}>{uiText("studio.configurePipeline")}</button></>}<button className="quiet" onClick={()=>setSelected(new Set())}>{uiText("sheetWorkspace.deselect")}</button></div>}
     {failure&&<div className="sheet-save-error" role="alert"><strong>{failure.message}</strong>{failure.draft&&!editing&&<span>{uiText("sheetWorkspace.preservedDraft", {v0: (failure.draft.slice(0,250))})}</span>}{editing&&<span>{uiText("sheetWorkspace.myContentCurrentContent", {v0: (text.slice(0,180)), v1: (String(parsed.rows.find(r=>r.rid===editing.rid)?.cells[editing.c]?.value??'').slice(0,180))})}</span>}{failure.details?.conflicts&&<details><summary>{uiText("sheetWorkspace.reviewConflict")}</summary><pre>{JSON.stringify(failure.details.conflicts,null,2)}</pre></details>}<div>{editing?<><button disabled={busy} onClick={()=>finishEdit()}>{uiText("sheetWorkspace.retrySave")}</button><button disabled={busy} onClick={rebaseEdit}>{uiText("sheetWorkspace.retryWithMyContent")}</button><button disabled={busy} onClick={cancelEdit}>{uiText("sheetWorkspace.discardThisEdit")}</button></>:failure.retry&&<button disabled={busy} onClick={failure.retry}>{uiText("sheetWorkspace.retry")}</button>}<button disabled={busy} onClick={()=>run(refresh)}>{uiText("sheetWorkspace.reloadCurrentContent")}</button><button onClick={()=>setFailure(null)}>{uiText("sheetWorkspace.collapse")}</button></div></div>}
     {taskError&&<p className="sheet-task-warning" role="status">{uiText("sheetWorkspace.taskStatusCouldNotRefresh", {v0: (taskError)})}</p>}
-    {editing&&<div className="sheet-edit-strip"><b>{columnName(editing.c)}{editing.r+1} · {parsed.headers[editing.c]}</b><span>{uiText("sheetWorkspace.enterNextRowTabNextColumnShiftEnterNew")}</span><button disabled={busy} onClick={()=>finishEdit()}>{uiText("sheetWorkspace.save")}</button><button disabled={busy} onClick={cancelEdit}>{uiText("sheetWorkspace.cancel")}</button>{presetChips(editing.c,text,setText)}</div>}
+    {editing&&editing.source!=='composer'&&<div className="sheet-edit-strip"><b>{columnName(editing.c)}{editing.r+1} · {parsed.headers[editing.c]}</b><span>{uiText("sheetWorkspace.enterNextRowTabNextColumnShiftEnterNew")}</span><button disabled={busy} onClick={()=>finishEdit()}>{uiText("sheetWorkspace.save")}</button><button disabled={busy} onClick={cancelEdit}>{uiText("sheetWorkspace.cancel")}</button>{presetChips(editing.c,text,setText)}</div>}
     <div className={`sheet-workspace-body${panel?' has-panel':''}${studioRails?' studio-rails':''}`}>
-      {studioRails&&<ShotList parsed={parsed} rows={visibleRows} statusColumn={statusCol} shotInfo={shotInfo} scenes={storyScenes} currentRid={currentRow?.rid} filter={shotFilter} onFilter={setShotFilter} onPick={pickShot} inFlight={inFlight}/>}
+      {studioRails&&<ShotList parsed={parsed} rows={visibleRows} statusColumn={statusCol} shotInfo={shotInfo} scenes={storyScenes} currentRid={currentRow?.rid} filter={shotFilter} onFilter={setShotFilter} onPick={openShot} inFlight={inFlight}/>}
       <div className="sheet-main-view">
         {mode==='grid'?<div className="sheet-scroll" ref={grid}><table className="production-sheet" role="grid" aria-label={parsed.name} aria-rowcount={visibleRows.length+1} style={{width:`max(100%, ${visibleColumns.reduce((n,c)=>n+(flexColumn(c)?88:columnWidth(c)),112)}px)`}}><colgroup><col style={{width:32}}/><col style={{width:36}}/>{visibleColumns.map(c=><col key={c} style={flexColumn(c)?undefined:{width:columnWidth(c)}}/>)}<col style={{width:44}}/></colgroup><thead><tr><th className="select-col"><input type="checkbox" aria-label={uiText("sheetWorkspace.selectAllVisibleRows")} checked={visibleRows.length>0&&visibleRows.every(r=>selected.has(r.rid))} onChange={e=>setSelected(e.target.checked?new Set(visibleIds):new Set())}/></th><th className="row-number">#</th>{visibleColumns.map(c=><th key={columnIds[c]||c}><button className="sheet-column-trigger" disabled={busy||dirty} aria-label={uiText("sheetWorkspace.configureColumn", {v0: (parsed.headers[c])})} onClick={()=>openColumn(c)}><span className="column-letter">{columnName(c)}</span><span>{parsed.headers[c]}</span>{sort?.c===c?<span>{sort.direction==='asc'?'↑':'↓'}</span>:<span className="column-chevron">⌄</span>}</button></th>)}<th className="row-actions">{uiText("sheetWorkspace.details")}</th></tr></thead><tbody>{visibleRows.map(item=>{
           const r=parsed.rows.indexOf(item);
@@ -426,7 +497,7 @@ export function SheetSurface({slug,tab,tabs=[],me,values,annotations=[],locks=[]
           })}<td className="row-actions"><button aria-label={uiText("sheetWorkspace.rowDetails", {v0: (r+1)})} onClick={()=>openRow(item.rid)}>↗</button>{locks.some(lock=>lock.tab_key===tab.key&&[item.rid,parsed.tableId].includes(lock.unit_id))&&<small title={uiText("sheetWorkspace.anotherCrewMemberIsEditingThisRow")}>{uiText("sheetWorkspace.locked")}</small>}</td></tr>;
         })}</tbody></table>{!visibleRows.length&&<div className="sheet-empty"><p>{query||statusFilter?uiText("sheetWorkspace.noMatchingRows"):uiText("sheetWorkspace.startWithTheFirstRow")}</p><small>{query||statusFilter?uiText("sheetWorkspace.clearFiltersOrTryAnotherSearch"):uiText("sheetWorkspace.chooseRowToAddDataThenPasteFromExcel")}</small></div>}</div>
           :mode==='kanban'&&view.groupColumn<0?<div className="sheet-empty"><h2>{uiText("sheetWorkspace.configureAStatusColumn")}</h2><p>{uiText("sheetWorkspace.setAColumnSTypeToStatusToGroup")}</p><button onClick={()=>setPanel('columns')}>{uiText("sheetWorkspace.configureColumn2")}</button></div>
-          :!visibleRows.length?<div className="sheet-empty"><p>{uiText("sheetWorkspace.noMatchingRows")}</p></div>:mode==='review'?review:mode==='compare'?<ShotCompare parsed={parsed} row={currentRow}/>:mode==='canvas'?<StoryCanvas storageKey={'zf.canvas:'+slug+':'+tab.key} model={view} parsed={parsed} scenes={storyScenes} title={tab.title} writable={writable} busy={busy||dirty} onOpen={openRow} onPreview={showPreview} onCommit={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} onUpload={pickUpload} onRunStep={runStage}/>:mode==='stage'?<Suspense fallback={null}><PrevisStage slug={slug} tabKey={tab.key} proposals={proposals} onApplyProposal={onApplyProposal} onDismissProposal={onDismissProposal} shots={stageShots(parsed,visibleRows,assetLookup,shotInfo)} focus={stageFocus} writable={writable} busy={busy||dirty} onRender={renderStage} onMotion={motionStage} onLayout={layoutStage} onShot={productionSheet?(rid=>{setRowOpen(rid);onShotFocus?.(rid);}):undefined}/></Suspense>:<SheetCards model={view} mode={mode} parsed={parsed} selected={selected} onSelect={(rid,checked)=>setSelected(old=>{const next=new Set(old);if(checked)next.add(rid);else next.delete(rid);return next;})} onOpen={studioRails?pickShot:openRow} onPreview={showPreview} onStatus={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} writable={writable} busy={busy||dirty} onUpload={pickUpload} onRunStep={runStage} onVariant={cycleVariant} scenes={storyScenes} shotInfo={shotInfo} onRebuildScene={rebuildScene} compact={studioRails} current={studioRails?currentRow?.rid:null}/>}
+          :!visibleRows.length?<div className="sheet-empty"><p>{uiText("sheetWorkspace.noMatchingRows")}</p></div>:mode==='composer'&&composer?composer:mode==='review'?review:mode==='compare'?<ShotCompare parsed={parsed} row={currentRow}/>:mode==='canvas'?<StoryCanvas storageKey={'zf.canvas:'+slug+':'+tab.key} model={view} parsed={parsed} scenes={storyScenes} title={tab.title} writable={writable} busy={busy||dirty} onOpen={openRow} onPreview={showPreview} onCommit={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} onUpload={pickUpload} onRunStep={runStage}/>:mode==='stage'?<Suspense fallback={null}><PrevisStage slug={slug} tabKey={tab.key} proposals={proposals} onApplyProposal={onApplyProposal} onDismissProposal={onDismissProposal} shots={stageShots(parsed,visibleRows,assetLookup,shotInfo)} focus={stageFocus} writable={writable} busy={busy||dirty} onRender={renderStage} onMotion={motionStage} onLayout={layoutStage} onShot={productionSheet?(rid=>{setRowOpen(rid);onShotFocus?.(rid);}):undefined}/></Suspense>:<SheetCards model={view} mode={mode} parsed={parsed} selected={selected} onSelect={(rid,checked)=>setSelected(old=>{const next=new Set(old);if(checked)next.add(rid);else next.delete(rid);return next;})} onOpen={studioRails?openShot:openRow} onPreview={showPreview} onStatus={(rid,c,value)=>commit(parsed.rows.findIndex(r=>r.rid===rid),c,value)} writable={writable} busy={busy||dirty} onUpload={pickUpload} onRunStep={runStage} onVariant={cycleVariant} scenes={storyScenes} shotInfo={shotInfo} onRebuildScene={rebuildScene} compact={studioRails} current={studioRails?currentRow?.rid:null}/>}
       </div>
       {panel?<aside className="sheet-side-panel" aria-label={panel==='columns'?uiText("sheetWorkspace.columnSettings"):uiText("sheetWorkspace.rowDetails2")}><header><h2>{panel==='columns'?uiText("sheetWorkspace.columnSettings"):row?.cells[0]?.value||uiText("sheetWorkspace.rowDetails2")}</h2><button aria-label={uiText("sheetWorkspace.closeSidebar")} onClick={closePanel}>×</button></header>
         {panel==='columns'?<><p className="sheet-subtle">{uiText("sheetWorkspace.sortingVisibilityAndWidthAffectThisViewOnly")}</p><div className="sheet-columns-nav">{parsed.headers.map((name,c)=><button key={c} className={columnDraft?.c===c?'active':''} onClick={()=>openColumn(c)}>{name}{hidden.includes(c)?uiText("sheetWorkspace.hidden"):''}</button>)}</div>{columnDraft&&<div className="sheet-column-form"><label>{uiText("sheetWorkspace.columnName")}<input aria-label={uiText("sheetWorkspace.columnName")} value={columnDraft.name} disabled={!writable} onChange={e=>setColumnDraft({...columnDraft,name:e.target.value})}/></label><label>{uiText("sheetWorkspace.contentType")}<select aria-label={uiText("sheetWorkspace.columnType")} value={columnDraft.type} disabled={!writable} onChange={e=>setColumnDraft({...columnDraft,type:e.target.value})}>{Object.entries(TYPES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>{columnDraft.type==='status'&&<label>{uiText("sheetWorkspace.statusOptionsOnePerLine")}<textarea aria-label={uiText("sheetWorkspace.statusOptions")} rows={5} value={columnDraft.options} disabled={!writable} onChange={e=>setColumnDraft({...columnDraft,options:e.target.value})}/></label>}<button className="primary" disabled={!writable||busy||!columnDraft.name.trim()} onClick={saveColumn}>{uiText("sheetWorkspace.applyColumnSettings")}</button><hr/><div className="sheet-panel-actions"><button onClick={()=>setSort({c:columnDraft.c,direction:'asc'})}>{uiText("sheetWorkspace.sortAscending")}</button><button onClick={()=>setSort({c:columnDraft.c,direction:'desc'})}>{uiText("sheetWorkspace.sortDescending")}</button></div><label>{uiText("sheetWorkspace.width")}<input type="number" aria-label={uiText("sheetWorkspace.columnWidth")} min={80} max={600} value={columnWidth(columnDraft.c)} onChange={e=>setWidths({...widths,[columnDraft.c]:Math.max(80,Math.min(600,Number(e.target.value)||180))})}/></label><button disabled={!hidden.includes(columnDraft.c)&&visibleColumns.length<=1} onClick={()=>setHidden(old=>old.includes(columnDraft.c)?old.filter(c=>c!==columnDraft.c):[...old,columnDraft.c])}>{hidden.includes(columnDraft.c)?uiText("sheetWorkspace.showColumn"):uiText("sheetWorkspace.hideColumn")}</button><hr/><button className="danger" disabled={!writable||busy||parsed.headers.length<=1} onClick={()=>{setSchemaPlan({operation:'delete',column_id:columnIds[columnDraft.c],label:parsed.headers[columnDraft.c]});setNewWorkbook(false);}}>{uiText("sheetWorkspace.deleteColumn")}</button></div>}

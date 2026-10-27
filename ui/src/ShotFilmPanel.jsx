@@ -9,6 +9,7 @@ import { normalizeStatus } from './format.js';
 import { ClipVideo, filmPlayback, filmTrial, useFilmTrial } from './StudioShell.jsx';
 import { ShotProposals } from './ShotProposals.jsx';
 import { Icon } from './Icon.jsx';
+import { shotMonitor, useShotMonitor } from './composer/shotMonitor.js';
 
 // SPEC_19 R3: the current shot's right column, "this shot in the cut". What it shows (3.2): the derived state and a "…" menu, the
 // previous / this / next shot with "Play around", the episode's progress bar, the Take list (✓ adopts: POST /shots/{id}/adoptions),
@@ -19,8 +20,9 @@ import { Icon } from './Icon.jsx';
 // (1.2 J). Writes go through onWrite, which holds the sheet's guards (no open cell draft, one write at a time) and reloads the row
 // afterwards; nothing here edits a cell itself (1.2 B). A reader sees no ✓ and no ↻ (A15).
 //
-// The panel's monitor is its main player: a take row, the current thumbnail or "Play around" play there, one <video> at a time, each
-// clip as trimmed (1.2 I). A take tried in the cut (R19) stands in for the adopted one in "Play around" and in the film window until
+// The Shot Stage has one player (composer/shotMonitor.js): a take row, the current thumbnail or "Play around" queue there, and the shot
+// composer's top half plays it; while no composer is on the page this panel draws the player itself. One <video> at a time, each clip
+// as trimmed (1.2 I). A take tried in the cut (R19) stands in for the adopted one in "Play around" and in the film window until
 // Esc, another shot, or its adoption; it is screen state only.
 
 const SHOWN = 6;  // takes listed before "All n takes": each row holds a paused first frame
@@ -79,7 +81,7 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
   useLocale();
   const id = shot?.shotId || storyShotId(slug, rid);
   const [output, setOutput] = useState('video'), [showAll, setShowAll] = useState(false);
-  const [playing, setPlaying] = useState(null), [measured, setMeasured] = useState({});
+  const {playing, measured, hosts} = useShotMonitor();
   const trial = useFilmTrial();
   const media = useShotMedia(id, version, output);
   const entries = rowProposals(proposals, rid, tabKey);
@@ -92,13 +94,13 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
   const fidelity = useFidelity(shot?.previsVideoUrl, takes.slice(0, showAll ? takes.length : SHOWN).map(take => take.url));
 
   // Another shot, another cut: what was playing and the take being tried end with it; leaving the stage ends the trial too.
-  useEffect(() => {setPlaying(null); setShowAll(false); filmTrial.set(null);}, [id]);
-  useEffect(() => () => filmTrial.set(null), []);
+  useEffect(() => {shotMonitor.stop(); setShowAll(false); filmTrial.set(null);}, [id]);
+  useEffect(() => () => {filmTrial.set(null); shotMonitor.stop();}, []);
 
   const item = playing ? playing.queue[playing.at] || null : null;
   const playingTake = item && item.shotId === id ? takes.find(take => take.url === item.url) || null : null;
-  // run: a new number each time something is played, so playing the same take again starts it over.
-  const play = (queue, around = false) => setPlaying(old => queue.length ? {queue, at:0, around, run:(old?.run || 0) + 1} : null);
+  // Each play is a new run, so playing the same take again starts it over.
+  const play = (queue, around = false) => shotMonitor.play(queue, around);
   const playTake = take => play([{shotId:id, shotIndex:current.shotIndex, index:0, url:take.url, in:0, out:null, source:'take', number:take.number}]);
   const neighbours = filmNeighbors(film, id, {measured});
   const around = (withTrial = tried) => {
@@ -106,8 +108,8 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
     return filmPlayback(film, {fill:'latest', trial:withTrial}).filter(entry => ids.has(entry.shotId));
   };
   const playAround = (withTrial = tried) => play(around(withTrial), true);
-  const stop = () => setPlaying(null);
-  const next = () => setPlaying(old => old && old.at + 1 < old.queue.length ? {...old, at:old.at + 1} : null);
+  const stop = () => shotMonitor.stop();
+  const next = () => shotMonitor.next();
 
   const adopt = async take => {
     const body = adoptionBody(take);
@@ -158,7 +160,7 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
   return <ShotFilmView label={label} sceneTitle={sceneTitle} state={shotStateOf(current)} newCount={newTakeCountOf(current)} writable={writable} disabled={disabled}
     canStatus={canStatus} menuItems={menuItems} top={top} film={film} neighbours={neighbours} segments={filmSegments(film, {measured})} summary={filmSummary(film, {measured})}
     currentId={id} trial={tried} playing={playing} item={item} canAround={around().length > 0} onAround={() => (playing?.around ? stop() : playAround())}
-    onPlayCurrent={() => play(around().filter(entry => entry.shotId === id))} onPick={rowId => onPick?.(rowId)} onStop={stop} onDone={next} onMeasured={(url, seconds) => Number.isFinite(seconds) && setMeasured(old => old[url] === seconds ? old : {...old, [url]:seconds})}
+    onPlayCurrent={() => play(around().filter(entry => entry.shotId === id))} onPick={rowId => onPick?.(rowId)} onStop={stop} onDone={next} onMeasured={(url, seconds) => shotMonitor.measure(url, seconds)} monitorHosted={hosts > 0}
     output={output} hasFrame={hasFrame} onOutput={setOutput} takes={takes} frames={output === 'frame' && media.images ? framesOf(media.images) : null} loading={media.loading} error={media.error}
     grades={media.grades} fidelity={fidelity} showAll={showAll} onShowAll={setShowAll} playingUrl={playingTake?.url || null}
     onPlay={playTake} onAdopt={adopt} onTry={tryTake} onChooseFrame={chooseFrame} onRetake={onRetake} onDismiss={take => take.entry && onDismissProposal?.(take.entry.proposal)}
@@ -170,7 +172,7 @@ export function ShotFilmPanel({slug, tabKey, rid, shot = null, shots = [], label
 // What the panel draws, from plain data: no requests, no timers (the monitor's <video> is the only thing that plays).
 export function ShotFilmView({label, sceneTitle, state = 'empty', newCount = 0, writable, disabled, canStatus = true, menuItems = [], top = null,
   neighbours = {index:-1, total:0}, segments = [], summary = {shots:0, adopted:0, withTake:0, seconds:0}, currentId, trial = null, playing = null, item = null,
-  canAround = false, onAround, onPlayCurrent, onPick, onStop, onDone, onMeasured, output = 'video', hasFrame = false, onOutput, takes = [], frames = null,
+  canAround = false, onAround, onPlayCurrent, onPick, onStop, onDone, onMeasured, monitorHosted = false, output = 'video', hasFrame = false, onOutput, takes = [], frames = null,
   loading = false, error = '', grades = [], fidelity = {}, showAll = false, onShowAll, playingUrl = null, onPlay, onAdopt, onTry, onChooseFrame, onRetake, onDismiss,
   trim = null, onTimeline, crew = [], onApplyProposal, onDismissProposal, onShowStage, failure = null, notes = null, cast = null, history = null}) {
   useLocale();
@@ -185,7 +187,7 @@ export function ShotFilmView({label, sceneTitle, state = 'empty', newCount = 0, 
       <ShotMenu items={menuItems}/>
     </header>
     {top}
-    {item && <FilmMonitor item={item} clip={`${playing?.run ?? 0}:${playing?.at ?? 0}`} trial={trial} currentId={currentId} onDone={onDone} onStop={onStop} onMeasured={onMeasured}/>}
+    {item && !monitorHosted && <FilmMonitor item={item} clip={`${playing?.run ?? 0}:${playing?.at ?? 0}`} trial={trial} currentId={currentId} onDone={onDone} onStop={onStop} onMeasured={onMeasured}/>}
     <section className="film-cut" aria-label={t('film.inTheCut')}>
       <header><h3>{t('film.inTheCut')}</h3>{neighbours.index >= 0 && <span className="studio-note">{t('film.position', {index:neighbours.index + 1, total:neighbours.total})}</span>}
         <span className="spacer"/>
@@ -287,8 +289,8 @@ function FilmNotes({messages, children}) {
   </section>;
 }
 
-// The panel's monitor: one clip at a time, the source marked in the corner (a filled gap, a take being tried).
-function FilmMonitor({item, clip, trial, currentId, onDone, onStop, onMeasured}) {
+// The player: one clip at a time, the source marked in the corner (a filled gap, a take being tried). The composer draws the same one.
+export function FilmMonitor({item, clip, trial, currentId, onDone, onStop, onMeasured}) {
   const tag = item.source === 'trial' || (trial && item.shotId === currentId && item.url === trial.url) ? 'trial' : ['latest', 'previs'].includes(item.source) ? item.source : null;
   const caption = item.source === 'take' && item.number ? `${item.shotIndex} · ${t('take.number', {number:item.number})}` : String(item.shotIndex ?? '');
   return <figure className="film-monitor">

@@ -14,7 +14,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 let temporary, components;
 before(async()=>{
   temporary=await mkdtemp(join(root,'tests/.story-render-'));
-  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette,SpaceMenu,spaceNote,spaceShortcuts,SPACES,spaceOf,tabOfSpace,FilmOverlay,episodeCounts,filmTrial} from './src/StudioShell.jsx'; export {ShotFilmView} from './src/ShotFilmPanel.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {BreakdownDialog} from './src/BreakdownDialog.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
+  const result=await build({stdin:{contents:"export {CompositionPanel,CompositionReport,AssetVaultModal,AssetGenerationState,ShotProduction,StoryBatchBar,TakeGrades} from './src/StoryWorkbenchModals.jsx'; export {StudioTopBar,CommandPalette,SpaceMenu,spaceNote,spaceShortcuts,SPACES,spaceOf,tabOfSpace,FilmOverlay,episodeCounts,filmTrial} from './src/StudioShell.jsx'; export {ShotFilmView} from './src/ShotFilmPanel.jsx'; export {StoryWorld} from './src/StoryWorld.jsx'; export {BreakdownDialog} from './src/BreakdownDialog.jsx'; export {SheetCards} from './src/SheetCards.jsx'; export {setLocale} from './src/i18n/index.js'; export {ShotComposer} from './src/composer/ShotComposer.jsx'; export {CameraWall} from './src/composer/ExampleWall.jsx'; export {shotMonitor} from './src/composer/shotMonitor.js'; export {StageViewMenu} from './src/ShotStage.jsx'; export {viewMode} from './src/sheetViews.js';",resolveDir:root,sourcefile:'story-render.jsx',loader:'jsx'},bundle:true,write:false,platform:'node',format:'esm',jsx:'automatic',packages:'external',loader:{'.css':'empty'}});
   const output=join(temporary,'components.mjs');await writeFile(output,result.outputFiles[0].text);components=await import(pathToFileURL(output));
 });
 after(async()=>{if(temporary)await rm(temporary,{recursive:true,force:true});});
@@ -385,4 +385,116 @@ test('a take tried in the cut stands in for its shot in the film window, marked 
     assert.ok(html.includes('Adopted 1 of 2 shots'),'the trial changes no count');
   }finally{components.filmTrial.set(null);}
   assert.equal(components.filmTrial.get(),null);
+});
+
+// SPEC_19 package B: the shot composer. The catalog is the packaged one the server serves at GET /catalog/looks.
+import {readFile as readCatalog} from 'node:fs/promises';
+const looks=JSON.parse(await readCatalog(new URL('../../project_docs/look_catalog.json',import.meta.url),'utf8')).items;
+const lookCatalog={camera:looks.filter(item=>item.kind==='camera'),moves:looks.filter(item=>item.kind==='move')};
+const ltx={appCode:'ltx25-cinema',name:'LTX-2.5 Cinema',tier:'open_weights',configured:true,reason:null,outputs:['VIDEO'],estimate:{seconds:40,samples:5},quotable:false};
+const barOptions={status:'ready',options:{apps:[ltx],defaultAppCode:'ltx25-cinema',style:null},catalog:[]};
+function composerFixture(extra={}){
+  const s1=filmShot(1,{sceneId:'sc1',reviewStatus:'Approved',selectedVideoUrl:'/t/1a.mp4',selectedImageUrl:'/s/1.png',trim:{in:0,out:3.8}});
+  const s2=filmShot(2,{sceneId:'sc1',previsPlan:{seconds:4}});
+  const s3=filmShot(3,{sceneId:'sc1',selectedVideoUrl:'/t/3a.mp4'});
+  const lookup={'CAST-01':{id:'CAST-01',name:'Kael',media:{kind:'image',url:'/kael.png'}},'SET-01':{id:'SET-01',name:'Observatory',media:{kind:'image',url:'/obs.png'}}};
+  return {slug:'demo',tabKey:'cinema-studio',rid:'b2',shot:s2,shots:[s1,s2,s3],label:'S02',scene:{index:1,title:'Observatory'},status:'Queued',
+    text:'@S01.end @CAST-01 turns to @SET-01 #push-in\n@S03.start @CAST-09 #xyz',dirty:false,promptColumn:true,rig:{text:'',column:true,onWrite(){}},
+    ladder:[{key:'frame',stage:{column:2},media:{kind:'image',url:'/s/2.png'}},{key:'video',stage:{column:3},media:null}],lookup,writable:true,disabled:false,
+    preloaded:{catalog:lookCatalog,bar:barOptions},onDraft(){},onSave(){},onGenerate(){},...extra};
+}
+
+test('B1: a chosen shot opens on its composer, none chosen is the overview, and the views live in one View menu',()=>{
+  assert.equal(components.viewMode('composer',{productionSheet:true,selected:true}),'composer');
+  assert.equal(components.viewMode('composer',{productionSheet:true,selected:false}),'gallery','no shot chosen yet: the overview grid');
+  assert.equal(components.viewMode('composer',{productionSheet:false,selected:true}),'grid','only a production sheet has a composer');
+  assert.equal(components.viewMode('stage',{productionSheet:true,hasStage:false}),'gallery');
+  assert.equal(components.viewMode('review',{productionSheet:true}),'review');
+  const views=[['composer','Composer','sparkle'],['gallery','Overview','board'],['stage','3D Stage','cube'],['review','Review','play'],['compare','Compare','layers'],['grid','Table','table'],['canvas','Canvas','flow'],['kanban','Board','board']].map(([key,label,icon])=>({key,label,icon}));
+  const closed=render('StageViewMenu',{views,mode:'composer',onPick(){}});
+  assert.equal((closed.match(/<button/g)||[]).length,1,'one button stands in the toolbar for all eight views');
+  assert.match(closed,/<button type="button" class="stage-view-btn" aria-haspopup="menu" aria-expanded="false"[^>]*><span class="stage-view-label">View<\/span>[\s\S]*<b>Composer<\/b>/);
+  assert.doesNotMatch(closed,/role="menu"/);
+  const open=render('StageViewMenu',{views,mode:'gallery',onPick(){},defaultOpen:true,settings:React.createElement('label',null,'Cover')});
+  assert.deepEqual([...open.matchAll(/role="menuitemradio" aria-checked="(true|false)"><svg[\s\S]*?<span class="studio-menu-name">([^<]+)</g)].map(match=>match[2]+(match[1]==='true'?'*':'')),
+    ['Composer','Overview*','3D Stage','Review','Compare','Table','Canvas','Board']);
+  assert.match(open,/<div class="stage-view-settings" role="group" aria-label="View settings"><p class="studio-menu-foot">View settings<\/p><label>Cover<\/label><\/div>/,'cover and grouping are view settings');
+});
+
+test('the composer: the take on top, the look buttons, the prompt with its tags and one light primary button',()=>{
+  const html=render('ShotComposer',composerFixture());
+  assert.match(html,/<section class="shot-composer" aria-label="Shot composer">/);
+  assert.match(html,/Scene 1 · 4\.0 s · Nothing adopted yet/);
+  assert.match(html,/<div class="look-buttons" role="toolbar" aria-label="Look">/);
+  assert.equal((html.match(/class="look-button"/g)||[]).length,2,'package B: references and camera');
+  assert.match(html,/<b>References<\/b><em class="look-scope is-shot">This shot<\/em><\/span><small>3 in this shot<\/small>/,'two known codes and one the cast sheet does not know');
+  assert.match(html,/data-shot-prompt="b2"/,'R puts the focus here');
+  assert.match(html,/<span class="pc-tag is-asset" contenteditable="false" data-token="@CAST-01" data-kind="asset" title="@CAST-01"><img class="pc-thumb" src="\/kael\.png" alt=""><span class="pc-label">Kael<\/span><\/span>/);
+  assert.match(html,/<span class="pc-tag is-move" contenteditable="false" data-token="#push-in" data-kind="move" title="The camera pushes in slowly[^"]*"><span class="pc-icon" aria-hidden="true">↗<\/span><span class="pc-label">#Push in<\/span><\/span>/);
+  assert.match(html,/<span class="pc-tag is-warn" contenteditable="false" data-token="@CAST-09" data-kind="asset" title="Can't find @CAST-09">/,'an unknown code is a warning tag');
+  assert.match(html,/turns to <span class="pc-tag is-asset"[^>]*data-token="@SET-01"/);
+  assert.match(html,/ #xyz/,'an unknown #word stays plain text');
+  assert.doesNotMatch(html,/data-token="#xyz"/);
+  assert.match(html,/\n<span class="pc-tag is-take/,'a new line stays a new line');
+  assert.equal((html.match(/class="primary composer-go"/g)||[]).length,1,'the one primary button');
+  assert.match(html,/<button type="button" class="primary composer-go">Generate ×1 · ~40 s<\/button>/,'the time is on the button');
+  assert.match(html,/<div class="studio-segmented shot-output" role="group" aria-label="Make"><button type="button" aria-pressed="false" title="First frame: this shot already has one">/,'the ladder is the output switch, ticked where made');
+  assert.match(html,/<select class="gen-count" aria-label="Takes to make"[^>]*><option value="1" selected="">×1<\/option><option value="2">×2<\/option><option value="3">×3<\/option><option value="4">×4<\/option><\/select>/);
+});
+
+test('D1: a quoted take is a tag with the frame it quotes, a warning when the shot is not adopted, and its use',()=>{
+  const html=render('ShotComposer',composerFixture());
+  assert.match(html,/<span class="pc-tag is-take" contenteditable="false" data-token="@S01\.end" data-kind="take" data-key="S01\.end" title="Quotes S01 at 3\.8 s"><video class="pc-thumb" src="\/t\/1a\.mp4#t=3\.8" preload="metadata" muted playsinline aria-hidden="true"><\/video><span class="pc-label">S01 · out · Reference<\/span><\/span>/,
+    'the adopted take at the trim out point, a paused frame');
+  assert.match(html,/<span class="pc-tag is-take is-warn" contenteditable="false" data-token="@S03\.start" data-kind="take" data-key="S03\.start" title="S03 has nothing adopted yet: its latest take will be used\."><video class="pc-thumb" src="\/t\/3a\.mp4#t=0\.1"/);
+  const beat=index=>({storyOrigin:{mapping:'exact',recipes:[{beatKeys:['b1'],segmentIndex:index,segmentCount:2}]}});
+  const fixture=composerFixture();
+  const continued=render('ShotComposer',{...fixture,shot:{...fixture.shot,...beat(1)},shots:[{...fixture.shots[0],...beat(0)},{...fixture.shot,...beat(1)},fixture.shots[2]]});
+  assert.match(continued,/<span class="pc-label">S01 · out · First frame<\/span>/,'the next segment of the same beat continues from the out point');
+});
+
+test('B9: an unsaved prompt turns the primary button into Save & generate; a reader has no button',()=>{
+  const html=render('ShotComposer',composerFixture({dirty:true}));
+  assert.match(html,/<button type="button" class="primary composer-go">Save &amp; generate<\/button>/);
+  assert.match(html,/<span class="studio-note warn" role="status">Not saved<\/span>/);
+  const reader=render('ShotComposer',composerFixture({writable:false}));
+  assert.doesNotMatch(reader,/composer-go|take-check|take-retake/);
+  assert.match(reader,/data-shot-prompt="b2"[^>]*contentEditable="false"/i,'the prompt can be read, not changed');
+});
+
+test('one player on the stage: the composer plays what the right column queues, the column draws no player of its own',()=>{
+  components.shotMonitor.play([{shotId:'sh_demo_b2',shotIndex:'S02',index:0,url:'/t/2c.mp4',in:0,out:null,source:'take',number:3}]);
+  try{
+    const html=render('ShotComposer',composerFixture());
+    assert.equal((html.match(/autoplay=""/gi)||[]).length,1,'one video plays');
+    assert.match(html,/<figure class="film-monitor"><video src="\/t\/2c\.mp4" autoplay=""/i);
+    const playing={item:{shotId:'sh_demo_b2',url:'/t/2c.mp4',source:'take',number:3,shotIndex:'S02'},playing:{run:1,at:0}};
+    assert.doesNotMatch(render('ShotFilmView',{...filmFixture(),...playing,monitorHosted:true}),/film-monitor|autoplay/i,'the composer hosts the player');
+    assert.match(render('ShotFilmView',{...filmFixture(),...playing}),/<figure class="film-monitor">/,'without a composer the column draws it');
+  }finally{components.shotMonitor.stop();}
+});
+
+test('B4: the camera wall numbers the moves in prompt order, outlines the chosen body and lens, and starts each group with Auto',()=>{
+  const groups={body:lookCatalog.camera.filter(item=>item.group==='body'),lens:lookCatalog.camera.filter(item=>item.group==='lens'),aperture:lookCatalog.camera.filter(item=>item.group==='aperture')};
+  const base={catalog:{status:'ready',items:lookCatalog.camera,groups},choice:{body:'film-35mm',lens:'anamorphic',aperture:'auto-aperture'},custom:false,moves:lookCatalog.moves,
+    numbers:{'push-in':[1,3],pan:[2]},order:['push-in','pan','push-in'],onCategory(){},onChoose(){},onMove(){},onClose(){},onReset(){}};
+  const moves=render('CameraWall',{...base,category:'moves'});
+  assert.match(moves,/aria-pressed="true"[^>]*><span class="look-frame"><span class="look-texture"[^>]*><\/span><span class="look-order" aria-label="Order 1, 3">1·3<\/span><\/span><span class="look-name">Push in<\/span>/);
+  assert.match(moves,/<span class="look-order" aria-label="Order 2">2<\/span><\/span><span class="look-name">Pan<\/span>/);
+  assert.match(moves,/<section aria-label="This shot, in order"><h4>This shot, in order<\/h4><ol><li><span class="num">1<\/span>Push in<\/li><li><span class="num">2<\/span>Pan<\/li><li><span class="num">3<\/span>Push in<\/li><\/ol>/);
+  assert.equal((moves.match(/<video/g)||[]).length,0,'no example plays until the pointer rests on it');
+  assert.match(moves,/>Reset all<\/button>/);assert.match(moves,/aria-label="Close \(Esc\)"/);
+  const rig=render('CameraWall',{...base,category:'rig',changed:['body','lens']});
+  assert.match(rig,/<section class="look-column" aria-label="Body">/);
+  assert.equal((rig.match(/class="look-tile is-selected is-small"/g)||[]).length,3,'one choice per column');
+  assert.match(rig,/<span class="look-texture is-auto" aria-hidden="true"><b>Auto<\/b><\/span>/,'Auto is an abstract texture');
+  assert.match(rig,/<button type="button" aria-current="true"><span>Body &amp; lens<\/span><i class="look-dot" aria-label="Changed"><\/i><\/button>/);
+});
+
+test('the composer reads in Traditional Chinese',async()=>{
+  await components.setLocale('zh-TW');
+  try{
+    const html=render('ShotComposer',composerFixture({dirty:true}));
+    for(const text of ['鏡頭生成台','第 1 場','還沒採用','參考','攝影機','本鏡','提示詞','看送出的完整提示詞','儲存並生成','未儲存','S01 · 出點 · 當參考','#慢推','S03 還沒採用，會用最新的 Take。','1 支']) assert.ok(html.includes(text),text);
+  }finally{await components.setLocale('en');}
 });

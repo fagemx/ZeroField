@@ -10,7 +10,8 @@ import { Icon } from './Icon.jsx';
 // SPEC_18 R4: the shot's three rungs, cheapest first: previs -> first frame -> video. Each shows what exists (a picture, or a paused first
 // frame; nothing here ever plays on its own) and opens the view where that rung is worked on. A shot with no previs yet is told so, with a
 // quiet way to plan one; it never blocks shooting. SPEC_19 took it out of the shot's right column (the column is now the shot in the
-// cut); the shot composer turns it into its output switch.
+// cut). Given onOutput, it is the shot composer's output switch (R9): the first frame and the video rungs become the two things the
+// composer can make, each ticked when the shot already has one; the previs rung stays in the 3D Stage.
 const RUNG_ICON = {previs: 'cube', frame: 'image', video: 'play'};
 function RungThumb({step}) {
   const media = step.media;
@@ -18,9 +19,10 @@ function RungThumb({step}) {
   if (media?.kind === 'video') return <video src={media.url + '#t=0.1'} preload="metadata" muted playsInline tabIndex={-1} aria-hidden="true"/>;
   return <Icon name={RUNG_ICON[step.key]} size={16}/>;
 }
-export function MediaLadder({steps, onOpen, onPlan}) {
+export function MediaLadder({steps, onOpen, onPlan, output = 'video', onOutput = null}) {
   useLocale();
   if (!steps.length) return null;
+  if (onOutput) return <OutputSwitch steps={steps} output={output} onOutput={onOutput}/>;
   const planned = steps.some(step => step.key === 'previs' && !step.media);
   return <div className="shot-ladder">
     <ol aria-label={t('stage.ladder')}>
@@ -36,6 +38,16 @@ export function MediaLadder({steps, onOpen, onPlan}) {
   </div>;
 }
 
+// The output switch: what the composer makes next. A rung the sheet has no column for is not offered.
+function OutputSwitch({steps, output, onOutput}) {
+  const rungs = ['frame', 'video'].map(key => steps.find(step => step.key === key)).filter(Boolean);
+  if (!rungs.length) return null;
+  return <div className="studio-segmented shot-output" role="group" aria-label={t('composer.output')}>
+    {rungs.map(step => <button key={step.key} type="button" aria-pressed={output === step.key} title={step.media ? t('composer.outputMade', {output:t('stage.ladder_' + step.key)}) : t('stage.ladder_' + step.key)}
+      onClick={() => onOutput(step.key)}><Icon name={RUNG_ICON[step.key]} size={13}/>{t('stage.ladder_' + step.key)}{step.media && <Icon name="check" size={11} className="ico shot-output-made"/>}</button>)}
+  </div>;
+}
+
 import { semanticEnumKey } from './writing/writingModel.js';
 
 // Only the live writing/alignment projection is freshness authority (never cached shot_meta).
@@ -48,6 +60,40 @@ export function ShotSourceBadge({alignment, shotId, onSource}) {
     {item.storyAlignment.mediaOutdated && <p>{t('writing.integration.oldMedia')}</p>}
     {item.sourceRef && <button type="button" onClick={() => onSource?.(item.sourceRef)}>{t('writing.authoring.backToSource')}</button>}
   </section>;
+}
+
+// SPEC_19 R7: the Shot Stage's views live in one "View" menu instead of a row of standing buttons. views: [{key, label, icon}]; the
+// current one names the button. settings: the view's own settings (the overview's cover and grouping), at the foot of the menu.
+// Arrow keys move through the views, Escape closes the menu and returns to its button.
+export function StageViewMenu({views, mode, disabled = false, onPick, settings = null, defaultOpen = false}) {
+  useLocale();
+  const [open, setOpen] = useState(defaultOpen);
+  const root = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = event => {if (!root.current?.contains(event.target)) setOpen(false);};
+    document.addEventListener('mousedown', away);
+    root.current?.querySelector('[aria-checked="true"]')?.focus();
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  const current = views.find(view => view.key === mode) || views[0];
+  const keys = event => {
+    if (!open) return;
+    if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); setOpen(false); root.current?.querySelector('.stage-view-btn')?.focus();}
+    else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const items = [...root.current.querySelectorAll('[role="menuitemradio"]')], at = items.indexOf(document.activeElement);
+      event.preventDefault(); event.stopPropagation(); items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+    }
+  };
+  return <div className="stage-view-menu" ref={root} onKeyDown={keys}>
+    <button type="button" className="stage-view-btn" aria-haspopup="menu" aria-expanded={open} disabled={disabled} title={t('composer.viewHint')} onClick={() => setOpen(value => !value)}>
+      <span className="stage-view-label">{t('composer.view')}</span>{current && <Icon name={current.icon} size={14}/>}<b>{current?.label}</b><Icon name="chevronDown" size={13}/></button>
+    {open && <div className="studio-menu stage-view-list" role="menu" aria-label={t('composer.views')}>
+      {views.map(view => <button key={view.key} type="button" role="menuitemradio" aria-checked={view.key === mode} onClick={() => {setOpen(false); onPick(view.key);}}>
+        <Icon name={view.icon}/><span className="studio-menu-name">{view.label}</span></button>)}
+      {settings && <div className="stage-view-settings" role="group" aria-label={t('composer.viewSettings')}><p className="studio-menu-foot">{t('composer.viewSettings')}</p>{settings}</div>}
+    </div>}
+  </div>;
 }
 
 // SPEC_15 Shot Stage: the storyboard, the 3D stage and review are views of one shot list, not three stations.
