@@ -14,7 +14,7 @@ from pathlib import Path
 import unittest.mock
 from unittest.mock import patch
 
-from project_assistant import providers, take_grader as grader
+from project_assistant import gpu_arbiter, providers, take_grader as grader
 
 ANSWER = json.dumps({"score": 58, "passed": False, "issues": ["Hand leaves the dial late (2.8s)."],
                      "feedback": "Push-in lands; the hand withdraws early.", "retake_prompt": "Kael keeps his hand on the dial to the final frame."})
@@ -140,6 +140,8 @@ class GradeHTTPTests(unittest.TestCase):
                             "-pix_fmt", "yuv420p", str(path)], check=True)
             self.take = f"/projects/api/{self.slug}/assets/" + repo.put_asset(self.conn, self.slug, data=path.read_bytes(), content_type="video/mp4", actor_id=self.actor)
         story.mutate_row(self.conn, self.me, self.slug, "cinema-studio", self.row["rid"], {5: f"[Video]({self.take})"})
+        # The GPU arbiter remembers the resident workload per machine; start each test from "unknown".
+        self.conn.execute("DELETE FROM projectops.assistant_setting WHERE project_slug=%s", (gpu_arbiter.STATE_SLUG,))
         self.conn.commit()
         self.patches = [patch.object(grader, "kick", lambda: None)]
         for p in self.patches:
@@ -150,17 +152,25 @@ class GradeHTTPTests(unittest.TestCase):
             p.stop()
         self.fixture.tearDown(self)
 
-    def run_grader(self, **fake):
+    def run_grader(self, server=None, env=None, **fake):
         import psycopg
-        server, base, calls = fake_gpu(**fake)
-        env = {"OPENBENCH_PROVIDER": "openai_compat", "OPENBENCH_API_BASE": base + "/v1", "OPENBENCH_MODEL": "qwen-test"}
+        own = server is None
+        server, base, calls = server or fake_gpu(**fake)
+        env = env or {"OPENBENCH_PROVIDER": "openai_compat", "OPENBENCH_API_BASE": base + "/v1", "OPENBENCH_MODEL": "qwen-test"}
         try:
             with patch.dict(os.environ, env), patch.object(grader, "comfy_url", lambda conn, slug: base), \
                     patch.object(grader, "hand_off", functools.partial(grader.hand_off, poll=0)):
                 ran = grader.drain(lambda: psycopg.connect(os.environ["OPENBENCH_TEST_DB_URI"]))
         finally:
-            server.shutdown(); server.server_close()
+            if own:
+                server.shutdown(); server.server_close()
         return ran, calls
+
+    def reservations(self):
+        self.conn.rollback()
+        return [r[0] for r in self.conn.execute("""SELECT jsonb_build_object('state',state,'cost',accounted_cost_usd,'agent',agent_key,
+            'kind',usage_kind,'session',session_key,'model',model_name) FROM projectops.agent_usage_reservation
+            WHERE project_slug=%s ORDER BY created_at""", (self.slug,)).fetchall()]
 
     def test_grade_from_shot_review_hands_off_the_gpu_and_keeps_a_one_click_retake(self):
         take = next(v for v in self.ok(f"/shots/{self.shot}/videos")["items"] if v["selected"])
@@ -171,9 +181,9 @@ class GradeHTTPTests(unittest.TestCase):
         self.assertEqual(ran, 1)
         paths = [c[1] for c in calls]
         self.assertNotIn("/interrupt", paths)
-        order = [paths.index(p) for p in ("/queue", "/free", "/v1/chat/completions", "/api/generate")]
-        self.assertEqual(order, sorted(order))  # wait, free ComfyUI, grade, then unload the vision model
-        self.assertEqual(calls[paths.index("/api/generate")][2], {"model": "qwen-test", "keep_alive": 0})
+        order = [paths.index(p) for p in ("/queue", "/free", "/v1/chat/completions")]
+        self.assertEqual(order, sorted(order))  # wait for renders, free ComfyUI, then grade
+        self.assertNotIn("/api/generate", paths)  # the vision model stays loaded until a render needs the GPU (SPEC_20 R13)
         self.assertIn("S03", calls[paths.index("/v1/chat/completions")][2]["messages"][1]["content"][0]["text"])
 
         listing = self.ok(f"/shots/{self.shot}/grades")
@@ -181,7 +191,11 @@ class GradeHTTPTests(unittest.TestCase):
         grade = listing["items"][0]
         self.assertEqual((grade["status"], grade["score"], grade["passed"], grade["model"]), ("graded", 58, False, "qwen-test"))
         self.assertEqual(grade["issues"], ["Hand leaves the dial late (2.8s)."])
-        self.assertTrue(grade["gpu"]["comfyFreed"] and grade["gpu"]["waitedForRenders"] and grade["gpu"]["visionUnloaded"])
+        self.assertTrue(grade["gpu"]["comfyFreed"] and grade["gpu"]["waitedForRenders"])
+        self.assertFalse(grade["gpu"]["batched"])
+        # Governed like an agent turn (SPEC_20 R11): admitted for the Continuity Supervisor, local so unbilled.
+        self.assertEqual(self.reservations(), [{"state": "finalized", "cost": None, "agent": "qa_critic", "kind": "grader_check",
+                                                "session": "grade:" + queued["gradeId"], "model": "qwen-test"}])
         self.assertEqual(self.repo.get_asset_meta(self.conn, self.slug, grade["sheetUrl"].rsplit("/", 1)[1])[0], "image/png")
 
         retake = "Kael keeps his hand on the dial to the final frame. @CAST-01 @SET-01"
@@ -193,6 +207,80 @@ class GradeHTTPTests(unittest.TestCase):
         self.ok(f"/shots/{self.shot}", "PATCH", {"description": retake})  # Retake with this prompt, step one
         self.conn.rollback()
         self.assertEqual(row()["cells"][3], retake)
+
+    def second_take(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "take2.mp4"
+            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=12:duration=2",
+                            "-pix_fmt", "yuv420p", str(path)], check=True)
+            url = f"/projects/api/{self.slug}/assets/" + self.repo.put_asset(self.conn, self.slug, data=path.read_bytes(), content_type="video/mp4", actor_id=self.actor)
+        self.conn.commit()
+        return url
+
+    def test_same_shot_takes_grade_in_one_phase_and_the_model_stays_until_a_render(self):
+        other = self.second_take()
+        first = self.ok(f"/shots/{self.shot}/grades", "POST", {"assetUrl": self.take})
+        second = self.ok(f"/shots/{self.shot}/grades", "POST", {"assetUrl": other})
+        fake = fake_gpu()
+        server, base, calls = fake
+        try:
+            self.assertEqual(self.run_grader(fake)[0], 2)
+            paths = [c[1] for c in calls]
+            self.assertEqual(paths.count("/free"), 1)  # ComfyUI is freed once for both takes of the shot
+            self.assertEqual(paths.count("/v1/chat/completions"), 2)
+            self.assertNotIn("/api/generate", paths)
+            grades = {g["gradeId"]: g for g in self.ok(f"/shots/{self.shot}/grades")["items"]}
+            self.assertFalse(grades[first["gradeId"]]["gpu"]["batched"])
+            self.assertTrue(grades[second["gradeId"]]["gpu"]["batched"])
+            # A render is the other workload: only now is the vision model unloaded (launchers enable switching).
+            calls.clear()
+            with patch.dict(os.environ, {gpu_arbiter.SWITCHING_ENV: "on"}):
+                gpu_arbiter.render(base, label="render:test").release()
+            self.assertEqual([(c[1], c[2]) for c in calls], [("/api/generate", {"model": "qwen-test", "keep_alive": 0})])
+            # The next grade switches back: ComfyUI is freed again before the vision call.
+            calls.clear()
+            self.ok(f"/shots/{self.shot}/grades", "POST", {"assetUrl": self.take})
+            self.run_grader(fake)
+            self.assertEqual([c[1] for c in calls if c[1] in ("/free", "/v1/chat/completions")], ["/free", "/v1/chat/completions"])
+        finally:
+            server.shutdown(); server.server_close()
+        self.assertEqual([r["state"] for r in self.reservations()], ["finalized"] * 3)
+
+    def test_hosted_vision_is_refused_without_an_allowlisted_host_or_a_price(self):
+        import governance_fixture
+        from project_assistant import agent_console_store as console, agent_registry
+        hosted = "https://vision.invalid/v1"
+        env = {"OPENBENCH_AGENT_KEY_ENVS": "SPEC20_VISION_KEY", "SPEC20_VISION_KEY": "synthetic-credential"}
+        with patch.dict(os.environ, env):
+            agent_registry.save_agent(self.conn, self.me, self.slug, {"agent_key": "qa_critic", "provider_config": {
+                "kind": "openai_compat", "base_url": hosted, "model": "hosted-vision", "api_key_env": "SPEC20_VISION_KEY"}})
+        self.conn.commit()
+        fake = fake_gpu()
+        server, base, calls = fake
+        errors = []
+        try:
+            def attempt():
+                self.ok(f"/shots/{self.shot}/grades", "POST", {"assetUrl": self.take})
+                self.run_grader(fake, env=env)
+                grade = self.ok(f"/shots/{self.shot}/grades")["items"][0]
+                self.assertEqual(grade["status"], "failed")
+                errors.append(grade["error"])
+            attempt()  # the restricted environment only reaches loopback
+            governance_fixture.authorize_synthetic_media(self)
+            attempt()  # full network, but no price ceiling for the hosted model
+            settings = console.get_settings(self.conn, self.me, self.slug)
+            console.save_settings(self.conn, self.me, self.slug, {"version": settings["version"], "model_pricing": {"hosted-vision": dict(
+                kind="openai_compat", base_url=hosted, input_usd_per_million=1, output_usd_per_million=2, max_input_tokens=100000,
+                max_output_tokens=10, byte_bounded_tokenizer=True)}})
+            self.conn.commit()
+            attempt()  # priced, yet a commercial vision request has no enforceable bound here
+        finally:
+            server.shutdown(); server.server_close()
+        self.assertEqual(len(errors), 3)
+        self.assertTrue(all(e.startswith("Model governance refused the grading call") for e in errors), errors)
+        self.assertFalse(any("synthetic-credential" in e for e in errors))
+        self.assertEqual(calls, [])  # no frames left, no ComfyUI hand-off for a GPU this grade does not use
+        self.assertEqual(self.reservations(), [])
 
     def test_passing_grade_stages_nothing_and_bad_answers_fail_visibly(self):
         self.ok(f"/shots/{self.shot}/grades", "POST", {"assetUrl": self.take})

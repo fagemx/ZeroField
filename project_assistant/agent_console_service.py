@@ -104,7 +104,10 @@ def converse(conn, me, slug, body, *, turn=None):
     """Agent-assisted Quickstart: the project's model proposes an unsaved draft; the server keeps the ceilings.
 
     The reply is a draft only. Tools/skills are filtered to the catalog, mutating tools are forced to always_ask, and
-    saving still goes through the normal versioned agent save. Without a reachable model the draft is unchanged."""
+    saving still goes through the normal versioned agent save. Without a reachable model the draft is unchanged.
+    The model call is governed like an agent turn (SPEC_20 R11): admitted for the coordinator's environment and
+    credentials, unbilled on a loopback endpoint, refused elsewhere without an allowlisted host and a price ceiling."""
+    from project_assistant import execution_governance as governance
     resources.authorize(conn, me, slug, admin=True)
     fields(body, {'template_key', 'messages', 'draft'}, required=('messages',))
     messages = body['messages']
@@ -127,20 +130,27 @@ def converse(conn, me, slug, body, *, turn=None):
     transcript = '\n'.join(('Showrunner: ' if m['role'] == 'user' else 'Builder: ') + m['content'] for m in messages)
     try:
         from project_assistant import agent_runtime, providers
-        config = agent_runtime.provider_for(agents.effective_profile(conn, agents.get_agent(conn, slug, 'coordinator', effective=False)))
+        profile = agents.get_agent(conn, slug, 'coordinator')
+        config = agent_runtime.provider_for(profile)
         if config.kind != 'openai_compat':
             raise ValueError('builder requires an OpenAI-compatible model')
         run = turn or providers.run_openai_compat_turn
         # Qwen3-family soft switch: the builder needs a JSON answer, not a long reasoning trace.
         text = transcript + ('\n/no_think' if config.model.lower().startswith('qwen') else '')
-        result = run(config=config, instructions=instructions, turn_text=text, call_tool=lambda *_: {}, timeout=120, tool_specs=[])
+        session = 'quickstart:' + uuid.uuid4().hex
+        admission = governance.ProviderAdmission(governance.media_context(me, slug, agent_key='coordinator', accounting_session_key=session,
+                                                                          execution_key=session), profile, config, purpose='quickstart_builder')
+        result = run(config=config, instructions=instructions, turn_text=text, call_tool=lambda *_: {}, timeout=120, tool_specs=[],
+                     admission=admission)
         if result.status != 'ok':
             raise ValueError(result.error_kind or 'model_error')
         answer = re.sub(r'(?s)<think>.*?</think>', '', result.answer or '').strip()
         parsed = json.loads(answer[answer.index('{'):answer.rindex('}') + 1])
-    except Exception as exc:  # any model, transport or parse failure keeps the draft unchanged
+    except Exception as exc:  # any model, transport, governance or parse failure keeps the draft unchanged
+        refused = isinstance(exc, (governance.AdmissionError, agents.AgentError))
         return {'draft': current, 'reply': '', 'changed': [], 'mode': 'deterministic_preview', 'persisted': False,
-                'error_kind': getattr(exc, 'kind', None) or type(exc).__name__}
+                'error_kind': 'policy' if refused else getattr(exc, 'kind', None) or type(exc).__name__,
+                **({'error': str(exc)} if refused else {})}
     changes = parsed.get('changes') if isinstance(parsed, dict) and isinstance(parsed.get('changes'), dict) else {}
     updated, changed = copy.deepcopy(current), []
     for key, value in changes.items():

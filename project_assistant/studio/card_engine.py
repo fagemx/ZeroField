@@ -1362,10 +1362,12 @@ def comfyui(task, config, head):
             workflow = bind_external_workflow(workflow, ctx, config, task, head, client)
         if profile["driver"] == "comfy_partner":
             head.paid_request_submitted = True
-        if urllib.parse.urlsplit(comfy_base_url(config, comfy_platform(config))).hostname in ("127.0.0.1", "localhost", "::1"):
-            from project_assistant.take_grader import GPU_LOCK
-            GPU_LOCK.acquire()  # a continuity grade holding the local GPU finishes first; renders queue behind it
-            gpu_lock = GPU_LOCK
+        from project_assistant import gpu_arbiter  # SPEC_20 R13: one render, grade or local model call per GPU, across processes
+        try:
+            gpu_lock = gpu_arbiter.render(comfy_base_url(config, comfy_platform(config)), label=f"render:{task.get('id')}",
+                                          timeout=config.get("timeout", 1800), cancelled=getattr(head, "lease_lost", None))
+        except gpu_arbiter.GpuBusy as exc:
+            raise runtime.WorkerError(str(exc)) from None
         started_at = _utc_now()
         identifier = client.submit_workflow(workflow, str(task["id"]), config.get("metadata"))
         deadline = time.monotonic() + config.get("timeout", (card.get("engine_config", {}).get("timeout", 1800) if card else 1800))

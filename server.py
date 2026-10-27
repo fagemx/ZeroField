@@ -395,6 +395,8 @@ def main() -> int:
         conn.close()
 
     shutdown = threading.Event()
+    from project_assistant import gpu_arbiter
+    restore_gpu = gpu_arbiter.enable_switching()  # SPEC_20 R13: while serving, owner switches free ComfyUI or unload the model
     if not args.no_worker:
         assistant_worker.start_in_background(projects_http.open_connection, shutdown)
 
@@ -409,6 +411,7 @@ def main() -> int:
         server.server_close()
         if cleanup_pg is not None:
             cleanup_pg()
+        restore_gpu()
     return 0
 
 
