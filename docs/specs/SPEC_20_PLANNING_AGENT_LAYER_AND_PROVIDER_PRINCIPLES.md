@@ -173,7 +173,7 @@
 | R31 | 服務帳號權杖 | 啟用既有的 `agent_service_account` 表。權杖限定專案、工具、寫入模式，有到期時間；稽核記錄外部代理的身分。 |
 | R32 | 流程手冊 | repo 內新增 `skills/` 資料夾（SKILL.md 格式），內容包括：劇組前製、單鏡分拍、3D 走位、接點巡檢。另以 `get_workflow` 工具回傳。手冊沒觸發時，工具層照樣限制（固定決策 8）。 |
 | R33 | Streamable HTTP（P2） | 只綁本機，用服務帳號權杖驗證。 |
-| R34 | MCP Apps 卡片（P2） | 生成台、成片視窗、3D 片場三張卡片（待決 9）。 |
+| R34 | MCP Apps 卡片（P2） | 生成台、成片視窗、3D 片場三張卡片（待決 9）。已實作：3D 預覽接觸表（`project_assistant/mcp_apps.py`、`mcp_cards/previs_contact_sheet.html`，`read_shot` 與 `propose_previs_ops`）；生成台與成片接點兩張等 SPEC_19 併入後再做。 |
 | R35 | ACP 工人選配（P2） | 沿用 `acp_bridge`，補齊判斷台的鎖權限：只開指定的 MCP、清除密鑰環境變數、啟動後確認模式、權限請求預設拒絕且一次性、意外工具呼叫就砍掉整棵程序、擋斜線指令、離線列出工具清單。 |
 
 **F. 中控台（P1）**

@@ -28,5 +28,5 @@ packages = ["project_docs", "project_assistant", "project_assistant.studio", "op
 include-package-data = false
 
 [tool.setuptools.package-data]
-project_assistant = ["prompts/*.md", "provider_catalog.json"]
+project_assistant = ["prompts/*.md", "provider_catalog.json", "mcp_cards/*.html"]
 openbench_data = ["db/*.sql", "static/projects/*", "static/projects/assets/*", "workflows/*.json", "workflows/*.md", "workflows/cards/*.json", "workflows/router/*.json", "samples/*.png", "samples/*.mp4", "samples/*.md", "samples/*.py", "skills/*.md", "skills/*/*.md"]

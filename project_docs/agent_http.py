@@ -9,6 +9,10 @@ Admin token management (signed-in project showrunners):
 Agent API for zerofield-mcp (Bearer service-account token, loopback clients only, no browser origin):
   GET  /agent-mcp/v1/tools                                   the tools this token sees
   POST /agent-mcp/v1/tools/{name}  {"arguments": {...}}      call one; {"text", "isError", "code", "images"}
+       with "card": true (an MCP Apps client, SPEC_20 R34) a tool with a card also returns "card", its data
+  GET  /agent-mcp/v1/resources                               the MCP Apps card resources this token may list
+  POST /agent-mcp/v1/resources/read  {"uri": "..."}          read one: {"contents": [...]}, else 404 RESOURCE_NOT_FOUND;
+       audited and rate limited like a tool call
 An optional X-ZeroField-Project header refuses a token issued for another production.
 
 MCP over Streamable HTTP (SPEC_20 R33, project_docs.mcp_http):
@@ -23,6 +27,7 @@ from project_docs import service
 
 ADMIN = re.compile(r'^/projects/api/([a-z0-9][a-z0-9-]{0,40})/service-accounts(?:/([a-z][a-z0-9_-]{0,47})/(revoke|audit))?$')
 AGENT = re.compile(r'^/agent-mcp/v1/tools(?:/([a-z][a-z0-9_]{0,63}))?$')
+RESOURCES = re.compile(r'^/agent-mcp/v1/resources(/read)?$')
 LOOPBACK = {'127.0.0.1', '::1', '::ffff:127.0.0.1'}
 UNAVAILABLE = 'Service accounts are temporarily unavailable.'
 
@@ -36,6 +41,10 @@ def handle(handler, parsed, method):
     agent = AGENT.fullmatch(parsed.path)
     if agent:
         _agent(handler, agent[1], method)
+        return True
+    resources = RESOURCES.fullmatch(parsed.path)
+    if resources:
+        _resources(handler, bool(resources[1]), method)
         return True
     admin = ADMIN.fullmatch(parsed.path)
     if admin:
@@ -144,9 +153,52 @@ def rate_limit(account, tool):
     _refusals_kept(lambda conn: service_accounts.rate_limit(conn, account, tool))
 
 
-def call_tool(account, name, arguments, client=None):
+def call_tool(account, name, arguments, client=None, card=False):
     from project_docs import http
-    return service_accounts.call_tool(http.open_connection, account, name, arguments, client=client)
+    return service_accounts.call_tool(http.open_connection, account, name, arguments, client=client, card=card)
+
+
+def read_resource(account, uri, client=None):
+    from project_docs import http
+    return service_accounts.read_resource(http.open_connection, account, uri, client=client)
+
+
+def _resources(handler, read, method):
+    """GET /agent-mcp/v1/resources and POST /agent-mcp/v1/resources/read (SPEC_20 R34), same checks as the tools."""
+    from project_docs import http
+    if _local_only(handler):
+        handler.send_json(403, {'error': 'The agent API accepts local zerofield-mcp clients only.', 'code': 'LOCAL_ONLY'})
+        return
+    if method != ('POST' if read else 'GET'):
+        handler.send_json(405, {'error': 'Unsupported method.'})
+        return
+    bearer = handler.headers.get('Authorization', '')
+    token = bearer[7:].strip() if bearer.startswith('Bearer ') else ''
+    project = handler.headers.get('X-ZeroField-Project') or None
+    body = {}
+    if read:
+        body, error = http._json_body(handler)
+        if error:
+            handler.send_json(*error)
+            return
+    try:
+        account = authenticate(token, project, service_accounts.RESOURCE_READ if read else None)
+    except Exception as exc:  # noqa: BLE001
+        _fail(handler, exc)
+        return
+    if not read:
+        handler.send_json(200, {'resources': service_accounts.visible_resources(account)})
+        return
+    uri = body.get('uri') if isinstance(body, dict) else None
+    if not isinstance(uri, str) or not uri or len(uri) > 2048:
+        handler.send_json(400, {'error': 'Send {"uri": "..."} with the resource to read.', 'code': 'INVALID_REQUEST'})
+        return
+    try:
+        payload = read_resource(account, uri, body.get('client'))
+    except Exception as exc:  # noqa: BLE001
+        _fail(handler, exc)
+        return
+    handler.send_json(200, payload)
 
 
 def _agent(handler, name, method):
@@ -177,7 +229,7 @@ def _agent(handler, name, method):
                                 'tools': service_accounts.visible_specs(account)})
         return
     try:
-        payload = call_tool(account, name, body.get('arguments', {}), client=body.get('client'))
+        payload = call_tool(account, name, body.get('arguments', {}), client=body.get('client'), card=body.get('card') is True)
     except Exception as exc:  # noqa: BLE001
         _fail(handler, exc)
         return

@@ -15,6 +15,9 @@ Transport (2026-07-28 binding, dual-era, stateless):
   An unsupported version is 400 (-32022) and an unknown method 404 (-32601).
 - Legacy requests (2025-11-25, 2025-06-18, 2025-03-26): initialize answers the negotiated version; every later
   request is framed by its MCP-Protocol-Version header, or 2025-03-26 when it has none.
+- MCP Apps cards (SPEC_20 R34) need a 2026-07-28 client here, whose requests each carry the capabilities that
+  accept them; with no session, a legacy initialize is not remembered, so legacy clients get the text fallback
+  (initialize does not advertise the extension). zerofield-mcp on stdio offers cards in both eras.
 
 Security: the client address must be loopback, the Host header must name this machine (localhost, 127.0.0.1
 or [::1]) and an Origin header, when present, must be a loopback origin (DNS-rebinding protection); a request
@@ -220,11 +223,21 @@ class AccountBackend:
     def list_tools(self):
         return service_accounts.visible_specs(self.account)
 
-    def call_tool(self, name, arguments, client=None):
+    def call_tool(self, name, arguments, client=None, card=False):
         try:
             agent_http.rate_limit(self.account, name)
-            return agent_http.call_tool(self.account, name, arguments, client)
+            return agent_http.call_tool(self.account, name, arguments, client, card=card)
         except Exception as exc:  # noqa: BLE001 - the same refusals the agent API answers over HTTP
+            raise _backend_error(exc) from None
+
+    def list_resources(self):
+        return service_accounts.visible_resources(self.account)
+
+    def read_resource(self, uri, client=None):
+        try:
+            agent_http.rate_limit(self.account, service_accounts.RESOURCE_READ)
+            return agent_http.read_resource(self.account, uri, client)
+        except Exception as exc:  # noqa: BLE001
             raise _backend_error(exc) from None
 
 
@@ -319,7 +332,10 @@ def handle(handler, method):
         except protocol.RpcError as exc:
             _reply(handler, 400, protocol.error_message(ident, exc.code, exc.message, exc.data))
             return
-    reply = protocol.Server(AccountBackend(account), legacy=legacy).handle(message)
+    # The Host header is a local authority (local_request), so a card's "Open in ZeroField" link stays on this machine.
+    # Legacy requests get no cards: this endpoint keeps no session to remember an initialize handshake.
+    url = 'http://' + (handler.headers.get('Host') or '127.0.0.1').strip()
+    reply = protocol.Server(AccountBackend(account), legacy=legacy, url=url, legacy_apps=False).handle(message)
     if reply is None:
         _reply(handler, 202)
         return

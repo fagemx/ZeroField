@@ -8,11 +8,21 @@ JSON-RPC handling, the tool list and the call results come from this module.
 Protocol: MCP 2026-07-28, stateless (server/discover; each request carries its protocol version and client
 capabilities in _meta), and the initialize handshake of 2025-11-25, 2025-06-18 and 2025-03-26 for older
 clients.
+
+MCP Apps (extension io.modelcontextprotocol/ui, SPEC_20 R34; content in project_assistant.mcp_apps): when the
+client's capabilities accept text/html;profile=mcp-app views (per request in 2026-07-28; from initialize on a
+transport that remembers it), the server advertises the extension and resources, lists _meta.ui.resourceUri on the
+tools that have a card, answers resources/list, resources/templates/list and resources/read (backend list_resources
+and read_resource, scoped and audited per token), and asks the backend for the card's data, which it puts on the
+tool result as _meta["zerofield/card"]. Any other client sees no resources and no UI metadata: text, image blocks
+and structuredContent, exactly as before.
 """
 from __future__ import annotations
 
 import json
 import sys
+
+from project_assistant import mcp_apps
 
 MODERN_VERSIONS = ('2026-07-28',)
 LEGACY_VERSIONS = ('2025-11-25', '2025-06-18', '2025-03-26')
@@ -22,10 +32,12 @@ META_CAPABILITIES = 'io.modelcontextprotocol/clientCapabilities'
 META_CLIENT = 'io.modelcontextprotocol/clientInfo'
 META_SERVER = 'io.modelcontextprotocol/serverInfo'
 
-# JSON-RPC and MCP codes; this server's own codes sit outside the reserved -32768..-32000 range.
+# JSON-RPC and MCP codes (-32002 is MCP's resource not found); this server's own codes sit outside the reserved
+# -32768..-32000 range.
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = -32700, -32600, -32601, -32602, -32603
-HEADER_MISMATCH, UNSUPPORTED_VERSION = -32020, -32022
-TOKEN_REFUSED, SERVER_UNREACHABLE, LOCAL_ONLY = -31001, -31002, -31003
+HEADER_MISMATCH, UNSUPPORTED_VERSION, RESOURCE_NOT_FOUND = -32020, -32022, -32002
+TOKEN_REFUSED, SERVER_UNREACHABLE, LOCAL_ONLY, RATE_LIMITED = -31001, -31002, -31003, -31004
+MAX_URI = 2048
 
 INSTRUCTIONS = ('ZeroField Studio tools for one production. Edits are proposals that a crew member reviews and '
                 'adopts in ZeroField. request_generation, when your token allows it, submits only free local '
@@ -58,11 +70,23 @@ class BackendError(Exception):
         self.status, self.message, self.code = status, message, code
 
 
-def tool_spec(spec):
-    """An MCP Tool from the server's registry spec."""
+def tool_spec(spec, apps=False):
+    """An MCP Tool from the server's registry spec; with MCP Apps, a tool that has a card names it in _meta.ui."""
     tool = {key: spec[key] for key in ('name', 'title', 'description', 'inputSchema', 'annotations') if key in spec}
     tool.setdefault('inputSchema', {'type': 'object', 'additionalProperties': False})
+    meta = mcp_apps.tool_meta(tool.get('name')) if apps else None
+    if meta:
+        tool['_meta'] = meta
     return tool
+
+
+def capabilities(apps=False):
+    """The server capabilities: tools, plus resources and the MCP Apps extension for a client that renders cards."""
+    caps = {'tools': {'listChanged': False}}
+    if apps:
+        caps['resources'] = {'subscribe': False, 'listChanged': False}
+        caps['extensions'] = {mcp_apps.EXTENSION: {}}
+    return caps
 
 
 def backend_failure(exc, *, tool=None, url=None):
@@ -83,13 +107,16 @@ def backend_failure(exc, *, tool=None, url=None):
 
 
 class Server:
-    """Dual-era MCP request handling; state is only the legacy version negotiated by initialize.
+    """Dual-era MCP request handling; state is only what initialize negotiated (legacy version, MCP Apps).
 
-    A transport without a connection (Streamable HTTP) passes the legacy version of each request instead."""
+    A transport without a connection (Streamable HTTP) passes the legacy version of each request instead, and
+    legacy_apps=False: it cannot remember an initialize handshake, so legacy clients there get no cards. url is
+    the ZeroField server as the client reaches it (loopback); a card's "Open in ZeroField" link is built on it."""
 
-    def __init__(self, backend, *, config_error=None, url=None, legacy=None):
+    def __init__(self, backend, *, config_error=None, url=None, legacy=None, legacy_apps=True):
         self.backend, self.config_error, self.url = backend, config_error, url
         self.legacy = legacy if legacy in LEGACY_VERSIONS else None
+        self.legacy_apps_possible, self.legacy_apps = legacy_apps, False
 
     # ---------- JSON-RPC ----------
 
@@ -114,7 +141,7 @@ class Server:
             if method == 'initialize':
                 return result_message(ident, self._initialize(params), modern=False)
             modern = self._modern(params)
-            return result_message(ident, self._dispatch(method, params, modern), modern=modern)
+            return result_message(ident, self._dispatch(method, params, modern, self._apps(params, modern)), modern=modern)
         except RpcError as exc:
             return error_message(ident, exc.code, exc.message, exc.data)
         except Exception as exc:  # noqa: BLE001 - one bad request never stops the server
@@ -124,8 +151,16 @@ class Server:
     def _initialize(self, params):
         requested = params.get('protocolVersion')
         self.legacy = requested if requested in LEGACY_VERSIONS else LEGACY_VERSIONS[0]
-        return {'protocolVersion': self.legacy, 'capabilities': {'tools': {'listChanged': False}},
+        self.legacy_apps = self.legacy_apps_possible and mcp_apps.supported(params.get('capabilities'))
+        return {'protocolVersion': self.legacy, 'capabilities': capabilities(self.legacy_apps),
                 'serverInfo': SERVER_INFO, 'instructions': INSTRUCTIONS}
+
+    def _apps(self, params, modern):
+        """Whether this request's client renders MCP Apps cards: its own capabilities (2026-07-28) or initialize's."""
+        if not modern:
+            return self.legacy_apps
+        meta = params.get('_meta') if isinstance(params.get('_meta'), dict) else {}
+        return mcp_apps.supported(meta.get(META_CAPABILITIES))
 
     def _modern(self, params):
         """True for a 2026-07-28 request (per-request _meta), False for a request after initialize."""
@@ -147,27 +182,41 @@ class Server:
 
     # ---------- methods ----------
 
-    def _dispatch(self, method, params, modern):
+    def _dispatch(self, method, params, modern, apps=False):
         if method == 'server/discover':
-            return {'supportedVersions': list(SUPPORTED_VERSIONS), 'capabilities': {'tools': {'listChanged': False}},
+            return {'supportedVersions': list(SUPPORTED_VERSIONS), 'capabilities': capabilities(apps),
                     'instructions': INSTRUCTIONS}
         if method == 'ping':
             return {}
         if method == 'tools/list':
-            return {'tools': [tool_spec(spec) for spec in self._backend(lambda: self.backend.list_tools())]}
+            return {'tools': [tool_spec(spec, apps) for spec in self._backend(lambda: self.backend.list_tools())]}
         if method == 'tools/call':
-            return self._call(params, modern)
+            return self._call(params, modern, apps)
+        if apps and method == 'resources/list':
+            return {'resources': list(self._backend(lambda: self.backend.list_resources()))}
+        if apps and method == 'resources/templates/list':
+            return {'resourceTemplates': []}  # contact sheets are named by the card's data, not discovered
+        if apps and method == 'resources/read':
+            return self._read(params, modern)
         raise RpcError(METHOD_NOT_FOUND, f'Method not found: {method}')
 
-    def _call(self, params, modern):
+    @staticmethod
+    def _client(params, modern):
+        meta = params.get('_meta') if isinstance(params.get('_meta'), dict) else {}
+        return meta.get(META_CLIENT) if modern and isinstance(meta.get(META_CLIENT), dict) else None
+
+    def _call(self, params, modern, apps=False):
         name, arguments = params.get('name'), params.get('arguments', {})
         if not isinstance(name, str) or not name:
             raise RpcError(INVALID_PARAMS, 'tools/call needs a tool name.')
         if not isinstance(arguments, dict):
             raise RpcError(INVALID_PARAMS, 'tools/call arguments must be an object.')
-        meta = params.get('_meta') if isinstance(params.get('_meta'), dict) else {}
-        client = meta.get(META_CLIENT) if modern and isinstance(meta.get(META_CLIENT), dict) else None
-        reply = self._backend(lambda: self.backend.call_tool(name, arguments, client), tool=name)
+        client = self._client(params, modern)
+        card = apps and name in mcp_apps.TOOL_CARDS
+        if card:  # only then: a backend without cards keeps its three-argument call
+            reply = self._backend(lambda: self.backend.call_tool(name, arguments, client, card=True), tool=name)
+        else:
+            reply = self._backend(lambda: self.backend.call_tool(name, arguments, client), tool=name)
         text = str(reply.get('text', ''))
         content = [{'type': 'text', 'text': text}]
         for image in reply.get('images') or []:
@@ -181,7 +230,28 @@ class Server:
                 structured = None
             if isinstance(structured, dict):
                 result['structuredContent'] = structured
+            if card and isinstance(reply.get('card'), dict):
+                result['_meta'] = {mcp_apps.CARD_META: mcp_apps.with_link(reply['card'], self.url)}
         return result
+
+    def _read(self, params, modern):
+        uri = params.get('uri')
+        if not isinstance(uri, str) or not uri or len(uri) > MAX_URI:
+            raise RpcError(INVALID_PARAMS, 'resources/read needs the uri of a resource.')
+        if self.config_error:
+            raise RpcError(TOKEN_REFUSED, self.config_error)
+        try:
+            reply = self.backend.read_resource(uri, self._client(params, modern))
+        except BackendError as exc:
+            if exc.status == 404:
+                raise RpcError(RESOURCE_NOT_FOUND, 'Resource not found', {'uri': uri}) from None
+            if exc.status == 429:
+                raise RpcError(RATE_LIMITED, exc.message, {'code': exc.code} if exc.code else None) from None
+            return backend_failure(exc, url=self.url)  # raises
+        contents = [item for item in (reply or {}).get('contents') or [] if isinstance(item, dict) and item.get('uri') == uri]
+        if not contents:
+            raise RpcError(RESOURCE_NOT_FOUND, 'Resource not found', {'uri': uri})
+        return {'contents': contents}
 
     def _backend(self, operation, tool=None):
         if self.config_error:
@@ -199,7 +269,8 @@ def unsupported_version(requested):
 
 def result_message(ident, result, *, modern):
     if modern:
-        result = {'resultType': 'complete', **result, '_meta': {META_SERVER: SERVER_INFO}}
+        meta = result.get('_meta') if isinstance(result.get('_meta'), dict) else {}
+        result = {'resultType': 'complete', **result, '_meta': {**meta, META_SERVER: SERVER_INFO}}
     return {'jsonrpc': '2.0', 'id': ident, 'result': result}
 
 

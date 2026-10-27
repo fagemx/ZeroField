@@ -9,6 +9,8 @@ Protocol: MCP 2026-07-28, stateless (server/discover; each request carries its p
 capabilities in _meta), and the initialize handshake of 2025-11-25, 2025-06-18 and 2025-03-26 for older
 clients. The JSON-RPC handling lives in project_assistant.mcp_protocol, shared with the server's Streamable
 HTTP endpoint (POST /mcp, SPEC_20 R33). One JSON-RPC message per line on stdin and stdout; logs go to stderr.
+MCP Apps cards (SPEC_20 R34, project_assistant.mcp_apps) work in both eras here: resources come from
+/agent-mcp/v1/resources with the same token, and a card's "Open in ZeroField" link is built on ZEROFIELD_URL.
 
 Environment:
   ZEROFIELD_MCP_TOKEN  the zfsa_ service-account token (required)
@@ -76,11 +78,22 @@ class HttpBackend:
     def list_tools(self):
         return self._request('GET', '/agent-mcp/v1/tools').get('tools', [])
 
-    def call_tool(self, name, arguments, client=None):
+    def call_tool(self, name, arguments, client=None, card=False):
         body = {'arguments': arguments}
         if client:
             body['client'] = client
+        if card:
+            body['card'] = True  # an MCP Apps client: the server adds the card's data (SPEC_20 R34)
         return self._request('POST', '/agent-mcp/v1/tools/' + quote(name, safe=''), body)
+
+    def list_resources(self):
+        return self._request('GET', '/agent-mcp/v1/resources').get('resources', [])
+
+    def read_resource(self, uri, client=None):
+        body = {'uri': uri}
+        if client:
+            body['client'] = client
+        return self._request('POST', '/agent-mcp/v1/resources/read', body)
 
 
 class Server(mcp_protocol.Server):

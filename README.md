@@ -128,6 +128,8 @@ Agents that connect over HTTP instead of launching a process can use the studio'
 claude mcp add --transport http zerofield http://127.0.0.1:3020/mcp --header "Authorization: Bearer zfsa_..."
 ```
 
+Hosts that render MCP Apps (`io.modelcontextprotocol/ui`) also get a 3D preview card next to `read_shot` and `propose_previs_ops`: the shot, its plan revision, the six contact-sheet frames and, for a proposal, its operations and state. The card is offered only to clients that declare `text/html;profile=mcp-app` (on `/mcp`, 2026-07-28 requests only: the endpoint keeps no session to remember a 2025 handshake); other clients get the usual text and image results. The card is a self-contained page with a strict content policy and no network access. Its image comes in the tool result or through a `resources/read` that the host forwards with the agent's token, served only to tokens that may call those tools and audited like a tool call. Its buttons only ask the host to open a link or to run `read_shot` again. The generation-desk and film-joins cards wait for SPEC_19. Checked in a simulated host page (headless Edge), not yet in a real MCP Apps host.
+
 ## External workflows and reference preparation
 
 The seeded OpenJutsu slate includes independently replaceable **Source Driving Video**, **First Frame**, **Motion Structure**, **Anchor Keyframe**, **Remastered Video** and **Split-Screen MP4** cells. The preparation stages use the original source video. Each result is reviewed before downstream generation proceeds.
