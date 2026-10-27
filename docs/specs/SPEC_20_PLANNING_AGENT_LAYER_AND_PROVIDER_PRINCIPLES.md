@@ -1,6 +1,6 @@
 # SPEC_20 規劃代理層：劇組真的會規劃、對內對外分工、供應商原則
 
-> **狀態：** 實作中（2026-10-27 起）。使用者指示不受參賽截止時間限制，R1–R44 全部完整實作；整合分支 `feat/spec20-integration`。
+> **狀態：** 已實作，待驗收（2026-10-27）。使用者指示不受參賽截止時間限制、R1–R44 全部完整實作；各項實作已併入整合分支 `feat/spec20-integration`，R44 與部分項目尚未完成，逐項狀態與未完成處見 §11。目前所有檢查都用假的模型端點、假的 ACP 代理與窄範圍測試；完整分片測試、真實模型與 GPU 驗收（A14、A15、A17、R42 實跑、R44）、真實 MCP 主機檢查都還沒做。<!-- verify R24 -->
 > **依據：** [`docs/research/2026-10-27-planning-agent-layer.md`](../research/2026-10-27-planning-agent-layer.md)（研究備忘，含查證狀態）。
 > **相關：** SPEC_08（中控台）、SPEC_13／14／16（故事與拆鏡）、SPEC_18（R4 階梯、R8 生成列）、SPEC_19（生成台、採用即成片、引用與接點；另一個工作階段在 `feat/spec19-integration` 平行實作，見 §10）。
 > **截止：** 參賽截止 2026-10-30 09:00 PT（台灣 10/31 00:00）。「P0／P1／P2」只代表先後與重要性，不再是截止前後的切分。
@@ -394,3 +394,60 @@ R6 已確認（見 §7 第 1 條），不阻擋任何一波。
 - 移除 `responses` 時，測試要改成走 `openai_compat` 假端點；不要為了讓測試通過，留下呼叫 chatgpt.com 的程式。
 - 文件裡每一句能力敘述都要能在程式或收據裡找到出處；查不到的寫「未驗證」。
 - 提交照 lean 流程：開 `fix/` 或 `docs/` 主題分支、`git add` 指定明確路徑、只在使用者要求時快轉 main，不推送。
+
+## 11. 實作對照
+
+狀態：**done** 是需求的內容都有程式，並有假模型或假服務的測試；**partial** 是做了一部分，缺的在備註；**deferred** 是還沒做，原因在備註。done 只代表程式與測試到位，不代表真實模型與 GPU 驗收通過（見本節末的未完成項目）。
+
+| 需求 | 狀態 | 主要模組 | 備註 |
+|---|---|---|---|
+| R1 修鎖死 | done | `project_assistant/providers.py`、`execution_governance.py`（`reserve`、`finalize`、`reconcile`）、`agent_console_store.py`（`uncertain_hold_seconds`）、`project_docs/console_http.py`（對帳路由） | 測試 `tests/test_spec20_provider_core.py` |
+| R2 預設本機模型與劇組就緒 | done | `providers.py`（`provider_from_env`）、`crew_readiness.py`、`agent_registry.py`（`needs_setup`）、`project_docs/http.py`（`/agents/readiness`）、`ui/src/assistant/AgentBoard.jsx` | `OPENBENCH_REASONING_EFFORT` 見 `docs/WORKERS.md` |
+| R3 移除 chatgpt.com | done | `model_client.py`（只留共用型別）、`agent_runtime.py`、`outcome_grader.py`、`agent_registry.py`、`execution_governance.py` | `responses`／`direct` 回報 `kind_removed`，不發出連線 |
+| R4 Ollama 相容 | done | `providers.py` | 不送 `tool_choice`，第 16 輪不帶 `tools` 並附 `LAST_ROUND_NOTE`；A14 實機待辦 |
+| R5 文件對齊 | partial | `README.md`、`AGENTS.md`、`docs/DESIGN_AND_DEV_GUIDELINES.md`、`docs/ZEROFIELD_SPEC.md`、`docs/WORKERS.md`、`docs/DEPLOYMENT.md`、`docs/STORY_WORKBENCH.md` | `docker-compose.yml` 仍預設 `api.openai.com` 與 `gpt-4.1`（閉源，預設政策會擋），文件已註明但檔案未改；A17 乾淨環境實測待辦 |
+| R6 確認平台規定 | done | （不改程式） | 已確認不是比賽規定，見 §7 第 1 條 |
+| R7 分拍提示詞提案 | done | `crew_planning.py`（`BEATS`）、`crew_jobs.py`、`project_docs/story_crew.py`（`beat-proposals`） | 沒有可用模型回 409 `DRAMA_CREW_NOT_READY`，不寫入 |
+| R8 供應商目錄與能力旗標 | done | `provider_catalog.json`、`provider_catalog.py`、`providers.py` | 目錄有 Ollama、OpenRouter、OpenAI、Gemini 四筆 |
+| R9 三級用量分級與政策 | done | `provider_catalog.py`、`execution_governance.py`、`console_model_matrix.py`（託管開放權重開關） | 開關在 Agent Console 的 Providers & API Keys → Roles and models |
+| R10 情境預算 | done | `providers.py`（修剪歷史與工具輸出）、`crew_jobs.py`（每個工作自己的強度） | |
+| R11 評分與快速建立助手走治理 | done | `take_grader.py`、`agent_console_service.py` | |
+| R12 失敗分類與實際模型 | done | `model_client.py`（`FAILURE_CLASSES`，含 `gpu_busy`）、`providers.py`、`execution_governance.py`、`ui/src/assistant/providerFailures.js` | 八個類別，帳本記錄實際回應的模型 |
+| R13 GPU 仲裁器 | partial | `gpu_arbiter.py`、`take_grader.py`、`studio/card_engine.py`、`studio/openapi_v2_hub.py`、`limb_worker.py` | 跨程序鎖與工作階段切換已做；沒有「規劃先於算圖」的優先序，等待者先到先得（FIFO）；真實 4090 上未驗收 |
+| R14 新專案的管線工人 | done | `local_workers.py`、`run_studio.py`、`project_docs/service.py`（`create_project`） | |
+| R15 宣告式工具登記 | done | `tool_registry.py`（`tool_specs`、`agent_policy`、`tool_host` 等由它產生） | |
+| R16 情境工具 | done | `context_tools.py`（`read_episode`、`read_scene`、`read_shot`、`read_cast`、`list_takes`） | |
+| R17 提案只鎖目標格 | done | `table_edits.py`、`service.py` | |
+| R18 非表格提案 | partial | `shot_meta.py`、`ui/src/previs/ShotMetaReview.jsx`、`shotMetaModel.js`、`PrevisStage.jsx` | 3D 計畫（`previsPlan`）提案已做；質感（`look`）提案等 SPEC_19 的 `story_look.py` 合進 main（`crew_art.LOOK_HOOK` 留好接點） |
+| R19 分拍提示詞（入口） | partial | `crew_planning.py`、`project_docs/story_crew.py`、`ui/src/CrewAsk.jsx`（鏡頭詳情「請劇組」） | 生成台提示詞區的入口等 SPEC_19 R9 |
+| R20 鏡頭與運鏡 | done | `crew_planning.py`（`CAMERA`）、`shot_meta.py`、`ui/src/previs/PrevisStage.jsx`（鬼影攝影機） | |
+| R21 描述與造型 | done | `crew_art.py`、`ui/src/StoryWorld.jsx`、`ui/src/CrewAsk.jsx` | 美術沒有獨立的名單角色，跑在編劇的設定上 |
+| R22 出場 | done | `crew_art.py`（`appearances`） | 鏡頭與場次兩種目標；插入鏡只綁場景 |
+| R23 拆鏡與改編、自動評分接故事 API | partial | `crew_writing.py`、`project_docs/story_crew.py` | 改編與拆鏡候選已做；「故事 API 的 Take 自動評分」那一半等 SPEC_19 的生成落地合進 main |
+| R24 劇組前製流程 | done | 前製流程模組（併入後由整合者填入檔名） | 依本規格；<!-- verify R24 --> |
+| R25 觸發點 | done | 前製卡片與各入口（併入後由整合者填入檔名） | 依本規格；<!-- verify R24 --> |
+| R26 3D 計畫存後端 | done | `project_docs/story_previs.py`、`ui/src/previs/PrevisStage.jsx`、`storyPlan.js` | 欄位 `previsPlanFull`，帶版本號，衝突回 409 |
+| R27 結構化操作與求解 | done | `previs_ops.py`、`ui/src/previs/ops.js`、`tests/fixtures/previs_ops_golden.json` | |
+| R28 無頭算圖與看圖驗證 | partial | `headless_previs.py`、`ui/src/previs/previsRender.js`、`ui/previs-solver.html` | 只有六格接觸表，WebM 預覽沒做；看圖檢查是選用設定 `previs_vision_check` |
+| R29 3D 與文字同步、角色代碼 | done | `story_previs.py`（`castOptions`）、`ui/src/previs/storyPlan.js`（`slateFromPlan`） | 同步場記是片場上的按鈕，由人按下，不是自動寫入 |
+| R30 stdio MCP 伺服器 | done | `zerofield_mcp.py`、`mcp_protocol.py`、`external_tools.py` | 只用假客戶端測過；真實主機待辦 |
+| R31 服務帳號權杖 | done | `service_accounts.py`、`db/164_agent_service_accounts.sql`、`project_docs/agent_http.py` | |
+| R32 流程手冊 | done | `skills/`（四份手冊）、`external_tools.py`（`get_workflow`）、`setup.py`、`MANIFEST.in` | `tests/test_skills_content.py` |
+| R33 Streamable HTTP | done | `project_docs/mcp_http.py` | 只收本機，用服務帳號權杖 |
+| R34 MCP Apps 卡片 | partial | `mcp_apps.py`、`mcp_cards/previs_contact_sheet.html` | 只有 3D 預覽接觸表一張；生成台與成片接點兩張等 SPEC_19；只在模擬主機頁測過 |
+| R35 ACP 工人加固 | done | `acp_lockdown.py`、`acp_bridge.py` | 用假 ACP 代理測；Claude Code 的 ACP adapter 未實機驗證 |
+| R36 模型設定精靈與健康檢查 | done | `console_model_check.py`、`ui/src/agentConsole/ConsoleOpsViews.jsx`（`ModelSetup`） | |
+| R37 角色 × 模型矩陣 | done | `console_model_matrix.py`、`ui/src/agentConsole/ConsoleModelMatrix.jsx`、`matrixModel.js` | |
+| R38 顯示卡面板 | done | `console_ops.py`、`gpu_arbiter.py`（`status`）、`ConsoleOpsViews.jsx`（`GpuPanel`） | |
+| R39 工作佇列與失敗 | done | `console_ops.py`、`ConsoleOpsViews.jsx`（`QueuePanel`）、`execution_governance.py`（`reconcile`） | |
+| R40 自動工作總開關 | done | `automation.py`、`ConsoleOpsViews.jsx`（`AutomationSwitch`、`PausedBanner`） | |
+| R41 外部代理連線頁 | partial | `ui/src/agentConsole/ConsoleExternalAgents.jsx`、`externalAgentsModel.js`、`project_docs/agent_http.py` | 工具標籤由伺服器的工具登記提供（英文），zh-TW 沒有翻譯 |
+| R42 劇組評測集 | partial | `research/crew_eval/`、`scripts/crew_eval.py`、`crew_planning.py`（`eval_adapter`） | 分拍、走位、接點各 8 題與評分器完成；真實工作的轉接器只有分拍，走位與接點沒有；真實模型實跑待使用者的 GPU |
+| R43 離線工具清單檢查 | done | `scripts/audit_tool_surface.py`、`tests/fixtures/tool_surface.json`、`tests/test_tool_registry.py` | 含 ACP 可見工具 |
+| R44 空白專案實走 | deferred | （收據 `docs/spec20-verification.json` 尚未建立） | 等使用者確認 GPU 空檔 |
+
+**未完成的驗收**
+- 完整後端測試只在最後分片跑一次，這一次還沒跑；前端完整測試與建置也一樣。各工作包只跑了自己新增與直接改到的測試，全部用假的模型端點、假的 ComfyUI 與 GPU 探測、假的 ACP 代理。
+- 實機驗收（A14、A15、A17、R42 實跑、R44）要使用者的 GPU，都還沒做；`docs/spec20-verification.json` 收據尚未建立。
+- MCP 用 MCP Inspector、Goose＋Ollama、Claude Code 各接一次的檢查沒做；MCP Apps 卡片只在模擬主機頁（無頭 Edge）看過。
+- 等 SPEC_19 併入才能補的項目：R19 的生成台入口、R23 的故事 API 自動評分、R18 的質感提案、R34 的生成台與成片接點兩張卡片。

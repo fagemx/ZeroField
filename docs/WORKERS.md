@@ -4,7 +4,7 @@
 
 各專案可由管理者設定代理 Prompt、具體工具清單與獨立模型。空的模型設定沿用全域設定；明確指定的模型失敗會顯示錯誤，不自動轉送另一個供應商。設定只儲存 `kind/base_url/api_key_env/model/effort`，不儲存實際金鑰。
 
-部署端以 `OPENBENCH_AGENT_KEY_ENVS` 設定允許的憑證環境變數名稱（逗號分隔），例如 `WRITER_API_KEY,SHEET_API_KEY`，實際金鑰仍只在 Worker 環境中。未列入清單的參照會被拒絕。`responses` 與 `codex_cli` 使用既有本機認證，不接受自訂 `base_url/api_key_env`。對話訊息保留當次代理名稱與設定快照，停用或撤權會阻止後續工具呼叫。
+部署端以 `OPENBENCH_AGENT_KEY_ENVS` 設定允許的憑證環境變數名稱（逗號分隔），例如 `WRITER_API_KEY,SHEET_API_KEY`，實際金鑰仍只在 Worker 環境中。未列入清單的參照會被拒絕。`codex_cli` 使用既有本機認證，不接受自訂 `base_url/api_key_env`。對話訊息保留當次代理名稱與設定快照，停用或撤權會阻止後續工具呼叫。
 
 OpenBench 的 Head 保存資料、版本、鎖與審核；Worker 在自己的機器執行模型及 FFmpeg。工作台設定 → 手腳 → 註冊，選擇能力與專案，複製只顯示一次的 token。每個 Worker 只註冊已配置的能力，勿讓尚未配置的能力領走任務。
 
@@ -28,6 +28,43 @@ openbench-worker --config examples/worker.example.json
 - 既有專案的 Comfy Pipeline 若還是未改過的範本，啟動時換成上述預設；改過的保持原樣。
 - `--no-worker` 不註冊、不換 token，也不改 Worker 資料。
 
+## 預設模型與思考強度（SPEC_20 R2、R4、R10）
+
+內建劇組與連戲評分沒有設任何 `OPENBENCH_*` 時，用本機預設 `http://127.0.0.1:11434/v1` 的 Ollama 加 `qwen3.8:27b`，並送 `reasoning_effort: medium`（`project_assistant/providers.py` 的 `provider_from_env`）。
+
+- `OPENBENCH_API_BASE`、`OPENBENCH_MODEL`：換成別的 OpenAI 相容端點或模型。只要設了其中一個，就不自動送 `reasoning_effort`（不是每個模型都收這個欄位）。
+- `OPENBENCH_REASONING_EFFORT`：`low`、`medium` 或 `high`（大小寫不拘）。設了就照設定送，包含自訂端點；其他值會讓載入設定時報錯。
+- 每個劇組工作有自己的強度（beats 與改編、拆鏡為 `medium`，運鏡、描述、造型、出場為 `low`；`crew_jobs.CrewJob.effort`），單次呼叫的強度蓋過設定；連戲評分固定用 `low`。
+- 託管或閉源端點要先過治理：放行主機、金鑰變數列入 `OPENBENCH_AGENT_KEY_ENVS`、價格上限，以及用量分級（見 [DESIGN_AND_DEV_GUIDELINES.md](DESIGN_AND_DEV_GUIDELINES.md) 第 3.1 節）。
+- 已移除的 `responses`／`direct` 類型：新設定回 400 `kind_removed`，已存的設定在就緒檢查與中控台回報 `kind_removed`，不發出任何連線。
+
+## GPU 仲裁（SPEC_20 R13）
+
+一張顯示卡放不下 LTX-2.5 和本機 27B 語言模型，所以每個要用這部署擁有的 GPU 的程序，先對該 GPU 主機取一把鎖（`project_assistant/gpu_arbiter.py`）：本機 ComfyUI 算圖、連戲評分、本機模型呼叫（劇組對話、劇組工作、快速建立助手）都要取。
+
+- **鎖與資料庫：** 鎖是 PostgreSQL 的 advisory lock，鍵是 GPU 主機；所有 loopback 端點共用 `gpu:local`，區網上的 ComfyUI 主機是 `gpu:<主機>`。占用者當掉時連線關閉，鎖隨之釋放。**獨立的 `openbench-worker` 必須在環境裡設 `OPENBENCH_DB_URI`（或 `DATABASE_URL`、`OPENBENCH_DB_HOST`）才會和伺服器共用同一把鎖**；沒有設定，或資料庫連不上，它只有程序內的鎖，擋不住伺服器那邊的算圖或模型呼叫。設定後這台 Worker 主機就持有資料庫連線資訊，只在 Worker 與資料庫同在受信任的環境時這樣做。
+- **哪些端點算自己的 GPU：** loopback、私有 IP、沒有點的主機名稱與 `.local`、`.lan`、`.internal`、`.home.arpa` 都算；公開網域（託管服務）不上鎖。`OPENBENCH_GPU_HOSTS`（逗號分隔的主機名稱）另外列出也屬於這個部署的 GPU 主機，例如放在公開網域名稱下的自架 ComfyUI。
+- **等待有上限：** 等待受呼叫端的期限限制（一輪對話剩下的時間、一次算圖的逾時），也可以取消；等不到就失敗並說明 GPU 忙碌（模型呼叫的失敗類別是 `gpu_busy`，算圖是 Worker 錯誤），沒有送出任何東西，也不留住鎖。
+- **切換：** 仲裁器記得 GPU 上現在常駐的是語言模型還是 ComfyUI。連續的模型呼叫不會卸載模型；換工作類型時才切換：算圖前對常駐模型送 `keep_alive: 0`，模型呼叫前等 ComfyUI 佇列清空後呼叫 `/free` 並等顯示記憶體釋出（門檻為 75% 空閒，`FREE_TARGET`，尚未依實際顯示卡校準）。切換動作只在啟動器（`run_studio.py`、`server.py`）與 `openbench-worker` 開啟，環境變數 `OPENBENCH_GPU_SWITCHING` 設 `on` 強制開啟、設 `off` 強制關閉，程式庫和測試單獨使用時不會碰真實的 GPU 服務。
+- **看得到誰占著：** Agent Console 的 Dashboard 有 GPU 面板（占用者、顯示記憶體、ComfyUI 佇列、載入的模型）。
+
+以上只在假的 ComfyUI、假的模型服務與一次性資料庫的測試中驗證過（`tests/test_spec20_gpu_arbiter.py`）；在真實 4090 上同時跑算圖與模型的驗收還沒做。
+
+## 無頭預演瀏覽器（SPEC_20 R27、R28）
+
+3D 走位的求解與接觸表由 3D 片場自己的 JavaScript 算（`ui/src/previs/ops.js`、`previsRender.js`），伺服器不重寫、也不需要 Node：`project_assistant/headless_previs.py` 在執行 `propose_previs_ops` 的程序裡啟動一個無頭的 Chromium 系瀏覽器，開啟建置出的 `static/projects/previs-solver.html`（要先 `npm run build --prefix ui`），用 DevTools 協定呼叫求解與算圖。
+
+| 環境變數 | 作用 |
+| --- | --- |
+| `ZEROFIELD_PREVIS_BROWSER` | 瀏覽器執行檔的路徑或名稱。沒設時依序找 Windows 與 macOS 常見的 Edge、Chrome 安裝路徑，再找 PATH 上的 `msedge`、`chrome`、`chromium` 等。設 `off`（或 `0`、`false`、`no`、`none`）關閉無頭求解。 |
+| `ZEROFIELD_PREVIS_TIMEOUT` | 一次工作階段（啟動、載入、求解、算圖）的總秒數，預設 60；不是數字時用預設。 |
+
+- 頁面沒有網路：它開在保留網域 `previs.zerofield.invalid`，所有請求都被攔截，只放行這次建置的檔案與呼叫端交給它的場景圖，瀏覽器另以 `--host-resolver-rules` 封住主機解析。
+- 用 SwiftShader（CPU）算 WebGL，不用 GPU，也不取 GPU 仲裁鎖。
+- 每個程序同時只跑一個工作階段；瀏覽器用拋棄式的設定資料夾，結束後關閉、必要時殺掉整棵程序樹並刪除資料夾。
+- 沒有瀏覽器、找不到建置出的頁面、啟動失敗或逾時時，提案只存操作，由審核的人在 3D 片場求解；沒有求解結果的提案不能核准。目前只輸出六格接觸表，伺服器端 WebM 預覽未做。
+- 手動檢查：`python -X utf8 scripts/previs_headless_check.py`（真的啟動瀏覽器，不用資料庫）。
+
 ## 可用 adapter
 
 ## M8 編排佇列與專家 Flow 節點
@@ -36,7 +73,7 @@ LLM profile 的結構化最終輸出也檢查畫布修改權限：表格需 `pro
 
 舊 Worker 預設只領取原 Flow 佇列。要接收專家編排任務，在設定檔加入 `"orchestration_enabled": true`；Worker 會輪替嘗試兩個佇列並沿用現有 adapter。註冊的 Worker 仍須具備該專案權限與實際配置的 capability。
 
-管理者可建立 `runtime_kind=remote_limb` 的代理，將 `bound_limb_id` 指向已註冊手腳；Flow 步驟可選此代理，或選內建 `builtin_llm` 專家。代理綁定與 `limb_id` 二選一；代理節點先提出整組提案，不能選 direct。內建 Worker 停用時工作可排隊等待；內建在線狀態以 90 秒內 Worker 心跳判斷，外部手腳沿用原連線判斷，不把已註冊等同已連接。
+管理者可建立 `runtime_kind=remote_limb` 的代理，將 `bound_limb_id` 指向已註冊手腳；Flow 步驟可選此代理，或選內建 `builtin_llm` 專家。代理綁定與 `limb_id` 二選一；代理節點先提出整組提案，不能選 direct。內建 Worker 停用時工作可排隊等待；內建代理在名單上只有「90 秒內有 Worker 心跳，且沒有就緒阻擋」才顯示 `online`，否則顯示 `needs_setup`（模型連不上、模型沒下載、政策或價格上限擋住等，原因見劇組看板橫幅與就緒 API，`agent_registry.py`、`crew_readiness.py`）；外部手腳沿用原連線判斷，不把已註冊等同已連接。
 
 每次遠端領取取得獨立 `dispatch_handle`、租約及 deadline。續約、輸出、失敗與媒體上傳都要帶回相同憑證；取消或重新派發後的舊上傳會在存入資產前拒絕。完成回覆重送相同內容會返回已保存結果，內容不同則回衝突。
 
