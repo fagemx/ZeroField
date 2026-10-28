@@ -7,10 +7,12 @@ width/height inputs yet) a minimal stand-in with the same id is registered for t
 import copy
 import io
 import os
+import sys
+import types
 import unittest
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from project_assistant import limb_worker as worker
 from project_docs import repository as repo, story_assets as assets, story_openapi as story
@@ -27,6 +29,15 @@ def near(found, wanted):
 def png(color, size=(48, 64)):
     out = io.BytesIO()
     Image.new("RGB", size, color).save(out, format="PNG")
+    return out.getvalue()
+
+
+def figure(size=(768, 1344), box=(200, 100, 567, 1299), color=(200, 0, 0)):
+    """A front as the card renders it: one figure (``box``, inclusive) on the mid-grey backdrop, as PNG bytes."""
+    picture = Image.new("RGB", size, GREY)
+    ImageDraw.Draw(picture).rectangle(box, fill=color)
+    out = io.BytesIO()
+    picture.save(out, format="PNG")
     return out.getvalue()
 
 
@@ -51,7 +62,7 @@ class PanelPureTests(unittest.TestCase):
     def test_the_panel_table_is_the_spec_table(self):
         self.assertEqual(assets.PANEL_TABLE, {
             "face": (SOUL_CAST, (), (896, 1184)), "front": (REFERENCE_KEY, ("face",), (768, 1344)),
-            "back": (REFERENCE_KEY, ("face", "front"), (768, 1344)), "plate": (SOUL_CAST, (), (1344, 768)),
+            "back": (REFERENCE_KEY, ("face",), (768, 1344)), "plate": (SOUL_CAST, (), (1344, 768)),
             "reverse": (KLEIN_EDIT, ("plate",), (1344, 768)), "angle": (KLEIN_EDIT, ("plate",), (1344, 768)),
             "product": (SOUL_CAST, (), (1024, 1024)), "stress": (REFERENCE_KEY, (), (1280, 704))})
         self.assertEqual(assets.PANELS, {"CHARACTER": ("face", "front", "back", "sheet"), "SCENE": ("plate", "reverse", "angle"), "PROP": ("product",)})
@@ -76,6 +87,39 @@ class PanelPureTests(unittest.TestCase):
                 self.assertEqual(picture.getpixel((picture.width - 3, 600)), GREY)
         with Image.open(io.BytesIO(sheet)) as image:
             self.assertEqual(image.format, "PNG")
+
+    def test_without_opencv_the_head_is_cut_at_15_percent_of_the_figure(self):
+        with patch.dict(sys.modules, {"cv2": None}):  # the optional dependency is missing: import fails
+            cropped = assets.crop_head(figure())
+            self.assertEqual(cropped, assets.crop_head(figure()), "the same picture gives the same crop")
+            self.assertIsNone(assets.crop_head(png(GREY, (768, 1344))), "nothing stands out: the picture is kept whole")
+        line = int(100 + 0.15 * (1299 - 100))
+        with Image.open(io.BytesIO(cropped)) as image:
+            self.assertEqual((image.format, image.size), ("PNG", (768, 1344 - line)))  # full width, cut below the head
+            picture = image.convert("RGB")
+        self.assertEqual((picture.getpixel((384, 0)), picture.getpixel((10, 0))), ((200, 0, 0), GREY))
+
+    def test_with_opencv_the_cut_is_below_the_largest_face(self):
+        calls = []
+
+        class Cascade:
+            def __init__(self, path):
+                calls.append(path)
+
+            def empty(self):
+                return False
+
+            def detectMultiScale(self, gray, **options):
+                calls.append((gray.shape, options))
+                return [(10, 40, 30, 30), (300, 120, 60, 80), (5, 5, 10, 10)]
+        fake = types.SimpleNamespace(cvtColor=lambda array, code: array[:, :, 0], COLOR_RGB2GRAY=7, error=RuntimeError,
+                                     data=types.SimpleNamespace(haarcascades="cascades/"), CascadeClassifier=Cascade)
+        with patch.dict(sys.modules, {"cv2": fake}):
+            cropped = assets.crop_head(figure())
+        self.assertEqual(calls, ["cascades/haarcascade_frontalface_default.xml",
+                                 ((1344, 768), {"scaleFactor": 1.05, "minNeighbors": 5, "minSize": (24, 24)})])
+        with Image.open(io.BytesIO(cropped)) as image:
+            self.assertEqual(image.size, (768, 1344 - int(120 + 1.25 * 80)))  # the largest box: 60 x 80 at y 120
 
     def test_a_state_variant_opens_with_the_same_identity_sentence(self):
         prompt, change = assets.variant_text({"change": "soaked to the skin.", "prompt": "Hair plastered flat."}, "CAST-01", "STATE")
@@ -146,16 +190,16 @@ class AssetPanelHTTPTests(PackBFixture, unittest.TestCase):
         self.assertEqual([task["status"] for task in done], ["SUCCEEDED"] * len(tasks), done)
         return done, seen
 
-    def picture(self, color, size=(48, 64)):
-        """A production picture (put_asset) as an image candidate of nothing yet: its URL."""
-        aid = repo.put_asset(self.conn, self.slug, data=png(color, size), content_type="image/png", actor_id=self.actor)
+    def picture(self, color, size=(48, 64), data=None):
+        """A production picture (put_asset; ``data`` or a plain colour) as an image candidate of nothing yet: its URL."""
+        aid = repo.put_asset(self.conn, self.slug, data=data or png(color, size), content_type="image/png", actor_id=self.actor)
         self.conn.commit()
         return f"/projects/api/{self.slug}/assets/{aid}"
 
-    def candidate(self, code, panel, color, size=(48, 64)):
+    def candidate(self, code, panel, color, size=(48, 64), data=None):
         """A finished render of ``panel`` on ``code``: its imageId."""
         asset = self.asset(code)
-        url = self.picture(color, size)
+        url = self.picture(color, size, data)
         story.store(self.conn, "ca_test_" + story.digest([asset["assetId"], url])[:20], "candidate",
                     {"entityId": asset["assetId"], "kind": "image", "url": url, "createdAt": story.now(), "panel": panel}, self.slug)
         self.conn.commit()
@@ -195,10 +239,12 @@ class AssetPanelHTTPTests(PackBFixture, unittest.TestCase):
         status, payload = self.generate("CAST-01", "front")
         self.assertEqual((status, payload["code"]), (409, "DRAMA_STAGE_PRECONDITION"))
         self.assertIn("face panel", payload["message"])
-        self.choose("CAST-01", "face", self.candidate("CAST-01", "face", "blue"))
         status, payload = self.generate("CAST-01", "back")
         self.assertEqual(status, 409)
-        self.assertIn("front panel", payload["message"])
+        self.assertIn("face panel", payload["message"])
+        self.choose("CAST-01", "face", self.candidate("CAST-01", "face", "blue"))
+        (back,) = self.queued("CAST-01", "back")  # the back needs the face only (SPEC_21 §2.3)
+        self.assertEqual((self.job(back)["card"]["card_id"], self.size(self.job(back))), (REFERENCE_KEY, (768, 1344)))
         fronts = self.queued("CAST-01", "front", count=2)
         self.assertEqual(len(fronts), 2)
         job = self.job(fronts[0])
@@ -244,9 +290,19 @@ class AssetPanelHTTPTests(PackBFixture, unittest.TestCase):
         self.assertEqual(chosen["panels"]["face"], {"url": faces[0]["url"], "imageId": faces[0]["imageId"]})
         self.assertIsNone(chosen["panels"]["sheet"])
         self.assertEqual(self.reference_cell("CAST-01"), before)
-        front = self.candidate("CAST-01", "front", (200, 0, 0), (768, 1344))
+        front = self.candidate("CAST-01", "front", None, data=figure())
+        original = next(c["url"] for c in self.ok(f"/assets/{identifier}/images?panel=front")["items"] if c["imageId"] == front)
         back = self.candidate("CAST-01", "back", (0, 200, 0), (768, 1344))
-        self.choose("CAST-01", "front", front)
+        cropped = self.choose("CAST-01", "front", front)["panels"]["front"]
+        self.assertEqual((cropped["imageId"], cropped["originalUrl"]), (front, original))  # the candidate stays the chosen one
+        self.assertNotEqual(cropped["url"], original)
+        self.conn.rollback()
+        with Image.open(io.BytesIO(repo.get_asset(self.conn, self.slug, cropped["url"].rsplit("/", 1)[1])[1])) as image:
+            self.assertEqual(image.width, 768)
+            self.assertLess(image.height, 1344)  # the head is cut off (the cut line itself: the pure tests)
+        self.assertEqual(self.choose("CAST-01", "front", front)["panels"]["front"], cropped, "the same front gives the same crop")
+        self.assertIn(original, [c["url"] for c in self.ok(f"/assets/{identifier}/images?panel=front")["items"]])
+        self.assertNotIn(cropped["url"], [c["url"] for c in self.ok(f"/assets/{identifier}/images?limit=100")["items"]])
         sheet = self.choose("CAST-01", "back", back)["panels"]["sheet"]
         self.assertTrue(sheet["url"].startswith(f"/projects/api/{self.slug}/assets/pa_"))
         self.assertEqual(self.reference_cell("CAST-01"), sheet["url"])
@@ -254,7 +310,9 @@ class AssetPanelHTTPTests(PackBFixture, unittest.TestCase):
         content_type, data = repo.get_asset(self.conn, self.slug, sheet["url"].rsplit("/", 1)[1])
         with Image.open(io.BytesIO(data)) as image:
             self.assertEqual((content_type, image.height), ("image/png", 1152))
-            self.assertTrue(near(image.convert("RGB").getpixel((5, 600)), (200, 0, 0)))  # front, then back, then face
+            picture = image.convert("RGB")
+            self.assertTrue(near(picture.getpixel((5, 600)), GREY))  # the cropped front's backdrop, then its figure
+            self.assertTrue(near(picture.getpixel((400, 600)), (200, 0, 0)))
         self.assertEqual(self.choose("CAST-01", "back", back)["panels"]["sheet"], sheet, "the same panels give the same sheet")
         self.assertEqual([c["url"] for c in self.ok(f"/assets/{identifier}/images?panel=sheet")["items"]], [sheet["url"]])
         self.assertEqual(self.call(f"/assets/{identifier}/panels/sheet", "PUT", {"imageId": front})[0], 422)
@@ -328,6 +386,10 @@ class AssetPanelHTTPTests(PackBFixture, unittest.TestCase):
             job = self.job(self.ok(f"/assets/{wet['assetId']}/image-generations", "POST", {"panel": "face"}))
         face = self.ok("/assets/" + base["assetId"])["panels"]["face"]["url"]
         self.assertEqual(job["input"]["base_panels"], {"face": face})
+        front = self.choose("CAST-01", "front", self.candidate("CAST-01", "front", None, data=figure()))["panels"]["front"]
+        with patch.object(story._POOL, "submit"):
+            job = self.job(self.ok(f"/assets/{wet['assetId']}/image-generations", "POST", {"panel": "front"}))
+        self.assertEqual(job["input"]["base_panels"], {"face": face, "front": front["originalUrl"]})  # edited with its head
         self.assertEqual(self.ok(path, "POST", {"name": "Night", "key": "night", "kind": "OUTFIT", "prompt": "Night coat"})["prompt"], "Night coat")
         kinds = [v["kind"] for v in self.ok(path)["items"]]
         self.assertEqual(sorted(kinds), ["OUTFIT", "STATE"])

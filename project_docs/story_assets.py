@@ -12,8 +12,9 @@ What this module adds to the API (routed from ``story_openapi.dispatch`` and ``g
 - panel generations (``POST /assets/{id}/image-generations`` with ``panel``): the panel picks the card, the size and the
   source keys the compiler reads (§2.3); the request's appCode is ignored. Renders stay candidates: a panel render never
   writes the reference image cell, so the cell is always the panel a person chose;
-- ``PUT /assets/{id}/panels/{panel}``: a candidate becomes a panel; a character's face, front and back make the sheet
-  (``compose_sheet``, Pillow, no model), a scene's plate and a prop's product go straight to the reference image cell;
+- ``PUT /assets/{id}/panels/{panel}``: a candidate becomes a panel; a chosen front loses its head below the chin
+  (``crop_front``: the front is rendered with its head, see SPEC_21 §2.3); a character's face, front and back make the
+  sheet (``compose_sheet``, Pillow, no model), a scene's plate and a prop's product go straight to the reference image cell;
 - stress tests (``POST|GET /assets/{id}/stress-tests``, ``PUT .../stress-tests/{imageId}``);
 - the ``asset_meta`` key of every generation source (``source_meta``, §2.5) and the STATE variant prefix.
 """
@@ -37,7 +38,7 @@ SOUL_CAST, REFERENCE_KEY, KLEIN_EDIT = "flux-soul-cast", "flux-reference-key", "
 PANEL_TABLE = {
     "face": (SOUL_CAST, (), (896, 1184)),
     "front": (REFERENCE_KEY, ("face",), (768, 1344)),
-    "back": (REFERENCE_KEY, ("face", "front"), (768, 1344)),
+    "back": (REFERENCE_KEY, ("face",), (768, 1344)),  # the face only: with the front too the body turned to the camera
     "plate": (SOUL_CAST, (), (1344, 768)),
     "reverse": (KLEIN_EDIT, ("plate",), (1344, 768)),
     "angle": (KLEIN_EDIT, ("plate",), (1344, 768)),
@@ -47,6 +48,10 @@ PANEL_TABLE = {
 COVER = {"SCENE": "plate", "PROP": "product"}  # the panel that is the reference image cell; a character's is its sheet
 STRESS_COUNT, STRESS_WITH = (4, 10), 5
 SHEET_HEIGHT, SHEET_GREY, FACE_SHARE = 1152, (0x8A, 0x8A, 0x8A), 0.38
+# The front's head crop (§2.3, measured on four GPU renders): below the largest face the Haar cascade finds, face top +
+# CHIN x face height lands at the neck; without a face, the figure's top + FIGURE_HEAD x its height. A figure pixel differs
+# from the backdrop (the corners' colour) by more than FIGURE_DIFF in some channel; a figure row has FIGURE_ROW of them.
+CHIN, FIGURE_HEAD, FIGURE_DIFF, FIGURE_ROW = 1.25, 0.15, 32, 0.015
 REFERENCE_CELL = 3  # Soul Cast: Asset ID, Name, Locked description, Reference Image, Voice, Status, Notes
 STATE_PREFIX = "Same identity as @{base}: same face, body proportions and posture. Changed: {change}."
 
@@ -171,7 +176,7 @@ def panel_plan(conn, slug, row, identifier, kind, body):
     """{card, size, source} of a panel generation, or a 422/409. The source keys go into the job input (the contract the
     context compiler reads): ``panel``; a stress test's ``variation`` (set per task), ``stress_with`` and ``stress_set``;
     a variant's ``base_panels`` ({panel: url}: its base's selected panels, the asked one falling back to the base's
-    reference image) and ``change``."""
+    reference image; a front is its uncropped original) and ``change``."""
     panel = body["panel"]
     if not identifier.startswith("as_") or kind != "image":
         story.invalid("panel applies to asset image generations only.")
@@ -197,7 +202,9 @@ def panel_plan(conn, slug, row, identifier, kind, body):
         if base is None:
             precondition(f"The base asset {base_of(code)} of this variant is missing.")
         base_data = meta_of(conn, base)
-        panels = {name: value["url"] for name, value in base_data["panels"].items() if isinstance(value, dict) and value.get("url")}
+        # A front is edited from its uncropped original: the edit keeps the head, the crop comes when it is chosen.
+        panels = {name: value.get("originalUrl") or value["url"] for name, value in base_data["panels"].items()
+                  if isinstance(value, dict) and value.get("url")}
         first = panels.get(panel) or story.media_url(base["cells"][REFERENCE_CELL])
         if not first:
             precondition(f"Give @{base_of(code)} a {panel} panel or a reference image before editing this variant from it.")
@@ -258,6 +265,75 @@ def asset_bytes(conn, slug, url, panel):
     return found[1]
 
 
+def face_line(picture):
+    """Where the head ends by the face detector (OpenCV, an optional dependency): the largest face's top + CHIN x its
+    height, or None (no OpenCV, no face)."""
+    try:
+        import cv2
+        import numpy
+    except ImportError:
+        return None
+    try:
+        gray = cv2.cvtColor(numpy.array(picture), cv2.COLOR_RGB2GRAY)
+        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        if cascade.empty():
+            return None
+        faces = cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=5, minSize=(24, 24))
+    except cv2.error:
+        return None
+    boxes = [tuple(int(v) for v in face) for face in faces]
+    if not boxes:
+        return None
+    x, y, w, h = max(boxes, key=lambda box: (box[2] * box[3], box))  # the largest; ties by position, so always the same
+    return int(y + CHIN * h)
+
+
+def figure_line(picture):
+    """Where the head ends by the figure on the backdrop (Pillow only): the figure's top + FIGURE_HEAD x its height, or
+    None when nothing stands out from the corners' colour."""
+    from PIL import Image, ImageChops
+    width, height = picture.size
+    corners = [picture.getpixel(point) for point in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1))]
+    backdrop = tuple((sorted(channel)[1] + sorted(channel)[2]) // 2 for channel in zip(*corners))  # the corners' median
+    difference = ImageChops.difference(picture, Image.new("RGB", picture.size, backdrop)).split()
+    mask = ImageChops.lighter(ImageChops.lighter(difference[0], difference[1]), difference[2]).point(lambda v: 255 if v > FIGURE_DIFF else 0)
+    rows = list(mask.resize((1, height), Image.BOX).tobytes())  # each row's share of figure pixels, 0-255
+    figure = [y for y, share in enumerate(rows) if share >= 255 * FIGURE_ROW]
+    if not figure:
+        return None
+    top, bottom = figure[0], figure[-1]
+    return int(top + FIGURE_HEAD * (bottom - top))
+
+
+def crop_head(raw):
+    """A front rendered with its head, cut below the chin at full width: PNG bytes, or None when no cut line is found
+    (the picture is kept as it is). Deterministic."""
+    from PIL import Image
+    with Image.open(io.BytesIO(raw)) as source:
+        picture = source.convert("RGB")
+    line = face_line(picture)
+    if line is None:
+        line = figure_line(picture)
+    if line is None or not 0 < line < picture.height - 1:
+        return None
+    out = io.BytesIO()
+    picture.crop((0, line, picture.width, picture.height)).save(out, format="PNG", optimize=False, compress_level=6)
+    return out.getvalue()
+
+
+def crop_front(conn, me, slug, url):
+    """The chosen front without its head, stored as a new production picture: its URL (``url`` itself when no cut line
+    is found). The uncropped original stays a candidate."""
+    from PIL import Image
+    try:
+        data = crop_head(asset_bytes(conn, slug, url, "front"))
+    except (OSError, ValueError, MemoryError, Image.DecompressionBombError) as exc:
+        raise story.StoryError(409, "DRAMA_STAGE_PRECONDITION", "The chosen front could not be read as an image; select another one.") from exc
+    if data is None:
+        return url
+    return f"/projects/api/{slug}/assets/" + repo.put_asset(conn, slug, data=data, content_type="image/png", actor_id=me.actor_id)
+
+
 def compose(front, back, face):
     """The character sheet as PNG bytes: front (no head) | back | face, all SHEET_HEIGHT high on mid-grey, the face cell at
     least FACE_SHARE of the width (the face centred in it). Deterministic: the same three pictures give the same bytes."""
@@ -302,8 +378,9 @@ def set_cover(conn, me, slug, row, url):
 
 
 def select_panel(conn, me, slug, row, identifier, panel, body):
-    """PUT /assets/{id}/panels/{panel}: a candidate of this asset becomes the panel. A character with face, front and
-    back chosen gets its sheet composed into the reference image cell; a scene's plate and a prop's product go there."""
+    """PUT /assets/{id}/panels/{panel}: a candidate of this asset becomes the panel. A front becomes its copy cut below
+    the chin ({url: the crop, imageId: the candidate's, originalUrl: the candidate's url}). A character with face, front
+    and back chosen gets its sheet composed into the reference image cell; a scene's plate and a prop's product go there."""
     code = code_of(row)
     kind_of = type_of(code)
     if panel == "sheet":
@@ -318,6 +395,9 @@ def select_panel(conn, me, slug, row, identifier, panel, body):
         raise story.StoryError(404, "DRAMA_NOT_FOUND", "Candidate does not belong to this asset.")
     data = meta_of(conn, row)
     data["panels"][panel] = {"url": chosen["url"], "imageId": chosen["imageId"]}
+    if panel == "front":
+        # The front is rendered with its head; the panel is the cropped copy, the imageId stays the chosen candidate's.
+        data["panels"][panel] |= {"url": crop_front(conn, me, slug, chosen["url"]), "originalUrl": chosen["url"]}
     if kind_of == "CHARACTER" and all(isinstance(data["panels"].get(name), dict) for name in ("face", "front", "back")):
         data["panels"]["sheet"] = compose_sheet(conn, me, slug, identifier, data["panels"])
         set_cover(conn, me, slug, row, data["panels"]["sheet"]["url"])
