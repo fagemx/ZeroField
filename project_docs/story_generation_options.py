@@ -13,6 +13,7 @@ from project_assistant import limb_worker as worker, privacy
 from project_docs import story_openapi as story
 
 DEFAULT_CARDS = {"image": "flux-soul-cast", "video": "ltx25-cinema"}  # what the studio generates with until another app is chosen
+SHOT_IMAGE_CARD = "flux-reference-key"  # SPEC_21: a first frame carries the pictures of the assets it names
 ASSET_SCOPES = {"CHARACTER": "CHARACTER", "SCENE": "SCENE_PROP", "PROP": "SCENE_PROP"}  # asset type -> usageScope
 RATIO_FIELDS = ("aspect_ratio", "ratio")
 SAMPLE_WINDOW, MIN_SAMPLES = 20, 3
@@ -124,9 +125,26 @@ def style_of(conn, slug, entity, identifier, requested):
     return {"stylePresetId": chosen["stylePresetId"], "name": chosen["name"]}
 
 
+def default_card(entity, kind):
+    """The card the studio prefers: a shot's first frame the reference card, an asset's picture and a shot's video the
+    DEFAULT_CARDS ones."""
+    return SHOT_IMAGE_CARD if entity == "shot" and kind == "image" else DEFAULT_CARDS[kind]
+
+
+def fallback_card(entity, kind):
+    """The card a generation request without an appCode uses: the preferred one while it is registered, else the
+    studio's image or video card."""
+    wanted = default_card(entity, kind)
+    return wanted if any(card["card_id"] == wanted for card in worker.openapi_list_cards()) else DEFAULT_CARDS[kind]
+
+
 def describe(conn, slug, identifier, entity, row, query):
-    """GET /assets/{id}/generation-options and /shots/{id}/generation-options."""
-    kind = "image" if entity == "asset" else "video"  # an asset gets a reference image, a shot a video
+    """GET /assets/{id}/generation-options and /shots/{id}/generation-options.
+
+    A shot lists its video cards; ``?kind=image`` lists the cards of its first frame (SPEC_21: the reference card first)."""
+    kind = "image" if entity == "asset" else query.get("kind") or "video"  # an asset gets a reference image, a shot a video
+    if kind not in ("image", "video"):
+        story.invalid("kind must be image or video.")
     scope = ASSET_SCOPES.get(story.asset_view(slug, row)["type"]) if entity == "asset" else None
     policy, privacy_mode, measured = story.production_policy(conn, slug), privacy.mode(conn, slug), estimates(conn, slug)
     listed, seen = [], set()
@@ -137,13 +155,14 @@ def describe(conn, slug, identifier, entity, row, query):
         configured, reason = availability(card, item, policy, privacy_mode)
         params = slot_params(card)
         app = {"appCode": item["appCode"], "name": card["label"], "tier": tier_of(card), "configured": configured, "reason": reason,
-               "outputs": ["REFERENCE" if entity == "asset" else "VIDEO"]}
+               "outputs": ["REFERENCE" if entity == "asset" else "IMAGE" if kind == "image" else "VIDEO"]}
         if params:
             app["slots"], app["slotParams"] = slots_of(params), params
         app |= {"estimate": measured.get(card["card_id"]), "quotable": item["driver"] == "comfy_router"}
         listed.append((card["card_id"], app))
     apps = [app for _, app in listed]
-    preferred = next((app for card_id, app in listed if card_id == DEFAULT_CARDS[kind] and app["configured"]), None)
+    preferred = next((app for wanted in (default_card(entity, kind), DEFAULT_CARDS[kind])
+                      for card_id, app in listed if card_id == wanted and app["configured"]), None)
     default = preferred or next((app for app in apps if app["configured"]), None)
     return {"apps": apps, "defaultAppCode": default["appCode"] if default else None,
             "style": style_of(conn, slug, entity, identifier, query.get("episodeId"))}
