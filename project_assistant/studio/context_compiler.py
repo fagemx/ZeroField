@@ -8,7 +8,7 @@ import re
 
 from project_docs import story_look, story_take_refs
 
-from . import runtime
+from . import runtime, shot_skeleton
 from .runtime import MAX_MATERIALS
 
 __all__ = [
@@ -280,6 +280,137 @@ def _take_seed(base, take):
     return None if base is None else base + (take if isinstance(take, int) and take > 0 else 0)
 
 
+_ASSET_TABS = ("soul-cast", "assets", "asset-sheet")
+_LOCKS = ("acting", "geo", "light", "lock", "change")
+
+
+def _asset_code(value):
+    return str(value or "").strip().lstrip("@").upper().replace("#", ":")
+
+
+def _panel_url(value):
+    """A chosen panel's picture as the SPEC_21 §2.5 source gives it (a URL, or its {url, imageId} record): a project
+    asset URL, never a remote one."""
+    if isinstance(value, dict):
+        value = value.get("url")
+    return next(iter(_media_urls(value)), None) if isinstance(value, str) else None
+
+
+def _asset_catalog(source, own=None):
+    """{CODE: shot_skeleton asset} for every asset row a source carries (and ``own``, (cells, headers) of the row being
+    generated), with its SPEC_21 ``asset_meta`` (§2.5). A variant's empty locks, voice and picture come from its base,
+    and a variant with meta but no row is its base under its own code, as an unpictured variant is in the shot prompt."""
+    meta = source.get("asset_meta") or {}
+    if not isinstance(meta, dict) or not all(isinstance(fields, dict) for fields in meta.values()):
+        raise runtime.WorkerError("The task's asset_meta must map asset codes to their locks and panels")
+    catalog = {}
+
+    def add(values, headers):
+        code = _asset_code(values[0])
+        if not code or code in catalog:
+            return
+        voice = next((i for i, header in enumerate(headers) if re.search(r"voice|audio", str(header), re.I)), 4)
+        catalog[code] = {"code": code, "kind": shot_skeleton.asset_kind(code), "name": str(values[1]).strip(),
+                         "description": _appearance(values[2]),
+                         "voice": str(values[voice]).strip() if len(values) > voice and values[voice] is not None else "",
+                         "image": next(iter(_media_urls(values)), None), "panels": {},
+                         **{key: "" for key in _LOCKS}}
+
+    if own and len(own[0]) >= 3:
+        add(*own)
+    for tab in source.get("tabs", []):
+        for asset_table in tab.get("tables", []):
+            headers = asset_table.get("headers", [])
+            if tab.get("tab_key") not in _ASSET_TABS and not (
+                    headers and str(headers[0]).strip().casefold() in ("asset id", "資產代號")):
+                continue
+            for asset_row in asset_table.get("rows", []):
+                if len(asset_row.get("cells", [])) >= 3:
+                    add(asset_row["cells"], headers)
+    fields_of = {_asset_code(code): fields for code, fields in meta.items()}
+    for code in fields_of:
+        base = code.split(":")[0]
+        if code not in catalog and ":" in code and base in catalog:
+            catalog[code] = dict(catalog[base], code=code, panels={})
+    for code, fields in fields_of.items():
+        if code in catalog:
+            entry = catalog[code]
+            entry.update({key: fields[key].strip() if isinstance(fields.get(key), str) else "" for key in _LOCKS})
+            panels = fields.get("panels") if isinstance(fields.get("panels"), dict) else {}
+            entry["panels"] = {str(name): url for name, url in ((name, _panel_url(value)) for name, value in panels.items())
+                               if url}
+    for code, entry in catalog.items():
+        base = catalog.get(code.split(":")[0]) if ":" in code else None
+        if base:
+            for key in ("acting", "geo", "light", "lock", "voice", "image"):
+                entry[key] = entry[key] or base[key]
+    names = {code: entry["name"] for code, entry in catalog.items() if entry["name"]}
+    for entry in catalog.values():  # "Same identity as @CAST-01: ..." reads "Same identity as Noa: ..."
+        entry["description"] = shot_skeleton.name_tags(entry["description"], names)
+    return catalog
+
+
+def _spec21_keys(source, row, table, column, resolved, mentions, excluded, raw_action, take_refs, quoted, optical,
+                 motion, camera_moves, look, asset_row):
+    """SPEC_21 §3.2–3.5 context: the reference plan and the prompts written around it (``shot_skeleton``); "" and []
+    where a key does not apply. Reads only the authorized source, like the rest of the compiler."""
+    cells = row.get("cells", [])
+    if asset_row:
+        if len(cells) < 3:
+            return shot_skeleton.empty_keys()
+        catalog = _asset_catalog(source, (cells, table.get("headers", [])))
+        code, panel = _asset_code(cells[0]), source.get("panel")
+        if panel not in shot_skeleton.PANELS or code not in catalog:
+            return shot_skeleton.empty_keys()
+        together = source.get("stress_with")
+        together = [together] if isinstance(together, str) else together if isinstance(together, list) else []
+        together = [catalog[other] for other in dict.fromkeys(map(_asset_code, together)) if other in catalog and other != code]
+        variation = source.get("variation")
+        base_panels = source.get("base_panels")
+        variant = ":" in code and isinstance(base_panels, dict)
+        base_code = code.split(":")[0] if variant else None
+        return shot_skeleton.compile_asset(
+            catalog[code], panel, together=together, setting=catalog.get(_asset_code(source.get("stress_set"))),
+            variation=variation if isinstance(variation, int) and not isinstance(variation, bool) else 0,
+            base_code=base_code, base=catalog.get(base_code) if variant else None,
+            base_panels={str(name): url for name, url in ((name, _panel_url(value)) for name, value in base_panels.items())
+                         if url} if variant else None,
+            change=str(source.get("change") or "").strip())
+    catalog = _asset_catalog(source)
+    names = {code: entry["name"] for code, entry in catalog.items() if entry["name"]}
+    assets = []
+    for item in resolved:
+        code = item["asset_id"]
+        entry = catalog.get(code) or catalog.get(code.split(":")[0]) or {"voice": "", "panels": {},
+                                                                         **{key: "" for key in _LOCKS}}
+        # The compiler's own resolution (names, locked text, pictures) stands; the catalog adds the SPEC_21 locks.
+        assets.append(dict(entry, code=code, kind=shot_skeleton.asset_kind(code), name=item["name"],
+                           description=_appearance(item["appearance_prompt"]),
+                           image=next(iter(item["reference_urls"]), None),
+                           panels=entry["panels"] if entry.get("code") == code else {}))
+        names[code] = item["name"]
+    for asset in assets:
+        asset["description"] = shot_skeleton.name_tags(asset["description"], names)
+    characters, seen = [], set()
+    for code in mentions:
+        base = code.split(":")[0]
+        if shot_skeleton.asset_kind(code) == "character" and base not in excluded and base not in seen:
+            seen.add(base)
+            characters.append((code, names.get(code) or names.get(base) or code))
+    moves = [story_look.option("move", move)["promptText"] for move in camera_moves]
+    action = raw_action if raw_action or row else source.get("prompt", "")
+    # The shot size a still names comes from the Camera Motion cell even when # move tags replace its movement.
+    shot = {"label": str(cells[0]).strip() if cells else "", "optical": optical, "motion": motion, "moves": moves,
+            "framing": column(r"camera\s*motion|movement|景別|運鏡"),
+            "video_action": story_take_refs.expand(story_look.expand_moves(action), take_refs),
+            "still_action": story_take_refs.expand(story_look.expand_moves(action, still=True), take_refs),
+            "assets": assets, "characters": characters, "names": names, "look": look,
+            "duration": column(r"duration|length|時長"),
+            "frames": [{"code": f"{ref['shotIndex']}.{ref['edge']}".upper(), "url": ref["frameUrl"],
+                        "sentence": story_take_refs.describe(ref)} for ref in quoted]}
+    return shot_skeleton.compile_shot(shot)
+
+
 def resolve_studio_context(task: dict) -> dict:
     """Compile the authorized shot snapshot without I/O or cross-row fallbacks."""
     source = task.get("input", {})
@@ -356,6 +487,7 @@ def resolve_studio_context(task: dict) -> dict:
     motion = column(r"camera\s*motion|movement|景別|運鏡")
     mode = column(r"jutsu\s*mode|^mode$")
     action = column(r"action.*prompt|swap\s*prompt|prompt|appearance")
+    raw_action = action  # SPEC_21 prompts expand the cell for a still and for a clip alike
     still = task.get("capability") == "image_gen"
     asset_row = row.get("tab_key") in ("soul-cast", "assets", "asset-sheet")
     # SPEC_19 R11: the episode look and the shot's override arrive compiled (story_look.source_look, written into the
@@ -466,6 +598,10 @@ def resolve_studio_context(task: dict) -> dict:
            "source_video_url": roles.get("source_video")}
     ctx["h3_context_ir_prompt"] = compile_h3_context_ir(ctx)
     ctx["ltx_ingredients_prompt"] = compile_ltx_ingredients_prompt(ctx)
+    # SPEC_21: reference_plan, image_reference_prompt, video_skeleton_prompt, dropped_blocks, asset_panel_prompt and
+    # edit_prompt; every key above stays as it was.
+    ctx.update(_spec21_keys(source, row, table, column, resolved, mentions, excluded_set, raw_action, take_refs, quoted,
+                            optical, motion, camera_moves, look, asset_row))
     if frames:
         ctx["resolved_assets"] = resolved + frames  # after the prompts: the card's reference slots see them, the text does not
     return ctx
