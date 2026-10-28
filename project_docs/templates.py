@@ -1,6 +1,36 @@
 """Reusable project archetypes and executable workflow definitions."""
 
-def tab_specs(template: str, title: str, summary: str) -> list[tuple[str, str, str, str]]:
+import re
+
+_TABLE_RULE = re.compile(r"^\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
+
+
+def _structure_only(specs):
+    """The template's pages without its sample content (R44-1/R44-2): doc pages start blank, so a story start
+    becomes the working screenplay, and sheet tables keep their header row and column order but no sample rows.
+    Flow pages describe the pipeline itself and stay as they are."""
+    result = []
+    for key, title, surface, md in specs:
+        if surface == "doc":
+            md = ""
+        elif surface == "sheet":
+            kept, in_body = [], False
+            for line in md.split("\n"):
+                if in_body and line.startswith("|"):
+                    continue  # a sample row under the header rule
+                in_body = bool(_TABLE_RULE.match(line))
+                kept.append(line)
+            md = "\n".join(kept)
+        result.append((key, title, surface, md))
+    return result
+
+
+def tab_specs(template: str, title: str, summary: str, *, samples: bool = True) -> list[tuple[str, str, str, str]]:
+    specs = _tab_specs(template, title, summary)
+    return specs if samples else _structure_only(specs)
+
+
+def _tab_specs(template: str, title: str, summary: str) -> list[tuple[str, str, str, str]]:
     if template == "zerofield_studio":
         return [
             ("director-brief", "Director Brief", "doc",

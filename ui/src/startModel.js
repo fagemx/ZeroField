@@ -27,6 +27,12 @@ export function startPlan({mode, text, ratio = RATIOS[0], style = ''}) {
   return {ok: true, start: {mode, text: body, ratio: RATIOS.includes(ratio) ? ratio : RATIOS[0], style: String(style || '')}};
 }
 
+// The production a story start creates (SPEC_20 R44-1, R44-2): the studio template's pages, columns and pipeline,
+// without its sample brief, cast, sets, shots or clips, so the story becomes the working screenplay.
+export function storyProductionRequest(title, slug = `project-${globalThis.crypto.randomUUID().slice(0, 8)}`) {
+  return {slug, title, template: 'zerofield_studio', status: 'planning', summary: '', samples: false};
+}
+
 const usable = value => Boolean(value) && typeof value === 'object' && START_MODES.includes(value.mode) && typeof value.text === 'string' && value.text.trim() !== '';
 
 export function rememberStart(slug, start) {

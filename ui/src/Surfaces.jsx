@@ -11,7 +11,7 @@ import { WorkspaceSettings } from "./WorkspaceSettings.jsx";
 import { SheetDialog } from "./SheetDialog.jsx";
 import { Icon } from "./Icon.jsx";
 import { StartFromStory } from "./StartFromStory.jsx";
-import { rememberStart } from "./startModel.js";
+import { rememberStart, storyProductionRequest } from "./startModel.js";
 
 
 export const PROJECT_STATUS = {
@@ -80,12 +80,13 @@ export function ProjectHub({ data, onReload }) {
     {key: "blank", icon: "▤", title: uiText("surfaces.blankProduction"), detail: uiText("surfaces.startWithABriefAndAddProductionPagesAs")},
   ];
   const closeCreate = () => { if (!busy) setCreating(false); };
-  // SPEC_18 R16: a production started from a story is an ordinary studio production; what was typed goes with the person to Story & World.
+  // SPEC_18 R16: a production started from a story is a studio production without the template's samples (SPEC_20 R44);
+  // what was typed goes with the person to Story & World, where it becomes the working screenplay.
   const createFromStory = async ({ title: name, start }) => {
     if (busy) return;
     setError(""); setBusy(true);
     try {
-      const res = await api.post("/projects/api/projects", { slug: `project-${crypto.randomUUID().slice(0, 8)}`, title: name, template: "zerofield_studio", status: "planning", summary: "" });
+      const res = await api.post("/projects/api/projects", storyProductionRequest(name));
       if (res?.project) { rememberStart(res.project.slug, start); window.location.href = `/projects/${res.project.slug}/#story-world`; }
       else { setCreating(false); onReload(); }
     } catch (err) { setError(err.message); } finally { setBusy(false); }
