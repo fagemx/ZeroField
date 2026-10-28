@@ -143,15 +143,16 @@ class StoryLookHTTPTests(unittest.TestCase):
         self.assertEqual({k: preview["look"][k] for k in ("film", "color", "light")},
                          {"film": expected["film"], "color": expected["color"], "light": expected["light"]})
         self.assertNotIn(story_look.option("tempo", "slow-drift")["promptText"], preview["look"]["film"], "the shot's Auto tempo wins")
+        # SPEC_21 §3.2: the video card takes the skeleton, where LIGHTING comes before STYLE (Film, Color).
         self.assertEqual(look_lines(preview["compiledPrompt"]),
-                         [f"Film: {expected['film']}.", f"Color: {expected['color']}.", f"Lighting: {expected['light']}."])
+                         [f"Lighting: {expected['light']}.", f"Film: {expected['film']}.", f"Color: {expected['color']}."])
         self.assertEqual(preview["look"]["opticalRig"], self.ok("/shots/" + shot["shotId"])["opticalRig"], "the shot's own Optical Rig cell wins")
         # An empty Optical Rig cell takes the episode camera.
         self.ok("/shots/" + shot["shotId"], "PATCH", {"opticalRig": ""})
         preview = self.ok(f"/shots/{shot['shotId']}/prompt-previews", "POST", body)
         camera = story_look.camera_text("film-35mm", "anamorphic")
         self.assertEqual(preview["look"]["opticalRig"], camera)
-        self.assertIn(f"Optical Rig: {camera}\n", preview["compiledPrompt"])
+        self.assertIn(f"OPTICS:\n{camera}", preview["compiledPrompt"])
 
     def test_the_story_api_and_the_m8_pipeline_write_the_same_look_lines(self):
         """SPEC_19 C3: both paths take the look from story_openapi.source_look, so the compiler writes the same text."""
@@ -175,7 +176,7 @@ class StoryLookHTTPTests(unittest.TestCase):
         story_source = story.snapshot(self.conn, self.slug, row)
         self.assertEqual(task["input"]["look"], story_source["look"])
         pipeline = worker.resolve_studio_context({"input": task["input"], "row_id": row["rid"], "capability": "video_gen"})
-        self.assertEqual(look_lines(pipeline["compiled_prompt"]), look_lines(preview["compiledPrompt"]))
+        self.assertEqual(look_lines(pipeline["video_skeleton_prompt"]), look_lines(preview["compiledPrompt"]))
         self.assertEqual(len(look_lines(preview["compiledPrompt"])), 3)
         # A still from either path: the same lines, the Film line without tempo.
         stills = [look_lines(worker.resolve_studio_context({"input": source, "row_id": row["rid"], "capability": "image_gen"})["compiled_prompt"])
