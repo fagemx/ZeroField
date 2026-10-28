@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_START_TEXT, acknowledgeStart, peekStart, rememberStart, slugOfEpisode, startPlan, takeStart, titleFrom } from '../src/startModel.js';
+import { MAX_START_TEXT, acknowledgeStart, peekStart, rememberStart, slugOfEpisode, startPlan, storyProductionRequest, takeStart, titleFrom } from '../src/startModel.js';
 
 const withStorage = (storage, run) => {
   const before = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
@@ -132,4 +132,10 @@ test('without storage the hand-off survives inside one page load, and broken or 
   for (const junk of ['not json', JSON.stringify({mode: 'video', text: 'x'}), JSON.stringify({mode: 'idea', text: '  '}), 'null', JSON.stringify(['idea'])]) {
     withStorage(fakeStorage({'zf.start:project-ffff6666': junk}), () => assert.equal(takeStart('ep_project-ffff6666_01'), null, junk));
   }
+});
+
+test('a story start asks for the studio template without its sample content (R44-1, R44-2)', () => {
+  assert.deepEqual(storyProductionRequest('Spillway', 'project-0a1b2c3d'),
+    {slug: 'project-0a1b2c3d', title: 'Spillway', template: 'zerofield_studio', status: 'planning', summary: '', samples: false});
+  assert.match(storyProductionRequest('Spillway').slug, /^project-[0-9a-f]{8}$/);
 });

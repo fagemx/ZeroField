@@ -131,9 +131,9 @@ def projects_payload(conn, me: Identity):
     }
 
 
-def _template_tabs(template, title, summary):
+def _template_tabs(template, title, summary, samples=True):
     from project_docs.templates import tab_specs
-    return tab_specs(template, title, summary)
+    return tab_specs(template, title, summary, samples=samples)
 
 
 def create_project(conn, me: Identity, body: dict):
@@ -156,10 +156,15 @@ def create_project(conn, me: Identity, body: dict):
         status = "planning"
     summary = str(body.get("summary") or "").strip()[:400]
     template = str(body.get("template") or "zerofield_studio").strip()
+    # A production started from a story keeps the template's pages, columns and pipeline but none of its sample
+    # brief, cast, sets, shots or clips, so the story becomes the working screenplay (SPEC_20 R44-1, R44-2).
+    samples = body.get("samples", True)
+    if not isinstance(samples, bool):
+        return _error(400, "samples must be true or false.")
     repo.upsert_project(conn, slug, title, status=status, summary=summary)
     if privacy_mode != "full_access":
         repo.update_project_meta(conn, slug, privacy_mode=privacy_mode)
-    specs = _template_tabs(template, title, summary)
+    specs = _template_tabs(template, title, summary, samples)
     if template == "ai_drama":
         specs.append(("deliverables", "成片與交付", "doc", "# 成片與交付\n\n完成的影片會在審核後加入本頁。\n"))
     tab_keys = {k for k, _, _, _ in specs}
@@ -187,7 +192,7 @@ def create_project(conn, me: Identity, body: dict):
                 pass  # checks run before the write; fall back to the template pipeline
         flow_runner.save_definition(conn, me, slug, key, {"definition": definition, "revision": 0})
     repo.add_audit(conn, slug, action="project_create", actor_id=me.actor_id,
-                   detail={"title": title, "status": status, "template": template})
+                   detail={"title": title, "status": status, "template": template, **({} if samples else {"samples": False})})
     return 200, {"project": repo.get_project(conn, slug), "projects": repo.list_projects(conn)}
 
 
