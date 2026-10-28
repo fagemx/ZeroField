@@ -87,7 +87,7 @@
   "Real MCP hosts: MCP Inspector, Goose with Ollama, Claude Code, and an MCP Apps host for the 3D preview card",
   "Real codex-acp / claude-code-acp under the ACP lock-down",
   "Docker Compose crew path",
-  "R42 blocking set (no crew job or adapter); R44 blocking break points R44-3 and R44-7 are open"
+  "R42 blocking set (no crew job or adapter); R44 non-blocking break points R44-1, -2, -4, -5 and the MiniMax H3 allocation recommendation are open"
  ],
  "main_untouched": true,
  "pushed": false,
@@ -169,13 +169,13 @@
     {
      "id": "R44-7",
      "blocking": true,
-     "status": "open",
+     "status": "closed: fixed in 56c0336, verified in R44_rewalk (2026-10-28)",
      "what": "\"Shoot This Shot\", the Keyframe/Cinema Shot \"Run\" buttons and \"Run Pipeline\" all fail with \"No unambiguous pipeline step matches this shot and media column\". The new production's pipeline (the showcase line) has three unfiltered steps writing Keyframe and four writing Cinema Shot (ui/src/studioModel.js studioRunInput needs one). \"Preview allocation\" routes both shots to h3-short-video-v3 (not installed), one \"Dispatch blocked: Required media is missing\". Workaround: Comfy Pipeline > step > Test Sample > Test This Step, then apply the proposal."
     },
     {
      "id": "R44-3",
      "blocking": true,
-     "status": "open",
+     "status": "closed: fixed in 3ae9d67, verified in R44_rewalk (2026-10-28)",
      "what": "A screenplay pasted in New Production is saved as one paragraph with hard breaks (writingStartHandoff.js plainDocument), and scenes are split per block, so the 3-scene script was one scene (\"Split scene\" disabled). Numbered headings (\"1. INT. ...\") never count as scene headings (six copies of the HEADING rule). Workaround: delete the numbers, then Backspace + Enter at each heading in the editor."
     },
     {
@@ -230,6 +230,130 @@
    ],
    "database": "the worktree's own embedded cluster (.openbench_pg, port 55433 after the A17 fix); the showcase cluster (55440) and the throwaway clusters were not touched"
   },
-  "machine_restored": "studio, embedded PostgreSQL, ComfyUI, own ollama serve and headless Edge stopped; Ollama tray app restarted (its own server on 11434); nvidia-smi 1,064 MiB used by the desktop, no compute process"
+  "machine_restored": "studio, embedded PostgreSQL, ComfyUI, own ollama serve and headless Edge stopped; Ollama tray app restarted (its own server on 11434); nvidia-smi 1,064 MiB used by the desktop, no compute process",
+  "R44_rewalk": {
+   "date": "2026-10-28",
+   "branch": "worktree-agent-a6ba268632bcbb8e6, fast-forwarded to fix/spec20-r44 b191e45 (R44-3 3ae9d67, R44-7 56c0336, catalog entry b562263, rebuilt static/projects)",
+   "result": "walked to an exported cut through the UI only with no workaround for R44-3 or R44-7; both fixes verified; every crew and grading call went to OpenRouter DeepSeek; no code changed during the walk",
+   "machine": "RTX 4090 24 GiB, Windows 11; ComfyUI 0.42.1 portable (run_nvidia_gpu.bat command plus --disable-auto-launch); studio `python run_studio.py --port 3048` with its own fresh embedded database on 55452; headless Edge 156 over CDP at 1440x900, showrunner in dev mode; Ollama tray app left running and idle",
+   "model_setup": {
+    "model": "openrouter-deepseek-v4.1-flash-1017 (deepseek/deepseek-v4.1-flash-1017, tier hosted_open)",
+    "server": "OPENBENCH_AGENT_KEY_ENVS=OPENROUTER_API_KEY and OPENBENCH_PG_PORT=55452 set in a .cmd launcher started through WMI (Win32_Process.Create); a WMI-created process gets the user's registry environment, so OPENROUTER_API_KEY reached the studio as it is in the user environment and was never read, printed or written by the walk",
+    "environment": "Agent Console > Environments & Bridges > Local 4090 (env_local_4090, the roles' default environment): network access restricted -> allowlist, allowed hosts [\"127.0.0.1\", \"localhost\", \"openrouter.ai\"], saved as v2. Loopback was listed because \"allowlist\" drops the loopback allowance that \"restricted\" gives (ComfyUI dispatch is checked against the same environment); README does not mention this",
+    "price_ceiling": "Spend & Rate Limits: model_pricing[\"deepseek/deepseek-v4.1-flash-1017\"] input 0.30 and output 1.20 USD per million tokens, max_input_tokens 200000 (UTF-8 byte ceiling), max_output_tokens 32768, byte_bounded_tokenizer true, base_url https://openrouter.ai/api/v1, kind openai_compat (v2). Each call reserves about $0.0994 until settled",
+    "roles": "Providers & API Keys > Roles and models: \"Allow hosted open-weights models\" switched on, then Change model > deepseek/deepseek-v4.1-flash-1017 > Use this model for Showrunner, Screenwriter, Cinematographer and Continuity Supervisor (the hosted qwen/qwen3.8-27b row stays disabled: no price ceiling). Production policy stayed open_weights_only",
+    "health_check": "model setup check run for all four roles: model installed, chat reply, tool call, JSON-schema output and image input passed (0.7-2.7 s each); context length \"not applicable\" (read only from a local Ollama)",
+    "server_defaults": "not needed: crew jobs and grading resolve the model per role (agent_runtime.provider_for); OPENBENCH_API_BASE/OPENBENCH_MODEL were not set",
+    "governance": "no refusal blocked the hosted-open setup; nothing in the walk needed a policy change or code change"
+   },
+   "verdicts": {
+    "R44-3": "verified, closed: the pasted Spillway screenplay (numbered headings \"1. INT. ...\") became three scenes titled \"1. INT. DAM CONTROL ROOM - NIGHT\", \"2. EXT. DAM WALKWAY - NIGHT\", \"3. INT. DAM CONTROL ROOM - NIGHT\" right after adopting the draft; Split scene and Merge enabled; no editor workaround",
+    "R44-7": "verified, closed: Review view Keyframe \"Run\" (FLUX 3 Klein 16.3 s), Cinema Shot \"Run\" (LTX-2.5 58.6 s), shot panel \"Re-shoot Take\" (FLUX 11.3 s) and \"Run Pipeline\" on SC01-S03 + SC02-S02 (two FLUX keyframes, then after approving them two LTX-2.5 shots, 49.1 s and 34.7 s) all queued with no \"No unambiguous pipeline step\" error and no Test This Step. The Shot Keyframe and Cinema Shot step inspectors show \"Default step for this column\" ticked, with \"Also written by ...\" for the competing steps. \"Shoot This Shot\" no longer exists in this build: the SPEC_19 shot panel (18db259) replaced it after the 10-27 walk; its single-shot actions are the Run buttons and \"Re-shoot Take\". Re-shoot Take re-runs the column of the open preview cell, so in Review view with the Keyframe open it re-ran the keyframe, not the shot"
+   },
+   "path": "New Production > From a story > Screenplay (Spillway, numbered headings) > Versions > adopt the private draft > Propose a shot breakdown (crew 11 vs rule 10, crew version adopted) > Agent Console model setup > Let the crew pre-produce: Screenwriter, Update Storyboard (14 rows), script lock, Art (7 jobs, 4 proposals), cast by hand (Nora @CAST-02, Eli @CAST-03), reviewed Art proposals and who-is-in for SC01-S03/SC02-S02, list lock, Cinematographer (22 jobs), reviewed beats, cameras and two 3D plans (both approved), storyboard lock, Continuity (3 jobs) > 5 FLUX 3 Klein references > SC01-S03 and SC02-S02 via Keyframe/Cinema Shot Run and Re-shoot Take > Run Pipeline on both > grades > Retake with this prompt (SC02-S02) > adopt > Export Episode MP4",
+   "timings": {
+    "crew_calls": "DeepSeek on OpenRouter 2.4-22 s per job, up to two at a time (10-27 local qwen3.8:27b: 6-34 s, one at a time)",
+    "shot_breakdown": "9.8 s (10-27: 21 s on the third try, 57 s cold)",
+    "preproduction_stages": "Screenwriter about 10 s, Art 24 s, Cinematographer 1.8 min (22 jobs), Continuity 28 s (10-27: 16 s, 1.5 min, 6.4 min, 1.7 min)",
+    "flux_references": "5 sheets 10.0-15.9 s each, about 1.2 min (10-27: 9.9-15.2 s, about 1 min)",
+    "keyframes": "FLUX 3 Klein 10.9-16.3 s; one pipeline keyframe took 109.65 s while an outside test held the local LLM on the GPU, rerun after 01:18 in 10.86 s",
+    "shots": "LTX-2.5 4 s shots 34.7-58.6 s (10-27: 42-50 s)",
+    "grades": "four grades 10-30 s each with an 8-frame sheet (10-27 local: 31-38 s)",
+    "export": "about 3 s"
+   },
+   "grades": [
+    "SC01-S03 take 2 (Run Pipeline): 28/100 retake in 10 s; it found that LTX-2.5 cut to a wide room view at 1.26-1.77 s, reversed the turn and turned the tired warning into a scream; the contact sheet confirms it (10-27: the local model gave that shot's take 90 pass)",
+    "SC02-S02 take 2 (Run Pipeline, one runner): 68/100 retake in 19.9 s (no shallow depth of field, missing glance back, push-in to an extreme close-up)",
+    "SC02-S02 take 1 (keyframe with a second runner): 60/100 retake in 13.4 s, \"an extra runner is on screen for the first 1.3s, which alone fails the one-person rule\"",
+    "SC02-S02 take 3 from \"Retake with this prompt\": 76/100 retake in 30.3 s; the prompt-only retake improved 68 -> 76 (10-27: 64 -> 58)"
+   ],
+   "cut": "Film 2/14 after adopting SC01-S03 take 2 and SC02-S02 take 3; Export Episode MP4: 8.10 s, 1280x720 H.264 24 fps + AAC, 2.35 MB, the two adopted takes",
+   "spend": "Usage & Cost \"Accounted / admitted\" $0.0652 at the end = the ledger estimate for 68 DeepSeek calls (64 llm_turn $0.0524, 4 grader_check $0.0128; health checks included); OpenRouter reported no per-call cost (reported/observed cost null). Far under the $3 stop",
+   "gpu_timeline": "723 samples every 5 s, 00:24:57-01:30:11. ComfyUI rendered in 88 samples; peak VRAM about 23.2 GB during LTX-2.5 when nothing else was loaded, no OOM. The local language model was loaded only 01:12:01-01:17:59 (67 samples, 23 of them during renders, peak 23.96 GB): another session's browser test (ui/tests/agentConsole.browser.py, Quickstart \"Draft an agent\") loaded qwen3.8:27b into the shared Ollama; it unloaded at 01:18. The studio's ledger, limb tasks, crew jobs, grades and assistant messages show no local model call from the walk; Ollama logged only that session's two POSTs and its unload. The two studios use separate databases, so their GPU arbiters do not see each other. The Agent Console GPU panel showed no owner in any sample (recurs)",
+   "break_points": [
+    {
+     "id": "R44-3",
+     "blocking": true,
+     "status": "closed (fixed in 3ae9d67, verified 2026-10-28)"
+    },
+    {
+     "id": "R44-7",
+     "blocking": true,
+     "status": "closed (fixed in 56c0336, verified 2026-10-28)"
+    },
+    {
+     "id": "R44-1",
+     "blocking": false,
+     "status": "recurs",
+     "what": "the pasted screenplay lands as \"Story start - private draft\"; adopting it still takes Versions > Compare > Preview adopting whole manuscript > Adopt > Apply"
+    },
+    {
+     "id": "R44-2",
+     "blocking": false,
+     "status": "recurs",
+     "what": "Kael @CAST-01, Observatory @SET-01 and three template shot rows (\"The 4 shots you have are kept\"); VFX-01 in the film provenance warning"
+    },
+    {
+     "id": "R44-4",
+     "blocking": false,
+     "status": "recurs",
+     "what": "no cards for Nora or Eli; added by hand; \"Who is in this shot\" added Nora to SC01-S03 but answered \"no change\" for \"Eli runs toward us\""
+    },
+    {
+     "id": "R44-5",
+     "blocking": false,
+     "status": "recurs",
+     "what": "scene 1 bound to the template Observatory @SET-01 (\"9 shots\"); Art again folded scene-1 text into the Observatory description (dismissed)"
+    },
+    {
+     "id": "R44-6",
+     "blocking": false,
+     "status": "did not recur",
+     "what": "the pre-production panel updated through all four stages without a remount"
+    },
+    {
+     "id": "R44-8",
+     "blocking": false,
+     "status": "did not recur",
+     "what": "all four grade panels updated by themselves"
+    },
+    {
+     "id": "allocation",
+     "blocking": false,
+     "status": "recurs, known",
+     "what": "Preview allocation (opened once, not dispatched) routes both shots to h3-short-video-v3 (MiniMax H3, not installed), labelled \"Local open weights\"; SC01-S03 \"Dispatch blocked: Reference media has the wrong image/video/audio type. Input: 3.video\""
+    },
+    {
+     "id": "new-minor",
+     "blocking": false,
+     "status": "open",
+     "what": "crew breakdown headings read \"Scene 01: 1. INT. DAM CONTROL ROOM - NIGHT\" (number twice) and set cards are named with the numbered heading; 3D plan proposals arrive as Needs You rows labelled \"待核對修改\" with \"shot_meta · <shot>\" and no contact sheet; after \"Open in Pipeline\" and back the Overview showed \"No Matching Rows\" until a reload; Re-shoot Take follows the open preview column; pipeline proposals still show \"欄 N\" with raw \"![圖片](...)\" markdown and \"0 change groups\""
+    },
+    {
+     "id": "minor",
+     "blocking": false,
+     "status": "recurs",
+     "what": "\"第 N 列\" in proposal reviews; zh-TW date format in the English UI (\"10月28日 上午12:37\"); every Art proposal labelled \"Soul Cast\"; Camera Motion gets the raw solver word (\"static\", \"track\"); stale \"Proposal ready above.\" and the \"Let the crew pre-produce\" card after the flow; \"unknown manuscript\" on pipeline takes; \"Connection lost or session expired\" banner on opening the pipeline with no outage"
+    },
+    {
+     "id": "model-quality",
+     "blocking": false,
+     "status": "observed",
+     "what": "FLUX 3 Klein put a second runner into 2 of 3 SC02-S02 keyframes despite \"One person only\" (the Run Pipeline keyframe had one); LTX-2.5 made an internal cut in SC01-S03 take 2. The DeepSeek grader caught both"
+    }
+   ],
+   "screenshots": [
+    "docs/research/screenshots/spec20/r44b-roles-deepseek-hosted-open.jpg",
+    "docs/research/screenshots/spec20/r44b-three-scenes-numbered-headings.jpg",
+    "docs/research/screenshots/spec20/r44b-preproduction-finished.jpg",
+    "docs/research/screenshots/spec20/r44b-pipeline-default-step.jpg",
+    "docs/research/screenshots/spec20/r44b-keyframe-run-queued.jpg",
+    "docs/research/screenshots/spec20/r44b-run-pipeline-two-shots.jpg",
+    "docs/research/screenshots/spec20/r44b-grade-sc01-s03-28-retake.jpg",
+    "docs/research/screenshots/spec20/r44b-grades-sc02-s02-60-68-76.jpg"
+   ],
+   "database": "the worktree's own fresh embedded cluster on 55452; 55440, 55461 and other sessions' clusters were not touched",
+   "machine_restored": "studio, embedded PostgreSQL (pg_ctl stop), ComfyUI, headless Edge and the timeline stopped; nvidia-smi 858 MiB with no own process; Ollama tray app still running with no model loaded"
+  }
  }
 }

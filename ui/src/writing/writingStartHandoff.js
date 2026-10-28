@@ -1,5 +1,12 @@
 import { stable } from './writingModel.js';
+import { isSceneHeading } from './sceneHeading.js';
 
+// Server limits one start save must fit:
+// - POST script/ops takes at most 200 ops per request (project_docs/blocks.py MAX_OPS), and the start is ONE atomic request;
+// - PUT sources/{mode} and branches/{id} replace the whole document: at most 1,000 structure units
+//   (writing_structure.reconcile_structure LIMIT_EXCEEDED) within the 2 MB / 500,000-character document limits.
+export const START_OPS_LIMIT = 200;
+export const START_BLOCK_LIMIT = 1000;
 const RECEIPT_WINDOW = 24 * 60 * 60 * 1000;
 const copy = value => structuredClone(value);
 const fail = (message, code = 'START_HANDOFF_INVALID') => Object.assign(new Error(message), {code});
@@ -13,14 +20,81 @@ export function isEmptyStartDocument(doc) {
     node.type === 'paragraph' && (node.content || []).every(child => child.type === 'hardBreak' || child.type === 'text' && !child.text?.trim()));
 }
 
-function plainDocument(text, identifier) {
+// Literal start text as blocks: never HTML/Markdown parsing, never a template guess. Each scene-heading line is
+// its own paragraph (scenes are split per block); body text splits into paragraphs at blank (or whitespace-only)
+// lines and keeps its other line breaks as hard breaks. A block is a list of segments (lines): one hard break
+// between lines, two (a blank line) between segments. Over `limit` blocks no text is ever dropped; the layout
+// degrades in this order:
+//   1. body paragraphs merge within their own scene;
+//   2. later scenes' bodies join their heading block after one hard break. The heading line still starts the
+//      block, so the scene is still found and still titled by that line;
+//   3. scenes past the limit join the last block after a blank line. They stay as text and can be split in the
+//      editor; `separateScenes < scenes` reports it. With 200 ops this starts past 200 scenes (199 after a title page).
+export function startLayout(text, limit) {
+  const groups = [];
+  let group = null, paragraph = null;
+  for (const line of String(text).replace(/\r\n?/g, '\n').split('\n')) {
+    if (isSceneHeading(line)) {groups.push(group = {heading:line, paragraphs:[]});paragraph = null;}
+    else if (!line.trim()) paragraph = null;
+    else {
+      if (!group) groups.push(group = {heading:null, paragraphs:[]});
+      if (!paragraph) group.paragraphs.push(paragraph = []);
+      paragraph.push(line);
+    }
+  }
+  const scenes = groups.filter(item => item.heading !== null).length;
+  const headingBlock = item => item.heading === null ? [] : [[[item.heading]]];
+  // n blocks of consecutive paragraphs, as even as possible and always in order.
+  const chunks = (paragraphs, n) => Array.from({length:n}, (_, j) => paragraphs.slice(Math.floor(j * paragraphs.length / n), Math.floor((j + 1) * paragraphs.length / n)));
+  const folded = item => item.heading === null ? [item.paragraphs] : [[[item.heading, ...(item.paragraphs[0] || [])], ...item.paragraphs.slice(1)]];
+  let blocks, mode;
+  if (groups.reduce((total, item) => total + (item.heading !== null) + item.paragraphs.length, 0) <= limit) {
+    mode = 'blocks';
+    blocks = groups.flatMap(item => [...headingBlock(item), ...item.paragraphs.map(lines => [lines])]);
+  } else if (scenes + groups.filter(item => item.paragraphs.length).length <= limit) {
+    // Water-fill: the largest even cap per scene that fits, the spare blocks to the first larger scenes.
+    mode = 'paragraphs';
+    const sizes = groups.map(item => item.paragraphs.length), available = limit - scenes;
+    const used = cap => sizes.reduce((total, size) => total + Math.min(size, cap), 0);
+    let low = 1, high = sizes.reduce((most, size) => Math.max(most, size), 1);
+    while (low < high) {const middle = Math.ceil((low + high) / 2);if (used(middle) <= available) low = middle;else high = middle - 1;}
+    let spare = available - used(low);
+    blocks = groups.flatMap((item, index) => {
+      const extra = sizes[index] > low && spare > 0 ? (spare--, 1) : 0;
+      return [...headingBlock(item), ...chunks(item.paragraphs, Math.min(sizes[index], low) + extra)];
+    });
+  } else {
+    mode = groups.length <= limit ? 'headings' : 'scenes';
+    let split = Math.max(0, limit - groups.length);
+    blocks = groups.flatMap(item => item.heading !== null && item.paragraphs.length && split > 0 ? (split--, [...headingBlock(item), item.paragraphs]) : folded(item));
+    if (blocks.length > limit) blocks = [...blocks.slice(0, limit - 1), blocks.slice(limit - 1).flat()];
+  }
+  const separateScenes = blocks.filter(segments => isSceneHeading(segments[0][0])).length;
+  return {blocks, scenes, separateScenes, mode};
+}
+
+function paragraphNode(segments, bid) {
   const content = [];
-  text.replace(/\r\n?/g, '\n').split('\n').forEach((line, index) => {
-    if (index) content.push({type:'hardBreak'});
-    if (line) content.push({type:'text', text:line});
+  segments.forEach((lines, index) => {
+    if (index) content.push({type:'hardBreak'}, {type:'hardBreak'});
+    lines.forEach((line, at) => {if (at) content.push({type:'hardBreak'});content.push({type:'text', text:line});});
   });
-  // One block avoids the 200-op limit; literal text is never HTML/Markdown or a template guess.
-  return {type:'doc', content:[{type:'paragraph', attrs:{bid:identifier, owner:null, created:null}, content}]};
+  return {type:'paragraph', attrs:{bid, owner:null, created:null}, content};
+}
+
+// The same text, token and limit always give the same document (the handoff is idempotent and checkpointed).
+export function startDocument(text, token, limit) {
+  const {blocks} = startLayout(text, limit);
+  return {type:'doc', content:blocks.map((segments, index) => paragraphNode(segments, `bs_${token.slice(0, 24)}_${index}`))};
+}
+
+// The working screenplay is saved through script/ops, a source or branch as one document.
+export const startLimit = ref => ref?.kind === 'working' ? START_OPS_LIMIT : START_BLOCK_LIMIT;
+
+// Scenes that could not keep a block of their own at the saved destination (layout step 3), or null.
+export function startOverflow(text, ref) {
+  const {scenes, separateScenes} = startLayout(text, startLimit(ref));
+  return separateScenes < scenes ? {scenes, separateScenes} : null;
 }
 
 function requireResource(value) {
@@ -28,14 +102,26 @@ function requireResource(value) {
   return value;
 }
 
-function checkSave(ack, request, doc) {
+// Every block the request submitted (a whole document, or the nodes of its put ops) must come back with the same
+// type and content, in the submitted order. Checked against the checkpointed request body, so a replay of an
+// older single-block checkpoint is verified against what it actually sent.
+function checkSave(ack, request) {
   if (ack?.clientMutationId !== request.body.clientMutationId || !ack.docHash || ack.conflicts?.length) {
     throw fail('The start text was not acknowledged without conflicts.', 'START_HANDOFF_CONFLICT');
   }
-  const expected = doc.content[0], saved = ack.doc?.content?.find(node => node.attrs?.bid === expected.attrs.bid);
-  if (!saved || saved.type !== expected.type || stable(saved.content) !== stable(expected.content)) {
-    throw fail('The start acknowledgement does not contain the submitted text.', 'START_HANDOFF_CONFLICT');
+  const submitted = Array.isArray(request.body.ops) ? request.body.ops.map(op => ({bid:op.bid, node:op.node}))
+    : (request.body.doc?.content || []).map(node => ({bid:node.attrs?.bid, node}));
+  const saved = Array.isArray(ack.doc?.content) ? ack.doc.content : [];
+  const position = new Map(saved.map((node, index) => [node?.attrs?.bid, index]));
+  let previous = -1;
+  for (const {bid, node} of submitted) {
+    const index = position.get(bid), found = saved[index];
+    if (!bid || !found || index <= previous || found.type !== node.type || stable(found.content) !== stable(node.content)) {
+      throw fail('The start acknowledgement does not contain the submitted text.', 'START_HANDOFF_CONFLICT');
+    }
+    previous = index;
   }
+  if (!submitted.length) throw fail('The start acknowledgement does not contain the submitted text.', 'START_HANDOFF_CONFLICT');
 }
 
 // transport MUST already be bound to the current actor and episode. The caller owns pending
@@ -52,7 +138,7 @@ export async function persistStartHandoff({transport, start, name = 'Story start
   }
   const inputHash = await fingerprint({mode:start.mode, text:start.text, idempotencyKey});
   const token = await fingerprint(idempotencyKey), mutation = suffix => `start-${token.slice(0, 48)}-${suffix}`;
-  const doc = plainDocument(start.text, 'b_start_' + token.slice(0, 32));
+  const doc = startDocument(start.text, token, START_BLOCK_LIMIT);
   let plan = start.handoff ? copy(start.handoff) : null;
   if (plan && (plan.schemaVersion !== 1 || plan.actorId !== actorId || plan.inputHash !== inputHash)) {
     throw fail('This pending start belongs to another actor or input.', 'START_HANDOFF_IDENTITY_MISMATCH');
@@ -74,10 +160,14 @@ export async function persistStartHandoff({transport, start, name = 'Story start
     baseVersion:resource?.version || 0, clientMutationId:mutation('source-save'), doc,
     structure:resource?.structure || {}, composition:resource?.composition || {},
   }, 'source-save')});
-  const workingPlan = () => ({...plan, stage:'working-save', request:request('script/ops', 'POST', {
-    ops:[{op:'put', bid:doc.content[0].attrs.bid, after:null, node:doc.content[0], base:null}],
-    atomic:true, clientMutationId:mutation('working-save'), session_id:mutation('session'),
-  }, 'working-save')});
+  // All blocks in ONE atomic request, each inserted after the previous one, so they land together and in order.
+  const workingPlan = () => {
+    const nodes = startDocument(start.text, token, START_OPS_LIMIT).content;
+    return {...plan, stage:'working-save', request:request('script/ops', 'POST', {
+      ops:nodes.map((node, index) => ({op:'put', bid:node.attrs.bid, after:index ? nodes[index - 1].attrs.bid : null, node, base:null})),
+      atomic:true, clientMutationId:mutation('working-save'), session_id:mutation('session'),
+    }, 'working-save')};
+  };
 
   // Bind even a read failure to its originating actor before doing any network work.
   if (!plan) await checkpoint({schemaVersion:1, actorId, inputHash, createdAt:Date.now(), stage:'select', request:null});
@@ -127,7 +217,7 @@ export async function persistStartHandoff({transport, start, name = 'Story start
         // No copied structure/composition: branch saves reconcile their protected metadata.
       }, 'branch-save')});
     } else if (['source-save','branch-save','working-save'].includes(plan.stage)) {
-      checkSave(ack, pending, doc);
+      checkSave(ack, pending);
       return done(plan.stage === 'source-save' ? {kind:'source', mode:start.mode} : plan.stage === 'working-save' ? {kind:'working'} : plan.ref);
     } else throw fail('Unknown pending start stage.');
   }

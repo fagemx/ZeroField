@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {persistStartHandoff, isEmptyStartDocument} from '../src/writing/writingStartHandoff.js';
+import {persistStartHandoff, isEmptyStartDocument, startLayout, startDocument, startOverflow, START_OPS_LIMIT, START_BLOCK_LIMIT} from '../src/writing/writingStartHandoff.js';
 import {createActorBoundRequest, createWritingTransport} from '../src/writing/writingTransport.js';
 import {stable} from '../src/writing/writingModel.js';
 
@@ -64,14 +64,19 @@ function mockWriting({working = resource(), sources = {}, initialized = true} = 
       assert.deepEqual(Object.keys(body).sort(), ['atomic','clientMutationId','ops','session_id']);
       assert.equal(body.atomic, true);
       assert.ok(body.session_id.length <= 64);
-      assert.equal(body.ops.length, 1, 'only an atomic insert, never deletes or reorder');
-      const op = body.ops[0];
-      assert.equal(op.op, 'put');assert.equal(op.base, null);assert.equal(op.after, null);
+      assert.ok(body.ops.length >= 1 && body.ops.length <= 200, 'one request within the server MAX_OPS');
+      // Only atomic inserts, never deletes or reorder: the first at the top, each next one after the previous bid.
+      body.ops.forEach((op, index) => {
+        assert.equal(op.op, 'put');assert.equal(op.base, null);
+        assert.equal(op.after, index ? body.ops[index - 1].bid : null);
+        assert.match(op.bid, /^[A-Za-z0-9_-]{4,40}$/);assert.equal(op.node.attrs.bid, op.bid);
+      });
+      assert.equal(new Set(body.ops.map(op => op.bid)).size, body.ops.length);
       assert.equal(state.working.structure.initialized, true);
-      const collision = state.working.doc.content.some(node => node.attrs?.bid === op.bid);
-      const doc = collision ? state.working.doc : {...state.working.doc,content:[copy(op.node),...state.working.doc.content]};
-      ack = {doc:copy(doc),docHash:'saved-script-'+identity,version:state.working.version+1,clientMutationId:body.clientMutationId,conflicts:collision ? [{bid:op.bid}] : []};
-      if (!collision) state.working = {...state.working,...copy(ack)};
+      const collisions = body.ops.filter(op => state.working.doc.content.some(node => node.attrs?.bid === op.bid));
+      const doc = collisions.length ? state.working.doc : {...state.working.doc,content:[...body.ops.map(op => copy(op.node)),...state.working.doc.content]};
+      ack = {doc:copy(doc),docHash:'saved-script-'+identity,version:state.working.version+1,clientMutationId:body.clientMutationId,conflicts:collisions.map(op => ({bid:op.bid}))};
+      if (!collisions.length) state.working = {...state.working,...copy(ack)};
     } else throw new Error('Unexpected mock mutation ' + tail);
     if (state.badAck) ack = state.badAck(copy(ack));
     state.receipts.set(key, {body:stable(body),ack:copy(ack)});
@@ -102,7 +107,7 @@ test('idea and novel save missing or empty private sources with authoritative CA
     const put = mutations(mock)[0];
     assert.equal(put.body.baseVersion, existing?.version || 0);
     assert.equal(mock.state.created, 0);
-    assert.equal(put.body.doc.content[0].content.find(node => node.text?.includes('<script>')).text, '<script>literal</script> & rain.');
+    assert.deepEqual(put.body.doc.content.map(block => block.content.map(node => node.text)), [['A signal.'], ['<script>literal</script> & rain.']]);
     assert.equal(c.saved().handoff.stage, 'done');
     const count = mock.state.calls.length;
     assert.deepEqual(await persistStartHandoff(c.reload()), ref, 'saved but load/host ACK failed: reuse the completed resource');
@@ -126,12 +131,12 @@ test('occupied sources and every nonempty screenplay (including template-like pr
 });
 
 test('empty working script is initialized when needed and saved only with a deterministic atomic insertion', async () => {
-  const mock = mockWriting({initialized:false}), c = caller(mock,'script','INT. DOME\r\nKael enters.');
+  const mock = mockWriting({initialized:false}), c = caller(mock,'script','INT. DOME\r\nKael enters.\r\nHe stops.');
   assert.deepEqual(await persistStartHandoff(c.args), {kind:'working'});
   assert.deepEqual(mutations(mock).map(call => call.tail), ['initialize','script/ops']);
-  const op = mutations(mock)[1].body.ops[0];
-  assert.match(op.bid, /^[A-Za-z0-9_-]{4,40}$/);
-  assert.equal(op.node.content[1].type, 'hardBreak');
+  const ops = mutations(mock)[1].body.ops;
+  assert.deepEqual(ops.map(op => op.node.content), [[{type:'text',text:'INT. DOME'}],
+    [{type:'text',text:'Kael enters.'},{type:'hardBreak'},{type:'text',text:'He stops.'}]]);
   assert.equal(mock.state.created, 0);
 });
 
@@ -149,7 +154,7 @@ test('GET-to-save insertion race cannot overwrite/delete/reorder other working b
   const mock = mockWriting(), c = caller(mock,'script');
   mock.state.before = ({tail,state}) => {if (tail === 'script/ops') state.working = resource('Concurrent block.',2);};
   assert.deepEqual(await persistStartHandoff(c.args), {kind:'working'});
-  assert.equal(mock.state.working.doc.content[1].content[0].text, 'Concurrent block.');
+  assert.deepEqual(mock.state.working.doc.content.map(block => block.content[0].text), ['A signal.','<script>literal</script> & rain.','Concurrent block.']);
 });
 
 test('empty source losing its version CAS moves to a private branch instead of rebasing over the winner', async () => {
@@ -199,7 +204,11 @@ test('no server mutation is allowed before a durable checkpoint; read failure st
 });
 
 test('changed input/actor, expired mutation, idempotency conflict and script save conflicts never complete or retry with a new key', async () => {
-  for (const badAck of [ack => ({...ack,conflicts:[{bid:'locked'}]}), ack => ({...ack,clientMutationId:'wrong'}), ack => ({...ack,docHash:null}), ack => ({...ack,doc:document('Wrong content')})]) {
+  for (const badAck of [ack => ({...ack,conflicts:[{bid:'locked'}]}), ack => ({...ack,clientMutationId:'wrong'}), ack => ({...ack,docHash:null}), ack => ({...ack,doc:document('Wrong content')}),
+    // Every submitted block is checked, not only the first: a missing, changed or reordered later block is a conflict.
+    ack => ({...ack,doc:{...ack.doc,content:ack.doc.content.filter((_, index) => index !== 1)}}),
+    ack => ({...ack,doc:{...ack.doc,content:ack.doc.content.map((node, index) => index === 1 ? {...node,content:[{type:'text',text:'Changed.'}]} : node)}}),
+    ack => ({...ack,doc:{...ack.doc,content:[ack.doc.content[1],ack.doc.content[0],...ack.doc.content.slice(2)]}})]) {
     const mock = mockWriting(), c = caller(mock,'script');mock.state.badAck = badAck;
     await assert.rejects(persistStartHandoff(c.args), {code:'START_HANDOFF_CONFLICT'});
     assert.equal(c.saved().handoff.stage, 'working-save');
@@ -240,4 +249,72 @@ test('helper uses the supplied actor-bound writing transport, including disposal
   const other = caller(mock,'novel');other.args.transport = c.args.transport;
   await assert.rejects(persistStartHandoff(other.args), {name:'AbortError'});
   assert.equal(other.saved().handoff.stage, 'select');
+});
+
+// R44-3: a pasted screenplay becomes scene-shaped blocks, not one paragraph.
+const SPILLWAY = 'SPILLWAY\r\nan original short\r\n\r\n1. INT. CONTROL ROOM - NIGHT\r\nRain hammers the glass.\r\nNora faces the gauges.\r\n\r\nNORA\r\n"The gate is jammed."\r\n\r\n2. EXT. DAM CREST - CONTINUOUS\r\nEli grips the rail.\r\n\r\n\r\n3. EXT. SPILLWAY - NIGHT\r\nEli runs toward us.\r\n';
+const lines = block => block.content.map(node => node.type === 'hardBreak' ? '\n' : node.text).join('');
+const scriptOf = count => 'TITLE PAGE\n\n' + Array.from({length:count}, (_, i) => `${i + 1}. INT. ROOM ${i + 1} - DAY\nOne of ${i + 1}.\nTwo of ${i + 1}.\n\nThree of ${i + 1}.`).join('\n\n');
+// Text kept exactly, except that a blank line and a block boundary are the same thing.
+const flat = value => value.replace(/\r\n?/g, '\n').trim().replace(/\n\n+/g, '\n');
+const textOf = doc => doc.content.map(lines).join('\n');
+
+test('a numbered screenplay saves each heading line as its own block in one atomic, chained request', async () => {
+  const mock = mockWriting(), c = caller(mock, 'script', SPILLWAY);
+  assert.deepEqual(await persistStartHandoff(c.args), {kind:'working'});
+  const [save] = mutations(mock);
+  assert.equal(save.tail, 'script/ops');
+  assert.deepEqual(save.body.ops.map(op => lines(op.node)), ['SPILLWAY\nan original short', '1. INT. CONTROL ROOM - NIGHT',
+    'Rain hammers the glass.\nNora faces the gauges.', 'NORA\n"The gate is jammed."', '2. EXT. DAM CREST - CONTINUOUS',
+    'Eli grips the rail.', '3. EXT. SPILLWAY - NIGHT', 'Eli runs toward us.']);
+  assert.ok(save.body.ops.every(op => op.node.type === 'paragraph' && op.node.content.every(node => node.type !== 'text' || node.text)));
+  assert.deepEqual(mock.state.working.doc.content.slice(0, 8).map(node => node.attrs.bid), save.body.ops.map(op => op.bid));
+});
+
+test('the same start text and key always give the same blocks and ids, whichever save receives them', async () => {
+  const runs = [];
+  for (let i = 0; i < 2; i++) {
+    const mock = mockWriting(), c = caller(mock, 'script', SPILLWAY);
+    await persistStartHandoff(c.args);
+    runs.push(mutations(mock)[0].body);
+  }
+  assert.deepEqual(runs[0], runs[1]);
+  const token = 'c'.repeat(64);
+  assert.deepEqual(startDocument(SPILLWAY, token, START_BLOCK_LIMIT), startDocument(SPILLWAY, token, START_BLOCK_LIMIT));
+  // A small script is laid out the same for script/ops (200) and a whole-document PUT (1,000).
+  assert.deepEqual(startDocument(SPILLWAY, token, START_OPS_LIMIT), startDocument(SPILLWAY, token, START_BLOCK_LIMIT));
+  const source = mockWriting(), s = caller(source, 'novel', SPILLWAY);
+  await persistStartHandoff(s.args);
+  assert.deepEqual(mutations(source)[0].body.doc.content.map(lines), runs[0].ops.map(op => lines(op.node)));
+});
+
+test('over the op limit, body paragraphs merge within their scene first and every heading keeps its block', () => {
+  // 60 scenes x (heading + 2 paragraphs) + title page = 181 blocks: under 200, block for block.
+  assert.equal(startLayout(scriptOf(60), START_OPS_LIMIT).mode, 'blocks');
+  // 80 scenes need 241: paragraphs merge (a blank line becomes two hard breaks), headings stay alone.
+  const merged = startLayout(scriptOf(80), START_OPS_LIMIT);
+  assert.deepEqual([merged.mode, merged.blocks.length, merged.scenes, merged.separateScenes], ['paragraphs', 200, 80, 80]);
+  const doc = startDocument(scriptOf(80), 'd'.repeat(64), START_OPS_LIMIT);
+  assert.equal(doc.content.filter(block => /^\d+\. INT\. /.test(lines(block)) && !lines(block).includes('\n')).length, 80);
+  assert.ok(doc.content.some(block => lines(block).includes('Two of 80.\n\nThree of 80.')));
+  assert.equal(flat(textOf(doc)), flat(scriptOf(80)));
+});
+
+test('150 scenes fit one 200-op save; past the limit no text is dropped and the overflow is reported', () => {
+  const doc = startDocument(scriptOf(150), 'e'.repeat(64), START_OPS_LIMIT);
+  assert.equal(doc.content.length, 200);
+  // Later scenes carry their body in the heading block after one hard break; the heading line still starts it.
+  const starts = doc.content.map(block => lines(block).split('\n')[0]).filter(line => /^\d+\. INT\. /.test(line));
+  assert.deepEqual(starts, Array.from({length:150}, (_, i) => `${i + 1}. INT. ROOM ${i + 1} - DAY`));
+  assert.equal(lines(doc.content.at(-1)), '150. INT. ROOM 150 - DAY\nOne of 150.\nTwo of 150.\n\nThree of 150.');
+  assert.equal(flat(textOf(doc)), flat(scriptOf(150)));
+  assert.equal(startOverflow(scriptOf(150), {kind:'working'}), null);
+  // A branch or source PUT holds 1,000 blocks: 150 scenes keep every paragraph.
+  assert.equal(startLayout(scriptOf(150), START_BLOCK_LIMIT).mode, 'blocks');
+  // 250 scenes cannot all start a block in 200 ops: the rest share the last block, all text kept.
+  const over = startDocument(scriptOf(250), 'f'.repeat(64), START_OPS_LIMIT);
+  assert.equal(over.content.length, 200);
+  assert.equal(flat(textOf(over)), flat(scriptOf(250)));
+  assert.deepEqual(startOverflow(scriptOf(250), {kind:'working'}), {scenes:250, separateScenes:199});
+  assert.equal(startOverflow(scriptOf(250), {kind:'branch', id:'wbr_x'}), null);
 });

@@ -149,10 +149,32 @@ export function applyPreset(value, preset) {
   return value.includes(preset) ? value : [value.trim(), preset].filter(Boolean).join(' ');
 }
 
+// SPEC_20 R44-7: several steps may write one column (the main lane, the previs and layout lanes all write Keyframe and Cinema
+// Shot). The one marked primary, the column's default step, is used when exactly one is; otherwise the action is refused with
+// the competing steps named, so the director can mark one in Pipeline.
+const preferPrimary = steps => {
+  const marked = steps.filter(node => node.primary === true);
+  return steps.length > 1 && marked.length === 1 ? marked : steps;
+};
+const ambiguous = (key, steps) => new Error(t(key, {count:steps.length, control:t('flowPanels.defaultStep'),
+  steps:steps.map(node => t('studio.stepName', {name:node.title || node.id})).join(t('studio.stepSeparator'))}));
+// The step and every step downstream of it: what a run started there covers.
+function laneOf(edges, id) {
+  const lane = new Set([id]);
+  for (let grown = true; grown;) {
+    grown = false;
+    for (const edge of edges) if (lane.has(edge.source) && !lane.has(edge.target)) { lane.add(edge.target); grown = true; }
+  }
+  return lane;
+}
+
 // Single-step uses the node's saved source/output. Never silently broaden a cell action.
-// match: optional node predicate, to name one pipeline step among several that write the same column.
+// match: optional node predicate, to name one pipeline step among several that write the same column (an explicit lane action:
+// the default step plays no part in it).
 // row: the single row's cell values. A step whose row_source filters a column (Jutsu Mode = Object Swap) runs only on rows
-// that pass it, and wins over an unfiltered step writing the same column.
+// that pass it, and wins over an unfiltered step writing the same column; the default step decides among what remains.
+// Without a capability (Run Pipeline) the run starts at the page's only first step, or at the first step of the one lane that
+// holds a default step.
 export function studioRunInput(flow, {tabKey, tableId, columnIds = [], rowIds, singleStep, capability, col_index, match, row}) {
   if (!rowIds.length || rowIds.length > 200 || new Set(rowIds).size !== rowIds.length) throw new Error(t('studio.invalidRows'));
   const nodes = flow.definition?.nodes || [];
@@ -171,14 +193,27 @@ export function studioRunInput(flow, {tabKey, tableId, columnIds = [], rowIds, s
       matching = matching.filter(passes);
       if (matching.some(node => statuses(node).length)) matching = matching.filter(node => statuses(node).length);
     }
-    if (rowIds.length !== 1 || matching.length !== 1) throw new Error(t('studio.noSafeStep'));
+    if (rowIds.length !== 1) throw new Error(t('studio.noSafeStep'));
+    if (!match) matching = preferPrimary(matching);
+    if (matching.length > 1 && !match) throw ambiguous('studio.ambiguousStep', matching);
+    if (matching.length !== 1) throw new Error(t('studio.noSafeStep'));
     return {execution_mode:'single_step', node_id:matching[0].id, input_mode:'current_sources', sample_row_id:rowIds[0], definition_revision:flow.revision};
   }
   const relevant = nodes.filter(node => node.row_source ? node.row_source.tab_key === tabKey && (!node.row_source.table_id || node.row_source.table_id === tableId) : sameTable(node.target));
   if (!relevant.length) throw new Error(t('studio.noSafeStep'));
-  const relevantIds = new Set(relevant.map(node => node.id));
-  const roots = relevant.filter(node => !(flow.definition.edges || []).some(edge => edge.target === node.id && relevantIds.has(edge.source)));
-  const start = capability ? (candidates.length === 1 ? candidates[0] : null) : roots.length === 1 ? roots[0] : null;
+  const edges = flow.definition.edges || [], relevantIds = new Set(relevant.map(node => node.id));
+  const roots = relevant.filter(node => !edges.some(edge => edge.target === node.id && relevantIds.has(edge.source)));
+  let start = null;
+  if (capability) {
+    const pool = match ? candidates : preferPrimary(candidates);
+    if (pool.length > 1 && !match) throw ambiguous('studio.ambiguousStep', pool);
+    start = pool.length === 1 ? pool[0] : null;
+  } else if (roots.length > 1) {
+    const marked = relevant.filter(node => node.primary === true).map(node => node.id);
+    const lanes = roots.filter(root => { const lane = laneOf(edges, root.id); return marked.some(id => lane.has(id)); });
+    if (lanes.length !== 1) throw ambiguous('studio.ambiguousStart', lanes.length ? lanes : roots);
+    start = lanes[0];
+  } else start = roots[0] || null;
   if (!start) throw new Error(t('studio.noSafeStep'));
   return {target_tab:tabKey, row_ids:[...rowIds], definition_revision:flow.revision, start_node_id:start.id};
 }

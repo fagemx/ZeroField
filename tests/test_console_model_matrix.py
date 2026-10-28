@@ -134,7 +134,8 @@ class MatrixViewTests(MatrixFixture):
         models = [(c['model'], c['source'], c['catalogId'], c['listed']) for c in payload['choices']]
         self.assertEqual(models, [('mistral:7b', 'listing', None, True), ('qwen3.8:27b', 'listing', 'ollama-qwen3.8-27b', True),
                                   ('qwen3.8:27b-16k', 'listing', 'ollama-qwen3.8-27b', True),
-                                  (HOSTED_MODEL, 'catalog', 'openrouter-qwen3.8-27b', None)])
+                                  (HOSTED_MODEL, 'catalog', 'openrouter-qwen3.8-27b', None),
+                              ('deepseek/deepseek-v4.1-flash-1017', 'catalog', 'openrouter-deepseek-v4.1-flash-1017', None)])
         self.assertEqual(set(self.probed), {PRESET})
         hosted = self.choice(payload, HOSTED_MODEL)
         self.assertEqual((hosted['tier'], hosted['local'], hosted['baseUrl'], hosted['host'], hosted['apiKeyEnv'], hosted['keyConfigured']),
@@ -188,7 +189,7 @@ class MatrixViewTests(MatrixFixture):
         self.assertEqual((payload['policy']['production'], payload['policy']['hybrid'], payload['policy']['closedHidden']), ('hybrid_studio', True, 0))
         gpt = self.choice(payload, 'gpt-4.1')
         self.assertEqual((gpt['tier'], gpt['denials']), ('closed', ['key_not_allowed', 'pricing_missing']))
-        self.assertEqual({c['catalogId'] for c in payload['choices']} - {None}, {'ollama-qwen3.8-27b', 'openrouter-qwen3.8-27b', 'openai-gpt-4.1', 'gemini-2.5-pro'})
+        self.assertEqual({c['catalogId'] for c in payload['choices']} - {None}, {'ollama-qwen3.8-27b', 'openrouter-qwen3.8-27b', 'openrouter-deepseek-v4.1-flash-1017', 'openai-gpt-4.1', 'gemini-2.5-pro'})
         self.assertEqual(self.choice(payload, HOSTED_MODEL)['denials'], ['key_not_allowed', 'pricing_missing'],
                          'hybrid_studio allows every tier; the key and the price ceiling still apply')
 

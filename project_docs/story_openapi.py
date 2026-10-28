@@ -26,7 +26,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from project_docs import blocks, markdown_import, media, repository as repo, service
+from project_docs import blocks, markdown_import, media, repository as repo, scene_headings, service
 from project_docs.doc_schema import column_ids, doc_text, new_id, node_text, validate_doc
 from project_assistant import limb_worker as worker
 from project_assistant.table_edits import _cell, cell_value, validate_value
@@ -191,9 +191,8 @@ def scene_sections(content):
     lines = content.splitlines()
     scenes, current = [], None
     for line in lines:
-        heading = re.match(r"^\s*(?:#{1,6}\s*)?((?:Scene\s*\d+|場景\s*[一二三四五六七八九十\d]+|场景\s*[一二三四五六七八九十\d]+|INT\.|EXT\.).*)$", line, re.I)
-        if heading:
-            current = {"title": heading[1].strip(), "content": ""}
+        if scene_headings.is_heading(line):
+            current = {"title": scene_headings.heading_title(line), "content": ""}
             scenes.append(current)
         elif current is not None:
             current["content"] += line + "\n"

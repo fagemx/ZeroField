@@ -79,6 +79,15 @@ def validate_definition(value, *, allow_empty=False):
         for key in ("x", "y"):
             if key in node and (type(node[key]) not in (int, float) or not -100000 <= node[key] <= 100000):
                 raise ValueError("Invalid node coordinates.")
+        if "primary" in node and type(node["primary"]) is not bool:
+            raise ValueError("primary must be true or false.")
+    # R44-7: a step marked primary is the default step of the column it writes; a column has at most one.
+    marked = [node for node in nodes if node.get("primary") is True]
+    for i, first in enumerate(marked):
+        for second in marked[i + 1:]:
+            if same_output(first["target"], second["target"]):
+                raise ValueError(f"Only one step can be the default for a column: “{first['title']}” and “{second['title']}” "
+                                 "both write it. Turn the default off on one of them.")
     links = set()
     for edge in edges:
         if not isinstance(edge, dict) or edge.get("source") not in ids or edge.get("target") not in ids:
@@ -96,6 +105,20 @@ def validate_definition(value, *, allow_empty=False):
     if seen != ids:
         raise ValueError("The pipeline contains a cycle. Remove connections that return upstream.")
     return {**copy.deepcopy(value), "nodes": nodes, "edges": edges}
+
+
+def same_output(first, second):
+    """Whether two step targets write the same column: same page, a compatible worksheet (an unnamed one is the page's
+    first) and the same column, by id when both name one, else by index. Documents and whole tables are never a column."""
+    def cell(target):
+        return isinstance(target, dict) and target.get("kind", "table") != "doc" and ("col_index" in target or bool(target.get("column_id")))
+    if not (cell(first) and cell(second)) or first.get("tab_key") != second.get("tab_key"):
+        return False
+    if first.get("table_id") and second.get("table_id") and first["table_id"] != second["table_id"]:
+        return False
+    if first.get("column_id") and second.get("column_id"):
+        return first["column_id"] == second["column_id"]
+    return "col_index" in first and "col_index" in second and first["col_index"] == second["col_index"]
 
 
 def _validate_source(source):

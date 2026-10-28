@@ -14,7 +14,7 @@ import re
 import uuid
 import unicodedata
 
-from project_docs import file_handoff, story_openapi as story
+from project_docs import file_handoff, scene_headings, story_openapi as story
 from project_docs.doc_schema import new_id, node_text
 from project_docs.writing_tools import (MAX_TEXT, checked_doc, fail, fingerprint, fresh_scope,
                                         selected_actions, sequence, strict, text, _store,
@@ -133,7 +133,7 @@ def section_preview(value, purpose, headings=()):
     for index, line in enumerate(value.splitlines(keepends=True)):
         content = line.rstrip("\r\n")
         if purpose == "script":
-            match = re.match(r"^\s*(?:#{1,3}\s*)?(?:Scene\s*\d+|INT\.|EXT\.|場景\s*[一二三四五六七八九十\d]+)", content, re.I)
+            match = scene_headings.is_heading(content)
         elif purpose == "novel":
             match = re.match(r"^\s*(?:#{1,3}\s+|Chapter\s+(?:\d+|[IVXLCDM]+)\b|第[^\s]{1,12}[章节章節回])", content, re.I)
         else:

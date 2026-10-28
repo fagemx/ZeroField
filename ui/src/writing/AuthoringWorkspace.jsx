@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from '../i18n/react.jsx';
 import { storyRequest } from '../storyModel.js';
 import { rememberStart } from '../startModel.js';
-import { persistStartHandoff } from './writingStartHandoff.js';
+import { persistStartHandoff, startOverflow } from './writingStartHandoff.js';
 import { createWritingTransport, writingAction, mutationId } from './writingTransport.js';
 import { createWritingJournal, journalScope } from './writingJournal.js';
 import { WritingPersistence } from './writingPersistence.js';
@@ -39,7 +39,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
   const journal=useMemo(()=>createWritingJournal(),[]),tabId=useRef(mutationId());
   const [workspace,setWorkspace]=useState(null),[resourceRef,setResourceRef]=useState({kind:'working'}),[resource,setResource]=useState(null),[snapshot,setSnapshot]=useState(null),[error,setError]=useState(null),[panel,setPanel]=useState(null),[preview,setPreview]=useState(null),[selectedScene,setSelectedScene]=useState(null),[focusBid,setFocusBid]=useState(null),[focus,setFocus]=useState(false),[outlineOpen,setOutlineOpen]=useState(true),[fontSize,setFontSize]=useState(18),[lineHeight,setLineHeight]=useState(1.8),[pageWidth,setPageWidth]=useState(720),[duplicate,setDuplicate]=useState(false),[busy,setBusy]=useState(false),[switching,setSwitching]=useState(false);
   // SPEC_16A: with `slots` ({left,right} DOM nodes) the studio shell owns the side columns, so the outline and the panels render there; the editor stays here.
-  const slotted=Boolean(slots),actions=useRef({}),[targetScenes,setTargetScenes]=useState(3),[seedTick,setSeedTick]=useState(0),seedWork=useRef(null),[seedBusy,setSeedBusy]=useState(false),[seedError,setSeedError]=useState(null);
+  const slotted=Boolean(slots),actions=useRef({}),[targetScenes,setTargetScenes]=useState(3),[seedTick,setSeedTick]=useState(0),seedWork=useRef(null),[seedBusy,setSeedBusy]=useState(false),[seedError,setSeedError]=useState(null),[startNotice,setStartNotice]=useState(null);
   const into=(node,slot)=>slotted?(slot&&node?createPortal(node,slot):null):node;
   const taskAbort=useRef(new AbortController());
   const persistence=useRef(null),latest=useRef({}),mounted=useRef(true),loadSequence=useRef(0),editor=useRef(null),actionRetry=useRef(null),structureUndo=useRef(null);
@@ -139,7 +139,8 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
         onCheckpoint:plan=>{seed.handoff=plan;if(!rememberStart(slug,seed))throw new Error(t('writing.integration.startStorageFailed'));}});
       if(!mounted.current||signal.aborted)return;
       await load(ref);
-      if(mounted.current&&!signal.aborted)onSeeded?.();
+      // A script with more scenes than one start save can hold keeps all its text, but the overflow scenes share the last block.
+      if(mounted.current&&!signal.aborted){setStartNotice(startOverflow(seed.text,ref));onSeeded?.();}
     })().catch(error=>{if(mounted.current&&!signal.aborted)setSeedError(error);})
       .finally(()=>{if(mounted.current&&!signal.aborted)setSeedBusy(false);});
   },[seed,workspaceReady,writable,seedTick]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -247,6 +248,7 @@ function WorkspaceSession({slug,epId,me,writable,ep,shots=[],request=storyReques
       {seedError&&<button type="button" disabled={seedBusy} onClick={()=>{seedWork.current=null;setSeedTick(value=>value+1);}}>{t(p+'retryAction')}</button>}
       <button type="button" onClick={downloadSeed}>{t('writing.integration.downloadStart')}</button>
     </section>}
+    {startNotice&&<p role="status">{t('writing.integration.startScenesMerged',{count:startNotice.scenes,kept:startNotice.separateScenes})} <button type="button" onClick={()=>setStartNotice(null)}>{t(p+'close')}</button></p>}
     {duplicate&&<p role="status">{t(p+'duplicateTab')}</p>}
     <div className="writing-layout">
       {into(outlineOpen&&resourceRef.kind==='working'&&<aside className="writing-left"><WritingOutline structure={structure} metadataDraft={outlineSnapshot?.draft} onComposition={value=>outlineRecovery.setComposing(value)} doc={doc} writable={editable&&!busy&&!outlineSnapshot?.recoveries?.length&&outlineSnapshot?.state!=='auth_lost'} selected={selectedScene} onSelect={async key=>{if(await flush()){activeSlice.current=null;setSliceGeneration(value=>value+1);setSelectedScene(key);setFocusBid(structure.scenes.find(scene=>scene.sceneKey===key)?.headingBid);}}} onMetadata={metadata} onStructure={previewStructure} onShots={navigateShots} onUndo={structureUndo.current?()=>run(async()=>{await requireServer();const current=await transport('workspace'),undo=structureUndo.current;if(current.docHash!==undo.docHash || undo.structureHash&&current.structure.structureHash!==undo.structureHash)throw new Error(t(p+'undoStale'));const result=await post('previews',{kind:'structure',targetDocHash:current.docHash,structureVersion:current.structure.version,operation:{type:'restore',snapshotId:undo.snapshotId}});setPreview(result);setPanel('preview');}):null}/></aside>,slots?.left)}
