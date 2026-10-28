@@ -77,7 +77,7 @@
 |---|---|---|---|
 | `face` | `flux-soul-cast` | 無 | 896×1184 |
 | `front` | `flux-reference-key` | 本素材 `face` | 768×1344 |
-| `back` | `flux-reference-key` | `face`、`front` | 768×1344 |
+| `back` | `flux-reference-key` | 本素材 `face`（只帶臉；2026-10-29 GPU 試算：同時帶正面全身時，身體會被拉成正面，出現「背面的頭、正面的身體」） | 768×1344 |
 | `plate` | `flux-soul-cast` | 無 | 1344×768 |
 | `reverse`、`angle` | `flux-klein-edit` | 本素材 `plate` | 1344×768 |
 | `product` | `flux-soul-cast` | 無 | 1024×1024 |
@@ -85,6 +85,7 @@
 | 變體的任一面 | `flux-klein-edit` | 基準素材同一面（沒有時用基準的參考圖欄） | 同該面 |
 
 - 缺少必要的前一面時回 409 `DRAMA_STAGE_PRECONDITION`，訊息寫明先做哪一面。
+- **正面全身由伺服器裁掉頭**（2026-10-29 GPU 試算：叫 Klein「頭在畫面外」時 4 張有 3 張切在鼻子或嘴巴、1 張整顆頭都在）。`front` 生成的是**有頭的全身**；`PUT /panels/front` 選定時，伺服器在下巴下方裁切，裁好的圖存成新素材檔，作為 `panels.front`；原圖仍是候選。裁切線：OpenCV 可用時用 `haarcascade_frontalface_default` 找最大的臉，取「臉框上緣＋1.25 倍臉框高」；找不到臉或沒有 OpenCV 時，用中灰背景找出人形的上緣與下緣，取「上緣＋人形高的 15%」。裁切是確定性的。
 - 尺寸用卡片的寬高輸入傳入（§3.1 表）。
 - 生成任務的來源（job input）多帶：`panel`、`variation`（壓力測試）、`base_panels`（變體）、`change`（變體）。
 
@@ -143,8 +144,10 @@ Action & Audio Prompt 欄可用的段標：`PHYSICS:`、`CHECK:`、`ORDER:`，�
 ### 3.4 素材面提示詞（`asset_panel_prompt`）與編輯提示詞（`edit_prompt`）
 依 LIRA 的模板寫成自然語句（不寫「character reference sheet」「painterly」）：
 - `face`：`Close-up studio photograph of <描述>, head and shoulders, face turned slightly in three-quarter view, neutral mid-grey backdrop, soft flat light from one side, real skin with visible pores, no retouching, a small catch-light in each eye.`
-- `front`：`Full-body studio photograph from the front of the person in image 1, wearing <描述的服裝>, standing straight, arms relaxed, framed from the shoulders to the feet so the head is outside the frame, neutral mid-grey backdrop, flat even light.`
-- `back`：同上，`seen from behind, head and back of the hair visible`，參考 image 1、image 2。
+- `front`（GPU 試算通過的版本）：`Full-body studio photograph from the front of the person in image 1, <體型>, wearing <服裝>. She stands straight facing the camera, arms relaxed at her sides, feet slightly apart, the whole figure from the top of the head to the boots in frame with a margin of grey above the head and below the feet. Neutral mid-grey studio backdrop, flat even light, real fabric texture, plain documentary studio photograph.`（頭由伺服器裁掉，見 §2.3。）
+- `back`（GPU 試算通過的版本，只參考 image 1）：`Full-body studio photograph of <體型> seen from directly behind, the person in image 1 turned completely away from the camera. We see the back of the head and the hair, the back of every garment — <服裝> — and the heels of the shoes. The arms hang relaxed at the sides with the backs of the hands toward the camera, feet slightly apart, the whole figure in frame with a margin of grey above the head and below the feet. Neutral mid-grey studio backdrop, flat even light, real fabric texture, plain documentary studio photograph.`
+- 體型與服裝取自鎖定描述：第一句是外貌、其餘句是服裝時，依句子切開；切不出來時整段描述放在服裝的位置。
+- `face`（GPU 試算通過的版本）：`Close-up studio photograph of <外貌>; <服裝的領口部分> shows at the neck. Head and shoulders, face turned slightly in three-quarter view, eyes looking just past the camera. Neutral mid-grey studio backdrop, soft flat light from one side, real unretouched skin with visible pores, fine vellus hair and natural asymmetry, a small catch-light in each eye. Plain documentary studio photograph, natural colour.`
 - `plate`：`Wide three-quarter view of <描述>, empty of people, camera at eye height looking diagonally across the space, <light 原文第一句>, real materials, cinematic film still.`（不寫鏡頭與景深）
 - `product`：`Photorealistic three-quarter overhead product photograph of <描述> on a neutral grey surface, soft directional light, isolated object, plain unbranded surfaces. <形狀鎖>`
 - `stress`：素材的 `front` 或代表圖用法同 §3.3，再依 `variation` 從固定的 10 組（姿勢×光線）取一組，例如 `sitting on a crate, side light from a window`、`walking toward camera, overcast daylight`。`withAssets` 的角色也寫進同一句。
@@ -153,6 +156,8 @@ Action & Audio Prompt 欄可用的段標：`PHYSICS:`、`CHECK:`、`ORDER:`，�
   Edit image 1. CHANGE: <change 或新視角的物件新位置>. PRESERVE EXACTLY: the face, hair, body proportions, clothing not named above, the backdrop, the light direction, the colour and grain. Only change what is named; everything else stays identical.
   ```
 - 鎖定描述裡的 `seed:` 片段照舊移除。
+
+面的參考計畫：`front` → [`face`]；`back` → [`face`]；`reverse`／`angle` → [`plate`]；`stress` → 本素材＋同框素材的計畫＋場景 `plate`；變體的面 → [基準同一面]。
 
 ### 3.5 參考計畫（`reference_plan`）
 依本鏡提到的素材順序：角色 → `face`、`front`（沒有面時用參考圖欄）；場景 → `plate`（沒有時用參考圖欄）；道具 → `product`（沒有時用參考圖欄）。總數上限 6，超過時先捨棄道具，再捨棄角色的 `front`。被 `!@代號` 排除的不列入。每筆 `{assetCode, role: "character_face"|"character_body"|"location"|"prop", panel, url}`。
