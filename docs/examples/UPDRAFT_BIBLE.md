@@ -42,7 +42,7 @@ Camera: film-35mm, auto-lens, f4. Genre: distant-miles. Era: grain-film. Light: 
 
 ### CAST-01 Noa
 
-A slight, wiry woman with a sun-browned oval face, dark straight eyebrows, a straight nose with a small bump on the bridge, a thin pale scar crossing her left eyebrow, and short blunt black hair cut at the jaw and tucked behind both ears. She wears a faded saffron-orange flight jacket open over a heather-grey hoodie, sleeves pushed to the forearms, tan canvas work trousers, scuffed brown leather boots, and thin brown leather gloves with the fingertips cut off. seed: 21001
+A slight, wiry woman with a sun-browned oval face, dark straight eyebrows, a straight nose with a small bump on the bridge, a thin pale scar crossing her left eyebrow, and short blunt black hair cut at the jaw and tucked behind both ears. She wears a faded saffron-orange flight jacket open over a heather-grey hoodie, sleeves pushed to the forearms, tan canvas work trousers, scuffed brown leather boots, and brown leather work gloves. seed: 21001
 
 **Voice.** Young female voice, light and quick, slightly hoarse from the dry morning air; speaks fast and low when she is nervous, words clipped short; when she is frightened the breath comes before the word.
 
@@ -138,7 +138,7 @@ A twin hot-air balloon burner: two round coils of stainless steel tubing side by
 
 A hand-held flint striker for a gas burner: a short steel rod with a spring-loaded cup-shaped flint head at one end and a worn black rubber grip, on a coiled cord. seed: 21024
 
-**Shape lock.** A palm-sized steel striker with a cup-shaped head and a black rubber grip, held in the fist like a short tool; scraping it throws a shower of small bright sparks.
+**Shape lock.** A palm-sized steel striker: a short straight steel rod with a small cup-shaped flint head at one end and a black rubber grip at the other.
 
 ### Prop states
 
