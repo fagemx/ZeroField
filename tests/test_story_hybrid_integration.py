@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
 import test_story_openapi as fixture
-from project_docs import repository as repo, story_openapi as story
+from project_docs import repository as repo, story_openapi as story, story_allocation
 from project_assistant import limb_worker as worker, story_media_adapter as adapter, orchestrator as cp, orchestration_store as db
 
 
@@ -66,6 +66,8 @@ class StoryHybridIntegrationTests(unittest.TestCase):
         self.provider_env = patch.dict(os.environ, {"OPENBENCH_PRODUCTION_POLICY": "hybrid_studio", "SEEDANCE_API_URL": self.base + "/vendor", "SEEDANCE_API_KEY": "synthetic-fixture-not-real", "RUNNINGHUB_API_URL": self.base + "/cloud", "RUNNINGHUB_API_KEY": "synthetic-fixture-not-real"})
         self.provider_env.start()
         self.health = patch.object(worker, "probe_local_comfy_status", return_value={"online": True}); self.health.start()
+        # The faked-online ComfyUI has every model; never ask a real one that happens to run on 8188.
+        self.gaps = patch.object(story_allocation, "installed_model_gaps", return_value={}); self.gaps.start()
         self.runs = []
 
     def tearDown(self):
@@ -77,7 +79,7 @@ class StoryHybridIntegrationTests(unittest.TestCase):
                 self.conn.rollback()
         deadline = time.monotonic() + 3
         while any(r in adapter._ACTIVE for r in self.runs) and time.monotonic() < deadline: time.sleep(.1)
-        self.health.stop(); self.provider_env.stop()
+        self.gaps.stop(); self.health.stop(); self.provider_env.stop()
         fixture.StoryHTTPTests.tearDown(self)
 
     def hybrid(self):

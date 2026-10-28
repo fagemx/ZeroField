@@ -45,8 +45,12 @@ class AllocationPreflightTests(unittest.TestCase):
         self.env.start()
         self.health = patch.object(worker, "probe_local_comfy_status", return_value={"online": True})
         self.health.start()
+        # The faked-online ComfyUI has every model; never ask a real one that happens to run on 8188.
+        self.gaps = patch.object(story_allocation, "installed_model_gaps", return_value={})
+        self.gaps.start()
 
     def tearDown(self):
+        self.gaps.stop()
         self.health.stop()
         self.env.stop()
         fixture.StoryHTTPTests.tearDown(self)
