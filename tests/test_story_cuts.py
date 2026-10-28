@@ -1,6 +1,6 @@
 """SPEC_19 R17: the cuts of an episode film and which of them can be checked.
 
-Real PostgreSQL (OPENBENCH_TEST_DB_URI, a throwaway database) with the zerofield_studio template: slate shots S01-S03 and the
+Real PostgreSQL (OPENBENCH_TEST_DB_URI, a throwaway database) with the zerofield_studio template (Updraft), cut down to the slate shots S01-S03 and the
 lab clip VFX-01. Nothing here runs the grader; the check results are written as the grader would write them, and the
 vision model is never called (test_take_grader covers the grading itself).
 """
@@ -20,6 +20,11 @@ class StoryCutsTests(unittest.TestCase):
 
     def setUp(self):
         self.setUp_fixture()
+        # The template slate is Updraft's ten shots; these tests are about the neighbours S01-S02-S03 only.
+        for row in story.table_rows(self.conn, self.slug, "cinema-studio"):
+            if row["cells"][0] not in ("S01", "S02", "S03"):
+                story.mutate_row(self.conn, self.me, self.slug, "cinema-studio", row["rid"], delete=True)
+        self.conn.commit()
         self.kick = patch.object(grader, "kick", side_effect=AssertionError("queueing alone never starts the grader"))
         self.kick.start()
         self.addCleanup(self.kick.stop)

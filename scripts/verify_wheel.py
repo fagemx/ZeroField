@@ -114,8 +114,7 @@ def verify(path, source=None):
                         ("crew-preproduction", "shot-beats", "previs-blocking", "continuity-check"))
         expected.add("openbench_data/skills/README.md")
         expected.update("openbench_data/samples/" + name for name in
-                        ("cast_kael.png", "set_observatory.png", "keyframe_s01.png", "keyframe_s02.png",
-                         "shot_s01.mp4", "shot_s02.mp4", "openjutsu_source.mp4", "openjutsu_remastered.mp4", "openjutsu_split.mp4", "first_frame_vfx01.png", "motion_structure_vfx01.mp4", "anchor_keyframe_vfx01.png"))
+                        ("cast_kael.png", "set_observatory.png", "shot_s01.mp4", "updraft/production.json"))
         missing = expected - names
         if missing:
             raise SystemExit("Wheel is missing resources: " + ", ".join(sorted(missing)))

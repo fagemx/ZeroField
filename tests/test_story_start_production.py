@@ -75,7 +75,7 @@ class StoryStartTemplateTests(unittest.TestCase):
 
     def test_the_template_itself_still_carries_its_samples(self):
         md = ''.join(s[3] for s in templates.tab_specs('zerofield_studio', 'Test Film', ''))
-        for word in ('The Last Signal', 'Kael', 'Observatory', 'VFX-01'):
+        for word in ('Updraft', 'Noa', 'The Canyon at Sunrise', 'VFX-01'):
             self.assertIn(word, md)
 
 
@@ -161,7 +161,7 @@ class StoryStartProductionTests(unittest.TestCase):
         slug = self.create()
         ref = self.start(slug)
         self.assertEqual(ref['kind'], 'branch', 'the template brief is occupied text, so the start stays a private draft')
-        self.assertIn('The Last Signal', doc_text(self.writing(slug, 'workspace')['doc']))
+        self.assertIn('Over a red canyon at sunrise', doc_text(self.writing(slug, 'workspace')['doc']))
 
 
 if __name__ == '__main__':

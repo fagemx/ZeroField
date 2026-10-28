@@ -250,7 +250,7 @@ class PreproductionServerTests(unittest.TestCase):
         invented = {'score': 50, 'findings': [{**good['findings'][1], 'shots': [labels[3], 'SC09-S99']}]}
         endpoint = FakeEndpoint(invented, good)
         status, done = self.run_job(endpoint)
-        self.assertEqual((status, done['source'], [a['valid'] for a in done['attempts']]), ('succeeded', 'model', [False, True]), done)
+        self.assertEqual((status, done['source'], [a['valid'] for a in done['attempts']]), ('succeeded', 'model', [False, True]), done['attempts'])
         sent = endpoint.requests[0]['messages'][-1]['content']
         self.assertIn(f'[{labels[1]}]', sent)
         self.assertIn("Director's note: Watch the jacket.", sent)
@@ -316,7 +316,7 @@ class PreproductionServerTests(unittest.TestCase):
         self.assertEqual((held['by'], held['role'], held['hash']), (self.actor, 'admin', waiting['next']['hash']))
         kinds = [j['kind'] for j in self.flow_jobs(flow['flowId']) if j['flowStage'] == 'art']
         cards = [a for a in self.ok(f'/episodes/{self.ep}/assets?limit=100')['items'] if a['isDefault']]
-        self.assertEqual((kinds.count('description'), kinds.count('appearances'), len(kinds)), (len(cards), 2, len(cards) + 2),
+        self.assertEqual((kinds.count('description'), kinds.count('appearances'), len(kinds)), (len(cards) - 2, 2, len(cards)),  # two Updraft cards are not in the script
                          'a description per card the episode names, who is in the shots per scene')
         self.assertFalse([j for j in self.flow_jobs(flow['flowId']) if j['kind'] in ('beats', 'camera')], 'the Cinematographer waits for the list lock')
         self.assertTrue(all(j['automatic'] for j in self.flow_jobs(flow['flowId'])))

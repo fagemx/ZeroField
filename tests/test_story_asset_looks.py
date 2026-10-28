@@ -37,7 +37,8 @@ class AssetLooksHTTPTests(PackBFixture, unittest.TestCase):
         self.assertFalse(any(":" in a["assetCode"] for a in listed), "looks are not cards of their own")
         self.assertEqual(next(a for a in listed if a["assetCode"] == "CAST-01")["looks"], {"total": 2, "missingImages": 2})
         self.assertTrue(all("looks" in a for a in listed))
-        others = [a["looks"] for a in listed if a["assetCode"] != "CAST-01"]
+        self.assertEqual(next(a for a in listed if a["assetCode"] == "PROP-03")["looks"], {"total": 2, "missingImages": 2})  # Updraft's lit and dead burner
+        others = [a["looks"] for a in listed if a["assetCode"] not in ("CAST-01", "PROP-03")]
         self.assertTrue(others and all(looks == {"total": 0, "missingImages": 0} for looks in others))
         detail = self.ok("/assets/" + kael["assetId"])
         self.assertEqual(len(detail["variants"]), 2, "the detail still lists the looks themselves")

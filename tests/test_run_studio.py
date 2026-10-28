@@ -98,7 +98,7 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         self.conn.rollback()
         self.conn.close()
 
-    def test_media_seed_preserves_template_ids_and_is_idempotent(self):
+    def test_seed_preserves_template_ids_and_is_idempotent(self):
         before = repo.get_tab(self.conn, self.slug, "cinema-studio")
         table = next(n for n in before["doc"]["content"] if n["type"] == "table")
         row_id = table["content"][1]["attrs"]["bid"]
@@ -108,20 +108,11 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         table = next(n for n in after["doc"]["content"] if n["type"] == "table")
         self.assertEqual(table["content"][1]["attrs"]["bid"], row_id)
         self.assertEqual(table["attrs"]["column_ids"], next(n for n in before["doc"]["content"] if n["type"] == "table")["attrs"]["column_ids"])
-        self.assertIn("@CAST-01 @SET-01", studio._text(table["content"][1]))
-        self.assertIn("Approved", studio._text(table["content"][1]))
-        self.assertIn("Pending Review", studio._text(table["content"][2]))
-        self.assertIn("Queued", studio._text(table["content"][3]))
-        annotations = repo.list_annotations(self.conn, self.slug, tab_key="cinema-studio")
-        self.assertEqual(len(annotations), 1)
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM projectops.asset WHERE project_slug=%s", (self.slug,))
-            count = cur.fetchone()[0]
-        self.assertGreaterEqual(count, 6)
+        self.assertIn("@PROP-01", studio._text(table["content"][1]))
+        self.assertIn("Queued", studio._text(table["content"][1]))
         lab = repo.get_tab(self.conn, self.slug, "openjutsu-lab")
         ref_table = next(n for n in lab["doc"]["content"] if n["type"] == "table")
         self.assertEqual([studio._text(c) for c in ref_table["content"][0]["content"][-3:]], ["First Frame", "Motion Structure", "Anchor Keyframe"])
-        self.assertTrue(all(studio._text(c).startswith("/projects/api/") for c in ref_table["content"][1]["content"][-3:]))
         self.assertFalse(studio.seed_showcase_media(self.conn, self.slug, actor_id=self.actor)["seeded"])
         self.assertEqual(repo.get_tab(self.conn, self.slug, "cinema-studio")["revision"], after["revision"])
 
@@ -249,9 +240,7 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         if ids:
             self.assertEqual(table["attrs"]["column_ids"][:len(ids)], ids)
         s03 = next(r for r in table["content"][1:] if studio._text(r["content"][0]) == "S03")
-        self.assertTrue(studio._text(s03["content"][-3]).startswith("/projects/api/"))
-        # The Blender blockout has no stage matte or skeleton: a stage render adds them.
-        self.assertEqual([studio._text(c) for c in s03["content"][-2:]], ["", ""])
+        self.assertEqual([studio._text(c) for c in s03["content"][-3:]], ["", "", ""])  # a stage render fills them
         self.assertFalse(studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)["seeded"])
 
 

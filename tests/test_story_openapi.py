@@ -460,7 +460,7 @@ class StoryHTTPTests(unittest.TestCase):
         self.prepare()
         ep = story.episode(self.conn, self.ep)
         missing, known = story.missing_episode_assets(self.conn, ep)
-        self.assertEqual(set(missing), {'CAST-01', 'SET-01', 'SET-02'})
+        self.assertEqual(set(missing), {'CAST-01', 'SET-05', 'SET-06'})  # SET-01..04 are the template's
         path = f'/episodes/{self.ep}/asset-image-generations'
         before = len(story.records(self.conn, 'task', owner=self.actor))
         original_prepare = governance.prepare_operation
