@@ -18,7 +18,8 @@
     "output_node": "9",
     "driver": "comfy_local",
     "tier": "open_weights",
-    "requires_comfyui": true
+    "requires_comfyui": true,
+    "prompt_compile": "asset_panel"
   },
   "nodes": [
     {
@@ -29,6 +30,28 @@
       "required": true,
       "slot": "prompt",
       "defaultValue": "Original fictional courier in a charcoal field jacket, holding an analog recorder. Cinematic portrait, soft studio light."
+    },
+    {
+      "nodeId": "5",
+      "fieldName": "width",
+      "fieldType": "INT",
+      "label": "Width",
+      "required": false,
+      "defaultValue": "1280",
+      "min": 256,
+      "max": 2048,
+      "step": 16
+    },
+    {
+      "nodeId": "5",
+      "fieldName": "height",
+      "fieldType": "INT",
+      "label": "Height",
+      "required": false,
+      "defaultValue": "720",
+      "min": 256,
+      "max": 2048,
+      "step": 16
     },
     {
       "nodeId": "3",

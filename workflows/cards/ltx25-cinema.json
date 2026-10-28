@@ -18,7 +18,8 @@
     "output_node": "12",
     "driver": "comfy_local",
     "tier": "open_weights",
-    "requires_comfyui": true
+    "requires_comfyui": true,
+    "prompt_compile": "video_skeleton"
   },
   "nodes": [
     {

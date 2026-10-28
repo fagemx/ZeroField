@@ -1,0 +1,128 @@
+{
+  "card_id": "flux-reference-key",
+  "label": "FLUX 3 Klein Reference Keyframe",
+  "sublabel": "Text + up to 6 reference images (face, wardrobe, set, prop) · zero references = text-to-image",
+  "group_label": "Image",
+  "icon": "✦",
+  "output_mode": "image",
+  "engine_key": "comfy-webapp/1",
+  "status": "active",
+  "sort_order": 3,
+  "engine_config": {
+    "webappId": "2105000000000000005",
+    "workflow": "workflows/flux3_klein_reference_key.json",
+    "instance": "default",
+    "frame_rule": "none",
+    "grid_size": 32,
+    "timeout": 900,
+    "output_node": "9",
+    "driver": "comfy_local",
+    "tier": "open_weights",
+    "requires_comfyui": true,
+    "prompt_compile": "reference_image",
+    "usage_scopes": ["FREE_CREATION_T2I", "FREE_CREATION_I2I"],
+    "mirror_inputs": {
+      "7.width": "10.width",
+      "7.height": "10.height"
+    }
+  },
+  "nodes": [
+    {
+      "nodeId": "6",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "Keyframe Prompt (image numbers follow the references)",
+      "required": true,
+      "slot": "prompt",
+      "defaultValue": "Cinematic film still, medium shot. The person in image 1 and image 2 is an original fictional courier: same face from image 1, same clothes from image 2. The place is the one in image 3: take its space and materials only, not its framing or colour. Exactly 1 person in frame."
+    },
+    {
+      "nodeId": "21",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 1",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "22",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 2",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "23",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 3",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "24",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 4",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "25",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 5",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "26",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 6",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "10",
+      "fieldName": "width",
+      "fieldType": "INT",
+      "label": "Width",
+      "required": false,
+      "defaultValue": "1280",
+      "min": 256,
+      "max": 2048,
+      "step": 16
+    },
+    {
+      "nodeId": "10",
+      "fieldName": "height",
+      "fieldType": "INT",
+      "label": "Height",
+      "required": false,
+      "defaultValue": "704",
+      "min": 256,
+      "max": 2048,
+      "step": 16
+    },
+    {
+      "nodeId": "3",
+      "fieldName": "seed",
+      "fieldType": "INT",
+      "label": "Seed",
+      "required": false,
+      "slot": "seed",
+      "defaultValue": "48291",
+      "min": 0,
+      "max": 281474976710655,
+      "step": 1
+    }
+  ]
+}
