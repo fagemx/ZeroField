@@ -196,11 +196,19 @@ The walk was repeated on 2026-10-28 (`real_acceptance.R44_rewalk`) after two fix
 - A pasted screenplay now becomes one scene per heading, numbered headings included.
 - Each pipeline column has a default step, so the Keyframe and Cinema Shot Run buttons, Re-shoot Take and Run Pipeline on selected shots reach FLUX 3 Klein and LTX-2.5 directly. Both are fixed.
 - Pre-production took about 3 minutes in all, against about 10 minutes with the local model. The hosted grader scored the takes lower and with more detail than the local one: 28, 60, 68 and 76 out of 100. It caught a cut inside a take and a second runner in frame.
-- Still open: the pasted screenplay arrives as a private draft, template content appears in new productions, character cues are not detected, scene 1 is bound to the template's set, and the allocation preview recommends a MiniMax H3 card that is not installed.
+- Still open at that point: the pasted screenplay arrived as a private draft, template content appeared in new productions, character cues were not detected, scene 1 was bound to the template's set, and the allocation preview recommended a MiniMax H3 card that is not installed.
+
+Those were fixed and pre-production was walked again the same day (`real_acceptance.R44_rewalk2`, same model, about $0.04, no rendering):
+
+- A production started from a story has the template's pages, columns and pipeline but none of its sample brief, cast, sets or shots, and the pasted screenplay is the working screenplay from the start.
+- Standard character cues (a name alone on its line) become cast cards, and scenes at the same location share one set.
+- The allocation preview only recommends cards whose models the running ComfyUI lists.
+- Panels keep polling after a failed request.
+- Still open: the crew's own re-breakdown during pre-production can fold cue lines back into action lines. The pipeline canvas came up blank once and the studio refused a connection once; neither has a confirmed cause. A few English strings still have Chinese punctuation.
 
 Still to do:
 
-- fix the remaining blank-production break points;
+- fix the remaining blank-production break points (`real_acceptance.R44_rewalk2.break_points`);
 - real MCP hosts (MCP Inspector, Goose with Ollama, Claude Code) and a real MCP Apps host;
 - the crew under Docker Compose: `docker-compose.yml` no longer defaults to any model endpoint, but inside the container `127.0.0.1` is the container itself, not the host's Ollama, and a self-hosted model on another host is tiered closed; this path is untested (see [deployment](docs/DEPLOYMENT.md)).
 

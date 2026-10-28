@@ -181,43 +181,43 @@
     {
      "id": "R44-4",
      "blocking": false,
-     "status": "open",
+     "status": "closed: fixed in 0b066db, verified in R44_rewalk2 (2026-10-28)",
      "what": "No cast cards for the screenplay's people: character detection knows \"Character:\" lines, \"NAME: line\" cues and names followed by said/asked/turned/ran, not standard cues (a name alone on a line). The crew breakdown also folds cue lines into the paragraph. All 11 shots were B-roll with no cast. Workaround: add the characters on the Cast & sets wall, then \"Who is in this shot\" (it added Nora; for \"Eli runs toward us\" it answered \"no change\", Eli was added by hand)."
     },
     {
      "id": "R44-1",
      "blocking": false,
-     "status": "open",
+     "status": "closed: fixed in 20bd09f, verified in R44_rewalk2 (2026-10-28)",
      "what": "The new production's working screenplay is the template's \"The Last Signal\" brief, so the user's screenplay lands as a private draft; adopting it takes Versions > Compare > Preview adopting whole manuscript > Adopt > Apply."
     },
     {
      "id": "R44-2",
      "blocking": false,
-     "status": "open",
+     "status": "closed: fixed in 20bd09f, verified in R44_rewalk2 (2026-10-28)",
      "what": "Template content leaks into a production made from a story: Kael @CAST-01, Observatory @SET-01, three Kael shot rows (kept by the storyboard build, \"The 4 shots you have are kept\") and an OpenJutsu row VFX-01 in the film's provenance warning."
     },
     {
      "id": "R44-5",
      "blocking": false,
-     "status": "open",
+     "status": "closed: fixed in 0b066db, verified in R44_rewalk2 (2026-10-28)",
      "what": "Scene 1 (no @SET tag) got SET-01 by scene index, which is the template's Observatory; scene 3 at the same location got a separate SET-03. Art then folded scene-1 text into the Observatory description. Fixed by hand on the shot."
     },
     {
      "id": "R44-6",
      "blocking": false,
-     "status": "open",
+     "status": "closed: fixed in 7627e15, verified in R44_rewalk2 (2026-10-28)",
      "what": "The pre-production panel froze at \"6 of 22 jobs finished\" for about 9 minutes although all 22 jobs finished by 21:39:43: no GET /preproduction reached the server after 21:34:59 until the panel was remounted, and the stage was settled only by that next GET. Suspect: the poll re-arms only on a state change, so one failed load stops it (PreproductionPanel.jsx)."
     },
     {
      "id": "R44-8",
      "blocking": false,
-     "status": "open",
+     "status": "closed: fixed in 7627e15, fix shares the polling helper verified under R44-6 in R44_rewalk2; the grade panel itself was not exercised (no render)",
      "what": "The grade panel stayed on \"Grading...\" with \"Connection lost or session expired\" while the grade (90/100) was already stored; its 3 s poll stopped after one failed fetch. A 40-request burst returned 40/40, so the server backlog is not the cause; the failed fetch was not explained."
     },
     {
      "id": "minor",
      "blocking": false,
-     "status": "open",
+     "status": "partly closed in 7627e15 (Chinese strings in proposal reviews, 3D plan row, step-test warning, image cells); the rest open, see R44_rewalk2.break_points",
      "what": "Chinese strings in the English UI (\"第 N 列\" in proposal reviews, the step-test warning, \"![圖片](...)\" image cells shown as raw markdown); the Needs You list labels every Art proposal \"Soul Cast\"; the 3D plan for a dam walkway says \"lateral tracking along the console\" (observatory vocabulary) and was rejected; Camera Motion gets the raw solver word (\"track\", \"dolly in\"); the \"Let the crew pre-produce\" card and \"Proposal ready above.\" hints stay after the flow and the proposals are done; pipeline-made takes are labelled \"unknown manuscript\"; the SC02-S02 keyframe put a second runner in frame (FLUX), which the grader caught."
     }
    ],
@@ -354,6 +354,131 @@
    ],
    "database": "the worktree's own fresh embedded cluster on 55452; 55440, 55461 and other sessions' clusters were not touched",
    "machine_restored": "studio, embedded PostgreSQL (pg_ctl stop), ComfyUI, headless Edge and the timeline stopped; nvidia-smi 858 MiB with no own process; Ollama tray app still running with no model loaded"
+  },
+  "R44_rewalk2": {
+   "date": "2026-10-28",
+   "branch": "fix/spec20-r44b at 8240801 (main 44cc793 + R44-1/R44-2 20bd09f, R44-4/R44-5 and titles 0b066db, allocation/strings/polling 7627e15, rebuilt static/projects)",
+   "result": "pre-production walk from a blank production through the UI only; all nine checks passed; no rendering (ComfyUI idle on 8188 for the installed-model probe, 0 prompts); every crew call on OpenRouter DeepSeek; no code changed during the walk",
+   "crew_model": "openrouter deepseek/deepseek-v4.1-flash-1017 (hosted open weights), policy open_weights_only",
+   "setup": "same as R44_rewalk: studio with its own fresh embedded database (55453), headless Edge 1440x900, Agent Console allowlist, price ceiling and role models set through the UI; OPENROUTER_API_KEY reached the studio only through the WMI-started launcher and was never read or written",
+   "path": "New Production > From a story > Screenplay (Spillway, 3 numbered scenes) > Propose a shot breakdown > adopt > Let the crew pre-produce (Screenwriter, script lock, Art, list lock, Cinematographer, storyboard lock, Continuity) > Overview > Comfy Pipeline and back > Preview allocation",
+   "verdicts": {
+    "1_R44-1_working_screenplay": {
+     "result": "PASS",
+     "evidence": "lands on Working screenplay, left pane Scenes 3, no private draft or adopt step"
+    },
+    "2_R44-2_no_template_content": {
+     "result": "PASS",
+     "evidence": "0 rows before build, 9 SCxx rows after; no Kael/Observatory/Last Signal/VFX-01; no 'shots you have are kept'; 5 pages, 11 columns, 11-step pipeline kept"
+    },
+    "3_R44-4_cast_from_cues": {
+     "result": "PASS",
+     "evidence": "CAST-01 Nora, CAST-02 Eli created by the storyboard build; adopted crew breakdown keeps cue lines; speaking shots carry @CAST",
+     "caveat": "pre-production Screenwriter candidate (not adopted) folds cues: B1"
+    },
+    "4_R44-5_shared_set": {
+     "result": "PASS",
+     "evidence": "SET-01 Dam Control Room (scenes 1+3, 7 shots), SET-02 Dam Walkway; no numbered set names"
+    },
+    "5_scene_titles": {
+     "result": "PASS",
+     "evidence": "Scene 01: INT. DAM CONTROL ROOM - NIGHT etc.",
+     "minor": "breadcrumb/chip 'Scene 01 · Scene 01: ...' (B4)"
+    },
+    "6_no_chinese_in_english_ui": {
+     "result": "PASS",
+     "evidence": "3D plan row 'Changes to review'; review heading 'Row 2 · SC01-S02'; CJK scan clean except known lock dates",
+     "not_exercised": "image cell markdown and step-test warning (need a render)",
+     "minor": "aria-label '；' flowModel.js:73 (B7)"
+    },
+    "7_overview_after_pipeline": {
+     "result": "PASS",
+     "evidence": "9 rows after Back, page menu and history.back, no reload"
+    },
+    "8_polling_R44-6": {
+     "result": "PASS",
+     "evidence": "every stage reached final counts without remount; preproduction polls blocked 10:30:07-10:30:21, panel resumed at 10:30:37 and finished"
+    },
+    "9_preview_allocation": {
+     "result": "PASS",
+     "evidence": "SC01-S03, SC02-S02, SC01-S01, SC03-S03 -> ltx25-cinema Local open weights, blocker 'Required media is missing. Input: 2.image'; no h3-short-video-v3"
+    }
+   },
+   "timings_s": {
+    "breakdown_proposal": 7,
+    "screenwriter": 8.6,
+    "art": 21.7,
+    "cinematographer": 78.0,
+    "continuity": 56.6
+   },
+   "spend": {
+    "accounted_usd": 0.0434,
+    "events": 57,
+    "by_role": {
+     "coordinator": 0.0007,
+     "doc_writer": 0.01,
+     "sheet_ops": 0.0202,
+     "qa_critic": 0.0125
+    },
+    "provenance": "configured_byte_token_ceiling estimate; provider-reported cost null",
+    "local_ollama_calls": 0
+   },
+   "full_tests": "sharded backend 1427 tests: 1425 OK, 2 failed in test_story_hybrid_integration because the new installed-model probe asked the real ComfyUI the walk had started while the tests faked it online; fixed in the tests (6acfbd0, story_allocation.installed_model_gaps patched where ComfyUI is faked online), affected modules 77 OK with ComfyUI running; UI 712/712",
+   "break_points": [
+    {
+     "id": "B1",
+     "severity": "medium",
+     "what": "pre-production Screenwriter re-breakdown folds cue lines ('fear. NORA It's past...')",
+     "where": "project_assistant/crew_writing.py:481-494 (shot_text joins a mid-paragraph cue unit with a space, line 491)"
+    },
+    {
+     "id": "B2",
+     "severity": "medium",
+     "what": "Comfy Pipeline canvas blank on first visit (12 nodes visibility:hidden, 0 edges); not reproduced later",
+     "where": "ui/src/FlowSurface.jsx:105-118 and :214 (controlled nodes rebuilt, dimensions changes never applied) - hypothesis",
+     "shot": "r44b2-break-pipeline-nodes-hidden.jpg"
+    },
+    {
+     "id": "B3",
+     "severity": "medium",
+     "what": "intermittent net::ERR_CONNECTION_REFUSED from the studio on polls and page loads",
+     "where": "server.py:72 OpenBenchHTTPServer default request_queue_size 5 - hypothesis"
+    },
+    {
+     "id": "B4",
+     "severity": "minor",
+     "what": "breadcrumb 'Scene 01 · Scene 01: ...'",
+     "where": "ui/src/App.jsx:666, ui/src/StoryWorld.jsx:370, ui/src/AssetEditor.jsx:208"
+    },
+    {
+     "id": "B5",
+     "severity": "minor",
+     "what": "storyboard lock card '9 shots' lists 8",
+     "where": "project_assistant/crew_preproduction.py:161 (items capped at 8)"
+    },
+    {
+     "id": "B6",
+     "severity": "minor",
+     "what": "allocation preview shows raw shot ids"
+    },
+    {
+     "id": "B7",
+     "severity": "minor",
+     "what": "CJK punctuation in English aria/strings; latent Chinese partial-apply note",
+     "where": "ui/src/flowModel.js:73; en.json 362,412,417,723,765,1462; project_assistant/service.py:435"
+    }
+   ],
+   "environment": "ComfyUI corrupt transformers .pyc worked around with PYTHONPYCACHEPREFIX; one transient health-check image-input failure on re-run passed",
+   "screenshots": [
+    "docs/research/screenshots/spec20/r44c-working-screenplay-3-scenes.jpg",
+    "docs/research/screenshots/spec20/r44c-shot-stage-no-template-rows.jpg",
+    "docs/research/screenshots/spec20/r44c-crew-breakdown-cues-and-titles.jpg",
+    "docs/research/screenshots/spec20/r44c-cast-from-cues.jpg",
+    "docs/research/screenshots/spec20/r44c-shared-set.jpg",
+    "docs/research/screenshots/spec20/r44c-3d-plan-row-english.jpg",
+    "docs/research/screenshots/spec20/r44c-overview-after-pipeline.jpg",
+    "docs/research/screenshots/spec20/r44c-allocation-installed-card.jpg"
+   ]
   }
  }
 }
