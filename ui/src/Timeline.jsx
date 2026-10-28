@@ -145,7 +145,7 @@ export function Timeline({epId, shots = [], writable, focusRid, onFocus, onChang
   const moveBy = (edge, delta) => selected ? edit(dragEdge(clips, selected.index, edge, delta, {ripple}), true) : null;
   const resetTrim = () => selected ? edit({delta: 0, trims: {[selected.rowId]: wholeTake()}}, true) : null;
 
-  // Other takes of the selected shot: the same list the Shot Stage offers, one tap to use.
+  // Other takes of the selected shot: the same list the Shot Stage offers, one tap to use. Using a take adopts it (SPEC_19 R1).
   useEffect(() => {
     if (!selected?.shotId || selected.kind === 'plan') {setTakes({shot: '', items: []}); return undefined;}
     let live = true;
@@ -155,7 +155,7 @@ export function Timeline({epId, shots = [], writable, focusRid, onFocus, onChang
   const otherTakes = takes.shot === selected?.shotId ? takes.items.filter(take => !take.selected) : [];
   const useTake = async take => {
     setError('');
-    try {await storyRequest(`/shots/${selected.shotId}/selected-video`, 'PUT', {videoId: take.videoId}); onChanged?.();} catch (failure) {setError(failure.message);}
+    try {await storyRequest(`/shots/${selected.shotId}/adoptions`, 'POST', {videoId: take.videoId}); onChanged?.();} catch (failure) {setError(failure.message);}
   };
 
   // Playing the cut: one video follows the playhead through each clip's trimmed range; a clip with no picture holds on a clock.

@@ -159,3 +159,22 @@
 - 緩慢漂移 / Slow drift：有連寫的遊戲名 Slowdrift，不算同名。
 
 查核的限制：只用一般網路搜尋，沒有查商標資料庫（USPTO、TIPO、WIPO），也沒有做 Steam、Bandcamp、書目等站內搜尋。「苔霧」「糖紙日光」「靜待突發」「濕玻璃霓光」「機房科幻」的搜尋結果雜訊多，只能說沒發現撞名。要正式保證，需要另外查商標。
+
+## 8. 實測結果（2026-10-28，精簡版實測）
+
+用本機 RTX 4090＋ComfyUI 0.42.1＋FLUX 3 Klein（`flux3-image-klein-base-int8-convrot`，`workflows/flux3_klein_soul_cast.json` 的文生圖圖，1280×720、50 步）替 36 個選項與 13 個攝影機選項各產一張範例。每張都是同一個原創測試場景（雨痕圓頂天文台裡站在黃銅控制台前的信使），選項文字依 `context_compiler` 對靜態圖的放法接在前面；每類固定一個 seed，完整版與約 15 字的精簡版用同一個 seed 並排生成。並排圖在 `docs/research/look-samples-compare/<kind>.jpg`（左完整、右精簡，不隨套件發佈）；產生程式是 `scripts/make_look_samples.py`，每張用的 seed、提示詞與採用的版本記在 `ui/public/assets/look-samples/manifest.json`。
+
+判斷原則：哪一版的畫面看得出描述裡寫的東西就用哪一版；看不出差別或兩版都沒做到時，保留完整版。49 個選項裡 46 個保留完整版，下面 3 個改用精簡版：
+
+| 選項 | 改用的精簡版 `promptText` | 原因 |
+|---|---|---|
+| `genre:close-warmth` | two people close together, shallow depth of field, faces and hands filling the frame, one small lamp | 完整版把兩張臉放在畫面左右兩端、中間還站著信使；精簡版是兩人靠在一起的近景、背景虛化，符合「近、淺景深」。 |
+| `era:tape-era` | soft low-resolution detail, faint horizontal scan lines, color bleeding at bright edges, blooming highlights | 只有精簡版在亮窗邊緣畫出明顯的溢色與高光暈開；完整版幾乎看不出錄影帶質感。兩版都沒有畫出掃描線。 |
+| `light:practical-lamp` | one visible lamp as the only light, a small pool on faces and table, the room near black | 只有精簡版把檯燈畫進畫面當光源；完整版畫面裡看不到燈。 |
+
+其他觀察，供之後調整文字參考（這次沒有改）：
+
+- 節奏（`tempo`）是動態，靜態範例圖幾乎看不出四個選項的差別；正式的靜態圖編譯會拿掉節奏，這裡為了讓範例有差別才把節奏子句留在 `Film:` 一行。節奏的範例之後應改成短片。
+- 色調的色碼會把部分畫面推向插畫風格（`bone-ink`、`cinder-glow`、`mulberry-hour`、`sugar-paper`、`dry-ochre`）；顏色本身大致照描述。`bone-ink` 與 `sugar-paper` 在 seed 1905 把整個房間畫進橢圓或圓形的框裡，改用 seed 2905 重生。
+- 攝影機三組（機身、鏡頭、光圈）在 640×360 的縮圖上差異細微；最明顯的是 `film-8mm`、`anamorphic`、`vintage-warm`、`vintage-glow`。
+- 49 張裡沒有出現可讀的文字、標誌或像真實名人的臉。

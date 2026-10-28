@@ -171,6 +171,84 @@ class MoveTagContextTests(unittest.TestCase):
                                 f'{cast}\n@CAST-01 waits.')
 
 
+class LookContextTests(unittest.TestCase):
+    """SPEC_19 R11: the compiled look of a task source becomes the Film, Color and Lighting lines after the camera lines."""
+    REFERENCES = MoveTagContextTests.REFERENCES
+    EPISODE = {'genre': 'rain-mystery', 'era': 'grain-film', 'tempo': 'slow-drift', 'palette': 'midnight-slate',
+               'light': 'window-side', 'camera': {'body': 'film-35mm', 'aperture': 'f1-4'}}
+
+    def task(self, look, capability=None, optical='ARRI / 35mm'):
+        task = studio_task()
+        task['input']['rows'][1]['cells'][1] = optical
+        if look is not None:
+            task['input']['look'] = look
+        if capability:
+            task['capability'] = capability
+        return task
+
+    def test_the_three_lines_follow_the_camera_lines_in_the_label_format(self):
+        lines = story_look.compile_look(self.EPISODE, {})
+        ctx = worker.resolve_studio_context(self.task(story_look.source_look(self.EPISODE, {})))
+        self.assertEqual(ctx['compiled_prompt'],
+                         'Optical Rig: ARRI / 35mm.\nCamera Movement: Slow dolly.\n'
+                         f"Film: {lines['film']}.\nColor: {lines['color']}.\nLighting: {lines['light']}.\n"
+                         f'{self.REFERENCES}\n@CAST-01 enters @SET-01. CAST-01 pauses.')
+        self.assertTrue(lines['color'].endswith('#D8E0E8, #C9953F'))
+        self.assertEqual((ctx['look_film'], ctx['look_color'], ctx['look_light']), (lines['film'], lines['color'], lines['light']))
+        self.assertEqual(ctx['optical_rig'], 'ARRI / 35mm')  # the shot's own cell wins over the episode camera
+        self.assertIn(f"Film: {lines['film']}.", ctx['ltx_ingredients_prompt'])
+        # Only the lines with text: an Auto genre and era leave a Film line of the tempo alone, no palette no Color line.
+        only = story_look.source_look({'genre': 'auto', 'tempo': 'still-hold', 'light': 'hard-top'}, {})
+        prompt = worker.resolve_studio_context(self.task(only))['compiled_prompt']
+        self.assertIn(f"\nFilm: {story_look.option('tempo', 'still-hold')['promptText']}.\nLighting: ", prompt)
+        self.assertNotIn('Color:', prompt)
+
+    def test_a_still_keeps_color_and_lighting_and_drops_tempo_from_film(self):
+        source = story_look.source_look(self.EPISODE, {'light': 'low-sun'})
+        still = story_look.compile_look(self.EPISODE, {'light': 'low-sun'}, still=True)
+        ctx = worker.resolve_studio_context(self.task(source, 'image_gen'))
+        self.assertEqual(ctx['compiled_prompt'],
+                         'Cinematic film still, 35mm lens look; no camera equipment or brand text in frame.\n'
+                         f"Film: {still['film']}.\nColor: {still['color']}.\nLighting: {still['light']}.\n"
+                         f'{self.REFERENCES}\n@CAST-01 enters @SET-01. CAST-01 pauses.')
+        self.assertNotIn(story_look.option('tempo', 'slow-drift')['promptText'], ctx['compiled_prompt'])
+        self.assertEqual(ctx['look_film'], still['film'])
+
+    def test_an_empty_optical_rig_takes_the_episode_camera(self):
+        source = story_look.source_look(self.EPISODE, {})
+        camera = story_look.camera_text('film-35mm', None, 'f1-4')
+        ctx = worker.resolve_studio_context(self.task(source, optical=''))
+        self.assertTrue(ctx['compiled_prompt'].startswith(f'Optical Rig: {camera}\nCamera Movement: Slow dolly.\nFilm: '))
+        self.assertEqual(ctx['optical_rig'], camera)
+        still = worker.resolve_studio_context(self.task(source, 'image_gen', optical=''))['compiled_prompt']
+        self.assertTrue(still.startswith(f'Cinematic film still, {camera.rstrip(".")} lens look; no camera equipment'))
+        # Without an episode camera the empty cell stays empty.
+        bare = worker.resolve_studio_context(self.task(story_look.source_look({'palette': 'bone-ink'}, {}), optical=''))
+        self.assertTrue(bare['compiled_prompt'].startswith('Camera Movement: Slow dolly.\nColor: '))
+
+    def test_a_source_without_a_look_compiles_exactly_as_before(self):
+        before = worker.resolve_studio_context(studio_task())
+        for look in (None, {}):
+            with self.subTest(look=look):
+                ctx = worker.resolve_studio_context(self.task(look))
+                self.assertEqual(ctx['compiled_prompt'], before['compiled_prompt'])
+                self.assertEqual((ctx['look_film'], ctx['look_color'], ctx['look_light']), ('', '', ''))
+        self.assertNotIn('Film:', before['compiled_prompt'])
+        # An asset's reference render never takes the shot look, even from a source that carries one.
+        task = self.task(story_look.source_look(self.EPISODE, {}))
+        task['row_id'] = 'cast-row'
+        task['input']['target'] = {'tab_key': 'soul-cast', 'table_id': 'cast'}
+        task['input']['rows'] = [{'row_id': 'cast-row', 'tab_key': 'soul-cast', 'table_id': 'cast',
+                                  'cells': ['CAST-01', 'Kael', 'original courier; seed 48291', ASSET(1)]}]
+        self.assertEqual(worker.resolve_studio_context(task)['compiled_prompt'],
+                         'original courier. Character reference portrait, waist-up, neutral backdrop, soft key light.')
+
+    def test_a_look_that_is_not_compiled_text_is_refused(self):
+        for look in ('rain-mystery', {'film': ['a']}, {'color': 3}):
+            with self.subTest(look=look), self.assertRaisesRegex(worker.WorkerError, 'compiled text'):
+                worker.resolve_studio_context(self.task(look))
+
+
 class TakeRefContextTests(unittest.TestCase):
     """SPEC_19 R15 (D3): a quoted take's frame is this render's first frame or its last reference picture, and its tag
     becomes a sentence where it stands."""

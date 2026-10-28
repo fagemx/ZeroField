@@ -2029,7 +2029,13 @@
     "requestNotAllowed": "不接受來自其他網站的請求",
     "requestNotAllowed2": "工作室介面尚未建置。",
     "requestNotAllowed3": "找不到此頁面",
-    "unknownLookKind": "不認得的質感種類 {{kind}}，可用的有：{{kinds}}。"
+    "unknownLookKind": "不認得的質感種類 {{kind}}，可用的有：{{kinds}}。",
+    "lookNotObject": "{{setting}} 必須是質感設定的物件。",
+    "unknownLookSetting": "不認得的質感設定「{{key}}」；可用的有 {{keys}}。",
+    "unknownLookOption": "不認得的{{setting}}選項「{{id}}」；請從質感目錄中選擇。",
+    "shotLookRevisionConflict": "鏡頭 {{shot}} 的質感在第 {{base}} 版之後已被修改（現在是第 {{current}} 版）；請重新載入後再儲存。",
+    "shotProposalLookChanged": "鏡頭 {{v0}} 的質感在提案建立後已被修改（提案依據第 {{v1}} 版，現在是第 {{v2}} 版）；未套用任何變更，請重新產生提案。",
+    "shotProposalLookInvalid": "提案給鏡頭 {{v0}} 的質感已不符合質感目錄：{{v1}} 未套用任何變更，請重新產生提案。"
   },
   "access": {
     "login": "請先登入工作室帳號，再開啟此頁面。",
@@ -4320,7 +4326,10 @@
     "previewNotAdopted": "未採用",
     "preview_opticalRig": "攝影機",
     "preview_cameraMovement": "運鏡",
-    "preview_moves": "運鏡標籤"
+    "preview_moves": "運鏡標籤",
+    "preview_film": "片型",
+    "preview_color": "色調",
+    "preview_light": "燈光"
   },
   "look": {
     "buttons": "質感",
@@ -4369,7 +4378,40 @@
     "quote_start": "入點",
     "quoteHint_end": "在游標處引用 {{shot}} 的出點",
     "quoteHint_start": "在游標處引用 {{shot}} 的入點",
-    "quoteHint": "引用在送出生成時凍結：新 Take 會記下用的是哪支 Take、第幾秒。"
+    "quoteHint": "引用在送出生成時凍結：新 Take 會記下用的是哪支 Take、第幾秒。",
+    "kind_genre": "類型",
+    "kind_era": "影像年代",
+    "kind_tempo": "節奏",
+    "kind_palette": "色調",
+    "kind_light": "燈光",
+    "backToEpisode": "回到本集",
+    "followsEpisode": "跟著本集",
+    "ownValue": "本鏡自己設定 · 本集是{{value}}",
+    "episodeCamera": "Optical Rig 欄是空的，這一鏡用本集的攝影機：{{value}}。在這裡選，就寫成這一鏡自己的。",
+    "previous": "上一個",
+    "next": "下一個",
+    "carouselAt": "第 {{from}}–{{to}} 個，共 {{count}} 個",
+    "eraOlder": "較舊",
+    "eraNewer": "較新",
+    "search": "搜尋",
+    "searchLabel": "搜尋{{what}}",
+    "sort": "排序",
+    "sort_catalog": "建議順序",
+    "sort_name": "名稱",
+    "sort_tone": "由暗到亮",
+    "noMatch": "沒有符合「{{query}}」的選項。",
+    "proposed": "提案",
+    "proposalWaiting": "有劇組提案待審",
+    "proposalTitle": "劇組提案",
+    "proposalBy": "{{author}} 提議",
+    "proposalCrew": "劇組",
+    "proposalToEpisode": "回到本集",
+    "proposalApply": "套用",
+    "proposalApplying": "套用中…",
+    "proposalDismiss": "忽略",
+    "proposalStale": "提案之後這一鏡的質感改過了（提案時第 {{base}} 版，現在第 {{current}} 版），套用可能會被拒絕。",
+    "proposalReadOnly": "只有可編輯的成員能套用。",
+    "proposalMore": "之後還有 {{count}} 個"
   },
   "lookCatalog": {
     "camera": {
@@ -4410,6 +4452,77 @@
       "rackFocus": "轉焦",
       "pov": "主觀鏡頭",
       "static": "固定鏡頭"
+    },
+    "genre": {
+      "auto": "自動",
+      "rainMystery": "雨夜謎案",
+      "quietDrama": "靜默人情",
+      "creepingUnease": "暗處不安",
+      "instrumentRoomSf": "機房科幻",
+      "distantMiles": "長途遠行",
+      "fieldRecord": "田野紀錄",
+      "brightCaper": "輕快鬧劇",
+      "closeWarmth": "近身暖意"
+    },
+    "era": {
+      "auto": "自動",
+      "earlyLens": "老鏡頭年代",
+      "saturatedPrint": "彩印年代",
+      "grainFilm": "顆粒膠片",
+      "tapeEra": "錄影帶年代",
+      "cleanDigital": "當代清透"
+    },
+    "tempo": {
+      "auto": "自動",
+      "stillHold": "靜止凝視",
+      "slowDrift": "緩慢漂移",
+      "holdThenBurst": "靜待突發",
+      "staccatoRun": "急促連動"
+    },
+    "palette": {
+      "auto": "自動",
+      "midnightSlate": "午夜石板",
+      "lampAmber": "燈下琥珀",
+      "verdigrisRust": "銅綠與鏽",
+      "boneInk": "骨白墨黑",
+      "wetGlassNeon": "濕玻璃霓光",
+      "mossFog": "苔霧",
+      "seaBleached": "海風褪色",
+      "cinderGlow": "炭火暗紅",
+      "floeWhite": "冰川藍白",
+      "mulberryHour": "桑紫時分",
+      "sugarPaper": "糖紙日光",
+      "dryOchre": "乾土赭黃"
+    },
+    "light": {
+      "auto": "自動",
+      "windowSide": "側窗柔光",
+      "practicalLamp": "檯燈光圈",
+      "hardTop": "頂光硬影",
+      "backlightRim": "逆光輪廓",
+      "instrumentGlow": "儀表面光",
+      "overcastFlat": "陰天均光",
+      "lowSun": "低角日光"
     }
+  },
+  "episodeLook": {
+    "title": "本集質感",
+    "open": "本集質感：{{summary}}",
+    "hint": "每一鏡都照這裡，除非那一鏡自己設定。",
+    "format": "格式",
+    "ratio": "比例",
+    "style": "畫風",
+    "noStyles": "還沒有畫風樣張。",
+    "looks": "片型、攝影機、色調與燈光",
+    "pick": "點一顆質感鈕看範例。",
+    "apply": "套用到本集",
+    "applying": "套用中…",
+    "applied": "已套用。自己設定過的鏡頭保留自己的。",
+    "unsaved": "尚未套用",
+    "loading": "正在載入本集設定…",
+    "failed": "無法載入本集設定：{{message}}",
+    "overrides": "{{count}} 鏡自己設定",
+    "cameraHint": "Optical Rig 欄有文字的鏡頭保留自己的；欄位空著的就用這台攝影機。",
+    "cameraOverrides": "{{count}} 鏡有自己的。"
   }
 }

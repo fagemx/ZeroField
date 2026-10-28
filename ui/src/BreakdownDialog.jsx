@@ -49,12 +49,12 @@ export function BreakdownDialog({value, styles = [], rebuild, shots = 0, estimat
     </fieldset>}
     <div className="breakdown-format">
       <label className="modal-field">{t('story.aspectRatio')}<select value={ratio} onChange={event => setRatio(event.target.value)}>{RATIOS.map(item => <option key={item}>{item}</option>)}</select></label>
-      <fieldset className="breakdown-styles"><legend>{t('story.style')}</legend>
+      {styles.length > 0 && <fieldset className="breakdown-styles"><legend>{t('story.style')}</legend>
         <div>{styles.map(item => <label key={item.stylePresetId} className={style === item.stylePresetId ? 'is-on' : undefined}>
           <input type="radio" name="style" value={item.stylePresetId} checked={style === item.stylePresetId} onChange={() => setStyle(item.stylePresetId)}/>
           {item.sampleImage ? <img src={item.sampleImage} alt="" loading="lazy"/> : <span className="breakdown-nosample" aria-hidden="true"/>}
           <span>{item.name}</span></label>)}</div>
-      </fieldset>
+      </fieldset>}
     </div>
     {onImport && <div className="breakdown-import"><span><b>{t('world.importAsk')}</b><small>{t('world.importHint')}</small></span>
       <button type="button" className="world-tool" onClick={onImport}><Icon name="arrowUp" size={14}/>{t('world.importTable')}</button></div>}

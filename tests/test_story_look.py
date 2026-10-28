@@ -1,4 +1,5 @@
-"""SPEC_19 package B look catalog: validation, Optical Rig text and in-place #move tags."""
+"""SPEC_19 look catalog: validation, Optical Rig text and in-place #move tags (package B); genre, era, tempo, palette and
+light, the episode look and a shot's override, and compile_look (package C)."""
 import copy
 import json
 import re
@@ -19,6 +20,23 @@ BRANDS = ("arri", "alexa", "red", "raptor", "komodo", "bolex", "panavision", "co
           "steadicam", "imax", "technicolor", "cinemascope", "vistavision", "kodachrome", "ektachrome", "portra",
           "vision3", "minidv", "handycam", "gopro", "dji", "hitchcock", "vertigo", "kubrick", "spielberg", "wes",
           "anderson", "nolan", "matrix", "super")
+# In a colour description "red" is a colour, not the camera brand.
+COLOUR_WORDS = {"red"}
+CLAUSES = ("genre", "era", "tempo", "palette", "light")
+# SPEC_19_LOOK_OPTIONS_DRAFT.md, in its order (2026-10-27 final list).
+PACKAGE_C = {
+    "genre": ["auto", "rain-mystery", "quiet-drama", "creeping-unease", "instrument-room-sf", "distant-miles", "field-record",
+              "bright-caper", "close-warmth"],
+    "era": ["auto", "early-lens", "saturated-print", "grain-film", "tape-era", "clean-digital"],
+    "tempo": ["auto", "still-hold", "slow-drift", "hold-then-burst", "staccato-run"],
+    "palette": ["auto", "midnight-slate", "lamp-amber", "verdigris-rust", "bone-ink", "wet-glass-neon", "moss-fog",
+                "sea-bleached", "cinder-glow", "floe-white", "mulberry-hour", "sugar-paper", "dry-ochre"],
+    "light": ["auto", "window-side", "practical-lamp", "hard-top", "backlight-rim", "instrument-glow", "overcast-flat", "low-sun"],
+}
+
+
+def text(kind, item_id):
+    return look.option(kind, item_id)["promptText"]
 
 
 def items(kind, group=None):
@@ -34,7 +52,7 @@ def broken(change):
 class CatalogTests(unittest.TestCase):
     def test_packaged_catalog_lists_the_package_b_options_in_order(self):
         look.validate(CATALOG)
-        self.assertEqual({item["kind"] for item in CATALOG["items"]}, {"camera", "move"})
+        self.assertEqual({item["kind"] for item in CATALOG["items"]}, set(look.API_KINDS))
         self.assertEqual([i["id"] for i in items("camera", "body")],
                          ["auto-body", "digital-cinema", "film-35mm", "film-16mm", "film-8mm", "dv-camcorder"])
         self.assertEqual([i["id"] for i in items("camera", "lens")],
@@ -45,6 +63,21 @@ class CatalogTests(unittest.TestCase):
                           "handheld", "whip-pan", "rack-focus", "pov", "static"])
         self.assertEqual(look.catalog(), CATALOG["items"])
 
+    def test_package_c_lists_the_final_options_in_the_drafts_order(self):
+        for kind, ids in PACKAGE_C.items():
+            options = items(kind)
+            with self.subTest(kind=kind):
+                self.assertEqual([i["id"] for i in options], ids)
+                # labelKey: lookCatalog.<kind>.<camelCaseId>, "auto" for Auto
+                self.assertEqual([i["labelKey"] for i in options],
+                                 [f"lookCatalog.{kind}." + re.sub(r"-([a-z0-9])", lambda m: m[1].upper(), i) for i in ids])
+                self.assertTrue(all("group" not in i for i in options))
+                # §4.4: every option but Auto (a texture) shows its sample still (tests/test_look_samples.py checks the files).
+                self.assertEqual([i.get("preview") for i in options],
+                                 [{"poster": f"/projects/assets/look-samples/{kind}/{i}.webp"} if i != "auto" else None for i in ids])
+        self.assertEqual(sum(len(ids) - 1 for ids in PACKAGE_C.values()), 36)  # SPEC_19 §7 decision 5
+        self.assertEqual(look.option("palette", "midnight-slate")["hex"][:2], ["#2E3A4A", "#5B6F86"])  # SPEC_19 §4.3
+
     def test_every_choice_starts_with_an_empty_auto_and_the_rest_are_english_sentences(self):
         for kind, groups in look.KINDS.items():
             for group in groups or (None,):
@@ -54,16 +87,30 @@ class CatalogTests(unittest.TestCase):
                     self.assertTrue(options[0]["id"].startswith("auto"))
                     for item in options[1:]:
                         text = item["promptText"]
-                        self.assertTrue(text.isascii() and text.endswith(".") and len(text.split()) >= 8, text)
-                        self.assertRegex(item["labelKey"], r"^lookCatalog\.")
+                        self.assertTrue(text.isascii() and len(text.split()) >= 8, text)
+                        self.assertRegex(item["labelKey"], rf"^lookCatalog\.{kind}\.")
+                        if kind in CLAUSES:
+                            # One clause the compiler joins: lowercase start, no full stop, no "; " of its own.
+                            self.assertTrue(text[0].islower() and not text.endswith(".") and ";" not in text, text)
+                        else:
+                            self.assertTrue(text.endswith("."), text)
         self.assertEqual(len({item["labelKey"] for item in CATALOG["items"]}), len(CATALOG["items"]))
+
+    def test_only_palettes_have_colours_and_every_palette_but_auto_has_them(self):
+        for item in CATALOG["items"]:
+            with self.subTest(option=f"{item['kind']}:{item['id']}"):
+                if item["kind"] == "palette" and item["promptText"]:
+                    self.assertTrue(5 <= len(item["hex"]) <= 6 and all(re.fullmatch(r"#[0-9A-F]{6}", c) for c in item["hex"]))
+                else:
+                    self.assertNotIn("hex", item)
 
     def test_options_name_no_brands_people_or_titles_and_camera_text_names_no_equipment(self):
         for item in CATALOG["items"]:
             words = lambda text: set(re.findall(r"[a-z0-9]+", text.lower()))
             prompt = words(item["promptText"])
+            banned = set(BRANDS) - (COLOUR_WORDS if item["kind"] == "palette" else set())
             with self.subTest(option=item["id"]):
-                self.assertFalse((words(item["id"] + " " + item["labelKey"]) | prompt) & set(BRANDS))
+                self.assertFalse((words(item["id"] + " " + item["labelKey"]) | prompt) & banned)
                 if item["kind"] == "camera":
                     # Stills draw named gear as props (PHASE2: "RED V-RAPTOR" lettered onto a recorder).
                     self.assertFalse(prompt & {"camera", "camcorder", "tripod", "lens", "rig"})
@@ -77,10 +124,33 @@ class CatalogTests(unittest.TestCase):
             return next(i for i in range(len(CATALOG["items"]))
                         if CATALOG["items"][i]["kind"] == kind and CATALOG["items"][i].get("group") == group)
 
-        auto_lens, auto_move = first("camera", "lens"), first("move")
+        auto_lens, auto_move, auto_palette = first("camera", "lens"), first("move"), first("palette")
+        slate = auto_palette + 1
+        teal = {"kind": "palette", "id": "teal-night", "labelKey": "lookCatalog.palette.tealNight",
+                "promptText": "shadows in deep teal, highlights a pale cool grey", "hex": ["#1F4E5A", "#D8E0E8"]}
         cases = {
             "unique within a kind": add({"kind": "move", "id": "pan", "labelKey": "lookCatalog.move.pan2", "promptText": "Pan again."}),
-            "unknown kind": add({"kind": "palette", "id": "teal", "labelKey": "lookCatalog.palette.teal", "promptText": "Teal."}),
+            "unknown kind": add({"kind": "filter", "id": "mist", "labelKey": "lookCatalog.filter.mist", "promptText": "Mist."}),
+            "labelKey of another kind": add({"kind": "move", "id": "drift", "labelKey": "lookCatalog.camera.drift", "promptText": "Drift."}),
+            # Package C: clauses, and colours on palettes only.
+            "clause with a full stop": add(dict(teal, promptText="shadows in deep teal.")),
+            "clause with a capital": add(dict(teal, promptText="Shadows in deep teal")),
+            "clause with a semicolon": add(dict(teal, promptText="shadows in deep teal; highlights grey")),
+            "genre sentence": add({"kind": "genre", "id": "slow-noir", "labelKey": "lookCatalog.genre.slowNoir",
+                                   "promptText": "Long shadows across wet streets."}),
+            "palette without colours": add({k: v for k, v in teal.items() if k != "hex"}),
+            "no colours": add(dict(teal, hex=[])),
+            "thirteen colours": add(dict(teal, hex=[f"#{i:06X}" for i in range(13)])),
+            "lowercase colour": add(dict(teal, hex=["#1f4e5a"])),
+            "short colour": add(dict(teal, hex=["#1F4"])),
+            "colour without #": add(dict(teal, hex=["1F4E5A"])),
+            "repeated colour": add(dict(teal, hex=["#1F4E5A", "#1F4E5A"])),
+            "colours as text": add(dict(teal, hex="#1F4E5A")),
+            "colours on a light": add({"kind": "light", "id": "red-lamp", "labelKey": "lookCatalog.light.redLamp",
+                                       "promptText": "one lamp low beside the face", "hex": ["#AA0000"]}),
+            "colours on a camera": lambda entries: entries[first("camera", "body") + 1].update(hex=["#2E3A4A"]),
+            "colours on auto": lambda entries: entries[auto_palette].update(hex=["#2E3A4A"]),
+            "palette auto not first": lambda entries: entries.insert(auto_palette, entries.pop(slate)),
             "uppercase id": add({"kind": "move", "id": "Push", "labelKey": "lookCatalog.move.x", "promptText": "Push."}),
             "underscore id": add({"kind": "move", "id": "push_in", "labelKey": "lookCatalog.move.x", "promptText": "Push."}),
             "one-letter id": add({"kind": "move", "id": "p", "labelKey": "lookCatalog.move.x", "promptText": "Push."}),
@@ -134,13 +204,24 @@ class ApiItemTests(unittest.TestCase):
         self.assertEqual([i["group"] for i in look.api_items("camera")], [i["group"] for i in items("camera", "body") +
                                                                           items("camera", "lens") + items("camera", "aperture")])
         moves = look.api_items("move")
-        self.assertEqual(moves[1], {"id": "push-in", "kind": "move", "labelKey": "lookCatalog.move.pushIn", "promptText": PUSH, "preview": None})
+        self.assertEqual(moves[1], {"id": "push-in", "kind": "move", "labelKey": "lookCatalog.move.pushIn", "promptText": PUSH,
+                                    "preview": {"poster": "/projects/assets/look-samples/move/push-in.webp",
+                                                "clip": "/projects/assets/look-samples/move/push-in.mp4"}})
         self.assertTrue(all("group" not in i and "hex" not in i for i in moves))
 
-    def test_kinds_not_in_the_catalog_yet_list_nothing_and_other_kinds_are_refused(self):
-        # Package C fills genre, era, tempo, palette and light; until then they are empty, not errors.
-        for kind in ("genre", "era", "tempo", "palette", "light"):
-            self.assertEqual(look.api_items(kind), [], kind)
+    def test_package_c_kinds_list_their_options_with_colours_on_palettes_and_other_kinds_are_refused(self):
+        for kind in CLAUSES:
+            listed = look.api_items(kind)
+            with self.subTest(kind=kind):
+                self.assertEqual([i["id"] for i in listed], PACKAGE_C[kind])
+                self.assertEqual(listed[0], {"id": "auto", "kind": kind, "labelKey": f"lookCatalog.{kind}.auto", "promptText": "", "preview": None})
+                self.assertTrue(all("group" not in i for i in listed))
+                self.assertEqual(["hex" in i for i in listed], [kind == "palette" and i["id"] != "auto" for i in listed])
+        slate = look.api_items("palette")[1]
+        self.assertEqual(slate, {"id": "midnight-slate", "kind": "palette", "labelKey": "lookCatalog.palette.midnightSlate",
+                                 "promptText": text("palette", "midnight-slate"),
+                                 "preview": {"poster": "/projects/assets/look-samples/palette/midnight-slate.webp", "clip": None},
+                                 "hex": ["#2E3A4A", "#5B6F86", "#1B2330", "#8FA3B8", "#D8E0E8", "#C9953F"]})
         self.assertEqual(look.API_KINDS, ("camera", "move", "genre", "era", "tempo", "palette", "light"))
         for kind in ("colour", "Camera", "", "body"):
             with self.subTest(kind=kind), self.assertRaises(look.LookCatalogError):
@@ -171,6 +252,129 @@ class CameraTextTests(unittest.TestCase):
                      {"body": "auto"}, {"lens": "auto-body"}):
             with self.subTest(args=args), self.assertRaises(look.LookCatalogError):
                 look.camera_text(**args)
+
+
+class LookValidationTests(unittest.TestCase):
+    """The episode look {genre, era, tempo, camera: {body, lens, aperture}, palette, light} and a shot's override."""
+    FULL = {"genre": "rain-mystery", "era": "grain-film", "tempo": "slow-drift",
+            "camera": {"body": "film-35mm", "lens": "anamorphic", "aperture": "f1-4"}, "palette": "midnight-slate", "light": "window-side"}
+
+    def refused(self, validate, value):
+        with self.assertRaises(look.LookCatalogError) as caught:
+            validate(value)
+        return caught.exception.reason, caught.exception.params, str(caught.exception)
+
+    def test_an_episode_look_takes_ids_of_each_kind_and_drops_what_sets_nothing(self):
+        self.assertEqual(look.validate_episode_look(self.FULL), self.FULL)
+        self.assertIsNot(look.validate_episode_look(self.FULL)["camera"], self.FULL["camera"])
+        self.assertEqual(look.validate_episode_look({}), {})
+        self.assertEqual(look.validate_episode_look({"palette": "auto", "genre": None, "camera": {"lens": "auto-lens", "body": None}}),
+                         {"palette": "auto", "camera": {"lens": "auto-lens"}})
+        self.assertEqual(look.validate_episode_look({"camera": {}, "light": None}), {})
+
+    def test_an_episode_look_refuses_unknown_settings_and_ids_and_names_the_problem(self):
+        cases = [
+            ([], ("lookNotObject", {"setting": "look"}, "look must be an object of look settings.")),
+            ({"camera": "film-35mm"}, ("lookNotObject", {"setting": "look.camera"}, "look.camera must be an object of look settings.")),
+            ({"colour": "midnight-slate"}, ("unknownLookSetting", {"key": "colour", "keys": "genre, era, tempo, camera, palette, light"},
+                                            "Unknown look setting 'colour'; use genre, era, tempo, camera, palette, light.")),
+            ({"camera": {"focus": "f4"}}, ("unknownLookSetting", {"key": "camera.focus", "keys": "body, lens, aperture"},
+                                           "Unknown look setting 'camera.focus'; use body, lens, aperture.")),
+            ({"palette": "teal"}, ("unknownLookOption", {"setting": "palette", "id": "teal"},
+                                   "Unknown palette option 'teal'; choose an option from the look catalog.")),
+            ({"light": "midnight-slate"}, ("unknownLookOption", {"setting": "light", "id": "midnight-slate"},
+                                           "Unknown light option 'midnight-slate'; choose an option from the look catalog.")),
+            ({"camera": {"lens": "film-35mm"}}, ("unknownLookOption", {"setting": "camera lens", "id": "film-35mm"},
+                                                 "Unknown camera lens option 'film-35mm'; choose an option from the look catalog.")),
+            ({"genre": 3}, ("unknownLookOption", {"setting": "genre", "id": "3"}, "Unknown genre option '3'; choose an option from the look catalog.")),
+            ({"tempo": "push-in"}, ("unknownLookOption", {"setting": "tempo", "id": "push-in"},
+                                    "Unknown tempo option 'push-in'; choose an option from the look catalog.")),
+        ]
+        for value, expected in cases:
+            with self.subTest(value=value):
+                self.assertEqual(self.refused(look.validate_episode_look, value), expected)
+
+    def test_a_shot_override_keeps_nulls_and_has_no_camera(self):
+        value = {"palette": "lamp-amber", "light": None, "tempo": "auto"}
+        self.assertEqual(look.validate_shot_look(value), value)
+        self.assertEqual(look.validate_shot_look({}), {})
+        self.assertEqual(self.refused(look.validate_shot_look, {"camera": {"body": "film-35mm"}})[:2],
+                         ("unknownLookSetting", {"key": "camera", "keys": "genre, era, tempo, palette, light"}))
+        self.assertEqual(self.refused(look.validate_shot_look, {"era": "1970s"})[:2], ("unknownLookOption", {"setting": "era", "id": "1970s"}))
+        self.assertEqual(self.refused(look.validate_shot_look, None)[0], "lookNotObject")
+
+
+class CompileLookTests(unittest.TestCase):
+    """compile_look(episode_look, shot_look, *, still=False) -> {film, color, light, camera} (SPEC_19 §4.3)."""
+
+    def test_film_joins_genre_era_and_tempo_in_order_and_auto_leaves_no_separator(self):
+        genre, era, tempo = text("genre", "rain-mystery"), text("era", "grain-film"), text("tempo", "slow-drift")
+        cases = [
+            ({"genre": "rain-mystery", "era": "grain-film", "tempo": "slow-drift"}, f"{genre}; {era}; {tempo}"),
+            ({"tempo": "slow-drift", "era": "grain-film", "genre": "rain-mystery"}, f"{genre}; {era}; {tempo}"),  # never key order
+            ({"genre": "auto", "era": "grain-film", "tempo": "slow-drift"}, f"{era}; {tempo}"),
+            ({"genre": "rain-mystery", "era": "auto", "tempo": "slow-drift"}, f"{genre}; {tempo}"),
+            ({"genre": "rain-mystery", "era": "grain-film", "tempo": "auto"}, f"{genre}; {era}"),
+            ({"tempo": "slow-drift"}, tempo),
+            ({"genre": "auto", "era": "auto", "tempo": "auto"}, ""),
+            ({}, ""),
+        ]
+        for episode, film in cases:
+            with self.subTest(episode=episode):
+                result = look.compile_look(episode, {})
+                self.assertEqual(result["film"], film)
+                self.assertFalse(result["film"].startswith(";") or result["film"].endswith(";") or ";;" in result["film"].replace(" ", ""))
+
+    def test_a_still_drops_tempo_and_keeps_everything_else(self):
+        episode = {"genre": "rain-mystery", "era": "grain-film", "tempo": "slow-drift", "palette": "bone-ink", "light": "hard-top",
+                   "camera": {"body": "film-16mm"}}
+        clip, still = look.compile_look(episode, {}), look.compile_look(episode, {}, still=True)
+        self.assertEqual(still["film"], f"{text('genre', 'rain-mystery')}; {text('era', 'grain-film')}")
+        self.assertEqual({k: v for k, v in still.items() if k != "film"}, {k: v for k, v in clip.items() if k != "film"})
+        self.assertEqual(look.compile_look({"tempo": "staccato-run"}, {}, still=True)["film"], "")
+
+    def test_color_is_the_palette_clause_then_its_colours_light_is_the_light_clause(self):
+        result = look.compile_look({"palette": "midnight-slate", "light": "window-side"}, None)
+        self.assertEqual(result["color"], text("palette", "midnight-slate") +
+                         "; palette #2E3A4A, #5B6F86, #1B2330, #8FA3B8, #D8E0E8, #C9953F")
+        self.assertIn(" palette #2E3A4A, #5B6F86", result["color"])  # SPEC_19 §4.3's example
+        self.assertEqual(result["light"], text("light", "window-side"))
+        self.assertEqual(look.compile_look({"palette": "auto", "light": "auto"}, {}), {"film": "", "color": "", "light": "", "camera": ""})
+        self.assertEqual(look.compile_look(None, None), {"film": "", "color": "", "light": "", "camera": ""})
+
+    def test_camera_is_the_episode_cameras_optical_rig_text(self):
+        camera = {"body": "film-35mm", "lens": "auto-lens", "aperture": "f1-4"}
+        self.assertEqual(look.compile_look({"camera": camera}, {})["camera"], look.camera_text("film-35mm", "auto-lens", "f1-4"))
+        self.assertEqual(look.compile_look({"camera": {"body": "auto-body"}}, {})["camera"], "")
+
+    def test_the_shot_override_wins_per_kind_and_null_falls_back_to_the_episode(self):
+        episode = {"genre": "rain-mystery", "era": "grain-film", "palette": "midnight-slate", "light": "window-side"}
+        result = look.compile_look(episode, {"genre": "quiet-drama", "palette": "lamp-amber", "light": None, "tempo": "still-hold"})
+        self.assertEqual(result["film"], f"{text('genre', 'quiet-drama')}; {text('era', 'grain-film')}; {text('tempo', 'still-hold')}")
+        self.assertTrue(result["color"].startswith(text("palette", "lamp-amber") + "; palette #C98A3D, "))
+        self.assertEqual(result["light"], text("light", "window-side"))  # null: back to the episode
+        # Auto on the shot is a choice too: this shot drops the episode's palette.
+        self.assertEqual(look.compile_look(episode, {"palette": "auto"})["color"], "")
+
+    def test_unknown_settings_or_ids_on_either_side_raise(self):
+        for episode, shot in (({"palette": "teal"}, {}), ({}, {"palette": "teal"}), ({}, {"camera": {"body": "film-35mm"}}),
+                              ({"colour": "auto"}, {})):
+            with self.subTest(episode=episode, shot=shot), self.assertRaises(look.LookCatalogError):
+                look.compile_look(episode, shot)
+
+
+class SourceLookTests(unittest.TestCase):
+    def test_a_task_source_carries_the_clip_lines_and_the_film_line_of_a_still(self):
+        episode, shot = {"genre": "field-record", "tempo": "staccato-run", "camera": {"lens": "anamorphic"}}, {"light": "low-sun"}
+        source = look.source_look(episode, shot)
+        self.assertEqual(source, dict(look.compile_look(episode, shot), filmStill=look.compile_look(episode, shot, still=True)["film"]))
+        self.assertEqual(source["filmStill"], text("genre", "field-record"))
+        self.assertEqual(json.loads(json.dumps(source)), source)  # plain text: it travels in a task's JSON input
+
+    def test_a_look_that_sets_nothing_is_no_look(self):
+        for episode, shot in (({}, {}), ({"genre": "auto", "camera": {"body": "auto-body"}}, {"light": None}), (None, None)):
+            with self.subTest(episode=episode, shot=shot):
+                self.assertIsNone(look.source_look(episode, shot))
 
 
 class MoveTokenTests(unittest.TestCase):

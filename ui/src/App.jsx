@@ -119,6 +119,9 @@ function ProjectPage({ slug }) {
   const [layout, setLayout] = usePref("studio.layout", { left: true, bottom: true, right: true });
   const [focus, setFocusState] = useState({ sceneId: null, shotRid: null, assetCode: null });
   const setFocus = useCallback((patch) => setFocusState((current) => ({ ...current, ...patch })), []);
+  // A row named from outside the stage (annotation, proposal target, flow source link, restored context) is also the shell's shot focus:
+  // a mounted Shot Stage follows that focus, so opening only the sheet row would snap it back to the previous shot.
+  const focusStageRow = useCallback((tab, rowId) => { if (rowId && spaceOf(tab) === 'stage') setFocus({ shotRid: rowId }); }, [setFocus]);
   // SPEC_18 R6: a shortcut in the space menu names a view and a filter; the space takes it once on arrival and clears it.
   const [intent, setIntent] = useState(null);
   const clearIntent = useCallback(() => setIntent(null), []);
@@ -369,10 +372,11 @@ function ProjectPage({ slug }) {
     }
     if(a.kind==='row'&&a.anchor?.rid&&data?.tabs.find(item=>item.key===a.tab_key)?.surface_type==='sheet'){
       setSheetFocus({tabKey:a.tab_key,tableId:a.anchor.table_id,rowId:a.anchor.rid,colIndex:0,openRow:true,nonce:Date.now()});
+      focusStageRow(a.tab_key, a.anchor.rid);
       return;
     }
     focusAnnotation(a.id, { scroll: true, flash: true });
-  }, [tabKey, focusAnnotation, showToast, data?.tabs]);
+  }, [tabKey, focusAnnotation, focusStageRow, showToast, data?.tabs]);
 
   const reattach = useCallback(async (a) => {
     setPanel(false);
@@ -424,7 +428,7 @@ function ProjectPage({ slug }) {
   useEffect(() => {
     if (!data?.me?.actor_id || !consoleRoute(window.location.hash)) return;
     try {const saved=JSON.parse(sessionStorage.getItem('zf.productionContext:'+slug+':'+data.me.actor_id));if(saved){setPaDraft(saved.chatDraft || '');if(['off','side','full'].includes(saved.dockMode))setPaMode(saved.dockMode);if(saved.episodeId)setStoryEpisode(saved.episodeId);
-      if(saved.focus){setSheetFocus({...saved.focus,nonce:Date.now()});if(saved.focus.rowId&&spaceOf(saved.focus.tabKey)==='stage')setFocus({shotRid:saved.focus.rowId});}}} catch { /* Ignore unavailable or obsolete local context. */ }
+      if(saved.focus){setSheetFocus({...saved.focus,nonce:Date.now()});focusStageRow(saved.focus.tabKey,saved.focus.rowId);}}} catch { /* Ignore unavailable or obsolete local context. */ }
   }, [slug,data?.me?.actor_id]);
   const paInput = useRef(null);
   const paEnabled = Boolean(data && data.assistant && data.assistant.enabled);
@@ -501,10 +505,11 @@ function ProjectPage({ slug }) {
         // stage: open the shot on the 3D Stage (a crew proposal of a new 3D plan is reviewed there, SPEC_20 R18); a sheet without
         // a stage opens the row instead.
         setSheetFocus({ tabKey: target.tab_key, tableId, rowId: target.row_id, colIndex: target.col_index ?? 0, nonce: Date.now(), ...(target.stage ? { openStage: true, openRow: true } : {}) });
+        focusStageRow(target.tab_key, target.row_id);
       }
       if (target.block_id && !surfaceControl.current?.flashUnit?.(target.block_id)) pendingFlash.current = target.block_id;
     }
-  }, [paMode, navigate, slug]);
+  }, [paMode, navigate, slug, focusStageRow]);
   const starter = useCallback((text) => askAssistant(text, null), [askAssistant]);
 
   // ---------- 修改紀錄 ----------
@@ -809,6 +814,7 @@ function ProjectPage({ slug }) {
               onOpenSource={async (target) => {
                 if (await flushSurface() && await navigate(target.tabKey)) {
                   setSheetFocus({ ...target, nonce: Date.now() });
+                  focusStageRow(target.tabKey, target.rowId);
                   setPaMode("off");
                 }
               }}

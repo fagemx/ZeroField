@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from '../i18n/react.jsx';
 import { t } from '../i18n/index.js';
+import { api } from '../api.js';
 import { storyList, storyRequest } from '../storyModel.js';
 import { rowProposals } from '../proposalModel.js';
+import { LOOK_FIELD, loadLookProposals, lookProposalReview, shotMetaKey } from '../previs/shotMetaModel.js';
 import { adoptionBody, isAdopted, mergeTakes } from '../takeModel.js';
 import { planSeconds } from '../timelineModel.js';
 import { resolveAssetReference } from '../studioModel.js';
@@ -12,37 +14,25 @@ import { useFilmTrial } from '../StudioShell.jsx';
 import { FilmMonitor } from '../ShotFilmPanel.jsx';
 import { MediaLadder } from '../ShotStage.jsx';
 import { GenerationBar } from '../generation/GenerationBar.jsx';
-import { cameraChoice, cameraGroups, cameraText, changedGroups, insertMove, moveNumbers, moveOrder, optionLabel, removeMove, removeMoves, withCamera, CAMERA_GROUPS } from './lookModel.js';
+import { BUTTON_KINDS, buttonScope, cameraScope, cameraText, changedGroups, idLabel, insertMove, isAutoId, lookScope, moveNumbers, moveOrder, optionLabel, overriddenKinds,
+  removeMove, removeMoves, resetLookBody, shotLookBody, swatchColors, withCamera, CAMERA_GROUPS } from './lookModel.js';
+import { useEpisodeSettings, useLookCatalog, useLookOptions } from './lookCatalog.js';
 import { shotMonitor, playingItem, useShotMonitor } from './shotMonitor.js';
-import { CameraWall, ReferenceWall } from './ExampleWall.jsx';
+import { CameraWall, LookWall, ReferenceWall } from './ExampleWall.jsx';
 import { LookButtons } from './LookTiles.jsx';
 import { PromptEditor } from './PromptComposer.jsx';
 import { Icon } from '../Icon.jsx';
 import './composer.css';
 
 // SPEC_19 R8, R9 (3.3): the shot composer, the Shot Stage's middle when a shot is chosen. The top half is the shot's take and its play bar
-// (Take 3 new | Take 2 ✓ | ...; ✓ adopts, ↻ sends to Retake), or, when a look button is pressed, its example wall. Under it the look
-// buttons (references and camera; package C adds film setup, palette and lighting), then the prompt, the biggest box on the screen, with
-// the parameter row and the screen's one primary button. The top half is the Shot Stage's one player (shotMonitor): the right column's
-// take rows, "Play around" and a take tried in the cut all play here.
-
-const CATALOG = {promise: null};
-// The camera and move options (GET /catalog/looks?kind=camera|move, paged: storyList asks 100 at a time), read once per page; a failure
-// is tried again on the next mount. preloaded ({camera, moves}): the options for the first paint (the tests).
-const catalogState = ({camera, moves}) => ({status: 'ready', items: camera, moves, groups: cameraGroups(camera), error: ''});
-function useLookCatalog(preloaded = null) {
-  const [state, setState] = useState(() => preloaded ? catalogState(preloaded) : {status: 'loading', items: [], moves: [], groups: cameraGroups([]), error: ''});
-  useEffect(() => {
-    if (preloaded) return undefined;
-    let alive = true;
-    CATALOG.promise ||= Promise.all([storyList('/catalog/looks?kind=camera'), storyList('/catalog/looks?kind=move')])
-      .then(([camera, moves]) => ({camera, moves}), error => {CATALOG.promise = null; throw error;});
-    CATALOG.promise.then(value => {if (alive) setState(catalogState(value));},
-      error => {if (alive) setState(old => ({...old, status: 'failed', error: error.message}));});
-    return () => {alive = false;};
-  }, []);
-  return state;
-}
+// (Take 3 new | Take 2 ✓ | ...; ✓ adopts, ↻ sends to Retake), or, when a look button is pressed, its example wall. Under it the five look
+// buttons (references, film setup, camera, palette, lighting), then the prompt, the biggest box on the screen, with the parameter row
+// and the screen's one primary button. The top half is the Shot Stage's one player (shotMonitor): the right column's take rows, "Play
+// around" and a take tried in the cut all play here.
+// R11: film setup, palette and lighting follow the episode's look (its settings) unless the shot overrides them (PUT /shots/{id}/look,
+// through onLook: a look is not a cell, so like the Optical Rig write it leaves an open prompt draft alone); the camera is the Optical
+// Rig cell, the episode's camera only while the cell is empty. A crew proposal of the shot's look (SPEC_20 R18) dots its buttons and
+// is applied or dismissed in their walls.
 
 // The shot's video takes, newest first: its candidates and its pending media proposals (the same list as the right column's).
 function useTakes(id, version, entries, status, adoption) {
@@ -94,7 +84,8 @@ function PromptPreview({state, onSaveAndPreview, disabled}) {
   if (state.status !== 'ready') return null;
   const {compiledPrompt = null, references = [], look = null} = state.data || {};
   const camera = [['opticalRig', look?.opticalRig], ['cameraMovement', look?.cameraMovement],
-    ['moves', Array.isArray(look?.moves) && look.moves.length ? look.moves.map(move => typeof move === 'string' ? '#' + move : move?.id ? '#' + move.id : String(move)).join(' ') : '']].filter(([, value]) => value);
+    ['moves', Array.isArray(look?.moves) && look.moves.length ? look.moves.map(move => typeof move === 'string' ? '#' + move : move?.id ? '#' + move.id : String(move)).join(' ') : ''],
+    ['film', look?.film], ['color', look?.color], ['light', look?.light]].filter(([, value]) => value);
   return <section className="composer-preview" aria-label={t('composer.previewTitle')}>
     {compiledPrompt === null ? <p className="studio-note">{t('composer.previewNoPrompt')}</p> : <pre>{compiledPrompt}</pre>}
     {Array.isArray(references) && references.length > 0 && <ul className="composer-preview-refs" aria-label={t('composer.previewRefs')}>{references.map((ref, index) => <li key={index}>
@@ -124,22 +115,37 @@ function RefPopover({entry, use, onUse, onClose}) {
 export function ShotComposer({slug, tabKey, rid, shot = null, shots = [], label, scene = null, status = '', text = '', dirty = false, promptColumn = true,
   onDraft, onSave, onRevert, rig = {text: '', column: false}, motionText = '', undo = null, ladder = [], lookup = {}, headers = [], cells = [], actionCol = -1,
   proposals = [], version, inFlight = false, generating = 0, writable = false, disabled = false, canStatus = true, controlRef,
-  onWrite, onRetake, onShowStage, onOpenWorld, onGenerate, preloaded = {}}) {
+  onWrite, onRetake, onShowStage, onOpenWorld, onGenerate, epId = null, onLook, onApplyProposal, onDismissProposal, preloaded = {}}) {
   useLocale();
   const id = shot?.shotId || `sh_${slug}_${rid}`;
   const catalog = useLookCatalog(preloaded.catalog || null);
+  const looks = useLookOptions(preloaded.looks || null);
+  const episodeLook = useEpisodeSettings(epId, preloaded.episode || null).settings?.look || null;
+  const shotLook = shot?.look || null, lookRevision = Number.isInteger(shot?.lookRevision) ? shot.lookRevision : null;
   const entries = useMemo(() => rowProposals(proposals, rid, tabKey), [proposals, rid, tabKey]);
   const takes = useTakes(id, version, entries, status, shot?.adoption ?? null);
   const {playing} = useShotMonitor();
   const trial = useFilmTrial();
   const item = playingItem(playing);
   const [output, setOutput] = useState('video'), [wall, setWall] = useState(null), [view, setView] = useState(null);
-  const [refCategory, setRefCategory] = useState('CHARACTER'), [cameraCategory, setCameraCategory] = useState('rig');
+  const [refCategory, setRefCategory] = useState('CHARACTER'), [cameraCategory, setCameraCategory] = useState('rig'), [lookCategory, setLookCategory] = useState('genre');
   const [uses, setUses] = useState({}), [refOpen, setRefOpen] = useState(null), [preview, setPreview] = useState({open: false, status: 'idle'});
+  const [lookLists, setLookLists] = useState({}), [decision, setDecision] = useState('');
   const editor = useRef(null), bodyRef = useRef(null);
   // This composer draws the stage's one player while it is on the page.
   useEffect(() => shotMonitor.host(), []);
   useEffect(() => {setView(null); setUses({}); setRefOpen(null); setPreview({open: false, status: 'idle'});}, [id]);
+  // SPEC_20 R18: my pending look proposals for this shot, with their values, read again when the assistant's list of them changes or
+  // the shot's look moves on. A crew member without the assistant (403) simply has none.
+  const lookKey = shotMetaKey(proposals, id, LOOK_FIELD);
+  useEffect(() => {
+    if (preloaded.lookProposals || !slug || !lookKey) return undefined;
+    let alive = true;
+    loadLookProposals(api.get, slug, id).then(list => {if (alive) setLookLists(old => ({...old, [id]: list}));}, () => {if (alive) setLookLists(old => ({...old, [id]: []}));});
+    return () => {alive = false;};
+  }, [slug, id, lookKey, lookRevision]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const review = lookProposalReview(preloaded.lookProposals || (lookKey ? lookLists[id] : null),
+    {revision: lookRevision, writable: writable && Boolean(onApplyProposal && onDismissProposal)});
   useEffect(() => {
     if (!controlRef) return undefined;
     const control = {escape: () => {if (refOpen) {setRefOpen(null); return true;} if (wall) {setWall(null); return true;} return false;}};
@@ -148,7 +154,10 @@ export function ShotComposer({slug, tabKey, rid, shot = null, shots = [], label,
   });
 
   const moves = catalog.moves;
-  const choice = useMemo(() => cameraChoice(rig.text, catalog.items), [rig.text, catalog.items]);
+  // The camera in effect: the Optical Rig cell's, or the episode's while the cell is empty (then the button says "Episode").
+  const camera = useMemo(() => cameraScope(rig.text, episodeLook?.camera, catalog.items), [rig.text, episodeLook, catalog.items]);
+  const sharedCamera = useMemo(() => cameraScope('', episodeLook?.camera, catalog.items), [episodeLook, catalog.items]);
+  const choice = camera.choice;
   const numbers = useMemo(() => moveNumbers(text, moves), [text, moves]), order = useMemo(() => moveOrder(text, moves), [text, moves]);
   const film = useMemo(() => shots.some(item => item.shotId === id) ? shots : [...shots, ...(shot ? [shot] : [])], [shots, shot, id]);
   const current = film.find(item => item.shotId === id) || shot;
@@ -162,7 +171,13 @@ export function ShotComposer({slug, tabKey, rid, shot = null, shots = [], label,
   // Every change to the prompt goes through the editor, so it can be undone there and is saved with the prompt.
   const edit = fn => {if (editor.current) editor.current.insert(fn); else {const result = fn(text, text.length); if (result && result.text !== text) onDraft(result.text);}};
   const castEdit = op => edit(source => ({text: op(source), caret: op(source).length}));
-  const openWall = next => {if (next) shotMonitor.stop(); setWall(next); setRefOpen(null);};
+  // A wall a crew proposal touches opens on the kind it proposes.
+  const openWall = next => {
+    if (next) shotMonitor.stop();
+    const proposed = review?.kinds.filter(kind => (BUTTON_KINDS[next] || []).includes(kind)) || [];
+    if (next === 'filmSetup' && proposed.length && !proposed.includes(lookCategory)) setLookCategory(proposed[0]);
+    setWall(next); setRefOpen(null);
+  };
 
   // A tag's look in the prompt.
   const byMove = useMemo(() => Object.fromEntries(moves.map(item => [item.id, item])), [moves]);
@@ -187,6 +202,33 @@ export function ShotComposer({slug, tabKey, rid, shot = null, shots = [], label,
   const toggleMove = item => numbers[item.id] ? edit(source => {const next = removeMove(source, item.id, moves); return {text: next, caret: next.length};})
     : edit((source, caret) => insertMove(source, caret, item.id));
   const resetCamera = () => {if (rig.column && rig.text) rig.onWrite(''); if (order.length) edit(source => {const next = removeMoves(source, moves); return {text: next, caret: next.length};});};
+
+  // R11: film setup, palette and lighting. A choice is the shot's override at once (PUT /shots/{id}/look with the revision the shot was
+  // read at; a stale one is refused with 409 and the shot is read again); choosing what is already in effect sends nothing.
+  const lookWrite = onLook || (async fn => {await fn(); return true;});
+  const putLook = body => {if (writable) lookWrite(() => storyRequest(`/shots/${id}/look`, 'PUT', body));};
+  const chooseLook = (kind, value) => {
+    const now = lookScope(kind, episodeLook, shotLook), items = looks.kinds[kind];
+    if (now.value === value || (now.scope !== 'shot' && isAutoId(now.value, items) && isAutoId(value, items))) return;
+    putLook(shotLookBody(kind, value, lookRevision));
+  };
+  // "Back to the episode" for one kind, Reset all for every kind of the wall the shot overrides.
+  const backToEpisode = kind => putLook(resetLookBody([kind], shotLook, lookRevision));
+  const resetLooks = button => {const kinds = overriddenKinds(BUTTON_KINDS[button], shotLook); if (kinds.length) putLook(resetLookBody(kinds, shotLook, lookRevision));};
+  // A look proposal goes through the assistant's own decisions; an applied one changed the shot's look, so the shot is read again.
+  const decideLook = async verb => {
+    if (!review || decision || !review.canDecide) return;
+    setDecision(verb);
+    try {
+      if (verb === 'dismiss') {await onDismissProposal(review.proposal); return;}
+      await lookWrite(async () => {
+        const result = await onApplyProposal(review.proposal, undefined, {});
+        if (!result) return null;  // refused: the assistant has said why
+        if (result.proposal?.status !== 'applied') throw new Error(result.proposal?.error || t('shotProposal.failed'));
+        return storyRequest(`/shots/${id}`);
+      });
+    } finally {setDecision('');}
+  };
 
   // Takes: the one in view is the one playing, else the one picked on the bar, else the newest.
   const playingTake = item && item.shotId === id ? takes.find(take => take.url === item.url) || null : null;
@@ -222,11 +264,25 @@ export function ShotComposer({slug, tabKey, rid, shot = null, shots = [], label,
   const cameraNames = CAMERA_GROUPS.map(group => catalog.items.find(option => option.id === choice[group])).filter(option => option?.promptText).map(option => optionLabel(option, t));
   const moveNames = order.map(moveId => optionLabel(byMove[moveId], t));
   const cameraValue = [...(choice.custom ? [t('look.custom')] : cameraNames), ...moveNames].join(' · ');
+  // Film setup, palette and lighting: what is in effect, "This shot" once the shot overrides one of the button's kinds.
+  const lookButton = button => {
+    const {scope, kinds} = buttonScope(BUTTON_KINDS[button], episodeLook, shotLook);
+    const set = kinds.filter(entry => !isAutoId(entry.value, looks.kinds[entry.kind]));
+    const named = entry => idLabel(entry.kind, entry.value, looks.kinds[entry.kind], t);
+    const lead = set[0] ? looks.kinds[set[0].kind].find(option => option.id === set[0].value) || null : null;
+    return {id: button, label: t('look.' + button), scope, value: set.map(named).join(' · '),
+      full: kinds.length > 1 ? set.map(entry => t('look.kind_' + entry.kind) + ': ' + named(entry)).join(' · ') : '',
+      thumb: button === 'palette' ? null : lead?.preview?.poster || null, swatch: button === 'palette' ? swatchColors(lead?.hex) : null,
+      texture: {id: set[0]?.value || button, auto: !set.length}, proposed: Boolean(review?.buttons.includes(button))};
+  };
   const buttons = [
     {id: 'references', label: t('look.references'), scope: 'shot', icon: 'users', thumb: rows.find(row => row.imageUrl)?.imageUrl || null, dot: missing > 0,
       value: rows.length ? t(missing ? 'look.refSummaryMissing' : 'look.refSummary', {count: rows.length, missing}) : ''},
-    {id: 'camera', label: t('look.camera'), scope: 'shot', icon: 'clapper', value: cameraValue, full: choice.custom ? rig.text : cameraValue,
+    lookButton('filmSetup'),
+    {id: 'camera', label: t('look.camera'), scope: camera.scope, icon: 'clapper', value: cameraValue, full: choice.custom ? rig.text : cameraValue,
       badge: current?.previsVideoUrl ? t('look.fromPrevis') : null},
+    lookButton('palette'),
+    lookButton('lighting'),
   ];
   const ref = refOpen ? byRef[refOpen] : null;
   const seconds = current ? planSeconds(current) : null;
@@ -242,7 +298,14 @@ export function ShotComposer({slug, tabKey, rid, shot = null, shots = [], label,
       {wall === 'camera' ? <CameraWall catalog={catalog} choice={choice} custom={choice.custom && Boolean(rig.text)} numbers={numbers} order={order} moves={moves} legacyMotion={motionText}
           rigColumn={rig.column} disabled={!writable || disabled} hasPrevis={Boolean(current?.previsVideoUrl)} category={cameraCategory} onCategory={setCameraCategory}
           changed={changedGroups(choice, catalog.items)} onChoose={chooseCamera} onMove={toggleMove} onClose={() => setWall(null)} onReset={resetCamera}
-          onUndo={undo?.can ? undo.run : undefined} onStage={onShowStage}/>
+          onUndo={undo?.can ? undo.run : undefined} onStage={onShowStage}
+          episodeNote={camera.scope === 'episode' ? t('look.episodeCamera', {value: cameraNames.join(' · ')}) : ''}
+          onBack={writable && rig.column && rig.text.trim() && sharedCamera.scope === 'episode' ? () => rig.onWrite('') : null}/>
+        : BUTTON_KINDS[wall] ? <LookWall button={wall} options={looks} category={lookCategory} onCategory={setLookCategory}
+          value={kind => lookScope(kind, episodeLook, shotLook).value} scope={kind => lookScope(kind, episodeLook, shotLook)} episode={kind => episodeLook?.[kind] ?? null}
+          changed={overriddenKinds(BUTTON_KINDS[wall], shotLook)} disabled={!writable || disabled} onChoose={chooseLook} onBack={backToEpisode}
+          onReset={overriddenKinds(BUTTON_KINDS[wall], shotLook).length ? () => resetLooks(wall) : null} onClose={() => setWall(null)}
+          review={review} decision={decision} onApply={() => decideLook('apply')} onDismiss={() => decideLook('dismiss')}/>
         : wall === 'references' ? <ReferenceWall rows={rows} more={more} lookup={lookup} elsewhere={elsewhere} writable={writable && promptColumn} disabled={disabled} category={refCategory}
           onCategory={setRefCategory} onClose={() => setWall(null)} onFix={onOpenWorld}
           onLook={(code, next) => castEdit(source => replaceLook(source, code, next))} onRemove={code => castEdit(source => removeBinding(source, code))} onAdd={code => castEdit(source => addBinding(source, code))}

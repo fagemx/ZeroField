@@ -78,6 +78,7 @@ class OptionsPureTests(unittest.TestCase):
         self.assertEqual([s["sampleImage"] for s in story.STYLES], [f"/projects/assets/style-samples/{slug}.svg" for slug in slugs])
         self.assertEqual([s["stylePresetId"] for s in story.STYLES], ["88123", "88124", "88125", "88126"])
         self.assertEqual(http.STATIC_TYPES[".svg"], "image/svg+xml")
+        self.assertEqual((http.STATIC_TYPES[".webp"], http.STATIC_TYPES[".mp4"]), ("image/webp", "video/mp4"))  # look samples
         root = (http.STATIC_DIR / "assets").resolve()
         for style in story.STYLES:
             relative = style["sampleImage"][len("/projects/assets/"):]  # what _send_static resolves below static/projects/assets

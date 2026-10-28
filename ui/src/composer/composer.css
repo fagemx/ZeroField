@@ -1,8 +1,10 @@
 /* SPEC_19 R7-R9: the shot composer (the Shot Stage's middle when a shot is chosen), its example walls, the prompt and the parameter row,
-   and the stage's View menu. 6C midnight blue-grey tokens from studio-shell.css; amber only marks what is chosen or focused; the one
-   light solid button is the composer's Generate.
+   and the stage's View menu. R11, R12: the film setup, palette and lighting walls, and the Episode look page, which uses the same look
+   buttons and walls. 6C midnight blue-grey tokens from studio-shell.css; amber only marks what is chosen or focused; the one light solid
+   button is the composer's Generate (on the Episode look page, its Apply to episode).
    studio.css styles every button inside .canvas at specificity (0,2,2) (32 px pill, outline): the composer's buttons are written under
-   .workbench-app.studio-shell .shot-composer (0,3,0 and up) so they keep their own shape. */
+   .workbench-app.studio-shell .shot-composer (0,3,0 and up) so they keep their own shape; the walls' are written for both hosts with
+   :is(.shot-composer, .episode-look), which counts as one class. */
 
 /* ---------- The stage's View menu (R7) ---------- */
 .stage-view-menu { position: relative; flex: none; }
@@ -51,16 +53,30 @@
   border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
 
 /* ---------- Look buttons ---------- */
-.look-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-.workbench-app.studio-shell .shot-composer button.look-button { display: flex; align-items: center; gap: 8px; height: auto; min-width: 0; max-width: 280px; padding: 5px 10px 5px 5px;
+/* Five buttons share one row from about 640 px of composer (1280×720 with both side columns): the label and its Episode / This shot
+   tag wrap onto two lines before the row does. */
+.look-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-button { display: flex; align-items: center; gap: 8px; height: auto; min-width: 0; padding: 5px 8px 5px 5px;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); color: var(--text); text-align: left; cursor: pointer; white-space: normal; }
-.workbench-app.studio-shell .shot-composer button.look-button:hover { background: var(--hover-bg); }
-.workbench-app.studio-shell .shot-composer button.look-button.is-open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.look-button-thumb { position: relative; flex: none; display: grid; place-items: center; width: 40px; height: 28px; overflow: visible; border-radius: 5px; background: var(--active); color: var(--muted); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-button:hover { background: var(--hover-bg); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-button.is-open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.look-button-thumb { position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 26px; overflow: visible; border-radius: 5px; background: var(--active); color: var(--muted); }
 .look-button-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+.look-button-thumb .look-texture, .look-button-thumb .look-swatch { border-radius: 5px; }
 .look-dot { position: absolute; top: -3px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: #e5566f; }
+/* A crew proposal waits: a blue dot (red is a missing picture; amber is only selection and focus). */
+.look-dot.is-proposal { background: #6ea8fe; }
+.look-button-thumb .look-dot + .look-dot.is-proposal { right: 6px; }
 .look-button-text { display: grid; gap: 1px; min-width: 0; }
-.look-button-head { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.look-button-head { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 6px; min-width: 0; font-size: 12.5px; }
+.look-button-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* About 128 px a button at 1280: a square picture and a 12 px label leave the longest label ("Color palette") whole. */
+.look-buttons { container-type: inline-size; }
+@container (max-width: 760px) {
+  .workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-button { gap: 6px; padding: 4px 6px 4px 4px; }
+  .look-button-thumb { width: 24px; height: 24px; }
+  .look-button-head { font-size: 12px; }
+}
 .look-button-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11.5px; }
 .look-scope { padding: 1px 5px; border-radius: 4px; background: var(--active); color: var(--faint); font-size: 10.5px; font-style: normal; }
 .look-scope.is-shot { color: var(--muted); }
@@ -70,21 +86,23 @@
   background: var(--bg-2); outline: none; overflow: hidden; }
 .example-wall > header { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--line); }
 .example-wall > header h3 { margin: 0; font-size: 13px; }
-.workbench-app.studio-shell .shot-composer .example-wall > header button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
-.workbench-app.studio-shell .shot-composer .example-wall > header button:hover { background: var(--active); color: var(--text); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .example-wall > header button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .example-wall > header button:hover { background: var(--active); color: var(--text); }
 .example-wall-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); min-height: 0; flex: 1; }
+.example-wall-body.is-single { grid-template-columns: minmax(0, 1fr); }
 .example-wall-nav { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-right: 1px solid var(--line); overflow: auto; }
-.workbench-app.studio-shell .shot-composer .example-wall-nav > button { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 6px; height: 30px; padding: 0 8px;
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .example-wall-nav > button { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 6px; height: 30px; padding: 0 8px;
   border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12.5px; text-align: left; cursor: pointer; }
-.workbench-app.studio-shell .shot-composer .example-wall-nav > button[aria-current="true"] { background: var(--active); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .example-wall-nav > button[aria-current="true"] { background: var(--active); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
 .example-wall-nav > button .num { margin-left: auto; color: var(--faint); font-size: 11px; }
 .example-wall-nav > button .look-dot { position: static; flex: none; width: 6px; height: 6px; background: var(--accent); }
+.example-wall-nav > button .look-dot.is-proposal { background: #6ea8fe; }
 .example-wall-aside { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .example-wall-aside h4 { margin: 0; color: var(--faint); font-size: 11px; font-weight: 500; }
 .example-wall-aside ol { display: grid; gap: 3px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; }
 .example-wall-aside li { display: flex; gap: 6px; align-items: center; }
 .example-wall-aside .num { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; background: var(--accent); color: #14110a; font-size: 10px; font-weight: 700; }
-.workbench-app.studio-shell .shot-composer .example-wall-aside > button { justify-content: flex-start; gap: 6px; height: auto; min-height: 28px; padding: 4px 6px; border: 0;
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .example-wall-aside > button { justify-content: flex-start; gap: 6px; height: auto; min-height: 28px; padding: 4px 6px; border: 0;
   background: transparent; color: var(--muted); font-size: 12px; white-space: normal; text-align: left; }
 .example-wall-main { min-width: 0; min-height: 0; padding: 10px 12px 12px; overflow: auto; display: grid; align-content: start; gap: 10px; }
 .example-wall-main .studio-note { margin: 0; font-size: 12px; }
@@ -93,12 +111,17 @@
 .look-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 @media (min-width: 1600px) { .look-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 1100px) { .look-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.workbench-app.studio-shell .shot-composer button.look-tile { display: grid; gap: 5px; align-content: start; height: auto; padding: 0; border: 0; border-radius: 8px;
-  background: transparent; color: var(--text); text-align: left; cursor: pointer; white-space: normal; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile { display: grid; gap: 5px; align-content: start; height: auto; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text); text-align: left; cursor: pointer; white-space: normal;
+  /* The app's generic button rule centres its content, which shrinks a grid's only column to its content: the 16:9 frame
+     then measured 24px. Stretch the column to the tile's width. */
+  grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: stretch; align-items: stretch; }
+/* The camera's three columns are lists, one choice each (§3.3): a small tile is a row, thumbnail beside its name. */
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile.is-small { grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
 .look-frame { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: var(--active); box-shadow: 0 0 0 1px var(--line); }
 .look-frame > img, .look-frame > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.workbench-app.studio-shell .shot-composer button.look-tile:hover .look-frame { box-shadow: 0 0 0 1px var(--control); }
-.workbench-app.studio-shell .shot-composer button.look-tile.is-selected .look-frame { box-shadow: 0 0 0 2px var(--accent); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile:hover .look-frame { box-shadow: 0 0 0 1px var(--control); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-tile.is-selected .look-frame { box-shadow: 0 0 0 2px var(--accent); }
 .look-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
 .look-tile.is-selected .look-name { color: var(--text); }
 .look-order { position: absolute; top: 6px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: var(--accent); color: #14110a;
@@ -109,6 +132,10 @@
     repeating-linear-gradient(calc(var(--look-hue, 210) * 1deg), hsl(var(--look-hue, 210) 22% 20%) 0 6px, hsl(var(--look-hue, 210) 22% 15%) 6px 12px); }
 .look-texture.is-auto { background: repeating-linear-gradient(135deg, rgba(220, 235, 255, .07) 0 4px, transparent 4px 9px), var(--active); }
 .look-texture.is-auto b { color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+/* A palette's own colours, the main one widest; over a poster it is a thin strip along the foot. */
+.look-swatch { position: absolute; inset: 0; }
+.look-swatch.is-strip { inset: auto 0 0 0; height: 14%; min-height: 6px; }
+.look-flag { position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 4px; background: rgba(14, 18, 23, .86); color: #a9c8ff; font-size: 10.5px; }
 
 /* Body, lens and aperture: three columns, each scrolling on its own */
 .look-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-height: 0; }
@@ -230,7 +257,84 @@
 .studio-shell .studio-rails .sheet-main-view > .shot-composer { flex: 1 1 auto; min-height: 0; }
 .shot-composer > :not(.composer-top) { flex: none; }
 .shot-composer > .composer-top { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.shot-composer > .composer-top > :not(.composer-view, .film-monitor) { flex: none; }
+.shot-composer > .composer-top > :not(.composer-view, .film-monitor, .example-wall) { flex: none; }
+/* An open wall takes the take's place and its height, never more: its options scroll inside it, so the look buttons and the
+   prompt below stay where they are (§3.3) and nothing is drawn over them at 1280×720. */
+.shot-composer > .composer-top > .example-wall { flex: 1 1 0; min-height: 160px; max-height: none; }
+/* On a short screen the prompt gives the open wall its spare lines (it scrolls, and it is all there again once the wall closes). */
+@media (max-height: 860px) {
+  .shot-composer:has(> .composer-top > .example-wall) .pc-editor { min-height: 0; max-height: 5.4em; }
+  /* smaller cards, so at least one whole row shows in the take's height */
+  .shot-composer .example-wall .look-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
 .shot-composer > .composer-top > .composer-view { flex: 1 1 0; height: auto; min-height: 120px; max-height: 520px; }
 .shot-composer > .composer-top > .film-monitor { flex: 1 1 0; min-height: 120px; max-height: 560px; grid-template-rows: minmax(0, 1fr) auto; }
 .shot-composer > .composer-top > .film-monitor video { height: 100%; min-height: 0; aspect-ratio: auto; }
+
+/* ---------- R11: film setup, palette and lighting walls ---------- */
+.look-wall-scope { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; font-size: 12.5px; }
+.look-wall-scope .studio-note { font-size: 12px; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .look-wall-scope button { height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent;
+  color: var(--muted); font-size: 12px; cursor: pointer; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .look-wall-scope button:hover { border-color: var(--control); color: var(--text); }
+/* Genre and tempo: a carousel of large examples, one card per step */
+.look-carousel { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; align-items: center; gap: 8px; }
+.look-carousel-track { display: grid; grid-template-columns: repeat(var(--look-size, 3), minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.look-carousel-at { grid-column: 2; justify-self: center; color: var(--faint); font: 500 11px ui-monospace, Consolas, monospace; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-step { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line);
+  border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-step:hover:not(:disabled) { border-color: var(--control); color: var(--text); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) button.look-step:disabled { opacity: .35; cursor: default; }
+/* Image era: Auto on its own, then a scale from the oldest look to the newest */
+.look-scale { display: grid; grid-template-columns: minmax(96px, 1fr) minmax(0, 5fr); gap: 16px; align-items: start; }
+.look-scale-auto { display: grid; min-width: 0; padding-right: 16px; border-right: 1px dashed var(--line-2); }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .look-scale-auto > button.look-tile { width: 100%; }
+.look-scale-track { display: grid; gap: 6px; min-width: 0; }
+.look-scale-steps { position: relative; display: grid; grid-template-columns: repeat(var(--look-steps, 5), minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0 0 14px; list-style: none; }
+.look-scale-steps::after { content: ""; position: absolute; left: 0; right: 0; bottom: 5px; height: 1px; background: var(--control); }
+.look-scale-steps > li { position: relative; display: grid; min-width: 0; }
+.look-scale-tick { position: absolute; z-index: 1; left: calc(50% - 4px); bottom: -14px; width: 8px; height: 8px; border-radius: 50%; background: var(--raised); box-shadow: 0 0 0 1px var(--control); }
+.look-scale-steps > li.is-on .look-scale-tick { background: var(--accent); box-shadow: none; }
+.look-scale-ends { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; }
+/* Palette and lighting: search and sort over the card grid */
+.look-grid-wrap { display: grid; gap: 10px; min-width: 0; }
+.look-grid-tools { display: flex; align-items: center; gap: 8px; }
+.look-grid-tools .look-search { flex: 1 1 auto; min-width: 0; max-width: 320px; height: 28px; font-size: 12.5px; }
+.look-grid-tools select { height: 28px; font-size: 12px; }
+/* A crew proposal of the shot's look (SPEC_20 R18), above the examples */
+.look-proposal { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid rgba(110, 168, 254, .35); border-radius: 8px; background: rgba(110, 168, 254, .07); font-size: 12.5px; }
+.look-proposal header { display: flex; align-items: center; gap: 8px; }
+.look-proposal header .look-dot { position: static; }
+.look-proposal ul { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; }
+.look-proposal li span { margin-right: 6px; color: var(--faint); }
+.look-proposal p { margin: 0; }
+.look-proposal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .look-proposal-actions button { height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.workbench-app.studio-shell :is(.shot-composer, .episode-look) .look-proposal-actions button.look-act { border-color: var(--control); color: var(--text); }
+
+/* ---------- R12: the Episode look page, over Story & World's middle and right columns ---------- */
+/* The script, the wall and the right column stay mounted underneath (hidden), so x gives them back as they were. Below 1100 px the
+   shell stacks its panels and the page simply follows the left rail. */
+.story-world.is-look > .space-main, .story-world.is-look > .space-detail { display: none; }
+@media (min-width: 1101px) {
+  .studio-shell .studio-space.story-world.is-look { grid-template-columns: 240px minmax(0, 1fr); }
+  .studio-shell.hide-left .studio-space.story-world.is-look { grid-template-columns: minmax(0, 1fr); }
+}
+.workbench-app.studio-shell .world-format-btn.is-open { border-color: var(--accent); color: var(--text); }
+.episode-look { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-panel);
+  background: var(--surface); outline: none; }
+.episode-look-head { display: flex; align-items: baseline; gap: 12px; min-width: 0; padding: 14px 18px 12px; border-bottom: 1px solid var(--line); }
+.episode-look-head h2 { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; }
+.episode-look-head .studio-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.episode-look-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 18px; padding: 16px 18px 20px; }
+.episode-look h3 { margin: 0; color: var(--faint); font-size: 11.5px; font-weight: 500; }
+.episode-look-format { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: start; }
+.episode-look-field { display: grid; gap: 8px; min-width: 0; }
+.episode-look-styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.episode-look-looks { display: grid; gap: 10px; min-width: 0; }
+.episode-look-looks .example-wall { min-height: 340px; max-height: none; }
+.episode-look-foot { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.episode-look-foot p { margin: 0; }
+.workbench-app.studio-shell .episode-look-foot button.primary.episode-look-apply { min-width: 220px; height: 36px; padding: 0 22px; border-radius: 8px; font-weight: 600; }
+@media (max-width: 900px) { .episode-look-format { grid-template-columns: minmax(0, 1fr); } }
