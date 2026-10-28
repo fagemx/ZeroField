@@ -424,7 +424,7 @@ export function StoryWorld({slug = '', epId, me, ep, shots = [], loadError = '',
       <div className="space-detail-body">
       {view === 'world' ? (active
         ? <>
-          <AssetEditor key={active.assetId} item={active} detail={detail?.assetId === active.assetId ? detail : null} scenes={scenes} writable={writable} busy={busy} runs={runs} ratio={ratio} styleName={styleName}
+          <AssetEditor key={active.assetId} item={active} detail={detail?.assetId === active.assetId ? detail : null} scenes={scenes} writable={writable} busy={busy} runs={runs} ratio={ratio} styleName={styleName} assets={items} onRefresh={refreshAsset}
             onSave={saveAsset} onSelectImage={selectImage} onClose={closeEditor} onUpload={uploadAsset} onGenerate={generate} onCancel={cancelGeneration} onLookCreate={createLook} onLookRename={renameLook} onLookDelete={deleteLook} onOpenShot={onOpenShot} onOpenScene={openScene} onTable={onAssets} onVault={onVault}/>
           {/* SPEC_20 R21: Art's description and look proposals are reviewed here, on the card they change. */}
           <ShotProposals items={assetProposals(proposals, active)} writable={writable && !busy} onApply={applyAssetProposal} onDismiss={onDismissProposal}/>
