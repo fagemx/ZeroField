@@ -74,7 +74,7 @@ def prepare_output(target,snapshot,output,*,conn=None,slug=None,row_id="",scope=
                 raise ExecutionError(400, "asset_url must reference media uploaded to this production.")
             mime, _ = repo.get_asset(conn, slug, asset_id)
             kind = mime.split("/", 1)[0]
-            text = f"![圖片]({text})" if kind == "image" else f"[{kind}]({text})"
+            text = f"![image]({text})" if kind == "image" else f"[{kind}]({text})"
         row_edits, new_rows = [{"row_id": target["row_id"], "cells": {str(target["col_index"]): text}}], []
     else:
         row_edits, new_rows = output.get("row_edits", []), output.get("new_rows", [])

@@ -173,7 +173,7 @@ def board(conn,me,slug,*,cursor=None,limit=50,counts_only=False):
         for proposal in proposals.values():
             if proposal['status']=='pending' and not proposal.get('dispatch_id'):
                 groups['needs_you'].append({'id':'proposal:'+str(proposal['id']),'kind':'proposal_review','proposal_ids':[proposal['id']],
-                    'proposals':[proposal],'target':proposal['target'],'title':proposal['target'].get('tab_title','待核對修改'),
+                    'proposals':[proposal],'target':proposal['target'],'title':proposal['target'].get('tab_title'),  # None: AgentBoard words "changes to review" itself
                     'status':'awaiting_gate','created_at':proposal['created_at']})
         for dispatch in dispatches:
             if dispatch['status'] in ('queued','running') and not dispatch['superseded_by']:
@@ -215,7 +215,7 @@ def board(conn,me,slug,*,cursor=None,limit=50,counts_only=False):
 def cancel_run_request(conn,me,slug,run_id,body):
     def action():
         object_body(body,('reason','client_request_id'))
-        reason=body.get('reason','已取消整批工作')
+        reason=body.get('reason','The whole batch was canceled')
         if not isinstance(reason,str) or len(reason)>1000:
             raise cp.OrchestrationError(400,"Cancellation reasons support up to 1,000 characters.")
         return cp.cancel_run(conn,me,slug,run_id,reason)
@@ -227,7 +227,7 @@ def cancel_dispatch_request(conn,me,slug,dispatch_id,body):
         object_body(body,('admission_no','reason','client_request_id'))
         if type(body.get('admission_no')) is not int or body['admission_no']<=0:
             raise cp.OrchestrationError(400,"Cancellation requires the exact admission_no.")
-        reason=body.get('reason','已取消')
+        reason=body.get('reason','Canceled')
         if not isinstance(reason,str) or len(reason)>1000:
             raise cp.OrchestrationError(400,"Cancellation reasons support up to 1,000 characters.")
         return cp.cancel_dispatch(conn,me,slug,f'dsp_{db.identifier(dispatch_id)}_{body["admission_no"]}',reason)
@@ -265,9 +265,9 @@ def resolve_gate_request(conn,me,slug,gate_id,body):
                 return {'gate':db.get_gate(conn,slug,gate_id),'proposal':store.proposal(conn,prior['proposal_id'])}
             code,payload=service.apply_proposal(conn,me,slug,value['proposal_id'],{}) if value.get('decision','apply')=='apply' else service.dismiss_proposal(conn,me,slug,value['proposal_id'])
             if code>=400:
-                raise cp.OrchestrationError(code,payload.get('error','核對失敗'))
+                raise cp.OrchestrationError(code,payload.get('error','Review failed'))
             dispatch=db.get_dispatch(conn,slug,gate['dispatch_id'])
-            db.event(conn,dispatch,'system','使用者完成提案核對',{'gate_id':gate_id,'gate_resolution_request_id':nonce,
+            db.event(conn,dispatch,'system','The user finished the proposal review',{'gate_id':gate_id,'gate_resolution_request_id':nonce,
                 'decision_hash':fingerprint,'proposal_id':value['proposal_id'],'actor_id':me.actor_id})
             return {'gate':db.get_gate(conn,slug,gate_id),**payload}
         return {'gate':cp.resolve_gate(conn,me,slug,gate_id,resolution=body.get('resolution'),client_request_id=body.get('client_request_id'))}
@@ -304,7 +304,7 @@ def retry_task_request(conn,me,slug,task_id,body):
                 descendants.add(candidate['id'])
                 db.execute(conn,"UPDATE projectops.orchestration_task SET status='pending',error=NULL WHERE id=%s",(candidate['id'],))
         payload={'task_id':task_id,'dispatch_handles':[cp.handle(d) for d in admitted],'retry_request_id':nonce}
-        db.event(conn,admitted[0],'system','使用者要求重試',payload)
+        db.event(conn,admitted[0],'system','The user asked to retry',payload)
         cp.refresh_run(conn,slug,run['id'])
         repo.add_audit(conn,slug,action='orchestration_retry',actor_id=me.actor_id,target=task_id,detail={'client_request_id':nonce})
         return payload

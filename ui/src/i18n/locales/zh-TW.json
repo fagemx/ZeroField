@@ -568,7 +568,16 @@
     "applyAllChangesTogether": "確認整組寫回",
     "aTableProposalIsReadyForReview": "有一份表格修改待核對",
     "changeGroups2": " · {{v0}} 組修改",
-    "reviewChanges": "核對修改"
+    "reviewChanges": "核對修改",
+    "rowNumber": "第 {{n}} 列",
+    "newData": "新增資料",
+    "structureChange": "結構修改",
+    "documentStructure": "文件／結構",
+    "columnNumber": "欄 {{n}}",
+    "imageCell": "圖片",
+    "videoCell": "影片",
+    "audioCell": "音訊",
+    "assetCell": "上傳檔案"
   },
   "text": {
     "retrying": "重新試一次…",
@@ -902,6 +911,9 @@
     "noSourcePageThisStepUsesItsInstructionsOnly": "無來源分頁，只使用步驟指令。",
     "editThisStep": "修正此步驟",
     "thisRunsTheActualWorker": "{{v0}} 這不是模擬執行。",
+    "effectsSingleStep": "建立真實執行任務；服務可能呼叫付費模型。單步結果需核對後才寫回。",
+    "effectsWorkflow": "建立真實執行任務；依各步設定直接寫入或等待提案核對。",
+    "keepResultNoWriteBack": "保留結果，不寫回分頁",
     "runStepTest": "確認試這一步",
     "confirmAndQueue": "確認並排入執行",
     "runResults": "本次執行結果",
@@ -1345,7 +1357,9 @@
     "status": "狀態",
     "visibleRows": "{{v0}} 列",
     "canvas": "畫布",
-    "exportApprovedTakes": "匯出已核准的 Take（ZIP＋清單）"
+    "exportApprovedTakes": "匯出已核准的 Take（ZIP＋清單）",
+    "episodeLoadFailed": "無法讀取鏡頭清單，正在自動重試。",
+    "episodeLoadRetry": "立即重試"
   },
   "surfaces": {
     "planning": "規劃中",
@@ -2025,6 +2039,8 @@
     "thisRunReadsTheSelectedCurrentSourceOnlyItDoes": "本次只讀指定的目前來源；不執行上游，也不取用任何歷史上游結果",
     "theRowCountPreviewsCurrentDataExecutionReadsMatchingRows": "列數是目前資料的預覽；正式執行會在上游完成／核對後重新讀取符合條件的列",
     "noRowsCurrentlyMatchPerRowScopeWillBeRecalculated": "目前沒有符合條件的列；上游寫入後會重新計算逐列範圍",
+    "saveAValidPipelineFirst": "請先儲存有效工作流：{{v0}}",
+    "createAndSaveAValidPipelineFirst": "請先建立並儲存有效工作流：{{v0}}",
     "notFound": "找不到此項目",
     "requestNotAllowed": "不接受來自其他網站的請求",
     "requestNotAllowed2": "工作室介面尚未建置。",
@@ -2159,6 +2175,7 @@
     "blockerPreparationSource": "前置處理需要來源影片或參考圖片。",
     "blockerPreparation": "請修正前置處理的綁定或相依關係。",
     "blockerCardInputs": "請修正卡片輸入或輸出類型。",
+    "blockerModelsMissing": "此卡片所需的模型檔尚未安裝在本地 ComfyUI：{{files}}。",
     "blockerUnknown": "請先排除輸入或設定問題再派發。",
     "blockerField": "{{message}} 輸入：{{field}}",
     "settings": "生成設定"

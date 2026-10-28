@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
 import { api } from './api.js';
+import { usePolling } from './polling.js';
 import { SheetDialog } from './SheetDialog.jsx';
 import { MediaCell } from './MediaCell.jsx';
 import { episodeId, shotId, selectedTake, storyList, storyRequest, waitStoryTask } from './storyModel.js';
@@ -310,17 +311,24 @@ export function ShotProduction({slug, actorId, rid, source, writable, disabled, 
   </section>;
 }
 
-// Continuity grades of this row's takes; polls while a grade is queued, waiting for the GPU or running.
+// Continuity grades of this row's takes; polls while a grade is queued, waiting for the GPU or running. A failed fetch shows its
+// error but never stops the poll (backoff and wake-on-visible are in polling.js), so a grade stored meanwhile still appears.
 function useTakeGrades(slug, id) {
-  const [grades, setGrades] = useState([]), [auto, setAuto] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false), [tick, setTick] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    storyRequest(`/shots/${id}/grades?limit=100`).then(data => {if (alive) {setGrades(data.items); setAuto(data.autoGrade); setError('');}}).catch(e => {if (alive) setError(e.message);});
-    return () => {alive = false;};
-  }, [id, tick]);
-  const active = gradesActive(grades);
-  useEffect(() => {if (!active) return; const timer = setTimeout(() => setTick(n => n + 1), 3000); return () => clearTimeout(timer);}, [active, grades]);
-  const call = async fn => {setBusy(true); try {await fn(); setTick(n => n + 1); setError('');} catch (e) {setError(e.message);} finally {setBusy(false);}};
+  const [grades, setGrades] = useState([]), [auto, setAuto] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const shot = useRef(id);
+  shot.current = id;
+  const load = useCallback(async () => {
+    try {
+      const data = await storyRequest(`/shots/${id}/grades?limit=100`);
+      if (shot.current === id) {setGrades(data.items); setAuto(data.autoGrade); setError('');}
+    } catch (e) {
+      if (shot.current === id) setError(e.message);
+      throw e;
+    }
+  }, [id]);
+  useEffect(() => {load().catch(() => {});}, [load]);
+  usePolling(load, gradesActive(grades) ? 3000 : null);
+  const call = async fn => {setBusy(true); try {await fn(); setError(''); load().catch(() => {});} catch (e) {setError(e.message);} finally {setBusy(false);}};
   return {grades, auto, error, busy,
     grade: body => call(() => storyRequest(`/shots/${id}/grades`, 'POST', body)),
     setAuto: value => call(async () => setAuto((await storyRequest(`/projects/pj_${slug}/grading`, 'PUT', {autoGrade:value})).autoGrade))};

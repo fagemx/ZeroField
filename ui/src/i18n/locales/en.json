@@ -568,7 +568,16 @@
     "applyAllChangesTogether": "Apply All Changes Together",
     "aTableProposalIsReadyForReview": "A table proposal is ready for review.",
     "changeGroups2": " · {{v0}}  change groups",
-    "reviewChanges": "Review Changes"
+    "reviewChanges": "Review Changes",
+    "rowNumber": "Row {{n}}",
+    "newData": "New data",
+    "structureChange": "Structural change",
+    "documentStructure": "Document / structure",
+    "columnNumber": "Column {{n}}",
+    "imageCell": "Image",
+    "videoCell": "Video",
+    "audioCell": "Audio",
+    "assetCell": "Uploaded file"
   },
   "text": {
     "retrying": "Retrying…",
@@ -902,6 +911,9 @@
     "noSourcePageThisStepUsesItsInstructionsOnly": "No source page. This step uses its instructions only.",
     "editThisStep": "Edit This Step",
     "thisRunsTheActualWorker": "{{v0}} This runs the actual worker.",
+    "effectsSingleStep": "Creates real execution tasks; the service may call paid models. A single-step result is written back only after review.",
+    "effectsWorkflow": "Creates real execution tasks; each step writes directly or waits for proposal review, as configured.",
+    "keepResultNoWriteBack": "Keep the result; nothing is written back to a page",
     "runStepTest": "Run Step Test",
     "confirmAndQueue": "Confirm and Queue",
     "runResults": "Run Results",
@@ -1345,7 +1357,9 @@
     "status": "Status",
     "visibleRows": "{{v0}} rows",
     "canvas": "Canvas",
-    "exportApprovedTakes": "Export approved takes (ZIP + manifest)"
+    "exportApprovedTakes": "Export approved takes (ZIP + manifest)",
+    "episodeLoadFailed": "The shots could not be loaded. Trying again automatically.",
+    "episodeLoadRetry": "Try again now"
   },
   "surfaces": {
     "planning": "Planning",
@@ -2025,6 +2039,8 @@
     "thisRunReadsTheSelectedCurrentSourceOnlyItDoes": "This run reads the selected current source only. It does not execute upstream steps or reuse historical results.",
     "theRowCountPreviewsCurrentDataExecutionReadsMatchingRows": "The row count previews current data. Execution reads matching rows again after upstream tasks finish and are approved.",
     "noRowsCurrentlyMatchPerRowScopeWillBeRecalculated": "No rows currently match. Per-row scope will be recalculated after upstream changes are applied.",
+    "saveAValidPipelineFirst": "Save a valid pipeline first: {{v0}}",
+    "createAndSaveAValidPipelineFirst": "Create and save a valid pipeline first: {{v0}}",
     "notFound": "Not found",
     "requestNotAllowed": "Cross-origin requests are not allowed.",
     "requestNotAllowed2": "The studio interface has not been built.",
@@ -2159,6 +2175,7 @@
     "blockerPreparationSource": "Preparation needs a source video or reference image.",
     "blockerPreparation": "The preparation bindings or dependencies need correction.",
     "blockerCardInputs": "The card inputs or output type need correction.",
+    "blockerModelsMissing": "This card's model files are not installed on the local ComfyUI: {{files}}.",
     "blockerUnknown": "Resolve the input or configuration issue before dispatch.",
     "blockerField": "{{message}} Input: {{field}}",
     "settings": "Generation settings"

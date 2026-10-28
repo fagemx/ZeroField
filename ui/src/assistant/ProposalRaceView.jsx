@@ -6,6 +6,7 @@ import { proposalChanges, raceSelectionPayload } from './orchestrationModel.js';
 import './orchestration.css';
 import { mediaOf } from '../sheetModel.js';
 import { MediaCell } from '../MediaCell.jsx';
+import { reviewColumnLabel, reviewGroupLabel } from './reviewLabels.js';
 
 const labels = { get queued() { return uiText("proposalRaceView.queued"); }, get running() { return uiText("proposalRaceView.running"); }, get awaiting_gate() { return uiText("proposalRaceView.readyForReview"); }, get failed() { return uiText("proposalRaceView.failed"); }, get timeout() { return uiText("proposalRaceView.timedOut"); }, get canceled() { return uiText("proposalRaceView.canceled"); } };
 
@@ -39,8 +40,8 @@ export function ProposalRaceView({ gate, onSelect, onClose, returnFocusRef }) {
       return <article className="race-candidate" key={candidate.agent_key}>
         <header><h4>{candidate.icon || '✦'} {candidate.display_name || candidate.agent_key}</h4><small>{candidate.model || uiText("proposalRaceView.modelNotReported")} · {labels[candidate.status] || candidate.status}</small></header>
         {proposal ? <><div className="race-differences">{proposalChanges(proposal).map((group, index) => <section key={index}>
-          <strong>{group.label}</strong>{group.changes.map((change, at) => <div className="race-change" key={at}>
-            <small>{change.column}</small><div><span>{uiText("proposalRaceView.before")}</span><DiffValue value={change.before} /></div><div className="race-after"><span>{uiText("proposalRaceView.after")}</span><DiffValue value={change.after} /></div>
+          <strong>{reviewGroupLabel(group)}</strong>{group.changes.map((change, at) => <div className="race-change" key={at}>
+            <small>{reviewColumnLabel(change)}</small><div><span>{uiText("proposalRaceView.before")}</span><DiffValue value={change.before} /></div><div className="race-after"><span>{uiText("proposalRaceView.after")}</span><DiffValue value={change.after} /></div>
           </div>)}
         </section>)}</div><button type="button" className="primary" disabled={busy !== null || gate.stale} onClick={() => select(proposal)}>
           {busy === proposal.id ? uiText("proposalRaceView.applying") : uiText("proposalRaceView.selectThisVersion")}</button></> : <p className="race-pending">{candidate.error || (['failed', 'timeout', 'canceled'].includes(candidate.status) ? uiText("proposalRaceView.thisCandidateDidNotCompleteYouCanSelectAnother") : uiText("proposalRaceView.candidatesWillAppearHereWhenReady"))}</p>}

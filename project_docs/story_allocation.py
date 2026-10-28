@@ -9,6 +9,51 @@ from project_assistant import limb_worker as worker
 from project_docs import repository as repo, story_openapi as story
 
 
+COMFY_URL = "http://127.0.0.1:8188"
+
+
+def _combo_names(spec):
+    """Choices of one /object_info input spec, in either the list or the COMBO form."""
+    if isinstance(spec, list) and spec:
+        head = spec[0]
+        if isinstance(head, list):
+            return [str(n) for n in head]
+        if head == "COMBO" and len(spec) > 1 and isinstance(spec[1], dict):
+            return [str(n) for n in spec[1].get("options", ())]
+    return []
+
+
+def installed_model_gaps(local_comfy_online, *, base_url=COMFY_URL):
+    """Card ID -> model files the local ComfyUI does not offer, so the allocator can route around them.
+
+    Asks the running ComfyUI which files each loader node lists (/object_info/<node>),
+    the same list its own UI shows. Empty when ComfyUI is offline or cannot be asked:
+    an unknown answer never blocks a card.
+    """
+    if local_comfy_online is not True:
+        return {}
+    listings, gaps = {}, {}
+    try:
+        for path in sorted(worker.CARDS_DIR.glob("*.json")):
+            try:
+                card, graph = worker._resolve_openapi_card_and_workflow(path.stem)
+            except worker.WorkerError:
+                continue
+            if not graph:
+                continue
+            for class_type in {c for c, _, _ in worker.required_model_files(graph)} - listings.keys():
+                info = worker.json_fetch(f"{base_url}/object_info/{class_type}", timeout=2)
+                inputs = (info.get(class_type) or {}).get("input") or {} if isinstance(info, dict) else {}
+                listings[class_type] = {key: _combo_names(spec) for group in ("required", "optional")
+                                        for key, spec in (inputs.get(group) or {}).items()}
+            missing = worker.missing_model_files(graph, listings)
+            if missing:
+                gaps[card["card_id"]] = missing
+    except Exception:
+        return {}
+    return gaps
+
+
 def options(conn, slug, body, *, local_comfy_online=None):
     policy = story.production_policy(conn, slug)
     if body.get("productionPolicy", policy) != policy:
@@ -17,9 +62,10 @@ def options(conn, slug, body, *, local_comfy_online=None):
         selected=story.resolve_app(body['appCode'],'video',policy)
         if selected['engine_config']['driver']=='comfy_router':
             local_comfy_online=False  # Official model requests never need local graph health.
+    online = worker.probe_local_comfy_status()["online"] if local_comfy_online is None else local_comfy_online
     return {"budget_mode": body.get("budgetMode", "hybrid_balanced"), "production_policy": policy,
-            "time_pressure": body.get("timePressure", "normal"),
-            "local_comfy_online": worker.probe_local_comfy_status()["online"] if local_comfy_online is None else local_comfy_online}
+            "time_pressure": body.get("timePressure", "normal"), "local_comfy_online": online,
+            "model_gaps": installed_model_gaps(online)}
 
 
 def current_shots(conn, ep, ids=None):
@@ -187,11 +233,13 @@ def plan(conn, me, ep, body, *, local_comfy_online=None):
         execution = worker.card_execution_profile(card)
         if opts["budget_mode"] == "lab_economical" and execution["tier"] != "open_weights":
             story.invalid("Lab mode cannot dispatch commercial cards.")
-        ready = worker.provider_configuration_status(card)["configured"] and (not execution["requires_comfyui"] or opts["local_comfy_online"])
+        gap = opts["model_gaps"].get(card["card_id"])
+        ready = worker.provider_configuration_status(card)["configured"] and (not execution["requires_comfyui"] or opts["local_comfy_online"]) and not gap
+        blockers = [] if ready else ["models_not_installed:%s:%s" % (card["card_id"], ", ".join(gap))] if gap else ["selected_card_unavailable"]
         for a in result["allocations"]:
             a.update(assigned_card_id=card["card_id"], **execution, preparation_steps=[],
                      stages=[{"step_id": "generate", "kind": "generate", "card_id": card["card_id"], "depends_on": [], "inputs": {}, "output_role": "output_video"}],
-                     ready=bool(ready), configuration_blockers=[] if ready else ["selected_card_unavailable"])
+                     ready=bool(ready), configuration_blockers=list(blockers))
         counts = {tier: sum(a["tier"] == tier for a in result["allocations"]) for tier in ("open_weights", "closed_hero", "cloud_burst")}
         result["summary"].update(open_weights_shot_count=counts["open_weights"], closed_hero_shot_count=counts["closed_hero"], cloud_burst_shot_count=counts["cloud_burst"],
                                   estimated_local_gpu_seconds=None, estimated_cloud_credits=None,
