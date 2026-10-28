@@ -158,7 +158,7 @@ def _check_row(conn, scope, shot):
 
 
 def _asset_changes(conn, scope, target):
-    details = story.extract_asset_details(doc_text(target['doc']), story.scene_sections(doc_text(target['doc'])))
+    details = story.asset_details(conn, scope.episode, doc_text(target['doc']), story.scene_sections(doc_text(target['doc'])))
     if len(details) > 200:
         store.fail('LIMIT_EXCEEDED', 'An extraction supports at most 200 assets.', 413)
     existing = {a['assetCode']: a for a in story.assets(conn, scope.episode)}
@@ -475,13 +475,15 @@ def bind_generated_shots(conn, scope, shot_ids, *, version_id):
     units = _units(target)
     mode = target['productionInputs'].get('breakdownMode', 'auto')
     plans = []
-    for scene in story.scenes(conn, scope.episode):
+    scene_list = story.scenes(conn, scope.episode)
+    sets = story.scene_sets(conn, scope.episode, scene_list)  # the build's own set rule, so descriptions match
+    for scene in scene_list:
         stable = next((s for s in target['structure']['scenes'] if s.get('legacySceneId') == scene['sceneId']), None)
         if not stable:
             continue
         source = [u for u in units if u['sceneKey'] == stable['sceneKey']]
         beats = story.scene_shot_beats(scene['content'], mode) or [scene['title']]
-        refs = list(dict.fromkeys(story.asset_code(m[1]) for m in story.ASSET_RE.finditer(scene['content']) if m[1].upper().startswith(('SET-', 'LOC-')))) or ['SET-%02d' % scene['sceneIndex']]
+        refs = sets[scene['sceneId']]
         cast = {a['name'].casefold(): a['assetCode'] for a in story.assets(conn, scope.episode) if a['type'] == 'CHARACTER' and a['isDefault']}
         for index, text in enumerate(beats):
             appended = list(dict.fromkeys(refs + [code for name, code in cast.items() if re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, re.I)]))

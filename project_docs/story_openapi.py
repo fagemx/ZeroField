@@ -33,7 +33,7 @@ from project_assistant.table_edits import _cell, cell_value, validate_value
 from project_docs.story_adaptation import (adapt_source_to_script, source_mode, scene_shot_beats,
     infer_shot_grammar, extract_asset_details, BREAKDOWN_MODES, asset_code, screenplay_markdown,
     composition_lenses, choice_trace_input, compute_choice_contrast, propose_story_collisions,
-    audit_narrative_voice, script_medium_lens)
+    audit_narrative_voice, script_medium_lens, LINE_BREAK, scene_set_codes)
 
 BASE = "/aivideo/open/v1"
 STAGES = ["PROJECT", "EPISODE", "SCRIPT", "ASSETS", "SCENES", "STORYBOARD", "SHOTS", "FILM_EXPORT"]
@@ -235,7 +235,7 @@ def choice_traces(conn, ep):
 
 def episode_view(conn, ep):
     content = script(conn, ep)
-    return {**{k: v for k, v in ep.items() if k not in ("confirmedHash",)}, "scriptContent": content,
+    return {**{k: v for k, v in ep.items() if k not in ("confirmedHash", "assetCodeMap")}, "scriptContent": content,
             "scriptDirty": ep.get("confirmedHash") != digest(content), "scenes": scenes(conn, ep),
             "missingAssetCodes": missing_episode_assets(conn, ep)[0]}
 
@@ -272,10 +272,28 @@ def save_doc(conn, me, slug, key, doc):
     service.reanchor_tab(conn, slug, key, doc, actor_id=me.actor_id)
 
 
+def screenplay_doc(content):
+    """Screenplay text as a document: Markdown blocks, with a cue's own line kept as a hardBreak (R44-4)."""
+    doc, _ = markdown_import.markdown_to_doc(screenplay_markdown(content), tab_keys=set(), image_src=lambda _: None)
+    for block in doc["content"]:
+        if block.get("type") in ("paragraph", "heading") and any(LINE_BREAK in (n.get("text") or "") for n in block.get("content") or []):
+            content_nodes = []
+            for node in block["content"]:
+                parts = (node.get("text") or "").split(LINE_BREAK) if node.get("type") == "text" else [None]
+                for i, part in enumerate(parts):
+                    if i:
+                        content_nodes.append({"type": "hardBreak"})
+                    if part is None:
+                        content_nodes.append(node)
+                    elif part:
+                        content_nodes.append({**node, "text": part})
+            block["content"] = content_nodes
+    return doc
+
+
 def script_doc(slug, content):
     """The document a saved script becomes (what scenes and storyboard builds read back); nothing is written."""
-    doc, _ = markdown_import.markdown_to_doc(screenplay_markdown(content), tab_keys=set(), image_src=lambda _: None)
-    return validate_doc(doc, slug=slug)[0]
+    return validate_doc(screenplay_doc(content), slug=slug)[0]
 
 
 def set_script(conn, me, ep, content):
@@ -371,6 +389,22 @@ def asset_view(slug, row):
 
 def assets(conn, ep):
     return [asset_view(ep["slug"], r) for r in table_rows(conn, ep["slug"], "soul-cast")]
+
+
+def _cards(conn, ep):
+    return [(a["assetCode"], a["name"]) for a in assets(conn, ep) if a["isDefault"]]
+
+
+def scene_sets(conn, ep, scene_list):
+    """{sceneId: set codes} by the one set rule (story_adaptation.scene_set_codes, R44-5), against this production's
+    cards and the places the episode's extraction chose."""
+    codes = scene_set_codes(scene_list, _cards(conn, ep), ep.get("assetCodeMap"))
+    return {scene["sceneId"]: scene_codes for scene, scene_codes in zip(scene_list, codes)}
+
+
+def asset_details(conn, ep, content, scene_list, chosen=None):
+    """extract_asset_details placed beside this production's cards and the episode's earlier choices."""
+    return extract_asset_details(content, scene_list, _cards(conn, ep), ep.get("assetCodeMap"), chosen)
 
 
 def missing_episode_assets(conn, ep):
@@ -643,8 +677,7 @@ def _write_scenes(conn, me, ep, items, redirects=None):
                for i, s in enumerate(items, 1) if s.get('sceneId')}
     content = []
     for i, item in enumerate(items, 1):
-        title = re.sub(r"^Scene\s*\d+\s*[:：.-]?\s*", "", item['title'], flags=re.I) or "Scene"
-        content.append(f"## Scene {i:02d}: {title}\n\n{item['content'].strip()}")
+        content.append(f"## {scene_headings.numbered_title(i, item['title'])}\n\n{item['content'].strip()}")
     result = set_script(conn, me, ep, "\n\n".join(content))
     if old_stable:
         current_doc = repo.get_tab(conn, ep['slug'], ep['tabKey'])['doc']
@@ -695,7 +728,8 @@ def extract(conn, me, ep):
         raise StoryError(422, "DRAMA_STAGE_INPUT_EMPTY", "Write a script before extracting assets.")
     existing = {a["assetCode"]: a for a in assets(conn, ep)}
     current_rows = {asset_code(r["cells"][0]): r for r in table_rows(conn, ep["slug"], "soul-cast")}
-    details = extract_asset_details(content, scenes(conn, ep))
+    chosen = {}  # untagged people and places keep these codes in later builds and extractions (R44-5)
+    details = asset_details(conn, ep, content, scenes(conn, ep), chosen)
     if len(details) > 200:
         invalid("An extraction supports at most 200 assets; split the script into episodes.")
     for code, item in details.items():
@@ -715,6 +749,7 @@ def extract(conn, me, ep):
                 mutate_row(conn, me, ep["slug"], "soul-cast", existing[code]["rowId"], {1: cells[1], 2: cells[2], **({6: item["kind"]} if item.get("kind") else {})})
                 store(conn, "extracted_" + existing[code]["assetId"], "asset_extraction", {"name": cells[1], "prompt": cells[2]}, ep["slug"])
     ep["extractedAssetCodes"] = list(details)
+    ep["assetCodeMap"] = {**(ep.get("assetCodeMap") or {}), **chosen}
     ep["confirmedHash"] = digest(content)
     store(conn, ep["episodeId"], "episode", ep, ep["slug"])
     from project_docs import writing_store, writing_versions
@@ -777,10 +812,10 @@ def build_shots(conn, me, ep, only_scene=None, breakdown_mode=None):
         invalid("A storyboard build supports at most 200 shots; split the script into episodes.")
     created = []
     origin_updated = []
+    sets = scene_sets(conn, ep, scene_list)
     for scene, beats in plans:
         steps, surplus = planner.scene_steps(scene, beats, previous, rebuild=bool(only_scene), claim=claim)
-        scene_refs = [asset_code(m[1]) for m in ASSET_RE.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-"))]
-        scene_refs = list(dict.fromkeys(scene_refs)) or [f"SET-{scene['sceneIndex']:02d}"]
+        scene_refs = sets[scene["sceneId"]]
         cast = {a["name"].casefold(): a["assetCode"] for a in assets(conn, ep) if a["type"] == "CHARACTER" and a["isDefault"]}
         for action, index, beat, previous_shot in steps:
             if action == "keep" or (action == "rewrite" and (previous_shot.get('storyOrigin') or {}).get('mapping') == 'ambiguous'):

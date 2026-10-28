@@ -224,11 +224,11 @@ def script_lines(conn, slug, codes, names=()):
 def script_traits(conn, slug, code):
     """The traits the rule-based extraction reads for a code from the scripts (story_adaptation.extract_asset_details)."""
     from project_docs import story_openapi as story
-    from project_docs.story_adaptation import extract_asset_details
     for ep in story.episodes(conn, slug):
         try:
             content = story.script(conn, ep)
-            traits = extract_asset_details(content, story.scenes(conn, ep)).get(code, {}).get('traits')
+            # Placed as the extraction placed them, so an untagged scene's text never lands on another set (R44-5).
+            traits = story.asset_details(conn, ep, content, story.scenes(conn, ep)).get(code, {}).get('traits')
         except (story.StoryError, ValueError):
             continue
         if traits:
@@ -631,8 +631,10 @@ def scene_characters(conn, slug, scene, shots):
     looks = [code for code in rows if ':' in code and code.split(':')[0] in named]
     sets = list(dict.fromkeys(m.group(0).lstrip('@').upper().replace('#', ':') for m in SET_TAG.finditer(text)))
     if not sets:
-        fallback = f"SET-{scene['sceneIndex']:02d}"
-        sets = [fallback] if fallback in rows else []
+        # The build's own set rule (by location, never by scene number), limited to cards that exist (R44-5).
+        from project_docs import story_openapi as story
+        ep = story.episode(conn, scene['episodeId'])
+        sets = [code for code in story.scene_sets(conn, ep, story.scenes(conn, ep)).get(scene['sceneId'], []) if code in rows]
     return characters, looks, sets
 
 

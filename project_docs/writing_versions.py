@@ -210,16 +210,14 @@ def build_preview(conn, scope, body):
     candidate=None
     if kind=='adaptation':
         if body['sourceRef'].get('kind')!='source': story.invalid('Adaptation requires your saved idea or novel source.')
-        from project_docs.story_adaptation import adapt_source_to_script, screenplay_markdown
-        from project_docs import markdown_import
+        from project_docs.story_adaptation import adapt_source_to_script
         composition=source.get('composition',{})
         medium=body.get('mediumLens',composition.get('mediumLens'));genre=body.get('genreLens',composition.get('genreLens'))
         breakdown=body.get('breakdownMode','auto')
         if breakdown not in story.BREAKDOWN_MODES: story.invalid('Unknown breakdown mode.')
         content=adapt_source_to_script(doc_text(source['doc']),body['sourceRef']['mode'],body.get('targetScenes',3),
             medium_lens=medium,genre_lens=genre,choice_trace=body.get('choiceTrace',composition.get('choiceTrace')))
-        doc,_=markdown_import.markdown_to_doc(screenplay_markdown(content),tab_keys=set(),image_src=lambda _:None)
-        doc=store.checked_doc(doc,scope.slug)
+        doc=store.checked_doc(story.screenplay_doc(content),scope.slug)  # cue lines stay lines (R44-4)
         proposed_structure=structure.reconcile_structure(doc,{})
         candidate='wbr_'+uuid.uuid4().hex
         candidate_record={'branchId':candidate,'name':'Adaptation candidate','doc':doc,
