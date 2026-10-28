@@ -1,8 +1,68 @@
 """Reusable project archetypes and executable workflow definitions."""
 
+import functools
+import json
 import re
 
+from openbench_data import resource_path
+
 _TABLE_RULE = re.compile(r"^\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
+LINE_BREAK = ""  # a line break inside one table cell: markdown rows are one line, configure_doc makes it a hardBreak
+
+
+@functools.lru_cache(maxsize=1)
+def load_updraft():
+    """The Updraft production (SPEC_21 section 5): brief, episode look, assets and shots, from samples/updraft/production.json."""
+    return json.loads(resource_path("samples", "updraft", "production.json").read_text(encoding="utf-8"))
+
+
+def _row(cells):
+    return "| " + " | ".join(str(c).replace("|", "/").replace("\r", "").replace("\n", LINE_BREAK) for c in cells) + " |\n"
+
+
+def _updraft_specs(title):
+    production = load_updraft()
+    assets = production["assets"]
+    brief = production["brief"].replace("# " + production["title"], "# " + title, 1) if title else production["brief"]
+    cast = ""
+    for a in assets:
+        if a.get("base"):  # a state variant: its own row, with its kind in the notes cell like a look variant
+            kept = "shape, materials and proportions" if a["type"] == "PROP" else "face, body proportions and posture"
+            description = f"Same identity as @{a['base']}: same {kept}. Changed: {a['change']}"
+            cast += _row([a["code"], a["name"], description, "", "", "{{s:Queued}}", a.get("kind", "STATE")])
+        else:
+            cast += _row([a["code"], a["name"], a["description"], "", a.get("voice", ""), "{{s:Queued}}", a.get("notes", "")])
+    shots = "".join(_row([s["code"], s["optical"], s["motion"], s["action"], "", "", "{{s:Queued}}", s.get("notes", ""), "", "", ""])
+                    for s in production["shots"])
+    lab = _row(["VFX-01", "Motion Transfer", "",
+                "Restage a self-shot or licensed clip of a hand striking a flint over a burner, keeping its action, with Noa in the basket. @CAST-01 @SET-03 @PROP-04",
+                "", "", "{{s:Queued}}", "No source clip yet. Add one in the video development phase; Updraft itself does not need this page."])
+    return [
+        ("director-brief", "Director Brief", "doc", brief),
+        ("soul-cast", "Soul Cast", "sheet",
+         "# Soul Cast & Asset Lookbook\n\n"
+         "| Asset ID | Character / Set | Locked Appearance Prompt / Seed | Reference Image | Voice / Audio Profile | Status | Notes |\n"
+         "| --- | --- | --- | --- | --- | --- | --- |\n" + cast),
+        ("cinema-studio", "Cinema Studio", "sheet",
+         "# Cinema Studio Multi-Shot Slate\n\n"
+         "| Shot | Optical Rig (Camera & Lens) | Camera Motion | Action & Audio Prompt | Keyframe | Cinema Shot | Status | Director Take Notes | Previs | Actor Matte | Pose Skeleton |\n"
+         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n" + shots),
+        ("openjutsu-lab", "OpenJutsu Lab", "sheet",
+         "# OpenJutsu V2V Planning Matrix\n\n"
+         "| Clip ID | Jutsu Mode | Source Driving Video | Target Cast / Swap Prompt | Remastered Video | Split-Screen MP4 | Status | Notes |\n"
+         "| --- | --- | --- | --- | --- | --- | --- | --- |\n" + lab),
+        ("comfy-pipeline", "Comfy Pipeline", "flow",
+         "# Comfy Production Pipeline\n\n"
+         "Updraft is built asset first: every character, place and prop gets a locked description and pictures before any shot is made. "
+         "Configure compatible workers before running the stages below.\n\n"
+         "| Stage | Worker Capability | Delivery | Status | Setup Notes |\n"
+         "| --- | --- | --- | --- | --- |\n"
+         "| 1. Optical Script Compiler | LLM | Structured shot prompts | {{s:Queued}} | Configure an open-weights language model. |\n"
+         "| 2. Asset Sheets | Image | Face, front and back pictures merged into a three-view sheet; location plates; prop photos | {{s:Queued}} | Configure a validated FLUX 3 Klein workflow. |\n"
+         "| 3. Reference Keys | Image | A first frame built from the sheet, the plate and the prop photo, each sent with its job | {{s:Queued}} | The reference-key card places every picture. |\n"
+         "| 4. LTX Shots | Video | Reviewed cinema takes with natural sound | {{s:Queued}} | Configure a validated LTX-2.5 workflow. |\n"
+         "| 5. Director Cut | Media Assembly | Assembled delivery | {{s:Queued}} | Requires approved generated media. |\n"),
+    ]
 
 
 def _structure_only(specs):
@@ -32,49 +92,7 @@ def tab_specs(template: str, title: str, summary: str, *, samples: bool = True) 
 
 def _tab_specs(template: str, title: str, summary: str) -> list[tuple[str, str, str, str]]:
     if template == "zerofield_studio":
-        return [
-            ("director-brief", "Director Brief", "doc",
-             f"# {title}\n\n{summary or 'Plan an original short film, direct each shot, and review agent proposals before applying changes.'}\n\n"
-             "## Production Brief\n\n"
-             "- Genre: Science-fiction noir\n- Working title: The Last Signal\n"
-             "- Cast: Kael, an original courier carrying an analog recorder\n"
-             "- Location: A quiet observatory after the rain\n"
-             "- Optical package: 35mm anamorphic, restrained camera movement\n"
-             "- Pacing: Establish the space, reveal the signal, hold on the decision\n\n"
-             "## Scene\n\nKael enters the observatory and finds a recorder still receiving a signal. "
-             "A distant light answers as Kael reaches for the dial.\n\n"
-             "## Production Notes\n\nThe slate below is a planning template. Media cells are empty. "
-             "Image and video generation require configured workers and validated workflows.\n"),
-            ("soul-cast", "Soul Cast", "sheet",
-             "# Soul Cast & Asset Lookbook\n\n"
-             "| Asset ID | Character / Set | Locked Appearance Prompt / Seed | Reference Image | Voice / Audio Profile | Status | Notes |\n"
-             "| --- | --- | --- | --- | --- | --- | --- |\n"
-             "| CAST-01 | Kael | original fictional courier, charcoal field jacket, analog recorder; seed 48291 | | Calm, measured delivery | {{s:Queued}} | Establish a reference before generating shots. |\n"
-             "| SET-01 | Observatory | original circular observatory, rain on glass, cool dawn, warm instrument lights | | Wind and a soft radio pulse | {{s:Queued}} | Keep the lighting direction consistent. |\n"),
-            ("cinema-studio", "Cinema Studio", "sheet",
-             "# Cinema Studio Multi-Shot Slate\n\n"
-             "| Shot | Optical Rig (Camera & Lens) | Camera Motion | Action & Audio Prompt | Keyframe | Cinema Shot | Status | Director Take Notes | Previs | Actor Matte | Pose Skeleton |\n"
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
-             "| S01 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Establish the empty observatory as Kael enters. Wind against the glass. @CAST-01 @SET-01 | | | {{s:Queued}} | Establish the space and light direction. | | | |\n"
-             "| S02 | RED V-Raptor / 85mm Prime | Static Tripod | Kael notices the pulsing recorder. A quiet radio signal becomes audible. @CAST-01 @SET-01 | | | {{s:Queued}} | Match CAST-01 wardrobe and recorder. | | | |\n"
-             "| S03 | ARRI Alexa 65 / 35mm Anamorphic | Slow Dolly Push-In | Kael reaches for the dial as a light answers outside. Hold the final frame. @CAST-01 @SET-01 | | | {{s:Queued}} | Keep the decision readable. | | | |\n"),
-            ("openjutsu-lab", "OpenJutsu Lab", "sheet",
-             "# OpenJutsu V2V Planning Matrix\n\n"
-             "| Clip ID | Jutsu Mode | Source Driving Video | Target Cast / Swap Prompt | Remastered Video | Split-Screen MP4 | Status | Notes |\n"
-             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
-             "| VFX-01 | Motion Transfer | | Restage an original source clip in the observatory while preserving its action. @CAST-01 @SET-01 | | | {{s:Queued}} | Add a self-shot or appropriately licensed source in the video development phase. |\n"),
-            ("comfy-pipeline", "Comfy Pipeline", "flow",
-             "# Comfy Production Pipeline\n\n"
-             "This editable pipeline describes the intended production stages. Configure compatible workers before running it. "
-             "The English baseline does not include generation workflows or sample renders.\n\n"
-             "| Stage | Worker Capability | Delivery | Status | Setup Notes |\n"
-             "| --- | --- | --- | --- | --- |\n"
-             "| 1. Optical Script Compiler | LLM | Structured shot prompts | {{s:Queued}} | Configure an open-weights language model. |\n"
-             "| 2. Soul Cast & Keyframes | Image | Character references | {{s:Queued}} | Configure a validated FLUX workflow. |\n"
-             "| 3. Cinema Studio Shots | Video | Reviewed cinema takes | {{s:Queued}} | Video integration is planned for the next phase. |\n"
-             "| 4. OpenJutsu Remaster | Video | Remastered source clips | {{s:Queued}} | Requires source video and a validated V2V workflow. |\n"
-             "| 5. Director Cut | Media Assembly | Assembled delivery | {{s:Queued}} | Requires approved generated media. |\n"),
-        ]
+        return _updraft_specs(title)
     if template == "ai_drama":
         return [
             ("script", "第一集劇本與分場", "doc",
@@ -158,7 +176,27 @@ COLUMN_TYPES = {
 }
 
 
+def _split_breaks(node):
+    """LINE_BREAK inside a text node becomes a hardBreak (a table cell holds several lines of one prompt)."""
+    content = node.get("content")
+    if not isinstance(content, list):
+        return
+    rebuilt = []
+    for child in content:
+        if child.get("type") == "text" and LINE_BREAK in child.get("text", ""):
+            for i, part in enumerate(child["text"].split(LINE_BREAK)):
+                if i:
+                    rebuilt.append({"type": "hardBreak"})
+                if part:
+                    rebuilt.append({**child, "text": part})
+        else:
+            _split_breaks(child)
+            rebuilt.append(child)
+    node["content"] = rebuilt
+
+
 def configure_doc(key, doc):
+    _split_breaks(doc)
     for table in doc.get("content", []):
         if table.get("type") == "table" and key in COLUMN_TYPES:
             table.setdefault("attrs", {})["column_types"] = COLUMN_TYPES[key]

@@ -1,4 +1,4 @@
-"""Start ZeroField with original playable fixtures and local/Comfy SDK workers."""
+"""Start ZeroField with the Updraft showcase production and local/Comfy SDK workers."""
 from __future__ import annotations
 
 import argparse
@@ -15,10 +15,6 @@ from project_docs import auth, doc_schema, http, repository as repo, service, te
 import server
 
 SHOWCASE_SLUG = "zerofield-showcase"
-SAMPLE_FILES = ("cast_kael.png", "set_observatory.png", "keyframe_s01.png", "shot_s01.mp4",
-                "keyframe_s02.png", "shot_s02.mp4", "openjutsu_source.mp4",
-                "openjutsu_remastered.mp4", "openjutsu_split.mp4", "first_frame_vfx01.png",
-                "motion_structure_vfx01.mp4", "anchor_keyframe_vfx01.png")
 # The Layout Key edit: previs frame 0 becomes a photographic still with the row's cast (image 2) and set (image 3).
 # Composition comes first: with a photographic portrait as the cast reference, "same face" alone made Klein copy the
 # portrait's close-up instead of the blockout's small figure.
@@ -43,81 +39,136 @@ def _set_text(cell, value):
     cell["content"] = [{"type": "paragraph", "content": [{"type": "text", "text": value}]}]
 
 
-def seed_showcase_media(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
-    """Fill only empty demo cells once; never rewrite an existing take or user prompt.
+UPDRAFT_DIR = ("samples", "updraft")
+MEDIA_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+              ".mp4": "video/mp4", ".webm": "video/webm"}
+PANELS = {"CHARACTER": ("face", "front", "back", "sheet"), "SCENE": ("plate", "reverse", "angle"), "PROP": ("product",)}
+SEED_RECORD = "updraft_seed_"  # + slug: which manifest items were already applied, so a cell the user cleared stays empty
 
-    Caller owns the transaction. Raw template calls remain empty planning slates.
-    """
-    actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
-    with conn.cursor() as cur:
-        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("zerofield-showcase-seed:" + slug,))
-        cur.execute("SELECT 1 FROM projectops.audit_log WHERE project_slug=%s AND action='studio_showcase_seed'", (slug,))
-        if cur.fetchone():
-            return seed_showcase_reference_pack(conn, slug, samples_dir=samples_dir, actor_id=actor_id)
-    if not repo.get_project(conn, slug):
-        return {"seeded": False, "reason": "project_missing"}
-    root = Path(samples_dir) if samples_dir else resource_path("samples")
-    missing = [name for name in SAMPLE_FILES if not (root / name).is_file()]
-    if missing:
-        raise FileNotFoundError("Showcase files missing: " + ", ".join(missing))
-    urls = {}
-    for name in SAMPLE_FILES:
-        mime = "image/png" if name.endswith(".png") else "video/mp4"
-        identifier = repo.put_asset(conn, slug, data=(root / name).read_bytes(), content_type=mime, actor_id=actor_id)
-        urls[name] = f"/projects/api/{slug}/assets/{identifier}"
-    targets = {
-        "soul-cast": {"CAST-01": {3: "cast_kael.png"}, "SET-01": {3: "set_observatory.png"}},
-        "cinema-studio": {"S01": {4: "keyframe_s01.png", 5: "shot_s01.mp4"},
-                          "S02": {4: "keyframe_s02.png", 5: "shot_s02.mp4"}},
-        "openjutsu-lab": {"VFX-01": {2: "openjutsu_source.mp4", 4: "openjutsu_remastered.mp4", 5: "openjutsu_split.mp4"}},
-    }
+
+def _asset_meta(row, asset):
+    """The asset_meta record of one Soul Cast row (SPEC_21 section 2.1); a state variant keeps its Change and takes the locks of its base."""
+    meta = asset.get("meta") or {}
+    return {"assetCode": asset["code"], "rowId": row["rid"],
+            "acting": meta.get("acting", ""), "geo": meta.get("geo", ""), "light": meta.get("light", ""), "lock": meta.get("lock", ""),
+            "panels": {name: None for name in PANELS.get(asset["type"], ())}, "stress": [],
+            "change": asset.get("change", "")}
+
+
+def seed_updraft_meta(conn, slug, *, owner=None):
+    """Write the asset_meta records and the episode look of the Updraft production; an existing record or look is kept. Caller owns the transaction."""
+    from project_docs import story_look, story_openapi as story
+    production = templates.load_updraft()
+    assets = {a["code"].upper(): a for a in production["assets"]}
+    written = 0
+    for row in story.table_rows(conn, slug, "soul-cast"):
+        asset = assets.get(row["cells"][0].lstrip("@").upper())
+        if not asset or story.record(conn, "am_" + row["rid"], required=False):
+            continue
+        story.store(conn, "am_" + row["rid"], "asset_meta", _asset_meta(row, asset), slug)
+        written += 1
+    look = False
+    episode = next((e for e in story.episodes(conn, slug) if e["episodeId"] == f"ep_{slug}_01"), None)
+    if episode and not (episode.get("settings") or {}).get("look"):
+        episode["settings"] = {**(episode.get("settings") or {}), "look": story_look.validate_episode_look(production["look"])}
+        story.store(conn, episode["episodeId"], "episode", episode, slug)
+        look = True
+    return {"meta": written, "look": look}
+
+
+def _manifest(root):
+    path = root / "manifest.json"
+    if not path.is_file():
+        return []
+    items = json.loads(path.read_text(encoding="utf-8")).get("items")
+    return items if isinstance(items, list) else []
+
+
+def seed_updraft_media(conn, slug, root, actor_id):
+    """Fill empty cells (and asset_meta panels) from samples/updraft/manifest.json. An item is applied once: a cell the user
+    edited or cleared later is never touched again. Returns the tabs that changed and the items that were applied."""
+    from project_docs import story_openapi as story
+    items = _manifest(root)
+    if not items:
+        return {"tabs": [], "applied": []}
+    stored = story.record(conn, SEED_RECORD + slug, required=False) or {"applied": []}
+    done = set(stored["applied"])
+    todo = [i for i in items if isinstance(i, dict) and f"{i.get('tab')}/{i.get('code')}/{i.get('column')}/{i.get('panel')}" not in done]
     values = repo.field_values(conn, slug)
-    changed, review_row = [], None
-    for key, row_targets in targets.items():
+    urls, applied, changed, missing = {}, [], [], []
+    for key in sorted({i.get("tab") for i in todo}):
         tab = repo.get_tab_for_update(conn, slug, key)
         if not tab:
             continue
         doc = copy.deepcopy(tab["doc"])
         dirty = False
         for table in doc.get("content", []):
-            if table["type"] != "table":
+            if table.get("type") != "table" or not table.get("content"):
                 continue
-            for row in table.get("content", [])[1:]:
-                cells = row.get("content", [])
-                label = _text(cells[0]) if cells else ""
-                if label not in row_targets or len(cells) < 7:
+            headers = [_text(c) for c in table["content"][0]["content"]]
+            for item in (i for i in todo if i.get("tab") == key):
+                file = root / str(item.get("file", ""))
+                if not file.is_file() or file.suffix.lower() not in MEDIA_MIME:
+                    missing.append(str(item.get("file")))
                     continue
-                pristine = not any(_text(cells[col], values.get(key)) for col in row_targets[label])
-                added = False
-                for col, name in row_targets[label].items():
-                    if not _text(cells[col], values.get(key)):
-                        _set_text(cells[col], urls[name])
-                        added = dirty = True
-                if not added:
+                column = headers.index(item["column"]) if item.get("column") in headers else None
+                row = next((r for r in table["content"][1:] if _text(r["content"][0]) == item.get("code")), None)
+                if row is None or column is None:
                     continue
-                status_col = 5 if key == "soul-cast" else 6
-                status = next((n for p in cells[status_col].get("content", []) for n in p.get("content", []) if n["type"] == "status"), None)
-                if pristine and status and _text(status, values.get(key)) == "Queued":
-                    label_status = "Pending Review" if label in ("S02", "VFX-01") else "Approved"
-                    status["attrs"]["label"] = label_status
-                    repo.set_field_value(conn, slug, key, status["attrs"]["fid"], kind="status", value=label_status, actor_id=actor_id)
-                if key == "cinema-studio" and label == "S02" and pristine:
-                    review_row = (row["attrs"]["bid"], table["attrs"]["bid"])
+                if file.name not in urls:
+                    identifier = repo.put_asset(conn, slug, data=file.read_bytes(), content_type=MEDIA_MIME[file.suffix.lower()], actor_id=actor_id)
+                    urls[file.name] = f"/projects/api/{slug}/assets/{identifier}"
+                cells = row["content"]
+                if not _text(cells[column], values.get(key)):
+                    _set_text(cells[column], urls[file.name])
+                    dirty = True
+                    status_col = 5 if key == "soul-cast" else 6
+                    status = next((n for p in cells[status_col].get("content", []) for n in p.get("content", []) if n["type"] == "status"), None)
+                    if status and _text(status, values.get(key)) == "Queued":
+                        status["attrs"]["label"] = "Pending Review"  # a generated candidate waits for a person's choice
+                        repo.set_field_value(conn, slug, key, status["attrs"]["fid"], kind="status", value="Pending Review", actor_id=actor_id)
+                applied.append(item)
         if dirty:
             clean, _ = doc_schema.validate_doc(doc, slug=slug)
             repo.save_tab_doc(conn, slug, key, doc=clean, title=tab["title"], actor_id=actor_id,
                               session_id="studio-showcase-seed", base_revision=tab["revision"], force_revision=True)
             changed.append(key)
-    if review_row:
-        rid, table_id = review_row
-        annotation_id = repo.row_annotation_id(conn, slug, "cinema-studio", rid, actor_id)
-        repo.add_activity(conn, slug, "cinema-studio", rid, kind="comment", actor_id=actor_id,
-            body="@Cinematographer Please re-shoot S02 with a slower signal pulse and hold the recorder close-up. Procedural playback fixture; review continuity before approving.",
-            annotation_id=annotation_id)
-    repo.add_audit(conn, slug, action="studio_showcase_seed", actor_id=actor_id,
-                   detail={"tabs": changed, "provenance": "Original procedural CC0 playback fixtures; not model renders"})
-    seed_showcase_reference_pack(conn, slug, samples_dir=samples_dir, actor_id=actor_id)
-    return {"seeded": True, "tabs": changed}
+    # Panels: a face or plate picture is also the asset's own panel (an empty panel only).
+    rows = {r["cells"][0]: r for r in story.table_rows(conn, slug, "soul-cast")}
+    for item in applied:
+        if item.get("panel") and item.get("tab") == "soul-cast" and item.get("code") in rows:
+            meta_id = "am_" + rows[item["code"]]["rid"]
+            meta = story.record(conn, meta_id, required=False)
+            if meta is not None and not (meta.get("panels") or {}).get(item["panel"]):
+                meta.setdefault("panels", {})[item["panel"]] = {"url": urls[Path(item["file"]).name], "imageId": None}
+                story.store(conn, meta_id, "asset_meta", meta, slug)
+    if applied:
+        keys = [f"{i['tab']}/{i['code']}/{i['column']}/{i.get('panel')}" for i in applied]
+        story.store(conn, SEED_RECORD + slug, "showcase_seed", {"applied": sorted(done | set(keys))}, slug)
+    return {"tabs": changed, "applied": applied, "missing": missing}
+
+
+def seed_showcase_media(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
+    """Seed the Updraft showcase: asset_meta records and the episode look once, then media from samples/updraft/manifest.json
+    wherever a cell is empty. Never rewrites an existing take or user prompt. Caller owns the transaction."""
+    actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
+    with conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("zerofield-showcase-seed:" + slug,))
+        cur.execute("SELECT 1 FROM projectops.audit_log WHERE project_slug=%s AND action='studio_showcase_seed'", (slug,))
+        first = cur.fetchone() is None
+    if not repo.get_project(conn, slug):
+        return {"seeded": False, "reason": "project_missing"}
+    root = Path(samples_dir) if samples_dir else resource_path(*UPDRAFT_DIR)
+    meta = seed_updraft_meta(conn, slug)
+    media = seed_updraft_media(conn, slug, root, actor_id)
+    if first:
+        repo.add_audit(conn, slug, action="studio_showcase_seed", actor_id=actor_id,
+                       detail={"production": "Updraft", "provenance": "CC0 content; media, when present, generated with open-weights models (see samples/updraft/manifest.json)"})
+    if media["applied"]:
+        repo.add_audit(conn, slug, action="studio_updraft_media_seed", actor_id=actor_id,
+                       detail={"items": [{k: i.get(k) for k in ("tab", "code", "column", "panel", "file", "card", "seed", "prompt")} for i in media["applied"]]})
+    seed_showcase_reference_pack(conn, slug, actor_id=actor_id)
+    return {"seeded": first or bool(media["applied"]) or bool(meta["meta"] or meta["look"]), "tabs": media["tabs"], "meta": meta["meta"], "look": meta["look"]}
 
 
 def _append_columns(table, specs):
@@ -146,7 +197,8 @@ def _append_columns(table, specs):
 
 
 def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
-    """Append prepared reference stages once, retaining existing column IDs and media."""
+    """Append the prepared-reference columns (First Frame, Motion Structure, Anchor Keyframe) to the OpenJutsu Lab once,
+    retaining existing column IDs and media. The pipeline seed binds its extract and structure stages to them."""
     actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM projectops.audit_log WHERE project_slug=%s AND action='studio_reference_pack_seed'", (slug,))
@@ -155,55 +207,23 @@ def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, 
     tab = repo.get_tab_for_update(conn, slug, "openjutsu-lab")
     if not tab:
         return {"seeded": False, "reason": "page_missing"}
-    root = Path(samples_dir) if samples_dir else resource_path("samples")
-    stages = [("First Frame", "image", "first_frame_vfx01.png"),
-              ("Motion Structure", "video", "motion_structure_vfx01.mp4"),
-              ("Anchor Keyframe", "image", "anchor_keyframe_vfx01.png")]
+    stages = [("First Frame", "image"), ("Motion Structure", "video"), ("Anchor Keyframe", "image")]
     doc = copy.deepcopy(tab["doc"])
     dirty = False
     for table in doc.get("content", []):
-        if table["type"] != "table":
-            continue
-        rows = table.get("content", [])
-        if not rows:
-            continue
-        if not any(_text(row.get("content", [{}])[0]) == "VFX-01" for row in rows[1:]):
-            continue
-        headers, added = _append_columns(table, [(name, kind) for name, kind, _ in stages])
-        dirty = dirty or added
-        for name, kind, filename in stages:
-            col = headers.index(name)
-            for row in rows[1:]:
-                if _text(row["content"][0]) != "VFX-01" or _text(row["content"][col]):
-                    continue
-                mime = "image/png" if kind == "image" else "video/mp4"
-                identifier = repo.put_asset(conn, slug, data=(root / filename).read_bytes(), content_type=mime, actor_id=actor_id)
-                _set_text(row["content"][col], f"/projects/api/{slug}/assets/{identifier}")
-                dirty = True
+        rows = table.get("content", []) if table["type"] == "table" else []
+        if rows and any(_text(row.get("content", [{}])[0]) == "VFX-01" for row in rows[1:]):
+            dirty = _append_columns(table, stages)[1] or dirty
     if dirty:
         clean, _ = doc_schema.validate_doc(doc, slug=slug)
         repo.save_tab_doc(conn, slug, "openjutsu-lab", doc=clean, title=tab["title"], actor_id=actor_id,
                          session_id="studio-reference-pack-seed", base_revision=tab["revision"], force_revision=True)
-    brief = repo.get_tab_for_update(conn, slug, "director-brief")
-    old_note = "The slate below is a planning template. Media cells are empty. Image and video generation require configured workers and validated workflows."
-    if brief:
-        brief_doc = copy.deepcopy(brief["doc"])
-        updated = False
-        for block in brief_doc.get("content", []):
-            if block.get("type") == "paragraph" and _text(block) == old_note:
-                block["content"] = [{"type": "text", "text": "This showcase uses original procedural playback fixtures, including a source-derived PNG and edge motion guide. The illustrative anchor is not a model-generated character swap. Configure Comfy models and an external image-edit workflow to generate production takes."}]
-                updated = True
-        if updated:
-            repo.save_tab_doc(conn, slug, "director-brief", doc=brief_doc, title=brief["title"], actor_id=actor_id,
-                session_id="studio-reference-pack-seed", base_revision=brief["revision"], force_revision=True)
-    repo.add_audit(conn, slug, action="studio_reference_pack_seed", actor_id=actor_id,
-                   detail={"provenance": "Source-derived first frame/edge guide; illustrative anchor, not model output"})
+    repo.add_audit(conn, slug, action="studio_reference_pack_seed", actor_id=actor_id, detail={"columns": [name for name, _ in stages]})
     return {"seeded": dirty, "tabs": ["openjutsu-lab"] if dirty else []}
 
 
 def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
-    """Add the Previs, Actor Matte and Pose Skeleton columns to the cinema slate once and give S03 its grey blockout,
-    keeping user media.
+    """Add the Previs, Actor Matte and Pose Skeleton columns to the cinema slate once, keeping user media.
 
     The 3D Stage writes all three on Render previs; the matte frees the actor in the Layout Render and the skeleton
     carries the acting (SPEC_10 §7.7)."""
@@ -211,19 +231,12 @@ def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id
     tab = repo.get_tab_for_update(conn, slug, "cinema-studio")
     if not tab:
         return {"seeded": False, "reason": "page_missing"}
-    root = Path(samples_dir) if samples_dir else resource_path("samples")
     doc = copy.deepcopy(tab["doc"])
     dirty = False
     for table in doc.get("content", []):
         if table["type"] != "table" or not table.get("content"):
             continue
-        headers, dirty = _append_columns(table, [("Previs", "video"), ("Actor Matte", "video"), ("Pose Skeleton", "video")])
-        col = headers.index("Previs")
-        for row in table["content"][1:]:
-            if _text(row["content"][0]) == "S03" and not _text(row["content"][col]) and (root / "previs_s03_blockout.mp4").is_file():
-                identifier = repo.put_asset(conn, slug, data=(root / "previs_s03_blockout.mp4").read_bytes(), content_type="video/mp4", actor_id=actor_id)
-                _set_text(row["content"][col], f"/projects/api/{slug}/assets/{identifier}")
-                dirty = True
+        dirty = _append_columns(table, [("Previs", "video"), ("Actor Matte", "video"), ("Pose Skeleton", "video")])[1]
         break
     if dirty:
         clean, _ = doc_schema.validate_doc(doc, slug=slug)
@@ -566,7 +579,7 @@ def main(argv=None):
             threads = start_media_workers(f"http://{head_host}:{http_server.server_port}", registered, shutdown)
         print(f"ZeroField Studio: http://{args.host}:{http_server.server_port}/projects/", flush=True)
         if cfg["mode"] == "dev":
-            print("The Last Signal includes original procedural playback fixtures; generation requires Comfy models and workflows.", flush=True)
+            print("Updraft is a CC0 production bible; its media, when present, come from open-weights models. Generation requires Comfy models and workflows.", flush=True)
         http_server.serve_forever()
     except KeyboardInterrupt:
         pass

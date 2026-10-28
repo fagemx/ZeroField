@@ -58,9 +58,9 @@ def seed_demo_data(conn) -> None:
         from project_docs import service
         me = service.Identity(admin_id, DEMO_MEMBERS[0]["name"], "admin")
         code, result = service.create_project(conn, me, {
-            "slug": slug, "title": "The Last Signal — ZeroField Studio",
+            "slug": slug, "title": "Updraft — ZeroField Studio",
             "template": "zerofield_studio", "status": "planning",
-            "summary": "An editable production brief, cast lookbook, shot slate, V2V plan, and pipeline. Media generation is not configured.",
+            "summary": "Updraft: a one-scene, ten-shot production built asset first, with locked cast, locations and props. Media generation needs configured workers.",
         })
         if code != 200:
             raise RuntimeError(result.get("error", "Could not create the studio example"))

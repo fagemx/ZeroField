@@ -253,7 +253,7 @@ class GradeHTTPTests(unittest.TestCase):
                                                 "session": "grade:" + queued["gradeId"], "model": "qwen-test"}])
         self.assertEqual(self.repo.get_asset_meta(self.conn, self.slug, grade["sheetUrl"].rsplit("/", 1)[1])[0], "image/png")
 
-        retake = "Kael keeps his hand on the dial to the final frame. @CAST-01 @SET-01"
+        retake = "Kael keeps his hand on the dial to the final frame. @PROP-03:dead @CAST-01"
         self.assertEqual(grade["retakePrompt"], retake)
         self.assertNotIn("proposalId", grade)  # grading is information: no proposal waits for approval
         self.conn.rollback()
@@ -435,7 +435,7 @@ class CutCheckTests(unittest.TestCase):
         self.assertEqual(chat["messages"][0]["content"], grader.CUT_RUBRIC)
         text, image = chat["messages"][1]["content"][0]["text"], chat["messages"][1]["content"][1]["image_url"]["url"]
         self.assertIn("Cut from S01 to S02.", text)
-        self.assertIn("Kael notices the pulsing recorder", text)  # the incoming shot's prompt, so intended changes are not issues
+        self.assertIn("Noa releases the valve and the flame drops", text)  # the incoming shot's prompt, so intended changes are not issues
         sent = base64.b64decode(image.split(",", 1)[1])
         size, left, right = panels(sent)
         self.assertEqual((size, colour(left), colour(right)), ((1288, 384), "green", "blue"))  # S01's last frame | S02's first
