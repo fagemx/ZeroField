@@ -24,7 +24,9 @@ Bindings (adapter=comfyui):
 
 | Workflow | prompt_node | seed_node | output_node | Inputs |
 | --- | --- | --- | --- | --- |
-| flux3_klein_soul_cast.json | 6 | 3 | 9 | Text only |
+| flux3_klein_soul_cast.json | 6 | 3 | 9 | Text only; latent size 5.width / 5.height |
+| flux3_klein_reference_key.json | 6 | 3 | 9 | Up to 6 references: LoadImage 21–26 → `ReferenceMultiLatent` images.image0–5; latent size 10.width / 10.height |
+| flux3_klein_edit.json | 6 | 3 | 9 | Image to edit 21 (image0) and up to 2 more references 22–23; latent size 10.width / 10.height |
 | ltx25_cinema_shot.json | 6 | 3 | 12 | image_node=2, image_input=image |
 | ltx25_openjutsu_v2v.json | 6 | 3 | 12 | video_node=1, video_input=video, reference_image_node=2, reference_image_input=image |
 | ltx25_openjutsu_swap.json | 6 | 3 | 12 | input_bindings 20.video and 25.video = source_video, 2.image = anchor_keyframe |
@@ -98,3 +100,18 @@ Declarative Studio Cards (`workflows/cards/*.json`) wrap complex ComfyUI workflo
   - `structure_type="ref05_edge"` / `"ref05_depth"`: Half-resolution Gaussian-smoothed de-textured motion structure videos.
   - `structure_type="layout_silhouette"` / `"sparse_tracks"` & `mode="time_strata"`: Articulated 2-link IK (`solve_ik`) + control knobs (`stride`, `turn`, `reach`, `flare`, `camera_zoom`, `phases`) supporting both Extract & Re-Rig (with source video) and Storyboard Rehearsal (without source video).
 - Post-render `.bounded.mp4` trimming (`bound_output_video_duration`): Trims `17n+5` / `8n+1` upward frame padding back to `min(requested_sec, source_sec)` with H.264 CRF 16, `-movflags +faststart`, and preserved audio.
+
+## Reference keyframes, Klein edits and compiled prompts (`SPEC_21`)
+
+Two FLUX 3 Klein graphs carry reference images into the picture, built like `flux3_klein_look_key.json` (same UNET/CLIP/VAE loaders, `ModelSamplingFlux`, `ReferenceMultiLatent` with resize at 1 MP, `EmptyFlux2LatentImage`, KSampler 50 steps at cfg 4, `VAEDecode`, `SaveImage`) but without the source-video frame:
+
+- `workflows/flux3_klein_reference_key.json`, card `flux-reference-key` (webappId `2105000000000000005`): text plus up to six references. `LoadImage` nodes 21–26 feed `images.image0`–`images.image5` and are the card's six `slot: "ref"` inputs. It is the shot keyframe card: its prompt numbers the pictures ("the person in image 1 and image 2 is …"), so the references go in the order the prompt names them.
+- `workflows/flux3_klein_edit.json`, card `flux-klein-edit` (webappId `2105000000000000006`): node 21 (`image0`) is the picture being edited and is required; nodes 22–23 are up to two more references. The prompt follows the "Edit image 1. CHANGE: … PRESERVE EXACTLY: …" form. Used for state variants and reverse angles.
+
+Story panels and shot keyframes choose these cards by id. In the generic asset generation bar they are listed only in their `usage_scopes` (reference key: `FREE_CREATION_T2I`, `FREE_CREATION_I2I`; edit: `SCENE_PROP_EDIT`, `FREE_CREATION_I2I`), so Character and Scene & prop assets keep `flux-soul-cast` as the first image card to fall back to.
+
+Both cards expose the latent size as `10.width` / `10.height` (INT, 256–2048). `engine_config.mirror_inputs` (`{"7.width": "10.width", "7.height": "10.height"}`) copies the size into `ModelSamplingFlux` after injection, so the sampler shift always reads the latent size. `flux-soul-cast` exposes its latent size as `5.width` / `5.height` (defaults 1280×720, as before).
+
+Empty reference inputs are unlinked by the same `"None"` media-slot rule as the other cards (`_unlink_node_and_dependents`). For `ReferenceMultiLatent` the remaining `images.imageN` inputs are then renumbered from `image0` in their original order, so the node never has a gap or a dangling input. With no reference left the node is bypassed (the sampler takes the text conditioning directly) and the graph is plain text-to-image: zero references never fail. Six 1 MP references multiply the sampler's sequence length; time and memory on the RTX 4090 are not measured yet (GPU acceptance G1).
+
+`engine_config.prompt_compile` names the compiled text a card's prompt input takes: `reference_image` → `image_reference_prompt` (`flux-reference-key`), `edit` → `edit_prompt` (`flux-klein-edit`), `asset_panel` → `asset_panel_prompt` (`flux-soul-cast`), `video_skeleton` → `video_skeleton_prompt` (`ltx25-cinema`). When that text is missing or blank, the prompt is filled by the earlier rules (H3 context IR, LTX ingredients prompt, compiled prompt, card default). A job's config may name a different `prompt_compile`; explicit card values still win. Cards that compile an image prompt (`reference_image`, `asset_panel`, `edit`) fill their reference inputs from the context's `reference_plan` (`[{url, assetCode, role, panel}]`) in plan order, one entry per input and `"None"` after the last entry; without a plan they use `slot_plan` as before. The video skeleton card keeps the first frame in its one reference input.

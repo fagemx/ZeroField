@@ -27,6 +27,7 @@ __all__ = [
     'CARD_FIELD_TYPES',
     'CARD_SLOTS',
     'CARD_OUTPUT_MODES',
+    'CARD_PROMPT_COMPILE',
     'CARDS_DIR',
     'validate_studio_card',
     'card_execution_profile',
@@ -59,6 +60,24 @@ CARD_SLOTS = frozenset({None, "ref", "prompt", "driving_video", "structure_video
 
 
 CARD_OUTPUT_MODES = frozenset({"video", "image", "audio"})
+
+
+# SPEC_21 §3.1: engine_config.prompt_compile names the compiled text a card's prompt input takes (the context key).
+CARD_PROMPT_COMPILE = {
+    "reference_image": "image_reference_prompt",
+    "video_skeleton": "video_skeleton_prompt",
+    "asset_panel": "asset_panel_prompt",
+    "edit": "edit_prompt",
+}
+
+
+# Image prompts number their pictures in reference-plan order ("image 1", "image 2"), so a card compiling one fills its
+# ref inputs in that order too. The video skeleton is not one: a video card's ref input is its first frame.
+_REFERENCE_PLAN_COMPILES = frozenset({"reference_image", "asset_panel", "edit"})
+
+
+# Dynamic image inputs that must stay numbered from 0 with no gap once an empty reference is unlinked.
+_CONTIGUOUS_IMAGE_INPUTS = {"ReferenceMultiLatent": "images.image"}
 
 
 CARDS_DIR = resource_path("workflows", "cards")
@@ -135,8 +154,15 @@ def validate_studio_card(card: dict) -> dict:
         raise runtime.WorkerError("Studio card engine_config must be an object")
     engine_config = dict(engine_config, **card_execution_profile(card))
     direct = engine_config["driver"] in ("vendor_api", "runninghub_cloud", "comfy_router")
-    if direct and any(engine_config.get(k) for k in ("locked_nodes", "disabled_loras")):
+    if direct and any(engine_config.get(k) for k in ("locked_nodes", "disabled_loras", "mirror_inputs")):
         raise runtime.WorkerError("Direct cards cannot configure graph node mutations")
+    compile_name = engine_config.get("prompt_compile")
+    if compile_name is not None and not (isinstance(compile_name, str) and compile_name in CARD_PROMPT_COMPILE):
+        raise runtime.WorkerError(f"Unsupported card prompt_compile: {compile_name!r}")
+    mirrors = engine_config.get("mirror_inputs")
+    if mirrors is not None and (not isinstance(mirrors, dict) or not all(
+            isinstance(path, str) and re.fullmatch(r"[^.\s]+\.\S+", path) for pair in mirrors.items() for path in pair)):
+        raise runtime.WorkerError("Studio card mirror_inputs must map node_id.input to node_id.input")
     if engine_config["driver"] == "comfy_router":
         from .comfy_router import validate_config
         validate_config(engine_config, output_mode)
@@ -471,10 +497,41 @@ def convert_litegraph_to_api(data: dict) -> dict:
     return api
 
 
+def _settle_contiguous_images(workflow: dict, node_id: str) -> None:
+    """Renumber a node's dynamic image inputs from 0 after one was unlinked (``images.image0, image2`` becomes
+    ``image0, image1``, in order). A ReferenceMultiLatent left with no image is bypassed: its consumers take the
+    positive and negative conditioning it was passing on, so the graph is plain text-to-image."""
+    node = workflow.get(node_id)
+    prefix = _CONTIGUOUS_IMAGE_INPUTS.get(node.get("class_type")) if isinstance(node, dict) else None
+    inputs = node.get("inputs") if prefix else None
+    if not isinstance(inputs, dict):
+        return
+    numbered = sorted((int(key[len(prefix):]), key) for key in inputs
+                      if key.startswith(prefix) and key[len(prefix):].isdigit())
+    links = [inputs.pop(key) for _, key in numbered]
+    for index, link in enumerate(links):
+        inputs[f"{prefix}{index}"] = link
+    if links:
+        return
+    through = {0: inputs.get("positive"), 1: inputs.get("negative")}
+    if not all(isinstance(link, list) and len(link) == 2 for link in through.values()):
+        return
+    consumers = [(other["inputs"], key, value[1]) for other in workflow.values()
+                 if isinstance(other, dict) and isinstance(other.get("inputs"), dict)
+                 for key, value in other["inputs"].items()
+                 if isinstance(value, list) and len(value) == 2 and str(value[0]) == node_id]
+    if any(slot not in through for _, _, slot in consumers):
+        return  # an output we cannot route around: leave the node for ComfyUI to report
+    for consumer_inputs, key, slot in consumers:
+        consumer_inputs[key] = list(through[slot])
+    workflow.pop(node_id, None)
+
+
 def _unlink_node_and_dependents(workflow: dict, node_id: str) -> None:
     """Unlink a node from all downstream inputs and cascade-prune orphaned image scale/passthrough nodes."""
     node_id = str(node_id)
     orphaned_passthroughs = []
+    regrouped = []
     for other_id, other in list(workflow.items()):
         if not isinstance(other, dict) or not isinstance(other.get("inputs"), dict):
             continue
@@ -490,6 +547,11 @@ def _unlink_node_and_dependents(workflow: dict, node_id: str) -> None:
                         del in_val[sub_k]
         if "image" in removed_keys and other.get("class_type") in _PASSTHROUGH_IMAGE_CLASSES:
             orphaned_passthroughs.append(str(other_id))
+        prefix = _CONTIGUOUS_IMAGE_INPUTS.get(other.get("class_type"))
+        if prefix and any(key.startswith(prefix) for key in removed_keys):
+            regrouped.append(str(other_id))
+    for group_id in regrouped:
+        _settle_contiguous_images(workflow, group_id)
     if node_id in workflow and (
         workflow[node_id].get("class_type") in ("LoadImage", "VHS_LoadVideo", "LoadVideo", "LoadAudio")
         or workflow[node_id].get("class_type") in _PASSTHROUGH_IMAGE_CLASSES
@@ -558,6 +620,17 @@ def inject_node_info_into_workflow(workflow: dict, node_info_list: list[dict],
             else:
                 coerced = str(raw_value)
             workflow[node_id]["inputs"][field_name] = coerced
+    # engine_config.mirror_inputs {"7.width": "10.width"}: the target input repeats the source (a latent size the
+    # sampler also reads stays one card input).
+    mirrors = ((card or {}).get("engine_config") or {}).get("mirror_inputs")
+    for target, source in (mirrors.items() if isinstance(mirrors, dict) else ()):
+        if not (isinstance(target, str) and isinstance(source, str) and "." in target and "." in source):
+            continue
+        (target_id, target_field), (source_id, source_field) = target.split(".", 1), source.split(".", 1)
+        target_node, source_node = workflow.get(target_id), workflow.get(source_id)
+        if (isinstance(target_node, dict) and isinstance(target_node.get("inputs"), dict) and isinstance(source_node, dict)
+                and source_field in (source_node.get("inputs") or {})):
+            target_node["inputs"][target_field] = copy.deepcopy(source_node["inputs"][source_field])
     return workflow
 
 
@@ -1210,8 +1283,33 @@ class ComfyPlatformClient:
             self.sdk.close()
 
 
+def _prompt_compile(card: dict, config: dict) -> str | None:
+    """The card's prompt_compile (a job config may name another); None for a card without one. Unknown names are skipped."""
+    for name in (config.get("prompt_compile"), (card.get("engine_config") or {}).get("prompt_compile")):
+        if isinstance(name, str) and name in CARD_PROMPT_COMPILE:
+            return name
+    return None
+
+
+def _compiled_prompt_for(ctx: dict, compile_name: str | None):
+    """The context text a prompt_compile names, or None when it is missing or blank (the caller falls back)."""
+    text = ctx.get(CARD_PROMPT_COMPILE[compile_name]) if compile_name else None
+    return text if isinstance(text, str) and text.strip() else None
+
+
+def _reference_plan(ctx: dict) -> list[dict]:
+    """ctx["reference_plan"] entries ({url, assetCode, role, panel}) in order; [] when there is no usable plan."""
+    plan = ctx.get("reference_plan")
+    return [entry for entry in plan if isinstance(entry, dict)] if isinstance(plan, (list, tuple)) else []
+
+
 def _build_card_form_values(card: dict, ctx: dict, config: dict, task: dict, head) -> dict:
-    """Populate Studio Card form values from resolved shot context and explicit overrides."""
+    """Populate Studio Card form values from resolved shot context and explicit overrides.
+
+    SPEC_21: a card with ``prompt_compile`` takes that compiled text for its prompt input, and the current rules when the
+    text is missing or blank. A card compiling an image prompt (``reference_image``, ``asset_panel``, ``edit``) fills its
+    ref inputs from ``ctx["reference_plan"]`` in plan order (its prompt numbers the images that way), one entry per input
+    and "None" after the last; without a plan the refs come from ``slot_plan`` as before."""
     values = {}
     proj = str(config.get("project_style") or "default")
     for node in card.get("nodes", ()):
@@ -1223,8 +1321,15 @@ def _build_card_form_values(card: dict, ctx: dict, config: dict, task: dict, hea
             values[key] = pdefs["default"]
         elif "defaultValue" in node:
             values[key] = node["defaultValue"]
+    compile_name = _prompt_compile(card, config)
     ref_nodes = [n for n in card.get("nodes", ()) if n.get("slot") == "ref" and n.get("fieldType") == "IMAGE"]
-    if ref_nodes:
+    plan = _reference_plan(ctx) if compile_name in _REFERENCE_PLAN_COMPILES else []
+    if ref_nodes and plan:
+        for idx, rnode in enumerate(ref_nodes):
+            entry = plan[idx] if idx < len(plan) else {}
+            url = entry.get("url")
+            values[f"{rnode['nodeId']}.{rnode['fieldName']}"] = url.strip() if isinstance(url, str) and url.strip() else "None"
+    elif ref_nodes:
         planned = context_compiler.slot_plan(ctx.get("resolved_assets") or [], len(ref_nodes), limit=legacy.MAX_MATERIALS,
                             excluded_ids=ctx.get("excluded_refs"))
         primary_sheet = ctx.get("ingredients_sheet") or ctx.get("anchor_keyframe")
@@ -1249,7 +1354,10 @@ def _build_card_form_values(card: dict, ctx: dict, config: dict, task: dict, hea
         elif slot == "prompt":
             is_h3_card = card.get("engine_config", {}).get("frame_formula") == "17n+5"
             use_ir = config.get("use_h3_context_ir", card.get("card_id") != "h3-reference") if is_h3_card else False
-            if use_ir:
+            compiled = _compiled_prompt_for(ctx, compile_name)
+            if compiled is not None:
+                values[key] = compiled
+            elif use_ir:
                 values[key] = ctx.get("h3_context_ir_prompt") or ctx.get("compiled_prompt") or values.get(key, "")
             elif card.get("card_id", "").startswith("ltx25") and ctx.get("ingredients_sheet"):
                 values[key] = ctx.get("ltx_ingredients_prompt") or ctx.get("compiled_prompt") or values.get(key, "")

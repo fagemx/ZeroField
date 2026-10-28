@@ -1035,7 +1035,7 @@ class StoryHTTPTests(unittest.TestCase):
         with patch.object(story._POOL, 'submit', side_effect=AssertionError('a preview never queues')):
             preview = self.ok(f"/shots/{two['shotId']}/prompt-previews", 'POST', dict(body, count=2))
         self.assertEqual(footprint(), before)
-        self.assertEqual(sorted(preview), ['compiledPrompt', 'look', 'references'])
+        self.assertEqual(sorted(preview), ['compiledPrompt', 'droppedBlocks', 'look', 'referencePlan', 'references'])  # SPEC_21 adds the last two
         text = preview['compiledPrompt']
         self.assertIn(f'Match the setting and lighting of shot {label}.', text)
         from project_docs import story_look

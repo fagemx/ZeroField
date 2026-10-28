@@ -468,7 +468,7 @@ class RouterTests(unittest.TestCase):
 
     def test_catalog_seventeen_driver_profiles_and_named_vendor_inputs(self):
         cards = [worker.load_studio_card(p) for p in worker.CARDS_DIR.glob("*.json")]
-        self.assertEqual(len(cards), 17)
+        self.assertEqual(len(cards), 19)
         self.assertEqual(sum(c['engine_config']['driver']=='comfy_router' for c in cards),7)
         for card in cards:
             config = card["engine_config"]

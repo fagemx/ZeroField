@@ -1,0 +1,101 @@
+{
+  "card_id": "flux-klein-edit",
+  "label": "FLUX 3 Klein Edit",
+  "sublabel": "Change one thing in image 1, keep the rest · up to 2 more reference images",
+  "group_label": "Image",
+  "icon": "✦",
+  "output_mode": "image",
+  "engine_key": "comfy-webapp/1",
+  "status": "active",
+  "sort_order": 4,
+  "engine_config": {
+    "webappId": "2105000000000000006",
+    "workflow": "workflows/flux3_klein_edit.json",
+    "instance": "default",
+    "frame_rule": "none",
+    "grid_size": 32,
+    "timeout": 900,
+    "output_node": "9",
+    "driver": "comfy_local",
+    "tier": "open_weights",
+    "requires_comfyui": true,
+    "prompt_compile": "edit",
+    "usage_scopes": ["SCENE_PROP_EDIT", "FREE_CREATION_I2I"],
+    "mirror_inputs": {
+      "7.width": "10.width",
+      "7.height": "10.height"
+    }
+  },
+  "nodes": [
+    {
+      "nodeId": "6",
+      "fieldName": "text",
+      "fieldType": "STRING",
+      "label": "Edit Instruction (CHANGE / PRESERVE EXACTLY)",
+      "required": true,
+      "slot": "prompt",
+      "defaultValue": "Edit image 1. CHANGE: the jacket is soaked with rain and darker. PRESERVE EXACTLY: the face, hair, body proportions, clothing not named above, the backdrop, the light direction, the colour and grain. Only change what is named; everything else stays identical."
+    },
+    {
+      "nodeId": "21",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Image to Edit (image 1)",
+      "required": true,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "22",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 2",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "23",
+      "fieldName": "image",
+      "fieldType": "IMAGE",
+      "label": "Reference Image 3",
+      "required": false,
+      "slot": "ref",
+      "defaultValue": "None"
+    },
+    {
+      "nodeId": "10",
+      "fieldName": "width",
+      "fieldType": "INT",
+      "label": "Width",
+      "required": false,
+      "defaultValue": "1280",
+      "min": 256,
+      "max": 2048,
+      "step": 16
+    },
+    {
+      "nodeId": "10",
+      "fieldName": "height",
+      "fieldType": "INT",
+      "label": "Height",
+      "required": false,
+      "defaultValue": "704",
+      "min": 256,
+      "max": 2048,
+      "step": 16
+    },
+    {
+      "nodeId": "3",
+      "fieldName": "seed",
+      "fieldType": "INT",
+      "label": "Seed",
+      "required": false,
+      "slot": "seed",
+      "defaultValue": "48291",
+      "min": 0,
+      "max": 281474976710655,
+      "step": 1
+    }
+  ]
+}
