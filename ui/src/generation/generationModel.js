@@ -73,26 +73,41 @@ const REASON_KEYS = {blocked_by_policy: 'reason_blocked_by_policy', blocked_by_p
 export const reasonKey = reason => REASON_KEYS[reason] || 'reason_unavailable';
 
 // ---- SPEC_19 R9: the shot composer's parameter row (GenerationBar kind="shot"). A shot makes a video from its video cards
-// (GET /shots/{id}/generation-options) or a first frame from the image cards (GET /catalog/apps?capability=IMAGE: the options of a shot
-// list its video cards only). The catalog item of a card also lists its inputs, which give the row two controls the options do not:
-// the seconds (a "duration" slot) and the sound (a generate_audio list). What is sent is still what is shown.
+// (GET /shots/{id}/generation-options) or a first frame from its image cards (SPEC_21: GET /shots/{id}/generation-options?kind=image,
+// whose default is the reference card; a server without that list falls back to GET /catalog/apps?capability=IMAGE). The catalog item
+// of a card also lists its inputs, which give the row two controls the options do not: the seconds (a "duration" slot) and the sound
+// (a generate_audio list). What is sent is still what is shown.
 export const MAX_TAKES = 4;
 export const clampCount = value => Math.max(1, Math.min(MAX_TAKES, Math.round(Number(value)) || 1));
 export const SECOND_CHOICES = [4, 6, 8];  // the lengths the 3D Stage plans a shot in
 
 const tierOf = item => item?.driver === 'comfy_router' ? 'router' : item?.driver === 'comfy_local' && item?.tier === 'open_weights' ? 'open_weights' : 'closed';
+// SPEC_21: a first frame carries the pictures of the assets it names, so its card is the reference card (the server's choice too).
+// An edit card changes a picture it is given and is never a first frame's default; the soul-cast card is the text-only fallback.
+export const FRAME_APP = 'flux-reference-key';
+const FRAME_PREFERENCE = [FRAME_APP, FALLBACK_APP];
+export const isEditCard = item => /(^|[-_])edit([-_]|$)/i.test(String(item?.cardId || item?.card_id || item?.appCode || ''));
+// The server's image options are a first frame's list only when they really are image cards (an older server ignores ?kind=image and
+// answers with the video cards).
+export const frameOptionsUsable = options => Array.isArray(options?.apps) && options.apps.length > 0
+  && options.apps.every(app => !Array.isArray(app.outputs) || !app.outputs.length || app.outputs.includes('IMAGE'));
 // A catalog item as a generation-options app. Availability is the card's provider configuration only: the policy and privacy checks
 // of generation-options are not applied to image cards here (the server still refuses what the policy blocks when it is sent).
-export function frameOptions(items, defaultAppCode = FALLBACK_APP) {
+// The default is the one asked for, else the reference card, else the soul-cast card (matched by appCode or card id: a card's catalog
+// appCode may be an alias, FLUX3_SOUL_CAST for flux-soul-cast), else the first card that can run and is not an edit card.
+export function frameOptions(items, defaultAppCode = null) {
   const seen = new Set(), apps = [];
   for (const item of Array.isArray(items) ? items : []) {
     if (!item?.appCode || seen.has(item.card_id || item.appCode)) continue;
     seen.add(item.card_id || item.appCode);
     const configured = item.configuration?.configured !== false;
-    apps.push({appCode: item.appCode, name: item.name || item.appCode, tier: tierOf(item), configured, reason: configured ? null : 'not_configured',
+    apps.push({appCode: item.appCode, cardId: item.card_id || item.appCode, name: item.name || item.appCode, tier: tierOf(item), configured, reason: configured ? null : 'not_configured',
       outputs: ['IMAGE'], estimate: null, quotable: item.driver === 'comfy_router'});
   }
-  const preferred = apps.find(app => app.appCode === defaultAppCode && app.configured) || apps.find(app => app.configured);
+  const ready = apps.filter(app => app.configured);
+  const named = code => ready.find(app => app.appCode === code || app.cardId === code);
+  const preferred = [defaultAppCode, ...FRAME_PREFERENCE].filter(Boolean).map(named).find(Boolean)
+    || ready.find(app => !isEditCard(app)) || ready[0];
   return {apps, defaultAppCode: preferred?.appCode || null, style: null};
 }
 

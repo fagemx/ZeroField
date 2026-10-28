@@ -62,20 +62,28 @@ export function rememberWorld(epId, state) {
 // sending them twice). Without storage they live in memory for as long as the page does.
 const generationKey = epId => 'zf.gen:' + epId;
 const memoryGenerations = new Map();
-export function restoredGenerations(epId) {
-  const kept = () => ({...(memoryGenerations.get(epId) || {})});
+function restoredTasks(key) {
+  const kept = () => ({...(memoryGenerations.get(key) || {})});
   try {
     const storage = globalThis.sessionStorage;
     if (!storage) return kept();
-    const saved = JSON.parse(storage.getItem(generationKey(epId)) || 'null');
+    const saved = JSON.parse(storage.getItem(key) || 'null');
     return saved && typeof saved === 'object' && !Array.isArray(saved)
-      ? Object.fromEntries(Object.entries(saved).filter(([assetId, taskId]) => assetId && typeof taskId === 'string' && taskId)) : {};
+      ? Object.fromEntries(Object.entries(saved).filter(([id, taskId]) => id && typeof taskId === 'string' && taskId)) : {};
   } catch { return kept(); }
 }
-export function rememberGenerations(epId, tasks) {
-  memoryGenerations.set(epId, {...tasks});
+function rememberTasks(key, tasks) {
+  memoryGenerations.set(key, {...tasks});
   try {
     const storage = globalThis.sessionStorage;
-    if (Object.keys(tasks).length) storage?.setItem(generationKey(epId), JSON.stringify(tasks)); else storage?.removeItem(generationKey(epId));
+    if (Object.keys(tasks).length) storage?.setItem(key, JSON.stringify(tasks)); else storage?.removeItem(key);
   } catch { /* No storage: the in-memory copy stays. */ }
 }
+export const restoredGenerations = epId => restoredTasks(generationKey(epId));
+export const rememberGenerations = (epId, tasks) => rememberTasks(generationKey(epId), tasks);
+
+// SPEC_21: the panel pictures and stress tests of one card in flight, `${assetId}#${panel}#${n}` -> taskId (the card's looks included), kept
+// apart from the card's own picture above so neither list overwrites the other. The same rules: a reload polls them again, never resends.
+const panelKey = assetId => 'zf.panelgen:' + assetId;
+export const restoredPanelGenerations = assetId => restoredTasks(panelKey(assetId));
+export const rememberPanelGenerations = (assetId, tasks) => rememberTasks(panelKey(assetId), tasks);

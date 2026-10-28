@@ -273,7 +273,8 @@
 .world-look-tools { display: flex; align-self: center; gap: 2px; margin-left: 6px; }
 /* the form for a new look or a new name sits under the strip as a card of its own: name and kind side by side, the description under them */
 .world-look-wrap .world-edit { grid-template-columns: minmax(0, 1fr) 190px; align-items: end; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-2); }
-.world-look-wrap .world-edit .modal-field:nth-child(3), .world-look-wrap .world-edit .world-actions { grid-column: 1 / -1; }
+.world-look-wrap .world-edit .modal-field:nth-child(n+3), .world-look-wrap .world-edit .world-actions { grid-column: 1 / -1; }
+.world-look-wrap .world-edit .modal-field small { display: block; margin-top: 4px; }
 
 /* The description: one big box, with the generation choices on a single row under it. */
 .world-describe { position: relative; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-2); }
@@ -330,3 +331,70 @@
   .world-pictures li { flex: none; width: 64px; }
 }
 @container (max-width: 480px) { .world-more .world-fields { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- SPEC_21 §4: panels, the stress test and the locks ---------- */
+/* A strip under the picture: all pictures, the asset's panels (a character's Face | Front (no head) | Back | Sheet, a set's
+   Plate | Reverse | Angle, a prop's Product) and the stress test. The picture and the column beside it show what the strip has picked;
+   the sheet and the stress test take the column's width too. */
+.world-stage.is-solo { grid-template-columns: minmax(0, 1fr); }
+/* The picture fits whole inside the stage: a definite row, so a wide sheet or a tall front-without-head is not cut to its top part. */
+.world-editor .world-hero { grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+.world-stage.is-stress { flex-basis: 360px; min-height: clamp(220px, 36dvh, 360px); }
+.world-panels { flex: none; display: flex; align-items: flex-start; gap: 10px; overflow-x: auto; padding: 2px 2px 4px; }
+.workbench-app.studio-shell .world-panel { flex: none; display: grid; justify-items: center; gap: 4px; min-width: 60px; max-width: 108px; padding: 0; border: 0; border-radius: 0;
+  background: transparent; color: var(--muted); font-size: 11px; line-height: 1.25; text-align: center; cursor: pointer; }
+.world-panel.is-pending { flex: none; display: grid; justify-items: center; gap: 4px; min-width: 60px; color: var(--faint); font-size: 11px; line-height: 1.25; text-align: center; cursor: help; }
+.world-panel > span:not(.world-panel-thumb) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-app.studio-shell .world-panel.is-all { margin-right: 8px; }
+.workbench-app.studio-shell .world-panel.is-stress { margin-left: 8px; }
+.world-panel-thumb { position: relative; display: grid; place-items: center; width: 56px; height: 56px; overflow: hidden; border-radius: 10px; background: var(--ground); }
+.world-panel-thumb img, .world-panel-thumb .world-blank { display: block; width: 100%; height: 100%; border-radius: 0; object-fit: cover; object-position: 50% 20%; }
+.world-panel-thumb .world-blank { border-color: var(--line-2); border-radius: 10px; }  /* a panel not made yet is still to do, not an error */
+.world-panel[aria-pressed="true"] .world-panel-thumb { outline: 2px solid var(--accent); outline-offset: 1px; }
+.world-panel[aria-pressed="true"] > span:not(.world-panel-thumb) { color: var(--text); }
+.world-panel.is-blocked .world-panel-thumb { opacity: .5; }
+.world-panel small { color: var(--faint); font: 500 10.5px ui-monospace, Consolas, monospace; }
+.world-panel-flag { position: absolute; right: 3px; top: 3px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: rgba(14, 18, 23, .88); color: #f0728a; }
+
+/* The row under the description while a panel or the stress test is in front of you: what it is for (or why it waits), how many, the button. */
+.world-panel-bar { display: grid; gap: 6px; padding: 10px 0 0; border-top: 1px solid var(--line); }
+.world-panel-hint, .world-panel-why { flex: 1 1 220px; min-width: 0; margin: 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
+.world-panel-why { color: #f5b656; }
+.world-panel-note { padding-top: 10px; border-top: 1px solid var(--line); }
+.world-stress-with { flex: 1 1 260px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--faint); font-size: 12px; }
+
+/* The stress test in the picture's place: every picture with its company, marked recognizable or not, and the tally on top. */
+.world-stress { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; padding: 2px 2px 4px; }
+.world-stress > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.world-stress h3 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.world-stress-tally { color: var(--text); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.world-stress > header .world-run { position: static; transform: none; }
+.world-stress-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.world-stress-grid > li { display: grid; align-content: start; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--ground); }
+.world-stress-grid > li.is-yes { border-color: rgba(63, 192, 122, .6); }
+.world-stress-grid > li.is-no { border-color: rgba(229, 86, 111, .6); }
+.workbench-app.studio-shell .world-stress-img { display: block; width: 100%; padding: 0; border: 0; border-radius: 7px; background: var(--bg-2); overflow: hidden; cursor: zoom-in; }
+.world-stress-img img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.world-stress-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; padding: 0 2px; }
+.world-stress-meta small { min-width: 0; overflow: hidden; color: var(--faint); font: 500 11px ui-monospace, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.world-stress-meta em { color: var(--muted); font-size: 11.5px; font-style: normal; white-space: nowrap; }
+.world-stress-marks { flex: none; display: inline-flex; gap: 2px; }
+.workbench-app.studio-shell .world-stress-marks .icon-btn { width: 26px; height: 26px; color: var(--faint); }
+.workbench-app.studio-shell .world-stress-marks .icon-btn[aria-pressed="true"]:first-child { background: rgba(63, 192, 122, .18); color: #3fc07a; }
+.workbench-app.studio-shell .world-stress-marks .icon-btn[aria-pressed="true"]:last-child { background: rgba(229, 86, 111, .18); color: #f0728a; }
+
+/* The locks under the description: the text constants pasted into every prompt that uses the asset, each saved when you leave it. */
+.world-locks { flex: none; display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-2); }
+.world-lock-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 16px; }
+.world-locks-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font-size: 13.5px; }
+.world-locks-head b { font-weight: 600; }
+.world-locks-head small { color: var(--faint); font-size: 12px; }
+.world-lock { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.world-lock-head { display: flex; align-items: baseline; gap: 8px; color: var(--muted); font-size: 12px; }
+.world-lock-head b { font-weight: 600; }
+.world-lock-head small { color: var(--faint); font-size: 11.5px; }
+.world-lock-head small.is-failed { color: #f0728a; }
+.workbench-app.studio-shell .world-locks .world-lock-text.world-lock-text.world-lock-text { width: 100%; min-height: 66px; resize: vertical; font: 400 13px/1.6 var(--font); }
+.world-lock.is-read p { margin: 0; color: var(--text); font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.world-lock.is-read p.is-unset { color: var(--faint); }
+@media (max-height: 780px) { .world-panel-thumb { width: 44px; height: 44px; } }

@@ -21,6 +21,7 @@ import { shotMonitor, playingItem, useShotMonitor } from './shotMonitor.js';
 import { CameraWall, LookWall, ReferenceWall } from './ExampleWall.jsx';
 import { LookButtons } from './LookTiles.jsx';
 import { PromptEditor } from './PromptComposer.jsx';
+import { ReferencePlan } from './ReferencePlan.jsx';
 import { Icon } from '../Icon.jsx';
 import './composer.css';
 
@@ -82,7 +83,7 @@ function PromptPreview({state, onSaveAndPreview, disabled}) {
   if (state.status === 'loading') return <p className="sheet-subtle" role="status">{t('composer.previewLoading')}</p>;
   if (state.status === 'failed') return <p className="gen-error" role="alert">{t('composer.previewFailed', {message: state.error})}</p>;
   if (state.status !== 'ready') return null;
-  const {compiledPrompt = null, references = [], look = null} = state.data || {};
+  const {compiledPrompt = null, references = [], look = null, referencePlan, droppedBlocks} = state.data || {};
   const camera = [['opticalRig', look?.opticalRig], ['cameraMovement', look?.cameraMovement],
     ['moves', Array.isArray(look?.moves) && look.moves.length ? look.moves.map(move => typeof move === 'string' ? '#' + move : move?.id ? '#' + move.id : String(move)).join(' ') : ''],
     ['film', look?.film], ['color', look?.color], ['light', look?.light]].filter(([, value]) => value);
@@ -94,6 +95,7 @@ function PromptPreview({state, onSaveAndPreview, disabled}) {
           {Number.isFinite(ref.at) ? ' · ' + t('generation.seconds', {value: tenth(ref.at)}) : ''}{ref.adopted === false ? ' · ' + t('composer.previewNotAdopted') : ''}</span></>
         : <>{ref?.imageUrl ? <img src={ref.imageUrl} alt="" loading="lazy"/> : <Icon name="image" size={13}/>}<span>{ref?.name || ref?.code}{ref?.code ? <small> @{ref.code}</small> : null}</span></>}
     </li>)}</ul>}
+    <ReferencePlan plan={referencePlan} dropped={droppedBlocks}/>
     {camera.length > 0 && <dl>{camera.map(([key, value]) => <div key={key}><dt>{t('composer.preview_' + key)}</dt><dd>{String(value)}</dd></div>)}</dl>}
   </section>;
 }

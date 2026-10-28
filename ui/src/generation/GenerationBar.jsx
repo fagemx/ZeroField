@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocale } from '../i18n/react.jsx';
 import { t } from '../i18n/index.js';
 import { storyList, storyRequest } from '../storyModel.js';
-import { FALLBACK_SHOT_APP, clampCount, estimateOf, fallbackOptions, frameOptions, generateLabel, humanSeconds, nodeControls, reasonKey, requestBody,
+import { FALLBACK_SHOT_APP, FRAME_APP, clampCount, estimateOf, fallbackOptions, frameOptions, frameOptionsUsable, generateLabel, humanSeconds, nodeControls, reasonKey, requestBody,
   secondChoices, shotRequestBody, slotControls, startingApp, startingSeconds, MAX_TAKES } from './generationModel.js';
 
 // SPEC_18 R8: what a picture will use and cost, on the same row as the button that makes it. The workflow, ratio and resolution you see are
@@ -14,7 +14,7 @@ import { FALLBACK_SHOT_APP, clampCount, estimateOf, fallbackOptions, frameOption
 // then the workflow, the seconds, resolution and sound, how many takes (1-4), the time, and the Shot Stage's one primary button
 // ("Generate 2 · about 80 s", or "Save & generate" while the prompt has unsaved changes). A narrow row (under 760 px, or a window under
 // 960 px) folds resolution and sound into "More"; the shot's ratio follows the episode and always sits there. A first frame uses the
-// image cards of the catalog, a video the shot's own generation options.
+// shot's image options (?kind=image, else the catalog's image cards), a video the shot's own generation options.
 const timeText = seconds => { const {unit, value} = humanSeconds(seconds); return t(unit === 's' ? 'generation.seconds' : 'generation.minutes', {value}); };
 
 // The catalog's cards per capability, read once per page: their inputs give the shot row its seconds and sound.
@@ -67,15 +67,20 @@ export function GenerationBar({kind = 'asset', id, ratio = '', styleName = '', l
     let alive = true;
     setLoaded({status: 'loading', options: null}); setQuote(null);
     const frame = shot && output === 'frame', capability = frame ? 'IMAGE' : 'VIDEO';
-    const options = frame ? catalogApps('IMAGE').then(items => frameOptions(items)) : storyRequest(`/${kind}s/${id}/generation-options`);
+    // SPEC_21: a first frame's cards come from the shot's image options, whose default is the server's (the reference card); a server
+    // without them leaves the catalog's image cards, which never default to an edit card.
+    const options = frame ? storyRequest(`/shots/${id}/generation-options?kind=image`)
+      .then(value => frameOptionsUsable(value) ? value : Promise.reject(new Error('no image options')))
+      .catch(() => catalogApps('IMAGE').then(items => frameOptions(items)))
+      : storyRequest(`/${kind}s/${id}/generation-options`);
     Promise.all([options, shot ? catalogApps(capability).catch(() => []) : null])
       .then(([value, catalog]) => {if (alive) setLoaded({status: 'ready', options: value, catalog: catalog || []});})
-      .catch(() => {if (alive) setLoaded({status: 'failed', options: fallbackOptions(shot && !frame ? FALLBACK_SHOT_APP : undefined), catalog: []});});
+      .catch(() => {if (alive) setLoaded({status: 'failed', options: fallbackOptions(shot ? (frame ? FRAME_APP : FALLBACK_SHOT_APP) : undefined), catalog: []});});
     return () => {alive = false;};
   }, [kind, id, shot && output]);  // eslint-disable-line react-hooks/exhaustive-deps
   // Another output is another list of workflows: the shot row starts over on it (the takes count stays).
   useEffect(() => {if (shot) setChosen({appCode: null, values: {}});}, [shot && output]);  // eslint-disable-line react-hooks/exhaustive-deps
-  const options = loaded.options || fallbackOptions(shot && output !== 'frame' ? FALLBACK_SHOT_APP : undefined);
+  const options = loaded.options || fallbackOptions(shot ? (output === 'frame' ? FRAME_APP : FALLBACK_SHOT_APP) : undefined);
   const app = startingApp(options, chosen.appCode);
   const controls = slotControls(app, chosen.values, ratio);
   const inputs = shot ? nodeControls((loaded.catalog || []).find(item => item.appCode === app?.appCode)) : {};
