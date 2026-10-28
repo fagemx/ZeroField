@@ -299,7 +299,7 @@ def preflight(conn, me, slug, key, body):
     try:
         value = validate_definition(saved["definition"])
     except ValueError as exc:
-        raise ExecutionError(400, "請先儲存有效工作流：" + str(exc)) from exc
+        raise ExecutionError(400, "Save a valid pipeline first: " + str(exc)) from exc
     if "definition_revision" in body and body["definition_revision"] != saved["revision"]:
         raise ExecutionError(409, "The pipeline definition changed. Reload it.")
     if body.get("execution_mode", "workflow") not in ("workflow", "single_step"):
@@ -388,7 +388,7 @@ def preflight(conn, me, slug, key, body):
             if target.get("tab_key") and not target_tab:
                 raise ExecutionError(400, "The output page does not exist.")
             entry["target"] = target
-            entry["target_title"] = target_tab["title"] if target_tab else "保留結果，不寫回分頁"
+            entry["target_title"] = target_tab["title"] if target_tab else None  # None: the UI says "keep the result"
             if target_tab:
                 tables = _table_data(target_tab["doc"], all_values.get(target["tab_key"], {}))
                 if not any(n.get("row_source") for n in value["nodes"] if n["id"] in active):
@@ -412,7 +412,7 @@ def preflight(conn, me, slug, key, body):
     return {"execution_mode": "single_step" if single else "workflow", "definition_revision": saved["revision"],
             "nodes": nodes, "sources": list(sources.values()), "source_revisions": {k: v["revision"] for k, v in sources.items()},
             "errors": errors, "warnings": warnings, "ready": not errors,
-            "external_effects": "建立真實執行任務；服務可能呼叫付費模型。單步結果需核對後才寫回。" if single else "建立真實執行任務；依各步設定直接寫入或等待提案核對。"}
+            "external_effects": "Creates real execution tasks; the service may call paid models. A single-step result is written back only after review." if single else "Creates real execution tasks; each step writes directly or waits for proposal review, as configured."}
 
 
 def _start_single_step(conn, me, slug, key, body):
@@ -466,7 +466,7 @@ def start(conn, me, slug, key, body):
     try:
         value = validate_definition(saved["definition"])
     except ValueError as exc:
-        raise ExecutionError(400, "請先建立並儲存有效工作流：" + str(exc)) from exc
+        raise ExecutionError(400, "Create and save a valid pipeline first: " + str(exc)) from exc
     if "source_revisions" in body:
         _check_source_revisions(conn, slug, body["source_revisions"])
     target_tab = body.get("target_tab")

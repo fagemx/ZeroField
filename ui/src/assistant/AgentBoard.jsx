@@ -115,7 +115,7 @@ export function AgentBoard({ assistant, me, onOpenTarget }) {
         <strong>{item.title || item.question || uiText("agentBoard.changesToReview")}</strong>
         {item.kind === 'race_select' ? <><p>{uiText("agentBoard.candidatesReadyToReview", {v0: (item.proposals.length)})}</p><button type="button" onClick={() => assistant.updateBoardUi({ selected: item })}>{uiText("agentBoard.compareCandidates")}</button></> :
           item.kind === 'question' || item.kind === 'escalation' ? <><p>{item.question}</p>
-            {item.context && <details><summary>{uiText("agentBoard.reviewPipelineScope")}</summary>{item.context.nodes.map(node => <p key={node.node_id}>{uiText("agentBoard.items", {v0: (node.title), v1: (node.row_count), v2: (node.target_title), v3: (node.write_mode === 'direct' ? uiText("agentBoard.directWrite") : uiText("agentBoard.proposalReview"))})}</p>)}
+            {item.context && <details><summary>{uiText("agentBoard.reviewPipelineScope")}</summary>{item.context.nodes.map(node => <p key={node.node_id}>{uiText("agentBoard.items", {v0: (node.title), v1: (node.row_count), v2: (node.target_title || uiText("flowPanels.keepResultNoWriteBack")), v3: (node.write_mode === 'direct' ? uiText("agentBoard.directWrite") : uiText("agentBoard.proposalReview"))})}</p>)}
               {item.context.sources.map(source => <small key={source.tab_key}>{uiText("agentBoard.revision", {v0: (source.title), v1: (source.revision)})}<br /></small>)}</details>}
             <div className="board-options">{item.options.map(option => <button type="button" aria-pressed={board.ui.drafts[item.gate_id] === option.id} key={option.id}
               disabled={busy !== null || !me.can_write} onClick={() => answer(item, option)}>{option.label}</button>)}</div></> :

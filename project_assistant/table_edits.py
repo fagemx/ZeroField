@@ -55,7 +55,7 @@ def cell_value(cell, values):
         elif kind == "hardBreak":
             text += "\n"
         elif kind == "image":
-            text = f"![{attrs.get('alt') or '圖片'}]({attrs.get('src')})"
+            text = f"![{attrs.get('alt') or 'image'}]({attrs.get('src')})"
         elif kind in ("fill", "status"):
             value = values.get(attrs.get("fid"))
             text = _plain(value.get("value", "") if isinstance(value, dict) else value if value is not None else attrs.get("label", "未開始") if kind == "status" else "")

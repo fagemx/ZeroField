@@ -3,6 +3,13 @@ import { t as uiText } from '../i18n/index.js';
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./review.css";
+import { reviewColumnLabel, reviewGroupLabel, reviewMedia } from "./reviewLabels.js";
+
+function ReviewValue({ value, empty }) {
+  const media = reviewMedia(value);
+  if (!media) return value || empty;
+  return media.kind === "image" ? <img className="review-thumb" src={media.url} alt={media.label} /> : <span>{media.label}</span>;
+}
 
 function ReviewDialog({ proposal, onApply, onDismiss, onClose }) {
   const locale = useLocale();
@@ -44,10 +51,10 @@ function ReviewDialog({ proposal, onApply, onDismiss, onClose }) {
       {review?.partial_allowed && <label className="review-all"><input type="checkbox" disabled={busy} checked={picked.length === groups.length}
         onChange={(e) => setPicked(e.target.checked ? groups.map((g) => g.index) : [])} />{uiText("tableProposalReview.selectAllChanges")}</label>}
       {groups.map((group) => <section className="review-group" key={group.index}>
-        <h3>{review.partial_allowed && <input type="checkbox" disabled={busy} aria-label={uiText("tableProposalReview.accept", {v0: (group.label)})} checked={picked.includes(group.index)}
-          onChange={(e) => setPicked((old) => e.target.checked ? [...old, group.index] : old.filter((i) => i !== group.index))} />}{group.label}</h3>
+        <h3>{review.partial_allowed && <input type="checkbox" disabled={busy} aria-label={uiText("tableProposalReview.accept", {v0: (reviewGroupLabel(group))})} checked={picked.includes(group.index)}
+          onChange={(e) => setPicked((old) => e.target.checked ? [...old, group.index] : old.filter((i) => i !== group.index))} />}{reviewGroupLabel(group)}</h3>
         <table><thead><tr><th>{uiText("tableProposalReview.column")}</th><th>{uiText("tableProposalReview.original")}</th><th>{uiText("tableProposalReview.suggestedChange")}</th></tr></thead>
-          <tbody>{group.changes.map((change, index) => <tr key={index}><th>{change.column}</th><td>{change.before || <span className="review-empty">{uiText("tableProposalReview.empty")}</span>}</td><td className="review-after">{change.after || <span className="review-empty">{uiText("tableProposalReview.clear")}</span>}</td></tr>)}</tbody></table>
+          <tbody>{group.changes.map((change, index) => <tr key={index}><th>{reviewColumnLabel(change)}</th><td><ReviewValue value={change.before} empty={<span className="review-empty">{uiText("tableProposalReview.empty")}</span>} /></td><td className="review-after"><ReviewValue value={change.after} empty={<span className="review-empty">{uiText("tableProposalReview.clear")}</span>} /></td></tr>)}</tbody></table>
       </section>)}
       {!groups.length && <pre>{proposal.content}</pre>}
     </div>

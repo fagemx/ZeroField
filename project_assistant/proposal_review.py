@@ -43,16 +43,20 @@ def describe(target, tab, *, partial_allowed=False):
             for c in op.get("edited_cols", range(len(after.get("content", [])))):
                 old = before.get("content", [])[c] if c < len(before.get("content", [])) else {}
                 new = after.get("content", [])[c] if c < len(after.get("content", [])) else {}
-                changes.append({"column": node_text(header[c]) if c < len(header) else f"欄 {c + 1}", "before": cell_text(old, before_values), "after": cell_text(new, after_values)})
+                # column_kind/column_index let the UI word the fallback names in its own language.
+                changes.append({"column": node_text(header[c]) if c < len(header) else f"Column {c + 1}", "column_kind": "header" if c < len(header) else "index",
+                                "column_index": c, "before": cell_text(old, before_values), "after": cell_text(new, after_values)})
         else:
-            changes.append({"column": "文件／結構", "before": node_text(before), "after": node_text(after)})
-        label = cell_text((before.get("content") or after.get("content") or [{}])[0], before_values) if op.get("op") == "put_row" else "結構修改"
+            changes.append({"column": "Document / structure", "column_kind": "structure", "before": node_text(before), "after": node_text(after)})
+        kind = "row" if op.get("op") == "put_row" else "structure"
+        label = cell_text((before.get("content") or after.get("content") or [{}])[0], before_values) if kind == "row" else "Structural change"
         data_rows = [row for row in table.get("content", []) if not all(cell.get("type") == "tableHeader" for cell in row.get("content", []))]
         row_number = next((n + 1 for n, row in enumerate(data_rows) if row.get("attrs", {}).get("bid") == op.get("rid")), None)
         context_cells = (before.get("content") or after.get("content") or [])[:2]
         context = " · ".join(cell_text(cell, before_values)[:80] for cell in context_cells if cell_text(cell, before_values))
-        label = (f"第 {row_number} 列 · " if row_number else "") + (context or label or "新增資料")
-        groups.append({"index": i, "row_id": op.get("rid"), "row_number": row_number, "context": context, "label": label[:200], "changes": changes})
+        label = (f"Row {row_number} · " if row_number else "") + (context or label or "New data")
+        # kind + row_number + context are the language-neutral parts of label; the UI words them itself.
+        groups.append({"index": i, "row_id": op.get("rid"), "row_number": row_number, "context": context, "kind": kind, "label": label[:200], "changes": changes})
     return {"groups": groups, "partial_allowed": bool(partial_allowed and _independent(target)), "source_revision": target.get("expected_revision") or target.get("source_revision"), "version": version(target)}
 
 

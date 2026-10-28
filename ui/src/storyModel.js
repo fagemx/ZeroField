@@ -114,9 +114,11 @@ const BLOCKER_KEYS = {
   missing_preparation_source:'blockerPreparationSource',invalid_preparation_binding:'blockerPreparation',
   invalid_dependencies:'blockerPreparation',invalid_preparation_output:'blockerPreparation',
   invalid_generation_output:'blockerCardInputs',invalid_card_inputs:'blockerCardInputs',
+  models_not_installed:'blockerModelsMissing',
 };
 export function allocationBlockerLabel(blocker) {
   const [code, , ...field] = String(blocker).split(':');
+  if (code === 'models_not_installed') return t('allocation.blockerModelsMissing',{files:field.join(':')});
   const key = Object.hasOwn(BLOCKER_KEYS,code) ? BLOCKER_KEYS[code] : 'blockerUnknown';
   const message = t('allocation.'+key);
   return field.length && key !== 'blockerUnknown' ? t('allocation.blockerField',{message,field:field.join(':')}) : message;

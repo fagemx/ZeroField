@@ -546,6 +546,8 @@ MESSAGES = (
     ('This run reads the selected current source only. It does not execute upstream steps or reuse historical results.', 'thisRunReadsTheSelectedCurrentSourceOnlyItDoes', None),
     ('The row count previews current data. Execution reads matching rows again after upstream tasks finish and are approved.', 'theRowCountPreviewsCurrentDataExecutionReadsMatchingRows', None),
     ('No rows currently match. Per-row scope will be recalculated after upstream changes are applied.', 'noRowsCurrentlyMatchPerRowScopeWillBeRecalculated', None),
+    ('Save a valid pipeline first: {detail}', 'saveAValidPipelineFirst', 'Save\\ a\\ valid\\ pipeline\\ first:\\ (?P<v0>[\\s\\S]*?)'),
+    ('Create and save a valid pipeline first: {detail}', 'createAndSaveAValidPipelineFirst', 'Create\\ and\\ save\\ a\\ valid\\ pipeline\\ first:\\ (?P<v0>[\\s\\S]*?)'),
     ('Not found', 'notFound', None),
     ('不接受從別的網站送來的請求', 'requestNotAllowed', None),
     ('專案工作台的前端還沒建置。', 'requestNotAllowed2', None),

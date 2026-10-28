@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale } from './i18n/react.jsx';
 import { t } from './i18n/index.js';
 import { api } from './api.js';
+import { usePolling } from './polling.js';
 import { storyRequest } from './storyModel.js';
 import { readinessLines } from './assistant/AgentBoard.jsx';
 import { cardDismissed, dismissCard, flowActive, flowCancelPath, flowLine, lockSummary, pollDelay, preproductionPath,
@@ -36,12 +37,8 @@ export function PreproductionPanel({slug, epId, writable, compact = false, shots
     setError(null); setDismissed(cardDismissed(epId));
     load().catch(failure => setError({text: t('preproduction.loadFailed', {v0: failure.message}), lines: []}));
   }, [epId, load]);
-  useEffect(() => {
-    const delay = pollDelay(state?.flow);
-    if (!delay) return undefined;
-    const timer = setTimeout(() => load().catch(() => {}), delay);
-    return () => clearTimeout(timer);
-  }, [state, load]);
+  // A failed load only slows the next try (see polling.js); the loop ends when the flow is no longer active.
+  usePolling(load, state ? pollDelay(state.flow) : null);
   if (!epId || !state) return null;
   const flow = state.flow, active = flowActive(flow);
   const act = async (name, action) => {
