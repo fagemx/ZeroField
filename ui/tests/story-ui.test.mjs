@@ -479,7 +479,7 @@ test('B4: the camera wall numbers the moves in prompt order, outlines the chosen
   const base={catalog:{status:'ready',items:lookCatalog.camera,groups},choice:{body:'film-35mm',lens:'anamorphic',aperture:'auto-aperture'},custom:false,moves:lookCatalog.moves,
     numbers:{'push-in':[1,3],pan:[2]},order:['push-in','pan','push-in'],onCategory(){},onChoose(){},onMove(){},onClose(){},onReset(){}};
   const moves=render('CameraWall',{...base,category:'moves'});
-  assert.match(moves,/aria-pressed="true"[^>]*><span class="look-frame"><span class="look-texture"[^>]*><\/span><span class="look-order" aria-label="Order 1, 3">1·3<\/span><\/span><span class="look-name">Push in<\/span>/);
+  assert.match(moves,/aria-pressed="true"[^>]*><span class="look-frame"><img src="\/projects\/assets\/look-samples\/move\/push-in\.webp"[^>]*\/><span class="look-order" aria-label="Order 1, 3">1·3<\/span><\/span><span class="look-name">Push in<\/span>/);
   assert.match(moves,/<span class="look-order" aria-label="Order 2">2<\/span><\/span><span class="look-name">Pan<\/span>/);
   assert.match(moves,/<section aria-label="This shot, in order"><h4>This shot, in order<\/h4><ol><li><span class="num">1<\/span>Push in<\/li><li><span class="num">2<\/span>Pan<\/li><li><span class="num">3<\/span>Push in<\/li><\/ol>/);
   assert.equal((moves.match(/<video/g)||[]).length,0,'no example plays until the pointer rests on it');
