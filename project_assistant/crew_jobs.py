@@ -220,7 +220,8 @@ def resolve_target(conn, ref):
         return Target(kind, identifier, slug, label[:160], row['tabKey'], row['rid'], row=row)
     if kind == 'scene':
         ep, scene = story.locate_scene(conn, identifier)
-        title = re.sub(r'^Scene\s*\d+\s*[:：.-]?\s*', '', scene['title'], flags=re.I).strip()
+        from project_docs.scene_headings import scene_label
+        title = scene_label(scene['title'])  # "1. INT. DAM" -> "Scene 01: INT. DAM", never the number twice
         label = f"Scene {scene['sceneIndex']:02d}" + (f': {title}' if title else '')
         return Target(kind, identifier, ep['slug'], label[:160], ep['tabKey'], episode=ep, scene=scene)
     ep = story.episode(conn, identifier)

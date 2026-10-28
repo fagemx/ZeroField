@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from project_docs.scene_headings import HEADING_LINES as HEADING, scene_name
+from project_docs.scene_headings import HEADING_LINES as HEADING, is_heading, numbered_title, place_key, scene_label, scene_location
 
 SOURCE_MODES = {"auto", "idea", "novel", "script"}
 BREAKDOWN_MODES = {"auto", "scene", "cinematic", "cinematic_multi"}
@@ -23,6 +23,55 @@ IDEA_STAGES = [("The discovery", "establishes the space and discovers the confli
 QUOTED = re.compile(r'["“「]([^"”」\n]+)["”」]')
 # A cue tag keeps its variant or has none: "@CAST-01:night enters." must not back off to "@CAST-01" + ": night enters."
 SPEAKER = re.compile(r'^\s*(@?CAST-\d+(?:[:#][\w-]+|(?![:#]\w))|[A-Za-z][A-Za-z\s\'-]{0,35}|[\u3400-\u9fff]{1,12})\s*[:：]\s*(.*)$')
+# A standard screenplay cue (R44-4): the speaker's name alone on its line in upper case, up to four words, with optional
+# extensions such as (V.O.), (O.S.) or (CONT'D) and a dual-dialogue caret; the dialogue starts on the next line.
+CUE = re.compile(r"^\s*([A-Z][A-Z0-9'’.\-]*(?:[ \t]+[A-Z0-9#][A-Z0-9'’.\-]*){0,3})\s*((?:\(\s*[A-Za-z][A-Za-z.'’ \-]{0,20}\)\s*)*)\^?\s*$")
+# All-caps lines that are no one: transitions, shot directions, titles and the like (any word of the line) ...
+NOT_CUE_WORDS = frozenset("""CUT FADE FADES DISSOLVE DISSOLVES SMASH WIPE IRIS INTERCUT INTERCUTTING CONTINUOUS LATER CLOSE
+    CLOSEUP CLOSE-UP ECU ANGLE ANGLES INSERT POV SHOT SHOTS PAN TILT ZOOM DOLLY TRACKING CRANE AERIAL OVERHEAD ESTABLISHING
+    MONTAGE FLASHBACK SUPER SUPERIMPOSE TITLE TITLES CREDITS CHYRON SUBTITLE SUBTITLES END BLACK BLACKOUT FREEZE SLOW BACK
+    RESUME RESUMING CONTINUED MORE SCENE CHAPTER PROLOGUE EPILOGUE INTERLUDE ACT PART MEANWHILE SILENCE BEAT PAUSE OMITTED
+    SFX VFX MUSIC SOUND SOUNDS NOISE""".split())
+# ... and sound or action words (a line made only of them: "BOOM", "KNOCK KNOCK"), plus group cues that are no one's card.
+NOT_CUE_LINES = frozenset("""BOOM BANG CRASH THUD THUMP CLICK CLANG CLANK SNAP CRACK CREAK SLAM SPLASH WHOOSH WHAM BAM POP BEEP
+    BUZZ RING KNOCK RUMBLE ROAR HISS DRIP SCREAM SCREAMS GUNSHOT GUNSHOTS EXPLOSION SIREN SIRENS ALARM ALARMS THUNDER LIGHTNING
+    DARKNESS BLACKNESS STATIC NOTHING SUDDENLY NOW THEN FLASH TICK TOCK SHATTER WATER RAIN WIND ALL BOTH EVERYONE
+    TOGETHER""".split())
+LINE_BREAK = "\ue000"  # a hard line break inside one screenplay_markdown block; story_openapi.screenplay_doc makes it a hardBreak
+
+
+def proper_name(value):
+    """An all-caps cue or slugline in name case ("MR. O'NEIL-VESK" -> "Mr. O'neil-Vesk"); mixed case stays as written."""
+    return re.sub(r"[A-Za-z][A-Za-z'’]*", lambda m: m[0][:1].upper() + m[0][1:].lower(), value) if value.isupper() else value
+
+
+def cue_name(line, following=""):
+    """The person a standard screenplay cue names ("ELI (O.S.)" over dialogue -> "Eli"), else None (R44-4).
+
+    The cue is the name alone on its line in upper case; the next line carries the dialogue (it has lower case or is a
+    parenthetical). Scene headings, transitions (CUT TO:, FADE IN:), shot directions and sound words are no one.
+    """
+    match = CUE.match(line or "")
+    following = (following or "").strip()
+    if not match or not following or is_heading(line) or not (re.search(r"[a-z]", following) or following.startswith("(")):
+        return None
+    name = match[1].strip()
+    if len(name) > 35 or name[-1] in ".-'’" or len(re.sub(r"[^A-Z]", "", name)) < 2 or no_one(name) or is_heading(following):
+        return None
+    return proper_name(name)
+
+
+def no_one(name):
+    """A transition, shot direction, title or sound word ("FADE IN", "CLOSE ON", "BOOM", "WHAAAM"), not a person."""
+    words = [word.strip(".,!?'’") for word in name.strip().upper().split()]
+    return (all(word in NOT_CUE_LINES for word in words) or bool(NOT_CUE_WORDS.intersection(words))
+            or bool(re.search(r"([A-Z])\1\1", " ".join(words))))
+
+
+def cue_split(text):
+    """(cue line, dialogue) when a beat opens with a standard cue, else ("", text)."""
+    first, separator, rest = (text or "").partition("\n")
+    return (first.strip(), rest) if separator and cue_name(first, rest.split("\n", 1)[0]) else ("", text)
 
 
 def asset_code(value):
@@ -45,7 +94,8 @@ def source_mode(raw_text, mode="auto"):
 def character_details(content):
     """Explicit declarations and speaker cues win; prose recognition is conservative."""
     found = []
-    for line in content.splitlines():
+    lines = content.splitlines()
+    for position, line in enumerate(lines):
         declaration = re.match(r"\s*(?:Character|角色)\s*[:：]\s*(.+)", line, re.I)
         if declaration:
             value = declaration[1].strip()
@@ -56,8 +106,10 @@ def character_details(content):
             traits = re.search(r"[（(](.*?)[）)]", value)
             found.append((name or code or "Protagonist", traits[1].strip() if traits else "", code))
         elif (cue := SPEAKER.match(line)) and (QUOTED.search(cue[2]) or re.fullmatch(r"[A-Z][A-Z '\-]{1,35}", cue[1])) and not DECLARATION.match(line):
-            if not TAG.fullmatch(cue[1].strip()):
+            if not TAG.fullmatch(cue[1].strip()) and not no_one(speaker_name(cue[1])):  # "FADE IN:" is no one
                 found.append((speaker_name(cue[1]), "", None))
+        elif name := cue_name(line, lines[position + 1] if position + 1 < len(lines) else ""):
+            found.append((name, "", None))
     # Names adjacent to speech/action verbs avoid mistaking every sentence opening for a name.
     for match in re.finditer(r"\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)\s*\(([^)\n]{1,300})\)\s+(?:said|asked|whispered|replied|shouted|walked|entered|turned|ran)\b|\b([A-Z][a-z]+(?: [A-Z][a-z]+)?),\s+(?:an?\s+)?([^,\n]{1,160}),\s+", content):
         found.append((match[1] or match[3], (match[2] or match[4]).strip(), None))
@@ -72,33 +124,54 @@ def character_details(content):
     return list(result.values())
 
 
-def allocated_characters(content, fallback=None):
+def allocated_characters(content, fallback=None, existing=(), known=None, chosen=None):
+    """(name, traits, code) of the people. An untagged person keeps the code chosen before (``known``, by name) or the
+    card of the same name (``existing``: (code, name) of the production's cards); a new code never takes one an existing
+    card already has (a placeholder card, named by its code, is no one's yet). ``chosen`` (a dict) receives the name ->
+    code choices to keep."""
     people = character_details(content) or (fallback or [])
+    known = known or {}
+    cards = [(code, name) for code, name in existing
+             if code.startswith("CAST-") and ":" not in code and (name or "").strip().upper() not in ("", code)]
     reserved = {code for _, _, code in people if code}
     # Anonymous explicit tags are paired by order with untagged declarations before new IDs.
     available = list(dict.fromkeys(asset_code(m[1]).split(":")[0] for m in TAG.finditer(content)
                                    if m[1].upper().startswith("CAST") and asset_code(m[1]).split(":")[0] not in reserved))
+    taken = {code for code, _ in cards} | {code for key, code in known.items() if key.startswith("cast:")}
     result = []
     for name, traits, code in people:
+        key = "cast:" + place_key(name)
         if code is None:
-            if available:
+            same = [card for card, card_name in cards if "cast:" + place_key(card_name) == key and card not in reserved]
+            if known.get(key) and known[key] not in reserved:
+                code = known[key]
+            elif same:
+                code = same[0]
+            elif available:
                 code = available.pop(0)
             else:
                 index = 1
-                while f"CAST-{index:02d}" in reserved:
+                while f"CAST-{index:02d}" in reserved | taken:
                     index += 1
                 code = f"CAST-{index:02d}"
             reserved.add(code)
+            if chosen is not None:
+                chosen[key] = code
         result.append((name, traits, code))
     return result
 
 
 def screenplay_markdown(content):
-    """Keep screenplay cues separate when Markdown would collapse soft line breaks."""
+    """Keep screenplay cues separate when Markdown would collapse soft line breaks.
+
+    A paragraph holding a standard cue ("NORA" over her line) keeps its line breaks as LINE_BREAK, so the cue stays on
+    its own line inside the one block (R44-4); other wrapped prose is joined into one line as before.
+    """
     result, paragraph = [], []
     def flush():
         if paragraph:
-            result.append(" ".join(paragraph))
+            cued = any(cue_name(line, following) for line, following in zip(paragraph, paragraph[1:]))
+            result.append((LINE_BREAK if cued else " ").join(paragraph))
             paragraph.clear()
     for line in content.splitlines():
         stripped = line.strip()
@@ -162,7 +235,7 @@ def adapt_source_to_script(raw_text, mode="auto", target_scenes=3, style_name="S
         for position, line in enumerate(lines):
             if HEADING.match(line):
                 index += 1
-                lines[position] = f"## Scene {index:02d}: {scene_name(line) or 'Scene'}"
+                lines[position] = "## " + numbered_title(index, line)
         normalized = "\n".join(lines)
         return normalized if index else "## Scene 01: Opening\n\n" + normalized
     if composed:
@@ -177,12 +250,12 @@ def adapt_source_to_script(raw_text, mode="auto", target_scenes=3, style_name="S
         sections = []
         for i in range(target_scenes):
             title, action, dialogue = IDEA_STAGES[min(2, i * 3 // target_scenes)]
-            sections.append(f"## Scene {i + 1:02d}: {title}\n\nEnvironment: @SET-{i + 1:02d}, {style_name}, layered light and shadow.\n\n"
+            sections.append(f"## {numbered_title(i + 1, title)}\n\nEnvironment: @SET-{i + 1:02d}, {style_name}, layered light and shadow.\n\n"
                             f"Shot 1: @{people[0][2]} {action}. Story premise: {raw}\n\n"
                             f'Shot 2: @{people[1][2]}: "{dialogue}"\n\n'
                             f"Shot 3: Close-up of @{people[0][2]} reacting beside @PROP-01.")
         return bounded("\n\n".join(declarations + sections))
-    sections = [f"## Scene {i + 1:02d}: {title}\n\nEnvironment: @SET-{i + 1:02d}, {style_name}.\n\n" + "\n\n".join(f"Shot {j}: {beat}" for j, beat in enumerate(beats, 1))
+    sections = [f"## {numbered_title(i + 1, title)}\n\nEnvironment: @SET-{i + 1:02d}, {style_name}.\n\n" + "\n\n".join(f"Shot {j}: {beat}" for j, beat in enumerate(beats, 1))
                 for i, (title, beats) in enumerate(novel_sections(raw, people, target_scenes))]
     return bounded("\n\n".join(declarations + sections))
 
@@ -397,7 +470,7 @@ def compose_script(raw, mode, target_scenes, style_name, medium, genre, trace, c
                           "cinema": f"Wide: {setting} framed exactly as the first shot; only @PROP-01 has changed.",
                           "storybook": f"[Page turn] The next page: {a} and {b} on either side of @PROP-01, and all of {setting} quiet around them."}[medium])
         beats = [beat for beat in beats if allowed(beat)]
-        sections.append(f"## Scene {i + 1:02d}: {title}\n\n" + "\n\n".join(context + [f"Shot {j}: {beat}" for j, beat in enumerate(beats, 1)]))
+        sections.append(f"## {numbered_title(i + 1, title)}\n\n" + "\n\n".join(context + [f"Shot {j}: {beat}" for j, beat in enumerate(beats, 1)]))
     return sanitize_narrative_voice("\n\n".join(declarations + sections))
 
 
@@ -450,36 +523,77 @@ def scene_shot_beats(scene_content, breakdown_mode="auto"):
     if breakdown_mode == "scene":
         return ["\n".join(beats)]
     if breakdown_mode in ("cinematic", "cinematic_multi"):
-        split = []
-        for beat in beats:
-            # Sentence boundaries outside quotes split actions without fragmenting spoken lines.
-            start, closing = 0, None
-            for i, char in enumerate(beat):
-                boundary = False
-                if closing:
-                    if char == closing:
-                        closing = None
-                        boundary = i > 0 and beat[i - 1] in '.!?。！？'
-                elif char in '"“「':
-                    closing = {'"': '"', '“': '”', '「': '」'}[char]
-                elif char in '.!?。！？':
-                    boundary = True
-                if boundary and (i + 1 == len(beat) or beat[i + 1].isspace() or '\u3400' <= beat[i + 1] <= '\u9fff'):
-                    fragment = beat[start:i + 1].strip()
-                    if fragment:
-                        split.append(fragment)
-                    start = i + 1
-            if beat[start:].strip():
-                split.append(beat[start:].strip())
-        beats = split
+        beats = [sentence for beat in beats for sentence in beat_sentences(beat, carry_cue=True)]
     if breakdown_mode == "cinematic_multi" and len(beats) == 1:
         beats = ["Wide establishing view: " + beats[0], "Close-up detail: " + beats[0]]
     return beats
 
 
+def _sentences(text):
+    """Sentence boundaries outside quotes split actions without fragmenting spoken lines."""
+    split, start, closing = [], 0, None
+    for i, char in enumerate(text):
+        boundary = False
+        if closing:
+            if char == closing:
+                closing = None
+                boundary = i > 0 and text[i - 1] in '.!?。！？'
+        elif char in '"“「':
+            closing = {'"': '"', '“': '”', '「': '」'}[char]
+        elif char in '.!?。！？':
+            boundary = True
+        if boundary and (i + 1 == len(text) or text[i + 1].isspace() or '\u3400' <= text[i + 1] <= '\u9fff'):
+            fragment = text[start:i + 1].strip()
+            if fragment:
+                split.append(fragment)
+            start = i + 1
+    if text[start:].strip():
+        split.append(text[start:].strip())
+    return split
+
+
+def beat_sentences(beat, carry_cue=False):
+    """A beat's sentences (the cinematic cut). A standard cue line is never cut or split itself ("MR. VESK"): it heads
+    the first sentence of its dialogue and, with carry_cue, every later one, so each cut still says who speaks (R44-4)."""
+    lines = beat.split("\n")
+    segments = [["", []]]
+    for i, line in enumerate(lines):
+        if cue_name(line, lines[i + 1] if i + 1 < len(lines) else ""):
+            segments.append([line.strip(), []])
+        else:
+            segments[-1][1].append(line)
+    result = []
+    for cue, body in segments:
+        parts = _sentences("\n".join(body))
+        result += [cue + "\n" + part if cue and (j == 0 or carry_cue) else part for j, part in enumerate(parts)]
+    return result
+
+
+def cue_dialogue(lines, position):
+    """(speaker, spoken text, lines it covers) of the standard cue at lines[position], else None (R44-4)."""
+    name = cue_name(lines[position], lines[position + 1] if position + 1 < len(lines) else "")
+    if not name:
+        return None
+    end = position + 1
+    while end < len(lines) and lines[end].strip() and not cue_name(lines[end], lines[end + 1] if end + 1 < len(lines) else ""):
+        end += 1
+    spoken = " ".join(re.sub(r"\([^()\n]*\)", " ", line).strip() for line in lines[position + 1:end])
+    return name, " ".join(spoken.split()), end - position
+
+
 def infer_shot_grammar(beat_text, beat_index, total_beats, medium_lens=None):
-    dialogue = []
-    for line in beat_text.splitlines():
+    dialogue, lines, skip = [], beat_text.splitlines(), 0
+    for position, line in enumerate(lines):
+        if skip:
+            skip -= 1
+            continue
+        block = cue_dialogue(lines, position)
+        if block:
+            speaker, text, skip = block[0], block[1], block[2] - 1
+            for sentence in [quote[1] for quote in QUOTED.finditer(text)] or ([text] if text else []):
+                words = len(re.findall(r"[A-Za-z0-9]+|[\u3400-\u9fff]", sentence))
+                dialogue.append({"speaker": speaker, "line": sentence, "estimatedSeconds": round(max(1.0, words / 2.5), 1)})
+            continue
         cue = SPEAKER.match(line)
         speaker = speaker_name(cue[1]).lstrip("@").replace("#", ":") if cue else None
         spoken = [quote[1] for quote in QUOTED.finditer(line)]
@@ -520,8 +634,60 @@ def infer_shot_grammar(beat_text, beat_index, total_beats, medium_lens=None):
                            "facing": "console" if reaching else "room", "seconds": 4}}
 
 
-def extract_asset_details(content, scenes):
-    """Return source-derived descriptions; callers retain existing media and manual edits."""
+def scene_set_codes(scenes, existing=(), known=None, chosen=None):
+    """The set codes of each scene, in scene order (R44-5); every set fallback (extraction, storyboard build, its origin
+    binding and the Art crew) asks this one rule.
+
+    A scene's own @SET/@LOC tags win. An untagged scene is placed by the location its slugline names
+    (scene_headings.scene_location: INT./EXT. and the time of day dropped, then compared case- and punctuation-free),
+    so scenes at one location share one code: the code a tagged scene there uses, else the one chosen for it before
+    (``known``, kept on the episode by the extraction), else an existing set card of that name (``existing``: (code,
+    name) of the production's cards), else a new code. A heading that names no location ("Scene 02: Dawn") is a place
+    of its own, matched to a card by its title. A new code is SET-<scene number> when no tag, card or earlier choice
+    has it, otherwise the lowest free SET-NN, so it never takes a code that already belongs to another set.
+    ``chosen`` (a dict) receives the place -> code choices to keep.
+    """
+    known = known or {}
+    tagged = [list(dict.fromkeys(asset_code(m[1]) for m in TAG.finditer(scene["content"])
+                                 if m[1].upper().startswith(("SET-", "LOC-")))) for scene in scenes]
+    places = []
+    for i, scene in enumerate(scenes, 1):
+        location = place_key(scene_location(scene["title"]))
+        places.append(("set:" + location, location) if location else
+                      (f"set:#{scene.get('sceneIndex', i)}", place_key(scene_label(scene["title"]))))
+    cards = {}
+    for code, name in existing:
+        if code.startswith(("SET-", "LOC-")) and ":" not in code and (name or "").strip().upper() not in ("", code):
+            cards.setdefault(place_key(scene_location(name)) or place_key(scene_label(name)), code)
+    by_place = {}
+    for (key, _), codes in zip(places, tagged):
+        if codes and not key.startswith("set:#"):
+            by_place.setdefault(key, codes[0])
+    taken = ({code for codes in tagged for code in codes} | set(cards.values())
+             | {code for key, code in known.items() if key.startswith("set:")})
+    result = []
+    for i, (scene, codes, (key, name)) in enumerate(zip(scenes, tagged, places), 1):
+        if not codes:
+            code = by_place.get(key) or known.get(key) or cards.get(name)
+            if not code:
+                code, index = f"SET-{scene.get('sceneIndex', i):02d}", 1
+                while code in taken:
+                    code, index = f"SET-{index:02d}", index + 1
+            by_place[key] = code
+            taken.add(code)
+            if chosen is not None:
+                chosen[key] = code
+            codes = [code]
+        result.append(codes)
+    return result
+
+
+def extract_asset_details(content, scenes, existing=(), known=None, chosen=None):
+    """Return source-derived descriptions; callers retain existing media and manual edits.
+
+    existing, known and chosen place untagged people and sets beside the production's cards (allocated_characters,
+    scene_set_codes); without them a script is placed on its own, as before.
+    """
     candidates = {}
     for match in TAG.finditer(content):
         code = asset_code(match[1])
@@ -530,22 +696,29 @@ def extract_asset_details(content, scenes):
         traits = re.match(r"\s*[（(]([^）)\n]+)[）)]", content[match.end():])
         if traits:
             candidates[code]["traits"] = traits[1].strip()
-    for name, traits, code in allocated_characters(content):
+    for name, traits, code in allocated_characters(content, existing=existing, known=known, chosen=chosen):
         old = candidates.setdefault(code, {})
         old.update(name=name, traits=traits or old.get("traits", ""))
     for i, match in enumerate(re.finditer(r"(?m)^\s*(?:Prop|道具)\s*[:：]\s*([^\n]+)", content, re.I), 1):
         tag = TAG.search(match[1])
         code = asset_code(tag[1]) if tag and tag[1].upper().startswith("PROP") else f"PROP-{i:02d}"
         candidates[code] = {"name": TAG.sub("", match[1]).strip(), "traits": ""}
-    for i, scene in enumerate(scenes, 1):
-        codes = list(dict.fromkeys(asset_code(m[1]) for m in TAG.finditer(scene["content"]) if m[1].upper().startswith(("SET-", "LOC-")))) or [f"SET-{i:02d}"]
-        title = re.sub(r"^Scene\s*\d+\s*[:：.-]?\s*", "", scene["title"], flags=re.I).strip()
+    placed = set()
+    for scene, codes in zip(scenes, scene_set_codes(scenes, existing, known, chosen)):
+        tagged = {asset_code(m[1]) for m in TAG.finditer(scene["content"])}
+        title = scene_label(scene["title"])
+        # A set found by its slugline is named by its place ("Spillway Control Room"), never by a numbered heading.
+        place = proper_name(scene_location(scene["title"]))
         lines = [line.strip() for line in scene["content"].splitlines() if line.strip()]
         environment = next((re.sub(r"^Environment\s*[:：]\s*", "", line, flags=re.I) for line in lines if re.match(r"Environment\s*[:：]", line, re.I)), "")
-        if not environment and lines and not re.search(r"CAST-|Character\s*:|[\"“「]", lines[0], re.I):
+        if (not environment and lines and not re.search(r"CAST-|Character\s*:|[\"“「]", lines[0], re.I)
+                and not cue_name(lines[0], lines[1] if len(lines) > 1 else "")):
             environment = lines[0]
         for code in codes:
-            candidates[code] = {"name": title or code, "traits": TAG.sub("", environment).strip(" ,.")}
+            if code in placed and code not in tagged and candidates[code].get("traits"):
+                continue  # the first scene at a shared location describes it
+            candidates[code] = {"name": (title if code in tagged else place or title) or code, "traits": TAG.sub("", environment).strip(" ,.")}
+            placed.add(code)
     for code, item in candidates.items():
         name, traits = item["name"], item.get("traits", "")
         if code.startswith("CAST"):
