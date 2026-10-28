@@ -20,4 +20,4 @@ prune .reference-repos
 
 recursive-include workflows *.json *.md
 recursive-include skills *.md
-recursive-include samples *.png *.mp4 *.md *.py
+recursive-include samples *.png *.mp4 *.md *.py *.json *.jpg *.webp *.webm

@@ -42,22 +42,12 @@ def _set_text(cell, value):
 UPDRAFT_DIR = ("samples", "updraft")
 MEDIA_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
               ".mp4": "video/mp4", ".webm": "video/webm"}
-PANELS = {"CHARACTER": ("face", "front", "back", "sheet"), "SCENE": ("plate", "reverse", "angle"), "PROP": ("product",)}
 SEED_RECORD = "updraft_seed_"  # + slug: which manifest items were already applied, so a cell the user cleared stays empty
-
-
-def _asset_meta(row, asset):
-    """The asset_meta record of one Soul Cast row (SPEC_21 section 2.1); a state variant keeps its Change and takes the locks of its base."""
-    meta = asset.get("meta") or {}
-    return {"assetCode": asset["code"], "rowId": row["rid"],
-            "acting": meta.get("acting", ""), "geo": meta.get("geo", ""), "light": meta.get("light", ""), "lock": meta.get("lock", ""),
-            "panels": {name: None for name in PANELS.get(asset["type"], ())}, "stress": [],
-            "change": asset.get("change", "")}
 
 
 def seed_updraft_meta(conn, slug, *, owner=None):
     """Write the asset_meta records and the episode look of the Updraft production; an existing record or look is kept. Caller owns the transaction."""
-    from project_docs import story_look, story_openapi as story
+    from project_docs import story_assets, story_look, story_openapi as story
     production = templates.load_updraft()
     assets = {a["code"].upper(): a for a in production["assets"]}
     written = 0
@@ -65,7 +55,10 @@ def seed_updraft_meta(conn, slug, *, owner=None):
         asset = assets.get(row["cells"][0].lstrip("@").upper())
         if not asset or story.record(conn, "am_" + row["rid"], required=False):
             continue
-        story.store(conn, "am_" + row["rid"], "asset_meta", _asset_meta(row, asset), slug)
+        data = story_assets.blank(row)
+        locks = {**(asset.get("meta") or {}), **({"change": asset["change"]} if asset.get("change") else {})}
+        data.update({key: str(locks.get(key, ""))[:story_assets.TEXT_LIMIT] for key in story_assets.TEXT_FIELDS})
+        story_assets.save(conn, slug, row, data)
         written += 1
     look = False
     episode = next((e for e in story.episodes(conn, slug) if e["episodeId"] == f"ep_{slug}_01"), None)
@@ -134,14 +127,15 @@ def seed_updraft_media(conn, slug, root, actor_id):
                               session_id="studio-showcase-seed", base_revision=tab["revision"], force_revision=True)
             changed.append(key)
     # Panels: a face or plate picture is also the asset's own panel (an empty panel only).
+    from project_docs import story_assets
     rows = {r["cells"][0]: r for r in story.table_rows(conn, slug, "soul-cast")}
     for item in applied:
-        if item.get("panel") and item.get("tab") == "soul-cast" and item.get("code") in rows:
-            meta_id = "am_" + rows[item["code"]]["rid"]
-            meta = story.record(conn, meta_id, required=False)
-            if meta is not None and not (meta.get("panels") or {}).get(item["panel"]):
-                meta.setdefault("panels", {})[item["panel"]] = {"url": urls[Path(item["file"]).name], "imageId": None}
-                story.store(conn, meta_id, "asset_meta", meta, slug)
+        row = rows.get(item.get("code")) if item.get("panel") and item.get("tab") == "soul-cast" else None
+        if row and story.record(conn, "am_" + row["rid"], required=False) is not None:
+            meta = story_assets.meta_of(conn, row)
+            if item["panel"] in meta["panels"] and not meta["panels"][item["panel"]]:
+                meta["panels"][item["panel"]] = {"url": urls[Path(item["file"]).name], "imageId": None}
+                story_assets.save(conn, slug, row, meta)
     if applied:
         keys = [f"{i['tab']}/{i['code']}/{i['column']}/{i.get('panel')}" for i in applied]
         story.store(conn, SEED_RECORD + slug, "showcase_seed", {"applied": sorted(done | set(keys))}, slug)

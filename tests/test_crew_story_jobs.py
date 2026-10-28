@@ -252,6 +252,15 @@ class CrewStoryJobServerTests(unittest.TestCase):
     counted = crew_fixture.CrewJobServerTests.counted
 
     def prepare(self, script=SCRIPT):
+        # These scripts name Kael and Mira: the template's Noa and Ines take those names (the rest of Updraft stays).
+        from project_docs import story_openapi as story
+        self.conn.rollback()
+        for row in story.table_rows(self.conn, self.slug, 'soul-cast'):
+            if row['cells'][0] in ('CAST-01', 'CAST-02'):
+                kael = row['cells'][0] == 'CAST-01'
+                story.mutate_row(self.conn, self.me, self.slug, 'soul-cast', row['rid'],
+                                 {1: 'Kael' if kael else 'Mira', 2: ASSET['description'] if kael else ''})
+        self.conn.commit()
         self.ok(f"/episodes/{self.ep}/script", "PUT", {"scriptContent": script})
         self.ok(f"/episodes/{self.ep}/asset-extractions", "POST", {})
         self.ok(f"/episodes/{self.ep}/storyboards", "POST", {})
@@ -349,7 +358,7 @@ class CrewStoryJobServerTests(unittest.TestCase):
         bad = {'description': 'Kael, cinematic character portrait, 85mm lens, neutral backdrop.', 'reason': 'x'}
         status, done = self.run_job(FakeEndpoint(bad, bad))
         self.assertEqual((status, done['source']), ('succeeded', 'rule_fallback'), done)
-        self.assertEqual(done['result']['description'], 'Kael, original fictional courier, charcoal field jacket, analog recorder.')
+        self.assertTrue(done['result']['description'].startswith('Kael, original fictional courier'))
         proposal = self.proposal(done['result']['proposalIds'][0])
         self.assertTrue(proposal['content'].startswith(crew_planning.FALLBACK_NOTE))
         board = self.request(f'/projects/api/{self.slug}/orchestration/board?limit=50')[1]

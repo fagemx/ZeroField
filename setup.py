@@ -33,6 +33,8 @@ class BuildRuntimeResources(build_py):
         for source in (root / "samples").glob("*"):
             if source.is_file() and source.suffix in (".png", ".mp4", ".md", ".py"):
                 shutil.copy2(source, target / "samples" / source.name)
+        if (root / "samples" / "updraft").is_dir():
+            shutil.copytree(root / "samples" / "updraft", target / "samples" / "updraft", dirs_exist_ok=True)
         # Only current source assets belong in a new wheel, even after a rebuild.
         packaged_frontend = target / "static" / "projects"
         if packaged_frontend.exists():
