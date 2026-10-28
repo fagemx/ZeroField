@@ -49,7 +49,7 @@ STYLES = [{"stylePresetId": str(88123 + i), "name": name, "sampleImage": f"/proj
           for i, (name, slug) in enumerate(STYLE_SAMPLES)]
 RATIOS = ["16:9", "9:16", "1:1", "21:9"]
 USAGE_SCOPES = ("CHARACTER", "SCENE_PROP", "SCENE_PROP_EDIT", "FREE_CREATION_T2I", "FREE_CREATION_I2I")
-LOOK_KINDS = ("OUTFIT", "POSE", "LOOK")
+LOOK_KINDS = ("OUTFIT", "POSE", "LOOK", "STATE")  # SPEC_21: STATE, one asset per state (wet, hurt...)
 ASSET_RE = re.compile(r"@?\b((?:CAST|SET|LOC|PROP|STYLE)-\d+(?:[:#][a-z0-9_-]+)?)\b", re.I)
 _POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="story")
 _PROCESS = uuid.uuid4().hex
@@ -370,7 +370,7 @@ def media_column(row, kind):
 
 
 def look_kind(cells):
-    """OUTFIT/POSE/LOOK of a look-variant row (CAST-01:night); a look keeps its kind in the notes cell, so that cell is not free text."""
+    """OUTFIT/POSE/LOOK/STATE of a look-variant row (CAST-01:night); a look keeps its kind in the notes cell, so that cell is not free text."""
     note = cells[6] if len(cells) > 6 else ""
     return note if ":" in asset_code(cells[0]) and note in LOOK_KINDS else None
 
@@ -875,6 +875,9 @@ def candidate_list(conn, identifier, kind):
     prefix, key = ("im_", "imageId") if kind == "image" else ("vd_", "videoId")
     result = [{key: prefix + digest([identifier, url])[:24], "url": url, kind + "Url": url, "selected": url == current,
                "createdAt": created.get(url)} for url in dict.fromkeys(urls)]
+    if entity == "asset" and kind == "image":
+        from project_docs import story_assets
+        result = story_assets.with_panels(result, stored)  # SPEC_21: the panel each render was made for, else null
     if entity == 'shot':
         from project_docs import writing_impact
         evidence = [c for c in records(conn, 'candidate', slug) + records(conn, 'story_media_receipt', slug)
@@ -975,12 +978,14 @@ def snapshot(conn, slug, row):
     # SPEC_19 R11: a shot's compiled look is part of its source, so every digest of the source (Router quotes, batch
     # guards) also covers the look its prompt will be written with; a shot without a look keeps its old source.
     look = source_look(conn, slug, row.get("tabKey"), row["rid"])
+    from project_docs import story_assets
+    meta = story_assets.source_meta(conn, slug)  # SPEC_21 §2.5: the locks and chosen panels; absent when no asset has any
     return {"rows": [{"row_id": row["rid"], "tab_key": row["tabKey"], "cells": row["cells"]}],
             "tabs": [{"tab_key": key, "tables": [{"headers": row["headers"], "rows": [{"row_id": row["rid"], "cells": row["cells"]}]}]}
                      for key in [row["tabKey"]]] + [{"tab_key": "soul-cast", "tables": [{"headers": r["headers"],
                      "rows": [{"cells": r["cells"]} for r in table_rows(conn, slug, "soul-cast")]}]}
                      for r in table_rows(conn, slug, "soul-cast")[:1]],
-            **({"look": look} if look else {})}
+            **({"look": look} if look else {}), **({"asset_meta": meta} if meta else {})}
 
 
 def public_task(task):
@@ -1045,6 +1050,14 @@ def prepare_take_refs(identifier, slug, job, head):
 def generation_job(conn, me, identifier, kind, body):
     slug, row = find_row(conn, identifier, "shot" if identifier.startswith("sh_") else "asset")
     authorize(conn, me, slug, write=True)
+    plan = None
+    if body.get("panel") is not None:
+        from project_docs import story_assets
+        plan = story_assets.panel_plan(conn, slug, row, identifier, kind, body)  # SPEC_21 §2.3: the panel picks the card
+        body = {**body, "appCode": plan["card"]}
+    elif "appCode" not in body and identifier.startswith("sh_") and kind == "image":
+        from project_docs import story_generation_options as options
+        body = {**body, "appCode": options.fallback_card("shot", "image")}
     policy = production_policy(conn, slug)
     if "productionPolicy" in body and body["productionPolicy"] != policy:
         invalid("Change the production policy explicitly before generation.")
@@ -1083,6 +1096,8 @@ def generation_job(conn, me, identifier, kind, body):
     episode_id = shot.get('episodeId', 'ep_' + slug + '_01') if shot else None
     job = {"episodeId": episode_id, "entityId": identifier, "kind": kind, "row": row, "input": snapshot(conn, slug, row),
            "card": card, "workflow": workflow, "values": values, "column": column, "production_policy": policy}
+    if plan:
+        story_assets.apply_plan(job, plan)
     refs = []
     if identifier.startswith('sh_'):
         from project_docs import writing_impact, story_take_refs
@@ -1242,7 +1257,10 @@ def prompt_preview(conn, me, identifier, kind, body):
     references = [{"kind": "asset", "code": a["asset_id"], "name": a["name"], "imageUrl": next(iter(a.get("reference_urls") or ()), None)}
                   for a in ctx.get("resolved_assets") or [] if not a.get("take_ref")]
     references += [{"kind": "take", **ref} for ref in refs]
+    # SPEC_21 §2.2: the pictures the card receives, in order, and the skeleton blocks the budget dropped ([] without them).
+    plan = [{key: item.get(key) for key in ("assetCode", "role", "panel", "url")} for item in ctx.get("reference_plan") or [] if isinstance(item, dict)]
     return {"compiledPrompt": compiled, "references": references,
+            "referencePlan": plan, "droppedBlocks": [str(block) for block in ctx.get("dropped_blocks") or []],
             "look": {"opticalRig": ctx.get("optical_rig") or "", "cameraMovement": ctx.get("camera_motion") or "",
                      "moves": list(ctx.get("camera_moves") or []), "film": ctx.get("look_film") or "",
                      "color": ctx.get("look_color") or "", "light": ctx.get("look_light") or ""}}
@@ -1466,15 +1484,18 @@ def execute_task(identifier):
                 evidence = job.get('storyProvenance')
                 if job['entityId'].startswith('sh_'):
                     result = writing_impact.candidate_view(result, evidence)
+                from project_docs import story_assets
+                panel = story_assets.candidate_fields(job)  # SPEC_21: the panel (stress: variation, co-stars, set)
                 store(conn, "ca_" + identifier, "candidate", {"entityId": job["entityId"], "kind": job["kind"], "url": output["asset_url"],
-                      "createdAt": now(), **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
+                      "createdAt": now(), **panel, **({'storyProvenance': evidence} if job['entityId'].startswith('sh_') else {})}, slug)
                 repo.get_tab_for_update(conn, slug, job["row"]["tabKey"])
                 _, row = find_row(conn, job["entityId"], "shot" if job["entityId"].startswith("sh_") else "asset")
                 from project_docs import story_adoption
                 # An adopted shot keeps the take that is in the cut: a new render only joins its candidates (SPEC_19 R2).
                 adopted = job['entityId'].startswith('sh_') and story_adoption.row_status(row) in story_adoption.ADOPTED
-                # A delayed render is kept as a candidate, not allowed to overwrite a newer selection.
-                if not adopted and row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
+                # A delayed render is kept as a candidate, not allowed to overwrite a newer selection. A panel render stays a
+                # candidate: the reference image cell is the panel a person chose (SPEC_21 §0.3).
+                if not adopted and not panel and row["cells"] == job["row"]["cells"] and (not job['entityId'].startswith('sh_') or writing_impact.provenance_matches(conn, me, job['entityId'], evidence)):
                     mutate_row(conn, me, slug, row["tabKey"], row["rid"], {job["column"]: f"[{job['kind']}]({output['asset_url']})"})
                     if job["kind"] == "video" and job["entityId"].startswith("sh_"):
                         from project_docs import story_trim
@@ -1973,6 +1994,8 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
                               if any(code == result["assetCode"] or code.startswith(result["assetCode"] + ":") for code in s["assets"])]
                     result["shotIds"] = [s["shotId"] for s in usages]
                     result["sceneIds"] = list(dict.fromkeys(s["sceneId"] for s in usages if s.get("sceneId")))
+                    from project_docs import story_assets
+                    result |= story_assets.asset_fields(conn, row)  # SPEC_21: meta (the locks) and panels
                 return result
             if method == "PATCH":
                 mapping = {"name": 1, "prompt": 2} if entity == "asset" else {"shotIndex": 0, **{key: next((i for i, h in enumerate(row["headers"]) if re.search(pattern, h, re.I)), -1)
@@ -1988,6 +2011,11 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             if method == "DELETE":
                 mutate_row(conn, me, slug, row["tabKey"], row["rid"], delete=True)
                 return {"deleted": True}
+        if entity == "asset":
+            from project_docs import story_assets  # SPEC_21 §2.2: meta, panels, stress tests
+            routed = story_assets.route(conn, me, method, slug, identifier, row, tail, body, query, actions)
+            if routed is not None:
+                return routed
         if tail == "generation-options" and method == "GET":
             from project_docs import story_generation_options as options
             return options.describe(conn, slug, identifier, entity, row, query)
@@ -2000,7 +2028,11 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
                 invalid("kind must be image or video.")
             return prompt_preview(conn, me, identifier, kind, {k: v for k, v in body.items() if k != "kind"})
         if tail in ("images", "videos") and method == "GET":
-            return page(candidate_list(conn, identifier, "image" if tail == "images" else "video"), query)
+            items = candidate_list(conn, identifier, "image" if tail == "images" else "video")
+            if "panel" in query and entity == "asset" and tail == "images":
+                from project_docs import story_assets
+                items = story_assets.only_panel(items, query["panel"])
+            return page(items, query)
         if tail == "images" and method == "POST":
             file = owned(conn, me, text(body, "fileId"), "file")
             if file["purpose"] != "IMAGE":
@@ -2060,14 +2092,18 @@ def dispatch(conn, me, method, path, body, query, actions, headers=None):
             if method == "GET":
                 return page(variants, query)
             if method == "POST":
-                if body.get("kind", "OUTFIT") not in ("OUTFIT", "POSE", "LOOK"):
-                    invalid("Variant kind must be OUTFIT, POSE or LOOK.")
+                from project_docs import story_assets
+                if body.get("kind", "OUTFIT") not in LOOK_KINDS:
+                    invalid("Variant kind must be OUTFIT, POSE, LOOK or STATE.")
+                prompt, change = story_assets.variant_text(body, base, body.get("kind", "OUTFIT"))  # SPEC_21: STATE prefix
                 name = text(body, "name").strip()
                 key = text(body, "key", re.sub(r"[^a-z0-9_-]", "-", name.lower()).strip("-") or uuid.uuid4().hex[:8], 60)
                 if not re.fullmatch(r"[a-z0-9_-]+", key) or any(v["assetCode"] == base + ":" + key.upper() for v in variants):
                     invalid("Use a unique variant key containing letters, digits, underscores or hyphens.")
-                rid = mutate_row(conn, me, slug, "soul-cast", cells={0: base + ":" + key, 1: name, 2: text(body, "prompt"), 5: "Queued", 6: body.get("kind", "OUTFIT")})
-                return asset_view(slug, find_row(conn, f"as_{slug}_{rid}", "asset")[1]) | {"variantId": "vr_" + rid}
+                rid = mutate_row(conn, me, slug, "soul-cast", cells={0: base + ":" + key, 1: name, 2: prompt, 5: "Queued", 6: body.get("kind", "OUTFIT")})
+                created = find_row(conn, f"as_{slug}_{rid}", "asset")[1]
+                story_assets.keep_change(conn, slug, created, change)
+                return asset_view(slug, created) | {"variantId": "vr_" + rid}
         if entity == "asset" and tail.startswith("variants/") and method in ("PATCH", "DELETE"):
             rid = parts[3].removeprefix("vr_")
             variant = next((r for r in table_rows(conn, slug, "soul-cast") if r["rid"] == rid and r["cells"][0].upper().startswith(row["cells"][0].upper().split(":")[0] + ":")), None)
