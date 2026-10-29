@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="Photoreal Natural Light sample: low sun over red canyon walls with a long warm shadow line">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fa6c4"/><stop offset=".55" stop-color="#e9c48f"/><stop offset="1" stop-color="#f3d9a8"/></linearGradient>
+    <radialGradient id="sun" cx=".28" cy=".52" r=".22"><stop offset="0" stop-color="#fff6dc"/><stop offset=".35" stop-color="#ffe2a3" stop-opacity=".8"/><stop offset="1" stop-color="#ffd27f" stop-opacity="0"/></radialGradient>
+    <linearGradient id="rock" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9c4a26"/><stop offset=".5" stop-color="#c76a35"/><stop offset="1" stop-color="#7d3a1e"/></linearGradient>
+  </defs>
+  <rect width="320" height="180" fill="url(#sky)"/>
+  <rect width="320" height="180" fill="url(#sun)"/>
+  <path d="M0 98 L60 92 L96 100 L150 94 L210 101 L262 95 L320 99 L320 180 L0 180 Z" fill="url(#rock)"/>
+  <path d="M0 132 L70 126 L120 140 L190 130 L250 142 L320 134 L320 180 L0 180 Z" fill="#5b2a17" opacity=".85"/>
+  <path d="M230 64 L236 60 L242 64 L240 98 L232 98 Z" fill="#a85730"/>
+  <ellipse cx="96" cy="58" rx="11" ry="13" fill="#e08a3a"/>
+  <path d="M85 60 Q96 82 107 60 Z" fill="#1f6f6b"/>
+  <rect x="93" y="76" width="6" height="5" fill="#8a6a45"/>
+</svg>

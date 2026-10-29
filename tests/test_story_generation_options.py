@@ -76,7 +76,7 @@ class OptionsPureTests(unittest.TestCase):
     def test_every_style_has_a_sample_image_on_the_static_path_convention(self):
         slugs = ["sci-fi-noir", "cel-shaded-anime", "dark-fantasy", "neo-noir"]
         self.assertEqual([s["sampleImage"] for s in story.STYLES], [f"/projects/assets/style-samples/{slug}.svg" for slug in slugs])
-        self.assertEqual([s["stylePresetId"] for s in story.STYLES], ["88123", "88124", "88125", "88126"])
+        self.assertEqual([s["stylePresetId"] for s in story.STYLES], ["88123", "88124", "88125", "88126", "88127"])
         self.assertEqual(http.STATIC_TYPES[".svg"], "image/svg+xml")
         self.assertEqual((http.STATIC_TYPES[".webp"], http.STATIC_TYPES[".mp4"]), ("image/webp", "video/mp4"))  # look samples
         root = (http.STATIC_DIR / "assets").resolve()

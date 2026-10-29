@@ -44,7 +44,8 @@ ALIASES = {"H3_SHORT_VIDEO_V3": "h3-short-video-v3", "H3_REF2VA_PASS1": "h3-refe
            "LOCAL_SDXL_SMOKE": "local-smoke"}
 # (name, sample slug): the samples ship with the UI build, served from static/projects/assets/style-samples/<slug>.svg
 STYLE_SAMPLES = [("Sci-Fi Noir Anamorphic", "sci-fi-noir"), ("Cel-Shaded Anime Drama", "cel-shaded-anime"),
-                 ("Dark Fantasy Concept", "dark-fantasy"), ("High-Contrast Neo-Noir", "neo-noir")]
+                 ("Dark Fantasy Concept", "dark-fantasy"), ("High-Contrast Neo-Noir", "neo-noir"),
+                 ("Photoreal Natural Light", "natural-light")]  # SPEC_21: the Updraft showcase
 STYLES = [{"stylePresetId": str(88123 + i), "name": name, "sampleImage": f"/projects/assets/style-samples/{slug}.svg"}
           for i, (name, slug) in enumerate(STYLE_SAMPLES)]
 RATIOS = ["16:9", "9:16", "1:1", "21:9"]

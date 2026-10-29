@@ -64,7 +64,9 @@ def seed_updraft_meta(conn, slug, *, owner=None):
     look = False
     episode = next((e for e in story.episodes(conn, slug) if e["episodeId"] == f"ep_{slug}_01"), None)
     if episode and not (episode.get("settings") or {}).get("look"):
-        episode["settings"] = {**(episode.get("settings") or {}), "look": story_look.validate_episode_look(production["look"])}
+        style = next((s["stylePresetId"] for s in story.STYLES if s["name"] == production.get("style")), None)
+        episode["settings"] = {**(episode.get("settings") or {}), "look": story_look.validate_episode_look(production["look"]),
+                               **({"stylePresetId": style} if style and "stylePresetId" not in (episode.get("settings") or {}) else {})}
         story.store(conn, episode["episodeId"], "episode", episode, slug)
         look = True
     return {"meta": written, "look": look}
