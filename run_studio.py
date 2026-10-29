@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import threading
+import uuid
 
 from openbench_data import resource_path
 from project_assistant import flow_runner, limb_worker, limbs, local_workers, worker as assistant_worker
@@ -88,7 +89,7 @@ def seed_updraft_media(conn, slug, root, actor_id):
     done = set(stored["applied"])
     todo = [i for i in items if isinstance(i, dict) and f"{i.get('tab')}/{i.get('code')}/{i.get('column')}/{i.get('panel')}" not in done]
     values = repo.field_values(conn, slug)
-    urls, applied, changed, missing = {}, [], [], []
+    urls, applied, changed, missing, rids = {}, [], [], [], {}
     for key in sorted({i.get("tab") for i in todo}):
         tab = repo.get_tab_for_update(conn, slug, key)
         if not tab:
@@ -106,13 +107,15 @@ def seed_updraft_media(conn, slug, root, actor_id):
                     continue
                 column = headers.index(item["column"]) if item.get("column") in headers else None
                 row = next((r for r in table["content"][1:] if _text(r["content"][0]) == item.get("code")), None)
-                if row is None or column is None:
+                # A panel picture (face, front, ...) or an earlier candidate needs no cell of its own.
+                if row is None or (column is None and not (item.get("panel") or item.get("candidate"))):
                     continue
                 if file.name not in urls:
                     identifier = repo.put_asset(conn, slug, data=file.read_bytes(), content_type=MEDIA_MIME[file.suffix.lower()], actor_id=actor_id)
                     urls[file.name] = f"/projects/api/{slug}/assets/{identifier}"
+                rids[id(item)] = row.get("attrs", {}).get("bid")
                 cells = row["content"]
-                if not _text(cells[column], values.get(key)):
+                if column is not None and not item.get("candidate") and not _text(cells[column], values.get(key)):
                     _set_text(cells[column], urls[file.name])
                     dirty = True
                     status_col = 5 if key == "soul-cast" else 6
@@ -130,7 +133,13 @@ def seed_updraft_media(conn, slug, root, actor_id):
     from project_docs import story_assets
     rows = {r["cells"][0]: r for r in story.table_rows(conn, slug, "soul-cast")}
     for item in applied:
-        row = rows.get(item.get("code")) if item.get("panel") and item.get("tab") == "soul-cast" else None
+        # The takes and pictures the production chose between stay listed beside the chosen one.
+        if item.get("candidate") and rids.get(id(item)):
+            entity = ("as_" if item["tab"] == "soul-cast" else "sh_") + f"{slug}_{rids[id(item)]}"
+            kind = "video" if Path(item["file"]).suffix.lower() in (".mp4", ".webm") else "image"
+            story.store(conn, "ca_" + uuid.uuid4().hex, "candidate", {"entityId": entity, "kind": kind, "url": urls[Path(item["file"]).name],
+                        "panel": item.get("panel"), "createdAt": story.now()}, slug)
+        row = rows.get(item.get("code")) if item.get("panel") and item.get("tab") == "soul-cast" and not item.get("candidate") else None
         if row and story.record(conn, "am_" + row["rid"], required=False) is not None:
             meta = story_assets.meta_of(conn, row)
             if item["panel"] in meta["panels"] and not meta["panels"][item["panel"]]:

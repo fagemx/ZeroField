@@ -145,6 +145,26 @@ class SeedTests(unittest.TestCase):
         self.assertFalse(self.seed()["seeded"])
         self.assertEqual(studio._text(self.cell("cinema-studio", "S01", "Keyframe")[0]), "")
 
+    def test_panel_pictures_and_earlier_candidates_need_no_cell(self):
+        self.manifest([
+            {"tab": "soul-cast", "code": "CAST-01", "column": None, "panel": "front", "file": "noa_front.png", "card": "server-crop", "seed": None, "prompt": None},
+            {"tab": "soul-cast", "code": "CAST-01", "column": None, "panel": "face", "candidate": True, "file": "noa_face_2.png",
+             "card": "flux-soul-cast", "seed": 21101, "prompt": "p"},
+            {"tab": "cinema-studio", "code": "S01", "column": "Cinema Shot", "panel": None, "candidate": True, "file": "s01_take2.png",
+             "card": "ltx25-cinema", "seed": 21002, "prompt": "v"},
+        ])
+        self.assertTrue(self.seed()["seeded"])
+        self.assertTrue(self.meta("CAST-01")["panels"]["front"]["url"].startswith("/projects/api/" + self.slug + "/assets/pa_"))
+        self.assertIsNone(self.meta("CAST-01")["panels"]["face"], "a candidate is listed, not chosen")
+        self.assertEqual(studio._text(self.cell("cinema-studio", "S01", "Cinema Shot")[0]), "", "a candidate never fills the cell")
+        _, cast = self.cell("soul-cast", "CAST-01", "Reference Image")
+        faces = [c for c in story.records(self.conn, "candidate", self.slug) if c["entityId"] == f"as_{self.slug}_{cast['attrs']['bid']}"]
+        self.assertEqual([(c["kind"], c["panel"]) for c in faces], [("image", "face")])
+        _, shot = self.cell("cinema-studio", "S01", "Cinema Shot")
+        takes = [c for c in story.records(self.conn, "candidate", self.slug) if c["entityId"] == f"sh_{self.slug}_{shot['attrs']['bid']}"]
+        self.assertEqual(len(takes), 1)
+        self.assertFalse(self.seed()["seeded"], "each item is applied once")
+
 
 if __name__ == "__main__":
     unittest.main()
