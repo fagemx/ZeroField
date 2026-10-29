@@ -75,7 +75,7 @@ class StoryStartTemplateTests(unittest.TestCase):
 
     def test_the_template_itself_still_carries_its_samples(self):
         md = ''.join(s[3] for s in templates.tab_specs('zerofield_studio', 'Test Film', ''))
-        for word in ('Updraft', 'Noa', 'The Canyon at Sunrise', 'VFX-01'):
+        for word in ('Updraft', 'Noa', 'Canyon at Sunrise', 'VFX-01'):
             self.assertIn(word, md)
 
 

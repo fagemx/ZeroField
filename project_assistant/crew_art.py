@@ -36,7 +36,7 @@ import re
 from project_assistant import crew_jobs, crew_planning
 
 ROLE = 'doc_writer'  # see the module docstring: Art runs on the Screenwriter's profile until the roster has an Art role
-LOOK_KINDS = ('OUTFIT', 'POSE', 'LOOK')  # story_openapi.LOOK_KINDS
+LOOK_KINDS = ('OUTFIT', 'POSE', 'LOOK', 'STATE')  # story_openapi.LOOK_KINDS
 MAX_DESCRIPTION = 1200
 MAX_REASON = 300
 MAX_SCRIPT_LINES = 8

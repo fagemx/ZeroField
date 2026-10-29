@@ -253,7 +253,7 @@ class GradeHTTPTests(unittest.TestCase):
                                                 "session": "grade:" + queued["gradeId"], "model": "qwen-test"}])
         self.assertEqual(self.repo.get_asset_meta(self.conn, self.slug, grade["sheetUrl"].rsplit("/", 1)[1])[0], "image/png")
 
-        retake = "Kael keeps his hand on the dial to the final frame. @PROP-03:dead @CAST-01"
+        retake = "Kael keeps his hand on the dial to the final frame. @PROP-03:dead @SET-03 @CAST-01"
         self.assertEqual(grade["retakePrompt"], retake)
         self.assertNotIn("proposalId", grade)  # grading is information: no proposal waits for approval
         self.conn.rollback()

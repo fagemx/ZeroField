@@ -440,7 +440,7 @@ register(
     _studio('studio_manage_asset', 'Review a cast/set/prop or costume variant change in the active production.',
             _obj({'episode_id': _ID, 'operation': {'type': 'string', 'enum': ['create', 'update', 'variant']},
                   'asset_id': _ID, 'type': {'type': 'string', 'enum': ['CHARACTER', 'SCENE', 'PROP']}, 'name': {'type': 'string', 'minLength': 1, 'maxLength': 200},
-                  'prompt': _TEXT, 'key': {'type': 'string', 'pattern': '^[a-z0-9_-]{1,60}$'}, 'kind': {'type': 'string', 'enum': ['OUTFIT', 'POSE', 'LOOK']}},
+                  'prompt': _TEXT, 'key': {'type': 'string', 'pattern': '^[a-z0-9_-]{1,60}$'}, 'kind': {'type': 'string', 'enum': ['OUTFIT', 'POSE', 'LOOK', 'STATE']}},
                  ['episode_id', 'operation', 'name', 'prompt']),
             policy='always_ask', analysis_only=False, race_candidate=False, grants=('coordinator', 'doc_writer')),
     _studio('studio_plan_allocation', 'Preview actual configuration_and_inputs readiness; retain the returned allocationId for dispatch.',
@@ -615,7 +615,7 @@ register(
 # The Art department's proposals (SPEC_20 R21, R22, §4.7): checked by the crew jobs' validators
 # (project_assistant/crew_art.py) and written only as table proposals on the Soul Cast or the shot's prompt cell.
 _ASSET = {'type': 'string', 'minLength': 1, 'maxLength': 200}
-_LOOK_KINDS = ['OUTFIT', 'POSE', 'LOOK']  # story_openapi.LOOK_KINDS (tests cross-check)
+_LOOK_KINDS = ['OUTFIT', 'POSE', 'LOOK', 'STATE']  # story_openapi.LOOK_KINDS (tests cross-check)
 _ART = ('coordinator', 'doc_writer')  # no Art role in the roster yet: the Screenwriter owns Soul Cast proposals
 register(
     Tool('propose_asset_description',
