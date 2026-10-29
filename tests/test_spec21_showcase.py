@@ -165,6 +165,15 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(len(takes), 1)
         self.assertFalse(self.seed()["seeded"], "each item is applied once")
 
+    def test_a_seeded_take_is_adopted_and_approved(self):
+        self.manifest([{"tab": "cinema-studio", "code": "S01", "column": "Cinema Shot", "panel": None, "file": "s01_take.png",
+                        "card": "ltx25-cinema", "seed": 1, "prompt": "v"}])
+        self.seed()
+        cell, shot = self.cell("cinema-studio", "S01", "Cinema Shot")
+        meta = story.record(self.conn, f"meta_sh_{self.slug}_{shot['attrs']['bid']}", required=False)
+        self.assertEqual(meta["adoption"]["url"], studio._text(cell))
+        self.assertIn("Approved", studio._text(self.cell("cinema-studio", "S01", "Status")[0]))
+
 
 if __name__ == "__main__":
     unittest.main()

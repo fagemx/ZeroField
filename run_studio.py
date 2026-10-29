@@ -89,7 +89,7 @@ def seed_updraft_media(conn, slug, root, actor_id):
     done = set(stored["applied"])
     todo = [i for i in items if isinstance(i, dict) and f"{i.get('tab')}/{i.get('code')}/{i.get('column')}/{i.get('panel')}" not in done]
     values = repo.field_values(conn, slug)
-    urls, applied, changed, missing, rids = {}, [], [], [], {}
+    urls, applied, changed, missing, rids, adoptions = {}, [], [], [], {}, []
     for key in sorted({i.get("tab") for i in todo}):
         tab = repo.get_tab_for_update(conn, slug, key)
         if not tab:
@@ -120,15 +120,24 @@ def seed_updraft_media(conn, slug, root, actor_id):
                     dirty = True
                     status_col = 5 if key == "soul-cast" else 6
                     status = next((n for p in cells[status_col].get("content", []) for n in p.get("content", []) if n["type"] == "status"), None)
-                    if status and _text(status, values.get(key)) == "Queued":
-                        status["attrs"]["label"] = "Pending Review"  # a generated candidate waits for a person's choice
-                        repo.set_field_value(conn, slug, key, status["attrs"]["fid"], kind="status", value="Pending Review", actor_id=actor_id)
+                    # The production adopted these takes (SPEC_19: adoption is Approved); anything else waits for a person's choice.
+                    adopted = key == "cinema-studio" and item.get("column") == "Cinema Shot"
+                    label = "Approved" if adopted else "Pending Review"
+                    if status and _text(status, values.get(key)) in (("Queued", "Pending Review") if adopted else ("Queued",)):
+                        status["attrs"]["label"] = label
+                        repo.set_field_value(conn, slug, key, status["attrs"]["fid"], kind="status", value=label, actor_id=actor_id)
+                    if adopted:
+                        adoptions.append((f"sh_{slug}_{rids[id(item)]}", urls[file.name]))
                 applied.append(item)
         if dirty:
             clean, _ = doc_schema.validate_doc(doc, slug=slug)
             repo.save_tab_doc(conn, slug, key, doc=clean, title=tab["title"], actor_id=actor_id,
                               session_id="studio-showcase-seed", base_revision=tab["revision"], force_revision=True)
             changed.append(key)
+    # The film window counts adopted shots, so a seeded take is adopted the way POST /shots/{id}/adoptions records it.
+    from project_docs import story_adoption
+    for shot_id, url in adoptions:
+        story_adoption._record(conn, service.Identity(actor_id, "Updraft seed", "admin"), slug, shot_id, url)
     # Panels: a face or plate picture is also the asset's own panel (an empty panel only).
     from project_docs import story_assets
     rows = {r["cells"][0]: r for r in story.table_rows(conn, slug, "soul-cast")}

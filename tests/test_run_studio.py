@@ -109,7 +109,8 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         self.assertEqual(table["content"][1]["attrs"]["bid"], row_id)
         self.assertEqual(table["attrs"]["column_ids"], next(n for n in before["doc"]["content"] if n["type"] == "table")["attrs"]["column_ids"])
         self.assertIn("@PROP-01", studio._text(table["content"][1]))
-        self.assertIn("Queued", studio._text(table["content"][1]))
+        # The shipped samples/updraft/manifest.json adopts S01's generated take, so the shot is Approved.
+        self.assertIn("Approved", studio._text(table["content"][1]))
         lab = repo.get_tab(self.conn, self.slug, "openjutsu-lab")
         ref_table = next(n for n in lab["doc"]["content"] if n["type"] == "table")
         self.assertEqual([studio._text(c) for c in ref_table["content"][0]["content"][-3:]], ["First Frame", "Motion Structure", "Anchor Keyframe"])
@@ -129,7 +130,7 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         row = next(n for n in saved["doc"]["content"] if n["type"] == "table")["content"][1]
         self.assertEqual(studio._text(row["content"][3]), "Custom director prompt")
         self.assertTrue(studio._text(row["content"][4]).endswith("a" * 32))
-        self.assertIn("Queued", studio._text(row))
+        self.assertIn("Approved", studio._text(row))  # only the empty Cinema Shot cell took the shipped take
 
     def test_workers_keep_ids_rotate_tokens_and_bind_disjoint_pipeline_branches(self):
         configs = studio.worker_configs("http://127.0.0.1:8188")
