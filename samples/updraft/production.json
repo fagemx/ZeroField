@@ -10,7 +10,7 @@
       "lens": "auto-lens",
       "aperture": "f4"
     },
-    "genre": "distant-miles",
+    "genre": "auto",
     "era": "grain-film",
     "tempo": "auto",
     "palette": "auto",
@@ -170,7 +170,7 @@
       "title": "The flame dies",
       "optical": "Cinema camera / 85mm close-up",
       "motion": "Static — the camera stays put",
-      "action": "0.0–1.5s — close on @PROP-03:dead above head height: the last of the flame shrinks, coughs once and goes out; the twin coils stand dark.\n1.5–4.0s — the gloved right hand of @CAST-01 enters from frame-left and squeezes the red valve twice; nothing lights; a thin hiss of gas, then silence.\nPHYSICS: the dark coils tick as they cool; a faint wobble of hot air fades above them.\nCHECK: only her gloved hand and forearm are in frame; the burner keeps its exact shape: two round coils side by side, two red-handled valves beneath.\nORDER: flame dies → hand squeezes → nothing.",
+      "action": "0.0–1.5s — close on @PROP-03:dead above head height inside @SET-03: the last of the flame shrinks, coughs once and goes out; the twin coils stand dark.\n1.5–4.0s — the gloved right hand of @CAST-01 enters from frame-left and squeezes the red valve twice; nothing lights; a thin hiss of gas, then silence.\nPHYSICS: the dark coils tick as they cool; a faint wobble of hot air fades above them.\nCHECK: only her gloved hand and forearm are in frame; the burner keeps its exact shape: two round coils side by side, two red-handled valves beneath.\nORDER: flame dies → hand squeezes → nothing.",
       "notes": "Insert. The silence after the hiss is the beat."
     },
     {
@@ -202,7 +202,7 @@
       "title": "The striker",
       "optical": "Cinema camera / 100mm macro",
       "motion": "Static — the camera stays put",
-      "action": "0.0–1.0s — the gloved right hand of @CAST-01 is already mid-strike, scraping @PROP-04 up against the underside of the dark coil of @PROP-03:dead; a shower of bright sparks.\n1.0–2.5s — a second strike: more sparks spray and die against the cold steel.\n2.5–4.0s — a third strike: the sparks catch and a small blue flame blooms at the coil.\nPHYSICS: the sparks fall in short bright arcs and die in the air; the hand shakes slightly between strikes.\nCHECK: one gloved hand with five fingers holds the short steel striker; the coil keeps its round shape.\nORDER: strike → strike → catch.",
+      "action": "0.0–1.0s — the gloved right hand of @CAST-01 is already mid-strike, scraping @PROP-04 up against the underside of the dark coil of @PROP-03:dead overhead in @SET-03; a shower of bright sparks.\n1.0–2.5s — a second strike: more sparks spray and die against the cold steel.\n2.5–4.0s — a third strike: the sparks catch and a small blue flame blooms at the coil.\nPHYSICS: the sparks fall in short bright arcs and die in the air; the hand shakes slightly between strikes.\nCHECK: one gloved hand with five fingers holds the short steel striker; the coil keeps its round shape.\nORDER: strike → strike → catch.",
       "notes": "A state, not a process: the strike is already happening in frame one."
     },
     {
