@@ -603,6 +603,8 @@ class PrevisTwoPassTests(unittest.TestCase):
         for graph in (motion, load('look', 'video_gen')):
             self.assertEqual((graph['20']['inputs']['frame_load_cap'], graph['21']['class_type'], graph['8']['class_type'], graph['8']['inputs']['temporal_size']),
                              (193, 'VAEEncodeTiled', 'VAEDecodeTiled', 64))
+        cinema = load('cinema', 'video_gen')['8']  # an 8 s image-to-video take filled 24 GB in a whole-clip decode
+        self.assertEqual((cinema['class_type'], cinema['inputs']['temporal_size']), ('VAEDecodeTiled', 64))
         self.assertEqual(load('lookkey', 'image_gen')['20']['inputs']['frame_load_cap'], 193)  # the key is the last frame of the whole shot
         # Shot beats land before the fixed live-action look lock that the encoder reads (cfg 1 ignores negatives).
         self.assertEqual(motion['6']['inputs']['text'], ['30', 0])

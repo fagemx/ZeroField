@@ -349,20 +349,20 @@ class VideoSkeletonTests(unittest.TestCase):
         length = len(full['video_skeleton_prompt'])
         with patch.dict(os.environ, {shot_skeleton.VIDEO_BUDGET_ENV: str(length - 1)}):
             one = self.skeleton()
-        self.assertEqual(one['dropped_blocks'], ['PHYSICS'])
-        self.assertNotIn('PHYSICS:', one['video_skeleton_prompt'])
+        self.assertEqual(one['dropped_blocks'], ['ACTIVE REFERENCES'])
+        self.assertNotIn('ACTIVE REFERENCES:', one['video_skeleton_prompt'])
         with patch.dict(os.environ, {shot_skeleton.VIDEO_BUDGET_ENV: '200'}):
             tight = self.skeleton()
         self.assertEqual(tight['dropped_blocks'], list(shot_skeleton.DROP_ORDER))
         self.assertEqual(blocks_of(tight['video_skeleton_prompt']),
-                         ['SCENE CONTEXT', 'FIRST FRAME AND BLOCKING', 'CAMERA', 'ACTION TIMING', 'LIGHTING', 'AUDIO',
-                          'STYLE', 'POSITIVE CONSTRAINTS'])
+                         ['SCENE CONTEXT', 'FIRST FRAME AND BLOCKING', 'CAMERA', 'ACTION TIMING', 'PHYSICS', 'LIGHTING',
+                          'AUDIO', 'STYLE', 'POSITIVE CONSTRAINTS'])
         # Every block that stays is whole: no sentence is cut.
         self.assertTrue(set(tight['video_skeleton_prompt'].split('\n\n')) <= chunks)
         # Only blocks the shot has are reported.
         with patch.dict(os.environ, {shot_skeleton.VIDEO_BUDGET_ENV: '50'}):
             plain = ctx_of(shot_task('@CAST-01 waits.'))
-        self.assertEqual(plain['dropped_blocks'], ['CHARACTER ACTING', 'OPTICS', 'ACTIVE REFERENCES'])
+        self.assertEqual(plain['dropped_blocks'], ['ACTIVE REFERENCES', 'OPTICS', 'CHARACTER ACTING'])
 
     def test_the_budget_defaults_to_4000(self):
         self.assertEqual(shot_skeleton.video_budget({}), 4000)
@@ -373,7 +373,8 @@ class VideoSkeletonTests(unittest.TestCase):
             os.environ.pop(shot_skeleton.VIDEO_BUDGET_ENV, None)
             ctx = self.skeleton(self.ACTION + '\n[6-8s] ' + 'Noa holds the line. ' * 100)
         self.assertLessEqual(len(ctx['video_skeleton_prompt']), 4000)
-        self.assertEqual(ctx['dropped_blocks'][0], 'PHYSICS')
+        self.assertEqual(ctx['dropped_blocks'][0], 'ACTIVE REFERENCES')
+        self.assertIn('PHYSICS:', ctx['video_skeleton_prompt'])
 
 
 class AssetPanelTests(unittest.TestCase):

@@ -129,7 +129,7 @@
 13. `POSITIVE CONSTRAINTS` — 人數鎖、道具鎖、欄位中 `CHECK:` 段（自我驗收句）。
 14. `[ORDER: …]` — 欄位中 `ORDER:` 段（有才放）。
 
-Action & Audio Prompt 欄可用的段標：`PHYSICS:`、`CHECK:`、`ORDER:`，其餘文字都是動作。**超出預算時的捨棄順序**：`PHYSICS` → `CHARACTER ACTING` → `OPTICS` → `ACTIVE REFERENCES` → `LOCATION MAP` → `[ORDER]`；`SCENE CONTEXT`、`CAMERA`、`ACTION TIMING`、`LIGHTING`、`AUDIO`、`STYLE`、`POSITIVE CONSTRAINTS` 永遠保留。
+Action & Audio Prompt 欄可用的段標：`PHYSICS:`、`CHECK:`、`ORDER:`，其餘文字都是動作。**超出預算時的捨棄順序**：`ACTIVE REFERENCES` → `LOCATION MAP` → `OPTICS` → `[ORDER]` → `CHARACTER ACTING`；`SCENE CONTEXT`、`CAMERA`、`ACTION TIMING`、`PHYSICS`、`LIGHTING`、`AUDIO`、`STYLE`、`POSITIVE CONSTRAINTS` 永遠保留。首幀已經呈現參考素材、場景位置與鏡頭，這三塊文字先捨；`PHYSICS` 不捨（2026-10-29 GPU 生成：少了物理段的片段出現漂浮、滑動）。
 
 ### 3.3 首幀提示詞（`image_reference_prompt`，給 Klein）
 自然語句、只寫正面描述、上限 2,200 字元，依序：

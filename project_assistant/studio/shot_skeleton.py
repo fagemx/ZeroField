@@ -29,8 +29,10 @@ VIDEO_BUDGET_ENV = "ZEROFIELD_VIDEO_PROMPT_BUDGET"
 DEFAULT_VIDEO_BUDGET = 4000
 BLOCKS = ("SCENE CONTEXT", "ACTIVE REFERENCES", "LOCATION MAP", "FIRST FRAME AND BLOCKING", "OPTICS", "CAMERA",
           "ACTION TIMING", "PHYSICS", "LIGHTING", "AUDIO", "CHARACTER ACTING", "STYLE", "POSITIVE CONSTRAINTS", "ORDER")
-# §3.2: over budget, whole blocks go in this order; every other block always stays.
-DROP_ORDER = ("PHYSICS", "CHARACTER ACTING", "OPTICS", "ACTIVE REFERENCES", "LOCATION MAP", "ORDER")
+# §3.2: over budget, whole blocks go in this order; every other block always stays. The first frame already shows the
+# references, the layout and the lens, so their text goes first; PHYSICS never goes (GPU trial 2026-10-29: takes without
+# it floated and slid).
+DROP_ORDER = ("ACTIVE REFERENCES", "LOCATION MAP", "OPTICS", "ORDER", "CHARACTER ACTING")
 KEYS = ("reference_plan", "image_reference_prompt", "video_skeleton_prompt", "dropped_blocks", "asset_panel_prompt",
         "edit_prompt")
 
