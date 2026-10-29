@@ -5,7 +5,11 @@
   "license": "CC0-1.0",
   "brief": "# Updraft\n\nOver a red canyon at sunrise, a trainee pilot's burner dies on her first solo flight. Her instructor refuses to take the controls. She has seconds to relight it before the balloon hits the wall.\n\n## Production Brief\n\n- Format: one scene, ten shots, about forty seconds, 16:9\n- Cast: @CAST-01 Noa, the trainee pilot; @CAST-02 Ines, her instructor\n- Locations: @SET-01 the canyon at sunrise, @SET-02 the canyon rim, @SET-03 inside the basket, @SET-04 inside the envelope\n- Props: @PROP-01 the balloon, @PROP-02 the basket, @PROP-03 the burner (states @PROP-03:lit and @PROP-03:dead), @PROP-04 the flint striker\n- Look: 35mm film body, low sunrise, one sun and one flame as the only lights\n- Pacing: hold the geography, lose the flame, hold the silence, burst into the sun\n\n## The scene\n\nThe balloon drifts toward the canyon's north wall. Noa fires the burner; Ines watches her hands. The flame coughs and dies. The balloon sinks past the shadow line toward the rock. Noa says the pilot light is out. Ines moves her hand toward the valve, stops, and says two words: \"Your balloon.\" Noa strikes the flint by hand, three times. The burner roars into the envelope, the balloon clears the rim by a few metres and rises into full sun. Noa laughs out a breath; Ines looks away so Noa will not see her smile.\n\n## How this production is built\n\n- **Assets first.** Every character, place and prop is a locked description plus pictures before any shot is generated. Characters have a three-view sheet: a 3/4 face close-up, a full-body front with no head, and a full-body back, on neutral grey with flat light.\n- **One job per reference.** The face comes only from the face close-up, the clothes from the body, the space and materials from the location plate, the shape from the prop photo. Every prompt says what each picture is for.\n- **Every state is its own asset.** The burner lit and the burner dead are separate assets with their own pictures.\n- **Locks pasted word for word.** Location map, the single light logic, voice and acting profiles live on the assets and go into every shot unchanged.\n- **Behaviour, not emotion.** Each shot is written as timed physical beats; fear is the eyes reaching the wall before the head turns, not the word \"afraid\".\n\n## Production Notes\n\nAll media in this production were generated with open-weights models (FLUX 3 Klein for assets and first frames, LTX-2.5 for video and sound) through ComfyUI. The generation record of every picture and take is kept with it.\n",
   "look": {
-    "camera": {"body": "film-35mm", "lens": "auto-lens", "aperture": "f4"},
+    "camera": {
+      "body": "film-35mm",
+      "lens": "auto-lens",
+      "aperture": "f4"
+    },
     "genre": "distant-miles",
     "era": "grain-film",
     "tempo": "auto",
@@ -37,7 +41,7 @@
     },
     {
       "code": "SET-01",
-      "name": "The Canyon at Sunrise",
+      "name": "Canyon at Sunrise",
       "type": "SCENE",
       "description": "A deep red sandstone canyon at sunrise: sheer walls layered in rust, ochre and pale cream bands, wind-carved ledges, a thin green river far below on the canyon floor, and one free-standing flat-topped sandstone spire rising apart from the north wall. Long cool shadow fills the lower canyon while the upper walls and rims glow gold. seed: 21011",
       "voice": "Wind moving through the canyon, a distant river, an occasional falling pebble.",
@@ -49,7 +53,7 @@
     },
     {
       "code": "SET-02",
-      "name": "The North Rim",
+      "name": "North Rim",
       "type": "SCENE",
       "description": "The flat top of a red canyon's north rim in early sun: wind-cut sandstone slabs, low silver sagebrush, two twisted juniper trees near the edge, the far rim of the canyon visible across the gap, and an open pale-blue sky. seed: 21012",
       "voice": "Wind over open rock, juniper branches stirring.",
@@ -61,7 +65,7 @@
     },
     {
       "code": "SET-03",
-      "name": "Inside the Basket",
+      "name": "Basket Interior",
       "type": "SCENE",
       "description": "The inside of a hot-air balloon basket in flight: chest-high walls of pale woven willow, a padded tan leather rim, four padded corner uprights rising to a steel burner frame overhead, two steel fuel cylinders in blue cloth covers strapped in opposite corners, a coil of rope, and open air beyond the rim above a red canyon. seed: 21013",
       "voice": "Wicker creaking, cables ticking, wind across the rim, the burner's roar when it fires.",
@@ -73,30 +77,30 @@
     },
     {
       "code": "SET-04",
-      "name": "Inside the Envelope",
+      "name": "Envelope Interior",
       "type": "SCENE",
-      "description": "Looking straight up through the mouth of a hot-air balloon into its hollow envelope: tall fabric gores in saffron-orange and deep teal converge toward a round crown opening of pale sky far above, dark load tapes run up every seam, and the fabric glows from within. seed: 21014",
+      "description": "Looking straight up through the mouth of a hot-air balloon into its hollow envelope: the lower part of the envelope around the mouth is solid deep teal and everything above the equator up to the crown is solid saffron-orange, the two colours meeting in one horizontal ring; dark load tapes run up every seam toward a round crown opening of pale sky far above, and the fabric glows from within. seed: 21014",
       "voice": "The deep hollow hum of air inside a large fabric dome.",
       "notes": "For the relight.",
       "meta": {
         "geo": "GEO LAYOUT — The mouth of the envelope frames the bottom of the image; the gores converge to the crown at top centre; the twin burner coils sit at the bottom centre of the frame, close to camera.",
-        "light": "The sun shines through the fabric from frame-left so the orange gores glow; when the burner fires, its flame lights the whole interior warm orange from below."
+        "light": "The sun shines through the fabric from frame-left so the orange upper envelope glows; when the burner fires, its flame lights the whole interior warm orange from below."
       }
     },
     {
       "code": "PROP-01",
-      "name": "The Balloon",
+      "name": "Balloon",
       "type": "PROP",
-      "description": "A hot-air balloon in flight: a smooth teardrop-shaped envelope of vertical fabric gores alternating faded saffron-orange and deep teal with one cream gore, slightly sun-bleached, a small patch near the mouth, and a rectangular wicker basket hanging below on steel cables. seed: 21021",
+      "description": "A hot-air balloon in flight with exactly two colour zones: the envelope is solid saffron-orange from the crown down to its widest point and solid deep teal from the widest point down to the mouth, divided by one clean horizontal line at the equator; plain sun-faded fabric with a small patch near the mouth, and a rectangular wicker basket hanging below on steel cables. seed: 21021",
       "voice": "",
       "notes": "Exterior shots only.",
       "meta": {
-        "lock": "A smooth teardrop envelope about twenty metres tall; vertical gores alternating saffron-orange and deep teal with exactly one cream gore; plain unbranded fabric; one small rectangular wicker basket on four cables far below the envelope."
+        "lock": "A smooth teardrop envelope about twenty metres tall in exactly two solid colour zones: saffron-orange above the equator, deep teal below it, one horizontal dividing line, plain unbranded fabric; one small rectangular wicker basket on four cables far below the envelope."
       }
     },
     {
       "code": "PROP-02",
-      "name": "The Basket",
+      "name": "Wicker Basket",
       "type": "PROP",
       "description": "A rectangular hot-air balloon basket: woven pale willow, chest high on a standing adult, a padded tan leather rim, four padded corner uprights rising to a square steel burner frame, and steel cables running up from each corner. seed: 21022",
       "voice": "",
@@ -107,7 +111,7 @@
     },
     {
       "code": "PROP-03",
-      "name": "The Burner",
+      "name": "Burner",
       "type": "PROP",
       "description": "A twin hot-air balloon burner: two round coils of stainless steel tubing side by side on a square frame, the coils blackened by heat, two red-handled blast valves hanging beneath, and flexible black fuel hoses looping down. seed: 21023",
       "voice": "",
@@ -119,7 +123,7 @@
     {
       "code": "PROP-03:lit",
       "base": "PROP-03",
-      "name": "The Burner — firing",
+      "name": "Burner (firing)",
       "type": "PROP",
       "kind": "STATE",
       "change": "Both coils are firing: a tall roaring flame about one and a half metres long, blue at the root and yellow-orange above, with heat shimmer around it."
@@ -127,14 +131,14 @@
     {
       "code": "PROP-03:dead",
       "base": "PROP-03",
-      "name": "The Burner — cold",
+      "name": "Burner (cold)",
       "type": "PROP",
       "kind": "STATE",
       "change": "The burner is cold: the coils are dark and dull, with no flame and no pilot light."
     },
     {
       "code": "PROP-04",
-      "name": "The Flint Striker",
+      "name": "Flint Striker",
       "type": "PROP",
       "description": "A hand-held flint striker for a gas burner: a short steel rod with a spring-loaded cup-shaped flint head at one end and a worn black rubber grip, on a coiled cord. seed: 21024",
       "voice": "",
@@ -206,7 +210,7 @@
       "title": "The roar",
       "optical": "Cinema camera / 18mm ultra-wide",
       "motion": "Static — the camera stays put, looking straight up",
-      "action": "0.0–1.0s — looking straight up from the basket into @SET-04: the gores converge to the bright crown far above; the twin coils of @PROP-03:lit sit close at the bottom of the frame with a small blue flame at one coil.\n1.0–2.0s — the burner opens: a roaring yellow-orange flame shoots a metre and a half up into the mouth of the envelope.\n2.0–4.0s — the whole interior lights up warm orange like a lantern; heat shimmer ripples the fabric; the flame keeps roaring.\nPHYSICS: the flame is loud, wide and heavy, blue at the root and yellow-orange above; the fabric breathes outward as the air heats.\nCHECK: the flame stays well below the fabric; the gores keep their orange and teal colours.\nORDER: small flame → roar → the interior glows.",
+      "action": "0.0–1.0s — looking straight up from the basket into @SET-04: the gores converge to the bright crown far above; the twin coils of @PROP-03:lit sit close at the bottom of the frame with a small blue flame at one coil.\n1.0–2.0s — the burner opens: a roaring yellow-orange flame shoots a metre and a half up into the mouth of the envelope.\n2.0–4.0s — the whole interior lights up warm orange like a lantern; heat shimmer ripples the fabric; the flame keeps roaring.\nPHYSICS: the flame is loud, wide and heavy, blue at the root and yellow-orange above; the fabric breathes outward as the air heats.\nCHECK: the flame stays well below the fabric; the envelope keeps its orange upper half and teal lower half.\nORDER: small flame → roar → the interior glows.",
       "notes": "The VFX shot of the film."
     },
     {
@@ -214,7 +218,7 @@
       "title": "Clearing the rim",
       "optical": "Cinema camera / 50mm",
       "motion": "Static — the camera stays put, level with the rim",
-      "action": "0.0–1.0s — the sunlit rim of @SET-02 runs across the lower third; the top of the basket of @PROP-01 is just visible below the edge in blue shade, the envelope above it glowing.\n1.0–3.0s — the balloon rises: the basket climbs past the rim edge with only a few metres to spare, the junipers at frame-right passing just beneath it.\n3.0–4.0s — the basket rises out of the shadow into full gold sunlight under a long burst of flame.\nPHYSICS: the balloon rises slowly and heavily; the juniper branches stir in the downdraft.\nCHECK: the basket clears the rim; the balloon keeps its saffron-orange and teal gores.\nORDER: basket below the edge → rises past the rim → into the sun.",
+      "action": "0.0–1.0s — the sunlit rim of @SET-02 runs across the lower third; the top of the basket of @PROP-01 is just visible below the edge in blue shade, the envelope above it glowing.\n1.0–3.0s — the balloon rises: the basket climbs past the rim edge with only a few metres to spare, the junipers at frame-right passing just beneath it.\n3.0–4.0s — the basket rises out of the shadow into full gold sunlight under a long burst of flame.\nPHYSICS: the balloon rises slowly and heavily; the juniper branches stir in the downdraft.\nCHECK: the basket clears the rim; the balloon keeps its orange upper half and teal lower half.\nORDER: basket below the edge → rises past the rim → into the sun.",
       "notes": "The release."
     },
     {

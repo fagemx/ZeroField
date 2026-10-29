@@ -24,7 +24,7 @@ PANEL_PROMPTS = ("face", "front", "back", "plate", "product", "stress")  # §3.4
 VIEW_EDITS = ("reverse", "angle")  # §2.3: a location's other views are edits of its plate
 REFERENCE_PANELS = ("front", "back", "stress")  # §2.3: the panels the reference card renders from earlier pictures
 MAX_REFERENCES = 6
-IMAGE_LIMIT = 1500
+IMAGE_LIMIT = 2200  # GPU trial 2026-10-29: at 1500 the single light logic was dropped; Klein held 2200 well
 VIDEO_BUDGET_ENV = "ZEROFIELD_VIDEO_PROMPT_BUDGET"
 DEFAULT_VIDEO_BUDGET = 4000
 BLOCKS = ("SCENE CONTEXT", "ACTIVE REFERENCES", "LOCATION MAP", "FIRST FRAME AND BLOCKING", "OPTICS", "CAMERA",
@@ -179,8 +179,25 @@ def name_tags(text, names):
     saying anything; every other character stays as written, line breaks included."""
     text = _EXCLUDED_TAG.sub("", str(text or ""))
     text = _TAG_RUN.sub(lambda match: match[1], text)
-    text = _TAG.sub(lambda match: names.get(code_of(match[1])) or names.get(base_of(match[1])) or match[0], text)
+
+    def named(match):
+        code = code_of(match[1])
+        name = names.get(code) or names.get(base_of(match[1]))
+        return (name if asset_kind(code) == "character" else the_name(name)) if name else match[0]
+    text = _TAG.sub(named, text)
+    text = re.sub(r"\b([Tt])he the\b", r"\1he", text)  # "the @SET-03" reads "the basket interior", not "the the …"
     return "\n".join(re.sub(r"[ \t]{2,}", " ", line).strip() for line in text.split("\n")).strip()
+
+
+def bare_name(name):
+    """A place or object name without its leading article, in lower case ("The Burner" -> "burner")."""
+    name = re.sub(r"^the\s+", "", str(name or "").strip(), flags=re.I)
+    return name[:1].lower() + name[1:]
+
+
+def the_name(name):
+    """A place or object as it reads inside a sentence: "the burner (firing)", never "The Burner (firing)"."""
+    return "the " + bare_name(name) if name else ""
 
 
 def split_sections(text):
@@ -423,8 +440,8 @@ def _usage(plan, assets, frames=(), described=None):
             sentences.append(f"{sentence} {description}".strip() if full else sentence)
         else:
             detail = " ".join(part for part in (description, lock) if part)
-            sentences.append(f"The {name} is the object in image {numbers[0]}: {detail}" if full and detail
-                             else f"The {name} is the object in image {numbers[0]}.")
+            sentences.append(f"The {bare_name(name)} is the object in image {numbers[0]}: {detail}" if full and detail
+                             else f"The {bare_name(name)} is the object in image {numbers[0]}.")
     for asset in assets:
         if asset["code"] in groups:
             continue
@@ -437,7 +454,7 @@ def _usage(plan, assets, frames=(), described=None):
             sentences.append(f"The place: {description}.")
         elif kind == "prop":
             detail = " ".join(part for part in (_sentence(description), lock) if part)
-            sentences.append(f"The {name}: {detail}" if full and detail else f"The {name} is in the frame.")
+            sentences.append(f"The {bare_name(name)}: {detail}" if full and detail else f"The {bare_name(name)} is in the frame.")
     return " ".join(sentences)
 
 

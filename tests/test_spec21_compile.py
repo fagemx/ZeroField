@@ -168,7 +168,7 @@ class ImageReferencePromptTests(unittest.TestCase):
                       'hair', prompt)
         self.assertIn('The person in image 2 and image 3 is Noa: same face from image 2, same clothes from image 3. '
                       'trainee pilot with short dark hair, red flight jacket, leather gloves.', prompt)
-        self.assertIn('The Burner is the object in image 4: twin-coil propane burner with a blue valve. Two stacked steel '
+        self.assertIn('The burner is the object in image 4: twin-coil propane burner with a blue valve. Two stacked steel '
                       'coils over one blue valve, mounted on a square frame.', prompt)
         self.assertIn('The place is the one in image 5: take only its space and materials', prompt)
         self.assertEqual(sorted({int(n) for n in re.findall(r'image (\d+)', prompt, re.I)}), [1, 2, 3, 4, 5])
@@ -208,21 +208,21 @@ class ImageReferencePromptTests(unittest.TestCase):
         rows = [cells if cells[0] != 'PROP-01' else cells[:2] + ['a burner, not a lamp'] + cells[3:] for cells in CAST_ROWS]
         self.assertIn('a burner, not a lamp', ctx_of(shot_task('@PROP-01 burns.', rows=rows))['image_reference_prompt'])
 
-    def test_over_1500_characters_it_shortens_film_light_then_descriptions(self):
-        long_look = dict(LOOK, filmStill='grain ' * 260)
+    def test_over_the_limit_it_shortens_film_light_then_descriptions(self):
+        long_look = dict(LOOK, filmStill='grain ' * 400)
         ctx = ctx_of(shot_task('@CAST-01 at @SET-01.', look=long_look))
         prompt = ctx['image_reference_prompt']
-        self.assertLessEqual(len(prompt), 1500)
+        self.assertLessEqual(len(prompt), shot_skeleton.IMAGE_LIMIT)
         self.assertNotIn('Film:', prompt)
         self.assertIn('Lighting: low golden side light.', prompt)
-        long_light = dict(long_look, light='gold ' * 300)
+        long_light = dict(long_look, light='gold ' * 480)
         prompt = ctx_of(shot_task('@CAST-01 at @SET-01.', look=long_light))['image_reference_prompt']
         self.assertNotIn('Lighting:', prompt)
         self.assertIn('trainee pilot with short dark hair', prompt)
-        rows = [cells[:2] + [cells[2] + ', ' + 'weathered ' * 140] + cells[3:] for cells in CAST_ROWS]
+        rows = [cells[:2] + [cells[2] + ', ' + 'weathered ' * 210] + cells[3:] for cells in CAST_ROWS]
         prompt = ctx_of(shot_task('@CAST-01 @CAST-02 @CAST-03 at @SET-01 with @PROP-01.', rows=rows, look=long_light)
                         )['image_reference_prompt']
-        self.assertLessEqual(len(prompt), 1500)
+        self.assertLessEqual(len(prompt), shot_skeleton.IMAGE_LIMIT)
         self.assertNotIn('weathered', prompt)
         for sentence in ('The person in image 1 and image 2 is Noa: same face from image 1, same clothes from image 2.',
                          'The person in image 3 is Ines: same face and clothes as in image 3.',
@@ -230,16 +230,16 @@ class ImageReferencePromptTests(unittest.TestCase):
                          'The place is the one in image 6', 'Exactly 3 people in frame.'):
             self.assertIn(sentence, prompt)
         # Descriptions go one asset at a time: the place first (its picture carries it), the characters last.
-        rows = [cells[:2] + [cells[2] + ', ' + ('ochre ' * 70 if cells[0] == 'SET-01' else 'sun-browned ' * 30)] + cells[3:]
+        rows = [cells[:2] + [cells[2] + ', ' + ('ochre ' * 110 if cells[0] == 'SET-01' else 'sun-browned ' * 45)] + cells[3:]
                 for cells in CAST_ROWS]
         prompt = ctx_of(shot_task('@CAST-01 and @CAST-02 at @SET-01.', rows=rows))['image_reference_prompt']
-        self.assertLessEqual(len(prompt), 1500)
+        self.assertLessEqual(len(prompt), shot_skeleton.IMAGE_LIMIT)
         self.assertNotIn('ochre', prompt)
         self.assertIn('same clothes from image 2. trainee pilot with short dark hair', prompt)
         self.assertIn('same face and clothes as in image 3. An instructor with grey braided hair', prompt)
         # An action longer than the limit is cut at a word, after everything else has gone.
-        prompt = ctx_of(shot_task('@CAST-01 ' + 'climbs ' * 400, rows=rows))['image_reference_prompt']
-        self.assertLessEqual(len(prompt), 1500)
+        prompt = ctx_of(shot_task('@CAST-01 ' + 'climbs ' * 600, rows=rows))['image_reference_prompt']
+        self.assertLessEqual(len(prompt), shot_skeleton.IMAGE_LIMIT)
         self.assertTrue(prompt.endswith('Exactly 1 person in frame.'))
         self.assertIn('The person in image 1 and image 2 is Noa', prompt)
 
@@ -328,7 +328,7 @@ class VideoSkeletonTests(unittest.TestCase):
     def test_sections_leave_the_action_and_go_to_their_blocks(self):
         prompt = self.skeleton()['video_skeleton_prompt']
         timing = prompt.split('ACTION TIMING:\n')[1].split('\n\n')[0]
-        self.assertEqual(timing, '[0-2s] Noa grips the valve of Burner as the basket drops toward Canyon rim. '
+        self.assertEqual(timing, '[0-2s] Noa grips the valve of the burner as the basket drops toward the canyon rim. '
                                  + story_look.option('move', 'push-in')['promptText'] + '\n'
                                  '[2-4s] Ines watches, hands still. Without looking up, Ines says "Your balloon."\n'
                                  '[4-6s] "Lighting it now." Noa pulls the valve.')
@@ -470,7 +470,7 @@ class AssetPanelTests(unittest.TestCase):
         self.assertIn('The place is the one in image 4', prompt)
         self.assertIn(f'Noa and Ines {pose}, {light}.', prompt)
         self.assertTrue(prompt.endswith('Exactly 2 people in frame.'))
-        self.assertLessEqual(len(prompt), 1500)
+        self.assertLessEqual(len(prompt), shot_skeleton.IMAGE_LIMIT)
         self.assertEqual(ctx['edit_prompt'], '')
         self.assertEqual(ctx['image_reference_prompt'], prompt)
         prompts ={ctx_of(asset_task('CAST-01', 'stress', variation=i))['asset_panel_prompt'] for i in range(10)}
@@ -479,7 +479,7 @@ class AssetPanelTests(unittest.TestCase):
         self.assertEqual(ctx_of(asset_task('CAST-01', 'stress', variation=13))['asset_panel_prompt'],
                          ctx_of(asset_task('CAST-01', 'stress', variation=3))['asset_panel_prompt'])
         prop = ctx_of(asset_task('PROP-01', 'stress', variation=1))['asset_panel_prompt']
-        self.assertIn('The Burner is the object in image 1', prop)
+        self.assertIn('The burner is the object in image 1', prop)
         self.assertIn('An empty place with nobody in it.', prop)
 
     def test_a_variant_edits_its_base_panel(self):
