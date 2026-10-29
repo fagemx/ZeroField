@@ -6,7 +6,17 @@ Updraft is original: a trainee pilot's burner dies over a red canyon at sunrise 
 
 ## Media
 
-Pictures and clips are generated with open-weights models only (FLUX 3 Klein for assets and first frames, LTX-2.5 for video and sound, run through ComfyUI) and are added under `updraft/` together with `updraft/manifest.json`:
+Every picture and clip in `updraft/media/` was generated on 2026-10-29 through ZeroField itself, on one RTX 4090 with open-weights models only (FLUX 3 Klein for the asset panels and first frames, LTX-2.5 22B distilled for video with sound, local ComfyUI). `updraft/updraft_film.mp4` is the episode film the studio exported from the ten adopted takes (40 s, 1280×720, generated sound, no music).
+
+What is there, and how it was made:
+
+- **Character sheets** (`cast-01_sheet.jpg`, `cast-02_sheet.jpg`): a 3/4 face close-up generated once (four candidates, one chosen), a full-body front rendered with the face as its only reference and then cropped below the chin by the server (`server-crop`: the model never sees a small face it could copy into wide shots), a full-body back rendered from the face, and the three composed side by side by the server (`server-compose`).
+- **Locations** (`set-0N_plate.jpg`): a 3/4 plate per place, empty of people, with its location map and single light logic kept as text locks.
+- **Props** (`prop-0N_product.jpg`): product shots on neutral grey with a shape lock; the burner's two states (`prop-03_lit`, `prop-03_dead`) are edits of the burner's own picture, so only the flame changes.
+- **Shots** (`s01_key.jpg` … `s10_take.mp4`): each first frame was rendered with the reference plan of its shot (the faces, bodies, place and props it names, up to six pictures) and each take animated by LTX-2.5 from that frame with the compiled video skeleton.
+- Files with a short suffix (`cast-01_face_5d770f.jpg`, `s04_take_eaf80b.mp4`) are the candidates the production chose between; the seed lists them beside the chosen one. Candidate takes are re-encoded at a lower bitrate to keep the repository small.
+
+`updraft/manifest.json` records each file's card, seed and the exact prompt the card received (recompiled from the frozen task input):
 
 ```json
 {"items": [{"tab": "soul-cast", "code": "CAST-01", "column": "Reference Image", "panel": "face",
