@@ -191,8 +191,7 @@ def name_tags(text, names):
 
 def bare_name(name):
     """A place or object name without its leading article, in lower case ("The Burner" -> "burner")."""
-    name = re.sub(r"^the\s+", "", str(name or "").strip(), flags=re.I)
-    return name[:1].lower() + name[1:]
+    return re.sub(r"^the\s+", "", str(name or "").strip(), flags=re.I).lower()
 
 
 def the_name(name):
@@ -473,7 +472,8 @@ def _camera_head(optical, motion):
 
 def image_reference_prompt(shot, plan, limit=IMAGE_LIMIT):
     """§3.3, for the image model: natural, positive sentences in a fixed order, at most ``limit`` characters. Over the
-    limit it drops the Film and Color lines, then the light, then the locked descriptions (the usage sentences stay)."""
+    limit it drops the locked descriptions of places and objects (their pictures carry them), then the Film and Color
+    lines, then the characters' descriptions, and the single light logic only last (the usage sentences stay)."""
     names = shot.get("names") or {}
     look = shot.get("look") or {}
     assets = shot.get("assets") or []
@@ -488,13 +488,13 @@ def image_reference_prompt(shot, plan, limit=IMAGE_LIMIT):
                                        f"Color: {_clause(look['color'])}." if look.get("color") else "") if part)
     people = _people(len(shot.get("characters") or ()))
     frames = shot.get("frames") or ()
-    full = _usage(plan, assets, frames)
-    for parts in ((head, state, full, light, style, people), (head, state, full, light, people)):
-        text = "\n".join(part for part in parts if part)
-        if len(text) <= limit:
-            return text
-    for described in _fewer_descriptions(assets):
-        text = "\n".join(part for part in (head, state, _usage(plan, assets, frames, described), people) if part)
+    steps = list(_fewer_descriptions(assets))
+    characters = {asset["code"] for asset in assets if asset_kind(asset["code"]) == "character"}
+    objects_only = [described for described in steps if characters <= described]
+    attempts = ([(described, light, style) for described in objects_only] +
+                [(described, light, "") for described in steps] + [(described, "", "") for described in steps])
+    for described, lit, styled in attempts:
+        text = "\n".join(part for part in (head, state, _usage(plan, assets, frames, described), lit, styled, people) if part)
         if len(text) <= limit:
             return text
     # The action alone is too long: keep as much of it as fits, in whole sentences or words.

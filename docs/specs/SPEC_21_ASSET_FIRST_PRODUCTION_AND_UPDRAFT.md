@@ -29,7 +29,7 @@
 2. **參考圖欄（第 4 欄）仍是素材的「代表圖」**：角色＝合成的三視圖表、場景＝母版、道具＝產品照。舊的程式路徑（H3、ingredients sheet、管線 lookkey）照舊讀這一欄。
 3. **首幀生成一律帶參考圖。** 鏡頭圖片的預設卡改為 `flux-reference-key`（§3.1）。沒有任何有圖的素材時，它退回純文字生圖，不報錯。
 4. **原始臉部特寫不再整張送進模型重畫。** 狀態變體用 Klein 編輯，從基準圖出發只改要改的地方（§2.5）；變體是新的素材列，不覆蓋基準。
-5. **兩種提示詞、各自的預算**：Klein 圖片用自然語句、只寫正面描述，上限 1,500 字元；LTX 影片用固定骨架，預設上限 4,000 字元（環境變數 `ZEROFIELD_VIDEO_PROMPT_BUDGET` 可改）。超過時**整塊**依序捨棄（§3.3），不在句子中間截斷；提示詞預覽列出被捨棄的區塊。上限值由 GPU 驗收 G2 實測後定案。
+5. **兩種提示詞、各自的預算**：Klein 圖片用自然語句、只寫正面描述，上限 2,200 字元（2026-10-29 GPU 生成後由 1,500 調高：1,500 時單一光源句被捨棄）；LTX 影片用固定骨架，預設上限 4,000 字元（環境變數 `ZEROFIELD_VIDEO_PROMPT_BUDGET` 可改）。超過時**整塊**依序捨棄（§3.3），不在句子中間截斷；提示詞預覽列出被捨棄的區塊。上限值由 GPU 驗收 G2 實測後定案。
 6. **不新增狀態值**（`project_docs/doc_schema.py:17` 不動）；生成結果都是候選，人選定才寫入。
 7. **全部開放權重**：FLUX 3 Klein（素材、首幀、編輯）、LTX-2.5（影片＋聲音）。示範路徑不出現閉源模型或 Router 卡。
 8. **介面文字**一律加到 `ui/src/i18n/locales/en.json` 與 `zh-TW.json`。
@@ -132,14 +132,14 @@
 Action & Audio Prompt 欄可用的段標：`PHYSICS:`、`CHECK:`、`ORDER:`，其餘文字都是動作。**超出預算時的捨棄順序**：`PHYSICS` → `CHARACTER ACTING` → `OPTICS` → `ACTIVE REFERENCES` → `LOCATION MAP` → `[ORDER]`；`SCENE CONTEXT`、`CAMERA`、`ACTION TIMING`、`LIGHTING`、`AUDIO`、`STYLE`、`POSITIVE CONSTRAINTS` 永遠保留。
 
 ### 3.3 首幀提示詞（`image_reference_prompt`，給 Klein）
-自然語句、只寫正面描述、上限 1,500 字元，依序：
+自然語句、只寫正面描述、上限 2,200 字元，依序：
 1. `Cinematic film still.` ＋景別與鏡頭（Optical Rig 的鏡頭部分；不寫機身品牌）。
 2. 動作的**狀態**：Action & Audio Prompt 欄第一段（第一個逐秒段落或第一句）。
 3. 每個參考圖一句用途，**編號照參考計畫的順序**：角色 `The person in image 1 and image 2 is <名字>: same face from image 1, same clothes from image 2. <鎖定描述>`；場景 `The place is the one in image k: take its space and materials only, not its framing or colour.`；道具 `The <名字> is the object in image k: <形狀鎖>`。
 4. 單一光源：場景 `light` 的第一句＋本集質感 `Lighting:` 行。
 5. 本集質感的 `Film:`（靜態版）與 `Color:` 行。
 6. `Exactly N people in frame.`（N＝CAST 數；0 時 `An empty place with nobody in it.`）。
-超過上限時依 5 → 4 → 3 的鎖定描述（只留用途句）順序縮短。
+超過上限時依序縮短：場景與道具的鎖定描述（圖片已承載）→ 5 的質感行 → 角色的鎖定描述 → 4 的光源（最後才丟，光是最嚴的鎖）；用途句永遠保留。場景與道具在句中寫成「the＋小寫名稱」。
 
 ### 3.4 素材面提示詞（`asset_panel_prompt`）與編輯提示詞（`edit_prompt`）
 依 LIRA 的模板寫成自然語句（不寫「character reference sheet」「painterly」）：
