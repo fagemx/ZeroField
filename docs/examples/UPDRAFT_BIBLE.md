@@ -52,7 +52,7 @@ A slight, wiry woman with a sun-browned oval face, dark straight eyebrows, a str
 
 ### CAST-02 Ines
 
-A tall, broad-shouldered woman with a weathered, deeply tanned face, deep crow's feet, heavy dark eyebrows, a nose that healed slightly crooked, and silver-grey hair pulled back into a short thick braid. She wears an olive-green quilted vest over a navy cable-knit wool sweater, dark grey cargo trousers, black leather boots, and aviator sunglasses pushed up into her hair. seed: 21002
+A tall, broad-shouldered woman with a weathered, deeply tanned face, deep crow's feet, heavy dark eyebrows, a nose that healed slightly crooked, and silver-grey hair pulled back into a short thick braid, and aviator sunglasses pushed up into her hair. She wears an olive-green quilted vest over a navy cable-knit wool sweater, dark grey cargo trousers and black leather boots. seed: 21002
 
 **Voice.** Low, dry, unhurried female voice with a faint gravel and a soft Iberian accent; she never raises it, and the worse things get the slower she speaks.
 
