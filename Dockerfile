@@ -13,6 +13,9 @@ COPY project_docs/ project_docs/
 COPY project_assistant/ project_assistant/
 COPY openbench_data/ openbench_data/
 COPY db/ db/
+COPY workflows/ workflows/
+COPY skills/ skills/
+COPY samples/ samples/
 COPY --from=ui /build/static/projects/ static/projects/
 RUN pip install --no-cache-dir . && useradd --create-home --uid 10001 openbench
 USER openbench
