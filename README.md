@@ -1,8 +1,94 @@
 # ZeroField Studio
 
-An open-source production workspace for planning films with a crew of AI agents. Organize a director brief, cast references, shot slates, and editable pipelines in one place.
+**An open-weights film crew that plans with you — and checks every shot it makes.**
 
-Built for the ComfyUI [Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield). The target is an open-weights filmmaking and V2V studio; this checkout delivers a **bilingual production workspace with inline video review, configurable Comfy workflows and a planning crew that runs on a local open-weights model**. The crew and provider work of [SPEC_20](docs/specs/SPEC_20_PLANNING_AGENT_LAYER_AND_PROVIDER_PRINCIPLES.md) is implemented and has had a first run on a real GPU with the local model; that run found open break points in the new-production path: see [Verification status of the SPEC_20 work](#verification-status-of-the-spec_20-work).
+[▶ Demo video (2 min)](TODO_DEMO_URL) · [▶ *Updraft*, an 88-second one-take](TODO_ONER_URL) · [Live demo (read-only)](TODO_LIVE_DEMO_URL) · [Run it locally](#run-locally) · MIT · `#OpenSourceHiggsfield`
+
+[![Frames from Updraft, an 88-second one-take rendered with LTX-2.5 and FLUX 3 Klein](docs/media/updraft-oner-strip.jpg)](TODO_ONER_URL)
+
+ZeroField is an open-source production workspace for AI films, built on ComfyUI for the [Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield). A crew of agents breaks down the script, builds locked character, set and prop assets, compiles each shot's prompt and reference plan, renders it with FLUX 3 Klein and LTX-2.5, and scores the take against the plan before it goes into the cut. Everything the crew writes is a proposal: nothing changes until a person adopts it.
+
+- **Assets first, one job per picture.** A character is a locked description plus a face close-up, a headless full-body front, a back and a composed sheet; sets carry the space and one light logic; props carry a shape lock and separate states. Each asset is stress-tested in new poses and light before any shot is made.
+- **Compiled shots.** The first frame gets a reference plan that tells FLUX 3 Klein which picture is the face, the body, the place or the prop. The video prompt follows a fixed skeleton for LTX-2.5: exact head count, location map, camera, timed action, one light and an audio lock.
+- **It checks its own takes.** Camera fidelity compares the take's camera path with the 3D plan, and the Continuity Supervisor grades an eight-frame contact sheet with a local vision model; a failing grade comes with a rewritten prompt and a one-click retake.
+- **Open weights only.** FLUX 3 Klein, LTX-2.5 (video and sound, with the Layout-to-Render and Alpha-Gen IC-LoRAs) and a crew on local Ollama `qwen3.8:27b`. No partner nodes, no closed APIs on the demo path. One RTX 4090.
+
+### The sample production: Updraft
+
+*Updraft* is an original short: a trainee pilot's burner dies over a red canyon at sunrise. It comes in two forms.
+
+- **Ten shots made in the app** (`samples/updraft/`): assets, first frames, takes and the exported 40-second film, all rendered through ZeroField on one RTX 4090. Every file records its card, seed and exact prompt in [`manifest.json`](samples/updraft/manifest.json). The launcher seeds this production, so it is what you see when you open the studio.
+- **An 88-second one-take** ([video](TODO_ONER_URL)): the whole camera move was blocked in Blender, and each eight-second segment was rendered with the same LTX-2.5 Layout-to-Render workflow the 3D Stage uses ([`workflows/ltx25_layout_render.json`](workflows/ltx25_layout_render.json)), with FLUX 3 Klein keyframes holding the face between segments and LTX-2.5's own generated sound. The segment joins, the circle transitions and the sound mix were done with Python/OpenCV scripts outside the app; those scripts are not part of this repository.
+
+![Left: Blender previs. Right: the LTX-2.5 Layout-to-Render result for the same frame (Updraft one-take, 0:05, 0:37 and 1:26)](docs/media/updraft-previs-to-render.jpg)
+
+*Left: the Blender previs. Right: LTX-2.5 Layout-to-Render, same frame.*
+
+### Submission at a glance
+
+| Requirement | Where it is |
+|---|---|
+| Built with ComfyUI | Every generation is a ComfyUI API graph in [`workflows/`](workflows/README.md); a card binds the compiled prompt and references into its slots, so any step can be opened and run in ComfyUI. Runs on local ComfyUI by default, or through the Comfy SDK. |
+| Category | Open Weights Only; bonus: VFX Workflow Built with LTX (LTX-2.5 is the video model of every shot in Updraft) |
+| Open-source license | Code: [MIT](LICENSE). Updraft content and media: [CC0](samples/README.md#license). Model weights keep their own licenses ([workflow setup](workflows/README.md)). |
+| Run it locally | [Run locally](#run-locally); [without a GPU](#try-it-without-a-gpu) for browsing only |
+| Workflow files | [`workflows/*.json`](workflows/README.md) and the card contracts in `workflows/cards/` |
+| Other tools used | Ollama with `qwen3.8:27b` for the crew; Blender and Python/OpenCV for the one-take (see above) |
+| Demo video | [2 minutes](TODO_DEMO_URL) |
+| Try it | [Read-only live demo](TODO_LIVE_DEMO_URL) of the Updraft production. Generation is not hosted: it runs on your own GPU. |
+| SFW, original | Updraft is original; no third-party footage, characters, text or real likenesses |
+
+### Try it without a GPU
+
+The built studio is checked in, so browsing needs only Python 3.11 or 3.12 (no Node, no ComfyUI, no model):
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -e ".[embedded]"
+python run_studio.py --port 3020 --no-worker
+```
+
+Open [http://127.0.0.1:3020/projects/](http://127.0.0.1:3020/projects/) and pick **Updraft**: the Cast & sets wall with each character's face, front, back and sheet, the props and their states, the ten shots with their first frames and takes, the compiled prompts, and the film window. `--no-worker` starts no workers, so nothing calls a model.
+
+### Tested hardware and render times
+
+Windows 11, one RTX 4090 (24 GB), local ComfyUI 0.42.1. Times are ComfyUI execution times from the 2026-10-30 renders.
+
+| Step | Model | Time per render |
+|---|---|---|
+| Asset panel or first frame | FLUX 3 Klein (int8) | median 34 s (9–60 s, 38 renders) |
+| 4 to 8 s image-to-video clip | LTX-2.5 22B distilled | about 1 min (32–71 s, 7 renders) |
+| 8 s Layout Render segment, 193 frames at 1280×704 | LTX-2.5 + Layout-to-Render IC-LoRA | median 4.7 min (268–298 s, 17 renders) |
+| Continuity grade of one take | `qwen3.8:27b` vision through Ollama | about 25–45 s |
+
+Eight-second segments decode in tiles to stay under 24 GB. The crew model needs about 17 GB of disk and runs with a 16k context ([Models](#models)).
+
+### How it fits together
+
+```mermaid
+flowchart LR
+  B["Browser: React studio"] --> S["Python server + PostgreSQL"]
+  S -->|"crew jobs: JSON schema, validator, rule fallback"| O["Ollama: qwen3.8:27b"]
+  S -->|"compiled prompt + reference plan"| C["Card engine: ComfyUI API JSON"]
+  C --> U["ComfyUI on your GPU"]
+  U --> F["FLUX 3 Klein: assets, first frames, edits"]
+  U --> L["LTX-2.5: video + sound, Layout-to-Render, Alpha-Gen"]
+  U -->|"takes"| S
+  S -->|"8-frame contact sheet"| O
+  M["External agents over MCP"] -.->|"proposals only"| S
+```
+
+A policy lock keeps a production on open weights, and a GPU arbiter queues ComfyUI renders, grading and model calls on one card. The repository also carries cards for other models (MiniMax H3, and hosted Router, Kling and Seedance cards); hosted and closed cards need an explicitly authorized hybrid production and are not used on the demo path.
+
+### Limits
+
+- Character voices are not built; spoken lines and sound come from LTX-2.5's generated audio.
+- Crew planning with the local 27B model is still weak on our hard evaluation set (beats 18.56%, continuity 24.29%). Every crew output is a proposal that a person reviews.
+- Starting a blank production from a pasted screenplay still has open break points ([Verification status](#verification-status-of-the-spec_20-work)).
+- The one-take was assembled outside the app (Blender previs, scripted Layout Render runs, Python/OpenCV compositing). In the app, the 3D Stage → Layout Render path renders one shot at a time.
+- Tested only on Windows 11 with one RTX 4090. Linux, the crew under Docker, Comfy Cloud and real MCP hosts are untested.
+- Object Swap mattes the whole foreground, so it cannot pick one person out of several.
 
 ## Start here
 
@@ -16,10 +102,14 @@ Verified on 2026-10-30 at this commit: the full backend suite (1,502 tests, four
 
 ## Available now
 
+The target is an open-weights filmmaking and V2V studio; this checkout delivers a **bilingual production workspace with inline video review, configurable Comfy workflows and a planning crew that runs on a local open-weights model**. The crew and provider work of [SPEC_20](docs/specs/SPEC_20_PLANNING_AGENT_LAYER_AND_PROVIDER_PRINCIPLES.md) is implemented and has had a first run on a real GPU with the local model; that run found open break points in the new-production path: see [Verification status of the SPEC_20 work](#verification-status-of-the-spec_20-work).
+
+
 - English / Traditional Chinese studio navigation, crew settings, annotations, asset review, and agent controls. English is the first-run default.
 - The [Story Workbench](docs/STORY_WORKBENCH.md): five navigation entries, script confirmation/breakdown, scene-grouped galleries, wardrobe variants, candidate selection, card/node overrides, split/merge, batch generation and episode film export over `/aivideo/open/v1`.
 - Three creative spaces on productions that have a cinema slate, behind one breadcrumb menu (Ctrl 1 / 2 / 3) with a scene · shot focus that travels between them and floating panels you can hide: **Story & World** (the writing workspace: the script with its stable outline, creative versions and the shots an edit would leave out of step; and the Cast & sets wall), **Shot Stage** (crew proposals reviewed on their shot, a draggable 3D plan with a beat track and easing curve, stored on the server with a revision number), and **Timeline** (frame-accurate per-shot trims with ripple or roll, a cut preview, and a film export that honors the trims). Built on a small control kit (parameter rows, range sliders, timecode fields, curve editor). Gaps are listed in [SPEC_15 §6](docs/specs/SPEC_15_UNIFIED_CREATIVE_WORKSPACE_UI_DESIGN.md): no write-back from shots to script lines, no audio tracks or J/L cuts, no razor, and the Timeline's "runs long" hints are a local rule, not an agent.
-- SPEC_18 refinements inside those spaces: on the Cast & sets wall pictures generate in the background (several at once, each with cancel and retry, picked up again after a reload) and the card you pick opens in a large editor laid out like RunningHub's character editor (the picture beside all of its pictures, a strip of looks with a + for another one, the description as the biggest box, and one row of generation choices that shows the time earlier runs took or "time unknown"; voice, status and notes fold into a More section); the primary button opens a build/update dialog with per-mode shot estimates; Shot Stage detail shows the previs → first frame → video ladder and each shot's cast, whose look menus rewrite only the `@code` in the prompt. A production can also start from a story: the New Production dialog takes an idea, a novel chapter or a screenplay in one box, with a ratio and a style, and opens Story & World with it in the writing workspace (an idea or novel as a private source, a screenplay as the working script when empty, or a private draft rather than overwriting occupied content). Not built: character three-views, voice audio, and a generation line on shot detail ([SPEC_18 §11](docs/specs/SPEC_18_RUNNINGHUB_INFORMED_STUDIO_REVISION.md)).
+- SPEC_18 refinements inside those spaces: on the Cast & sets wall pictures generate in the background (several at once, each with cancel and retry, picked up again after a reload) and the card you pick opens in a large editor laid out like RunningHub's character editor (the picture beside all of its pictures, a strip of looks with a + for another one, the description as the biggest box, and one row of generation choices that shows the time earlier runs took or "time unknown"; voice, status and notes fold into a More section); the primary button opens a build/update dialog with per-mode shot estimates; Shot Stage detail shows the previs → first frame → video ladder and each shot's cast, whose look menus rewrite only the `@code` in the prompt. A production can also start from a story: the New Production dialog takes an idea, a novel chapter or a screenplay in one box, with a ratio and a style, and opens Story & World with it in the writing workspace (an idea or novel as a private source, a screenplay as the working script when empty, or a private draft rather than overwriting occupied content). Not built: voice audio and a generation line on shot detail ([SPEC_18 §11](docs/specs/SPEC_18_RUNNINGHUB_INFORMED_STUDIO_REVISION.md)); character three-views came later with SPEC_21 (below).
+- **Asset-first production** ([SPEC_21](docs/specs/SPEC_21_ASSET_FIRST_PRODUCTION_AND_UPDRAFT.md)). Every character, set and prop is a locked text description plus pictures, and each picture has one job. A character has a face close-up, a full-body front that the server crops below the chin (so the model never sees a small face it could copy into wide shots), a back rendered from the face, and a sheet the server composes from the three; sets have a plate, a location map and one light logic; props have a product shot and a shape lock, and each state (a lit and a dead burner) is its own asset, edited from the base picture. A stress test renders the asset in new poses, light and company and shows how many of the results are still recognizable. For each shot the compiler writes a reference plan (up to six pictures, each with its purpose: face, body, location, prop) for the FLUX 3 Klein first frame, and a fixed video skeleton for LTX-2.5 (exact head count, location map, optics, timed action, physics, one light, an audio lock where only quoted lines are spoken); when a prompt runs over budget whole blocks drop in a fixed order and the preview shows what was dropped.
 - [SPEC_19](docs/specs/SPEC_19_SHOT_COMPOSER_ADOPTION_AND_FILM_PANEL.md) adoption and the film panel on the Shot Stage: a picked shot opens in a **composer** (the current take on top; **Reference** and **Camera** buttons open an example wall in its place, camera body, lens and aperture write `Optical Rig`, camera moves go into the prompt as `#tags` expanded in place; the prompt is the largest input, with inline `@` asset, `#` move and `@SC01-S02.end` cross-shot tags, a read-only view of the exact compiled prompt, and one row for output, workflow, seconds, 1–4 takes and the estimate). One ✓ (or `A`) adopts a take, story candidate or pending pipeline proposal, writing the media and Approved in one table edit; later takes never overwrite an adopted shot. The right column shows the shot in the cut: neighbours, a progress bar with seam dots, the takes, trim, the references it quoted and "upstream changed". A cut check sets the outgoing and incoming frames side by side for the Continuity Supervisor, queued behind renders. The film window counts adopted shots, fills gaps with the latest take, previs or nothing, can play only the seams, lets you try a take in the cut without writing anything, and exports `selection: "adopted"` with each segment's take, in/out points, references and cut result. Film setup (genre, image era, tempo), palette and lighting are three more buttons with their own walls; the episode sets defaults on an **Episode look** page (opened from the ratio and style tile in Story & World) and a shot can override any of them (本集 / 本鏡 on the button, Back to episode clears it). They compile into `Film:`, `Color:` (with the palette's hex codes) and `Lighting:` lines, the same text on the Story API and the M8 pipeline ([receipt](docs/spec19-verification.json)). Every look and camera option has a sample: FLUX 3 Klein stills of one original test scene and camera-move loops rendered by the 3D Stage, each with its seed, prompt and licence in `ui/public/assets/look-samples/manifest.json`. Not yet: OpenJutsu in the composer; no crew tool proposes a look yet; the M8 pipeline path does not resolve cross-shot references; cut checks and generation were exercised with stand-in models only.
 - The [writing workspace](docs/WRITING_WORKSPACE.md) (SPEC_16) adds recoverable private sources/drafts, scene/plot editing, immutable creative versions, compare/adopt, selected-shot story impact, shared narrative notes, safe literal replacement and TXT/MD/DOCX / browser-print handoff. Saving text never generates media. In the three-space studio it is the editing face of Story & World's By scene view ([SPEC_16A](docs/specs/SPEC_16A_INTEGRATION_INTO_THREE_SPACE_STORY_WORLD.md)).
 - Nineteen built-in Studio Cards (twelve existing plus seven official native Router models) and authenticated persistent ComfyUI JSON / RunningHub curl imports. [Router protocol and limits](docs/COMFY_ROUTER.md) are separate from workflow-graph execution.
@@ -31,7 +121,7 @@ Verified on 2026-10-30 at this commit: the full backend suite (1,502 tests, four
 - **Workflow manuals and evaluation.** [`skills/`](skills/README.md) holds four step-by-step manuals (crew pre-production, shot beats, 3D blocking, continuity check) that the `get_workflow` tool returns; the tools enforce scope, review and spending limits whether or not a manual is followed. An offline tool-surface audit (`python -X utf8 scripts/audit_tool_surface.py`) lists every tool the built-in crew, MCP and ACP can see and fails on any change to the checked-in list. A crew evaluation set ([`research/crew_eval/`](research/crew_eval/README.md), `scripts/crew_eval.py`) has eight hard cases each for beats, blocking and continuity, with reference answers and a scorer; the tests check that the reference answers score 100%. Against local `qwen3.8:27b` (2026-10-27) the beats set scored 18.56% and the continuity set 24.29% (2 of 8 cases each passed every hard check); the blocking set has no crew job to run yet.
 - [SPEC_07 routing and allocation](docs/SPEC07_STUDIO_ROUTING.md): default open-weights policy lock, explicitly authorized hybrid graphless providers, source-bound batch allocation, real structural preparation and reviewed M8 media races/two-stage handoffs. Resource estimates are uncalibrated, not savings or quality promises.
 - A `ZeroField Studio` template with five editable pages: **Director Brief**, **Soul Cast**, **Cinema Studio**, **OpenJutsu Lab**, and **Comfy Pipeline**.
-- **Updraft** showcase, seeded by the launcher from `samples/updraft/production.json`: a one-scene, ten-shot production with locked cast, location and prop assets (including a lit and a dead burner state), the film look, and a shot slate. Media generated with open-weights models is filled in from `samples/updraft/manifest.json` when present. Raw project templates retain empty media cells.
+- **Updraft** showcase, seeded by the launcher from `samples/updraft/production.json`: a one-scene, ten-shot production with locked cast, location and prop assets (including a lit and a dead burner state), the film look, and a shot slate. Its media (asset panels, first frames, takes and the exported film) were rendered through ZeroField with FLUX 3 Klein and LTX-2.5 and are filled in from `samples/updraft/manifest.json`; the adopted takes are seeded as approved, so the film window opens at 10/10 ([how each file was made](samples/README.md)). Raw project templates retain empty media cells.
 - Inline video controls and hover previews, cached metadata, candidate video comparison, and visual input/output chains with resolved `@Asset` references.
 - Single-shot comparison, keyboard shot stepping and optical/motion/mode presets alongside Studio Assistant; selected shots and individual stages run in the current sheet.
 - Standard reference packs: source video, extracted PNG frame, continuous motion guide, anchor keyframe, multiple `@Asset` images, prompt and seed.
@@ -58,14 +148,14 @@ Translations live in `ui/src/i18n/locales/en.json` and `zh-TW.json`. Add semanti
 
 The bundled [FLUX 3 Klein and LTX 2.5 workflows](workflows/README.md) use open-weights model graphs and documented node dependencies. Install the listed weights/custom nodes in your Comfy deployment before generating. The official Comfy SDK remains the workflow-capable Developer Platform route. The separate official native Router model driver cannot execute arbitrary workflow graphs. It uses **POST `/estimate`**, not `/price`; even exact estimates are not price locks. Hard is the default and refuses unlocked charges. Only explicit versioned current-admin estimate-soft consent permits estimate-risk admission; overages remain visible, and provider reports are not invoices. Open-only stays local by default; hosted Router also needs explicitly authorized hybrid, current environment/credential grants and a fresh exact-input-bound quote.
 
-Model quality has not been benchmarked. OpenJutsu provides source-guided V2V restyling with a reference image. Rows whose **Jutsu Mode** is `Object Swap` use an LTX-native subject replacement instead: the Alpha-Gen IC-LoRA mattes the subject, LTX-2.5 regenerates it from the FLUX 3 Klein edited first frame, and the result is composited inside the grown, feathered matte over the untouched source pixels, keeping the source audio. [Two RTX 4090 renders](docs/verification/openjutsu-swap/README.md) ran it, one through a lab driver and one through the Comfy SDK and comfy-api-proxy. Limits: Alpha-Gen mattes the whole foreground, so a shot with several people cannot pick one; clips are capped at 145 frames; higher denoise follows the new identity more closely but follows the source motion less (at 0.85 a held prop can disappear); the background inside the matte is regenerated too and drifts from the source at higher denoise (seams show at 0.9). The Clean-Plate IC-LoRA and depth conditioning are not wired. The bundled [showcase media](samples/README.md) are original CC0 procedural playback fixtures, not model renders or proof of motion/object transfer. `luma_depth` is a luminance structure proxy, not learned depth estimation. The sample V2V graph exposes a motion-guide upload slot; using that guide as model conditioning requires an externally authored compatible control graph.
+Model quality has not been benchmarked. OpenJutsu provides source-guided V2V restyling with a reference image. Rows whose **Jutsu Mode** is `Object Swap` use an LTX-native subject replacement instead: the Alpha-Gen IC-LoRA mattes the subject, LTX-2.5 regenerates it from the FLUX 3 Klein edited first frame, and the result is composited inside the grown, feathered matte over the untouched source pixels, keeping the source audio. [Two RTX 4090 renders](docs/verification/openjutsu-swap/README.md) ran it, one through a lab driver and one through the Comfy SDK and comfy-api-proxy. Limits: Alpha-Gen mattes the whole foreground, so a shot with several people cannot pick one; clips are capped at 145 frames; higher denoise follows the new identity more closely but follows the source motion less (at 0.85 a held prop can disappear); the background inside the matte is regenerated too and drifts from the source at higher denoise (seams show at 0.9). The Clean-Plate IC-LoRA and depth conditioning are not wired. The [Updraft media](samples/README.md) are real FLUX 3 Klein and LTX-2.5 renders, original and CC0; they do not exercise OpenJutsu. The older `samples/cast_kael.png`, `set_observatory.png` and `shot_s01.mp4` are procedural placeholders kept for tests, not model renders. `luma_depth` is a luminance structure proxy, not learned depth estimation. The sample V2V graph exposes a motion-guide upload slot; using that guide as model conditioning requires an externally authored compatible control graph.
 
 ## Run locally
 
-Requirements: Python 3.11+, Node.js 22+ for frontend development, and PostgreSQL. The optional `embedded` extra supplies local PostgreSQL support; an installed PostgreSQL distribution can also be selected with `OPENBENCH_PG_BIN`.
+Requirements: Python 3.11 or 3.12, Node.js 22+ for frontend development, and PostgreSQL. The `embedded` extra supplies a bundled PostgreSQL through `pgserver`, which has no packages for Python 3.13 or later. On 3.13 or later, install PostgreSQL 15 to 17 yourself and install without the extra (`python -m pip install -e .`); the launcher finds PostgreSQL on `PATH` or in `C:\Program Files\PostgreSQL\<version>\bin`, and `OPENBENCH_PG_BIN` selects another bin directory.
 
 ```powershell
-python -m venv .venv
+py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e ".[embedded]"
 npm ci --prefix ui
