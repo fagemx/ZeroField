@@ -2,7 +2,7 @@
 
 **An open-weights film crew that plans with you — and checks every shot it makes.**
 
-[▶ Demo video (2 min)](TODO_DEMO_URL) · [▶ Updraft one-take (88 s)](samples/updraft/updraft_oner.mp4) · [▶ Exported 10-shot film](samples/updraft/updraft_film.mp4) · [Live demo (read-only)](TODO_LIVE_DEMO_URL) · [Run it locally](#run-locally) · MIT · `#OpenSourceHiggsfield`
+[▶ Demo video (2 min)](TODO_DEMO_URL) · [▶ Updraft one-take (88 s)](samples/updraft/updraft_oner.mp4) · [▶ Exported 10-shot film](samples/updraft/updraft_film.mp4) · [Live demo (read-only)](https://fagem-zerofield-studio.hf.space/projects/zerofield-showcase/) · [Run it locally](#run-locally) · MIT · `#OpenSourceHiggsfield`
 
 [![Frames from Updraft, an 88-second one-take rendered with LTX-2.5 and FLUX 3 Klein](docs/media/updraft-oner-strip.jpg)](samples/updraft/updraft_oner.mp4)
 
@@ -45,7 +45,7 @@ Verified on 2026-10-30 at `b7ea8ce` (later commits change only documentation and
 | Workflow files | [`workflows/*.json`](workflows/README.md) and the card contracts in `workflows/cards/` |
 | Other tools used | Ollama with `qwen3.8:27b` for the crew. For the one-take: Blender (previs), ACE-Step 1.5 (score) and Python/OpenCV (push-through, seam fixes, mix), all in [`tools/oner/`](tools/oner/README.md) |
 | Demo video | [2 minutes](TODO_DEMO_URL) |
-| Try it | [Read-only live demo](TODO_LIVE_DEMO_URL) of the Updraft production. Generation is not hosted: it runs on your own GPU. |
+| Try it | [Read-only live demo](https://fagem-zerofield-studio.hf.space/projects/zerofield-showcase/) of the Updraft production ([Space](https://huggingface.co/spaces/fagem/zerofield-studio), set up by [`deploy/hf-space/`](deploy/hf-space/Dockerfile)). Nothing can be changed or generated there; generation runs on your own GPU. |
 | SFW, original | Updraft is original; no third-party footage, characters, text or real likenesses |
 
 ### Try it without a GPU
