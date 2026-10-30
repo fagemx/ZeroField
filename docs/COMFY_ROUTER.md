@@ -8,7 +8,7 @@ No global model, credentials, CLI config or existing custom profile is changed.
 
 ## Verified public protocol, not spec assumptions
 
-Captured public source evidence and hashes: [reference manifest](references/comfy-router-public/sources.json).
+Public sources, read 2026-10-19: the OpenAPI document below and the per-model schemas under `https://docs.comfy.org/router-schemas/`. The local copy of those documents was removed before the repository went public; read them at the official URLs.
 Primary contract: <https://docs.comfy.org/router-openapi.yaml>, OpenAPI 3.0.2,
 Comfy Router API version `1.0`. Seven exact per-model schema snapshots are packaged
 under `workflows/router/` and identified by their official document revision.
