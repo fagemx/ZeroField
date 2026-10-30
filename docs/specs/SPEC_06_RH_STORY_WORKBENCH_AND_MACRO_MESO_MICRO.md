@@ -5,7 +5,7 @@
 - [`docs/specs/SPEC_02_MACRO_MESO_MICRO_WORKSPACE.md`](./SPEC_02_MACRO_MESO_MICRO_WORKSPACE.md) (Macro ↔ Meso ↔ Micro UI switching)
 - [`docs/specs/SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md`](./SPEC_05_DUAL_ENGINE_ALIGNMENT_AND_LINEWORLDS.md) (Self-Hosted RunningHub `/openapi/v2` Card Engine & `nodeInfoList` Injector)  
 **Reference Specification Audited**:
-- [`docs/references/runninghub-open-api-2026-10-18/`](../references/runninghub-open-api-2026-10-18/README.md) (`openapi.json`, `API_REFERENCE.md`, `endpoints.json`, `guides/*.txt`, `web-pages/*.txt` — 15 functional groups, 75 paths, 98 operations from `https://story.runninghub.ai/aivideo/open/v1`)
+- The [RunningHub Open API documentation](https://story.runninghub.ai/zh-cn/ai-comic/open-api) (captured 2026-10-18: 15 functional groups, 75 paths, 98 operations from `https://story.runninghub.ai/aivideo/open/v1`). The local snapshot was removed from the repository on 2026-10-30 because it is third-party documentation without a license.
 - [`docs/references/open-source-lock.json`](../references/open-source-lock.json) (`baserow`, `teable`, `activepieces`, `affine`, `windmill`, `xyflow`, `univer`)  
 **Order of Execution**: **Step 5 (After `SPEC_05` — Unifies Lower-Layer `/openapi/v2` ComfyUI Card Engine with Upper-Layer `/aivideo/open/v1` Drama Workbench & Macro/Meso/Micro UI)**  
 **Owned Files**:
@@ -83,7 +83,7 @@ All RH STORY `/aivideo/open/v1/*` API calls **read and write directly to ZeroFie
 ## 3. Part 1 (Backend): Self-Hosted `/aivideo/open/v1/*` RH STORY OpenAPI Engine (`project_docs/story_openapi.py`)
 
 ### 3.1 Wire Conventions & Response Envelope (100% RH STORY Spec Compliant)
-Per `docs/references/runninghub-open-api-2026-10-18/guides/02-conventions.txt` and `03-error-codes.txt`:
+Per the conventions and error-code guides of the official documentation:
 
 1. **Base Path**: `/aivideo/open/v1` (mounted in `project_docs/runtime_http.py` whenever `parsed.path.startswith("/aivideo/open/v1")`).
 2. **Success Envelope (`HTTP 200`)**:
