@@ -12,6 +12,7 @@ jobs:
   test-and-package:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python: ["3.11", "3.12"]
     services:
