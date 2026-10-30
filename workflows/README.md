@@ -53,6 +53,16 @@ An optional cinema lane next to Previs Motion Pass → Look Key → Look Pass: *
 
 Install `ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors` into `models/loras/ltx/`. On the RTX 4090 a 6 s shot takes about 55 s (key) + 2-3 min (render). Findings: [motion-control lab](../docs/research/2026-10-20-motion-control-lab.md#layout-to-render-ic-lora-2026-10-21).
 
+**Chained Layout Render (long takes).** A long take is rendered as 8 s slices (193 frames) that share their boundary frames. Three optional image columns on the row turn the stage into a chained slice ([`layout_guides.py`](../project_assistant/studio/layout_guides.py)); a row without them binds exactly as above.
+
+| Column | Graph | Use |
+|---|---|---|
+| **Chain In Frame** | `LoadImage` → `ImageScale` → `LTXVImgToVideoInplace` (strength 1.0) on the empty latent before the previs guide | The previous slice's last frame becomes frame 0: no seam. |
+| **Mid Key** | `LTXVAddGuide` at the middle of the previs (a multiple of 8), strength 0.8 | A still the slice must pass through, e.g. a small Klein edit of an approved frame (eyes open, a smile) that keeps a face while the camera moves. |
+| **End Key** | `LTXVAddGuide` at frame -1, strength 0.9 | The planned last frame; the next slice starts from it. |
+
+The guides chain after the pose-skeleton guide and feed the sampler, `LTXVCropGuides` and the audio/video concat. An End Key must match the framing the next slice's previs starts with, or the next slice pulls back to the previs. The 88 s [Updraft one-take](../samples/updraft/updraft_oner.mp4) was made this way; the scripts that ran it directly against ComfyUI, with the compositing and sound around it, are in [`tools/oner/`](../tools/oner/README.md).
+
 Image bindings accept the active shot, its predecessors, and mentioned @Asset rows only. Include soul-cast in the flow node input_tabs to resolve @CAST-01 references. The compiler supports the actual input.rows payload and the older documented structured_rows alias. param_bindings maps node_id.input_name to a context key or literal; empty context values leave the workflow default intact.
 
 For local ComfyUI use platform=local and base_url=http://127.0.0.1:8188. For the Developer Platform install pip install 'openbench[comfy]', use platform=comfy_sdk, set COMFY_API_KEY, and set base_url or COMFY_BASE_URL to a serverless deployment or a self-hosted [comfy-api-proxy](https://github.com/Comfy-Org/comfy-api-proxy); Comfy Cloud is the default SDK target. The [official SDK](https://github.com/Comfy-Org/comfy-python-sdk) uses workflow API v2 assets/jobs, with origin-scoped bearer credentials and bounded output streaming. Credentials stay in api_key_env/environment, never in a workflow. Cloud/deployments must have these same model files and custom nodes installed.
