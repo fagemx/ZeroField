@@ -2,23 +2,33 @@
 
 **An open-weights film crew that plans with you — and checks every shot it makes.**
 
-[▶ Demo video (2 min)](TODO_DEMO_URL) · [▶ *Updraft*, an 88-second one-take](TODO_ONER_URL) · [Live demo (read-only)](TODO_LIVE_DEMO_URL) · [Run it locally](#run-locally) · MIT · `#OpenSourceHiggsfield`
+[▶ Demo video (2 min)](TODO_DEMO_URL) · [▶ Updraft one-take (88 s)](samples/updraft/updraft_oner.mp4) · [▶ Exported 10-shot film](samples/updraft/updraft_film.mp4) · [Live demo (read-only)](TODO_LIVE_DEMO_URL) · [Run it locally](#run-locally) · MIT · `#OpenSourceHiggsfield`
 
-[![Frames from Updraft, an 88-second one-take rendered with LTX-2.5 and FLUX 3 Klein](docs/media/updraft-oner-strip.jpg)](TODO_ONER_URL)
+[![Frames from Updraft, an 88-second one-take rendered with LTX-2.5 and FLUX 3 Klein](docs/media/updraft-oner-strip.jpg)](samples/updraft/updraft_oner.mp4)
 
 ZeroField is an open-source production workspace for AI films, built on ComfyUI for the [Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield). A crew of agents breaks down the script, builds locked character, set and prop assets, compiles each shot's prompt and reference plan, renders it with FLUX 3 Klein and LTX-2.5, and scores the take against the plan before it goes into the cut. Everything the crew writes is a proposal: nothing changes until a person adopts it.
 
 - **Assets first, one job per picture.** A character is a locked description plus a face close-up, a headless full-body front, a back and a composed sheet; sets carry the space and one light logic; props carry a shape lock and separate states. Each asset is stress-tested in new poses and light before any shot is made.
 - **Compiled shots.** The first frame gets a reference plan that tells FLUX 3 Klein which picture is the face, the body, the place or the prop. The video prompt follows a fixed skeleton for LTX-2.5: exact head count, location map, camera, timed action, one light and an audio lock.
 - **It checks its own takes.** Camera fidelity compares the take's camera path with the 3D plan, and the Continuity Supervisor grades an eight-frame contact sheet with a local vision model; a failing grade comes with a rewritten prompt and a one-click retake.
-- **Open weights only.** FLUX 3 Klein, LTX-2.5 (video and sound, with the Layout-to-Render and Alpha-Gen IC-LoRAs) and a crew on local Ollama `qwen3.8:27b`. No partner nodes, no closed APIs on the demo path. One RTX 4090.
+- **Open weights only.** FLUX 3 Klein, LTX-2.5 (video and sound, with the Layout-to-Render and Alpha-Gen IC-LoRAs), ACE-Step 1.5 for the one-take's score, and a crew on local Ollama `qwen3.8:27b`. No partner nodes, no closed APIs on the demo path. One RTX 4090.
 
-### The sample production: Updraft
+## Start here
+
+1. **Watch the 88-second Updraft one-take**: [`samples/updraft/updraft_oner.mp4`](samples/updraft/updraft_oner.mp4). A single take up a red canyon before dawn, over the rim into the first sun, a quiet hold on the pilot's face, a push into her eye, and through a chain of circles (pupil, rock pool, moon, sun, the glowing balloon) to the child she was on her first flight. [How it was made](#updraft-two-films).
+2. **Watch the episode the studio exported**: [`samples/updraft/updraft_film.mp4`](samples/updraft/updraft_film.mp4), ten shots of the Updraft production, each generated, reviewed and adopted in ZeroField; the launcher seeds the same production with every take, prompt and seed ([samples](samples/README.md)).
+3. **Open it**: [browse it without a GPU](#try-it-without-a-gpu), or run `python run_studio.py --port 3020 --comfy-url http://127.0.0.1:8188` after the install in [Run locally](#run-locally); the Updraft showcase project opens with its cast, sets, props, look and shot slate.
+4. **What it adds to ComfyUI for filmmaking**: asset-first production (cast three-view sheets, prop and set sheets, reference images that state what they are for, a fixed prompt skeleton per shot, [SPEC_21](docs/specs/SPEC_21_ASSET_FIRST_PRODUCTION_AND_UPDRAFT.md)); a 3D Stage whose previs drives the LTX-2.5 Layout-to-Render IC-LoRA, chained into long takes; shot review with takes, adoption and an episode film; a planning crew on a local open-weights model.
+5. **Open weights only**: LTX-2.5 22B distilled (video with sound), FLUX 3 Klein (images and edits), ACE-Step 1.5 (score), Ollama with `qwen3.8:27b` (crew), all local; no Partner Nodes or closed APIs on the demo path ([Models](#models)).
+
+Verified on 2026-10-30 at `b7ea8ce` (later commits change only documentation and the demo deployment): the full backend suite (1,502 tests, four shards on a throwaway PostgreSQL; five environment-sensitive tests, an API key in the environment and browser or timing tests under parallel load, passed when re-run alone) and the frontend suite (732 tests) and build.
+
+### Updraft: two films
 
 *Updraft* is an original short: a trainee pilot's burner dies over a red canyon at sunrise. It comes in two forms.
 
-- **Ten shots made in the app** (`samples/updraft/`): assets, first frames, takes and the exported 40-second film, all rendered through ZeroField on one RTX 4090. Every file records its card, seed and exact prompt in [`manifest.json`](samples/updraft/manifest.json). The launcher seeds this production, so it is what you see when you open the studio.
-- **An 88-second one-take** ([video](TODO_ONER_URL)): the whole camera move was blocked in Blender, and each eight-second segment was rendered with the same LTX-2.5 Layout-to-Render workflow the 3D Stage uses ([`workflows/ltx25_layout_render.json`](workflows/ltx25_layout_render.json)), with FLUX 3 Klein keyframes holding the face between segments and LTX-2.5's own generated sound. The segment joins, the circle transitions and the sound mix were done with Python/OpenCV scripts outside the app; those scripts are not part of this repository.
+- **Ten shots made in the app** (`samples/updraft/`): assets, first frames, takes and the [exported 40-second film](samples/updraft/updraft_film.mp4), all rendered through ZeroField on one RTX 4090. Every file records its card, seed and exact prompt in [`manifest.json`](samples/updraft/manifest.json). The launcher seeds this production, so it is what you see when you open the studio.
+- **An 88-second one-take** ([`updraft_oner.mp4`](samples/updraft/updraft_oner.mp4)): nine eight-second slices from one Blender previs camera, each rendered with the LTX-2.5 Layout-to-Render IC-LoRA. Each slice starts on the previous slice's last frame and is guided through FLUX 3 Klein keyframes, the same chaining the studio's **Chain In Frame**, **Mid Key** and **End Key** columns do on a Cinema Studio row. The circle push-through (pupil → rock pool → moon → sun → balloon) is composited from LTX image-to-video plates, and the sound is the takes' own LTX audio with an ACE-Step 1.5 score. The slices, the push-through and the mix were made with the scripts in [`tools/oner/`](tools/oner/README.md), not in the studio's interface.
 
 ![Left: Blender previs. Right: the LTX-2.5 Layout-to-Render result for the same frame (Updraft one-take, 0:05, 0:37 and 1:26)](docs/media/updraft-previs-to-render.jpg)
 
@@ -33,7 +43,7 @@ ZeroField is an open-source production workspace for AI films, built on ComfyUI 
 | Open-source license | Code: [MIT](LICENSE). Updraft content and media: [CC0](samples/README.md#license). Model weights keep their own licenses ([workflow setup](workflows/README.md)). |
 | Run it locally | [Run locally](#run-locally); [without a GPU](#try-it-without-a-gpu) for browsing only |
 | Workflow files | [`workflows/*.json`](workflows/README.md) and the card contracts in `workflows/cards/` |
-| Other tools used | Ollama with `qwen3.8:27b` for the crew; Blender and Python/OpenCV for the one-take (see above) |
+| Other tools used | Ollama with `qwen3.8:27b` for the crew. For the one-take: Blender (previs), ACE-Step 1.5 (score) and Python/OpenCV (push-through, seam fixes, mix), all in [`tools/oner/`](tools/oner/README.md) |
 | Demo video | [2 minutes](TODO_DEMO_URL) |
 | Try it | [Read-only live demo](TODO_LIVE_DEMO_URL) of the Updraft production. Generation is not hosted: it runs on your own GPU. |
 | SFW, original | Updraft is original; no third-party footage, characters, text or real likenesses |
@@ -86,19 +96,9 @@ A policy lock keeps a production on open weights, and a GPU arbiter queues Comfy
 - Character voices are not built; spoken lines and sound come from LTX-2.5's generated audio.
 - Crew planning with the local 27B model is still weak on our hard evaluation set (beats 18.56%, continuity 24.29%). Every crew output is a proposal that a person reviews.
 - Starting a blank production from a pasted screenplay still has open break points ([Verification status](#verification-status-of-the-spec_20-work)).
-- The one-take was assembled outside the app (Blender previs, scripted Layout Render runs, Python/OpenCV compositing). In the app, the 3D Stage → Layout Render path renders one shot at a time.
+- The one-take's slices, push-through transitions and mix were made with the scripts in `tools/oner/`, not in the studio's interface; the studio can chain Layout Render slices row by row, but does not composite transitions or score a film.
 - Tested only on Windows 11 with one RTX 4090. Linux, the crew under Docker, Comfy Cloud and real MCP hosts are untested.
 - Object Swap mattes the whole foreground, so it cannot pick one person out of several.
-
-## Start here
-
-1. **Watch the 88-second Updraft one-take**: [`samples/updraft/updraft_oner.mp4`](samples/updraft/updraft_oner.mp4). A single take up a red canyon before dawn, over the rim into the first sun, a quiet hold on the pilot's face, a push into her eye, and through a chain of circles (pupil, rock pool, moon, sun, the glowing balloon) to the child she was on her first flight. Nine chained Layout Render slices from one Blender previs camera, a push-through composited from LTX image-to-video plates, the takes' own LTX sound and an ACE-Step score. [How it was made](tools/oner/README.md).
-2. **Watch the episode the studio exported**: [`samples/updraft/updraft_film.mp4`](samples/updraft/updraft_film.mp4), ten shots of the Updraft production, each generated, reviewed and adopted in ZeroField; the launcher seeds the same production with every take, prompt and seed ([samples](samples/README.md)).
-3. **Run it**: `python run_studio.py --port 3020 --comfy-url http://127.0.0.1:8188` after the install in [Run locally](#run-locally); the Updraft showcase project opens with its cast, sets, props, look and shot slate.
-4. **What it adds to ComfyUI for filmmaking**: asset-first production (cast three-view sheets, prop and set sheets, reference images that state what they are for, a fixed prompt skeleton per shot, [SPEC_21](docs/specs/SPEC_21_ASSET_FIRST_PRODUCTION_AND_UPDRAFT.md)); a 3D Stage whose previs drives the LTX-2.5 Layout-to-Render IC-LoRA, chained into long takes; shot review with takes, adoption and an episode film; a planning crew on a local open-weights model.
-5. **Open weights only**: LTX-2.5 22B distilled (video with sound), FLUX 3 Klein (images and edits), ACE-Step 1.5 (score), Ollama with `qwen3.8:27b` (crew), all local; no Partner Nodes or closed APIs on the demo path ([Models](#models)).
-
-Verified on 2026-10-30 at this commit: the full backend suite (1,502 tests, four shards on a throwaway PostgreSQL; five environment-sensitive tests, an API key in the environment and browser or timing tests under parallel load, passed when re-run alone) and the frontend suite (732 tests) and build.
 
 ## Available now
 
