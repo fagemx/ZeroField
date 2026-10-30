@@ -1,0 +1,21 @@
+# Connect an external agent
+
+Agents that speak MCP (Claude Code, Goose, MCP Inspector) can work on one production through `zerofield-mcp`, a stdio MCP server installed with the package (MCP 2026-07-28, and the `initialize` handshake of 2025-11-25 and earlier). It talks to the running studio on this machine only. A showrunner issues a service-account token for the production; the token lists the tools the agent may use, a write mode (`propose_only`, or `generate` to also allow `request_generation`) and an expiry (at most 365 days). The response shows the token once; ZeroField keeps only its hash. In development mode the request below runs as the default showrunner; with token sign-in add `Authorization = 'Bearer <your crew token>'` to the headers.
+
+```powershell
+$body = @{ accountKey = 'claude-code'; tools = @('list_pages', 'read_page', 'propose_table_edit', 'get_workflow'); writeMode = 'propose_only'; expiresInDays = 30 } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3020/projects/api/<production>/service-accounts -ContentType application/json -Headers @{ 'X-Requested-With' = 'projects' } -Body $body
+claude mcp add zerofield -e ZEROFIELD_MCP_TOKEN=zfsa_... -e ZEROFIELD_PROJECT=<production> -- zerofield-mcp
+```
+
+`ZEROFIELD_URL` selects another local port (default `http://127.0.0.1:3020`). Everything the agent writes is a proposal that a crew member adopts in ZeroField. `request_generation` submits only free local open-weights renders and refuses closed or paid plans. `GET .../service-accounts` lists tokens with their call counts; `POST .../service-accounts/<accountKey>/revoke` revokes one; `GET .../service-accounts/<accountKey>/audit?limit=25` returns its recent calls. Every call is audited under the service account. The `get_workflow` tool hands the agent the [`skills/`](../skills/README.md) manuals. The protocol paths are covered by tests with fake and in-process clients; no real MCP host (MCP Inspector, Goose with Ollama, Claude Code) has been connected to them yet.
+
+A showrunner can do all of this without the request above: the Agent Console page **Environments & Bridges** has an **External agents** section that creates the token (name, tools, write mode, expiry), shows it once with a ready-to-paste `zerofield-mcp` setup, lists each agent with its scope, expiry, last use and call counts, revokes it after a confirmation and shows its recent activity.
+
+Agents that connect over HTTP instead of launching a process can use the studio's own MCP endpoint, `POST http://127.0.0.1:3020/mcp` (Streamable HTTP, same protocol versions). It is for clients on this machine only: it refuses non-loopback clients, a `Host` other than `localhost`, `127.0.0.1` or `[::1]`, a non-local `Origin`, and requests relayed by a proxy or tunnel. Every request needs the same service-account token as a Bearer header, with the same tools, write mode, expiry, revocation, rate limit and audit as `zerofield-mcp`; `X-ZeroField-Project` optionally refuses a token for another production. The endpoint answers each message with one JSON response and keeps no sessions; `GET` and `DELETE` return 405.
+
+```powershell
+claude mcp add --transport http zerofield http://127.0.0.1:3020/mcp --header "Authorization: Bearer zfsa_..."
+```
+
+Hosts that render MCP Apps (`io.modelcontextprotocol/ui`) also get a 3D preview card next to `read_shot` and `propose_previs_ops`: the shot, its plan revision, the six contact-sheet frames and, for a proposal, its operations and state. The card is offered only to clients that declare `text/html;profile=mcp-app` (on `/mcp`, 2026-07-28 requests only: the endpoint keeps no session to remember a 2025 handshake); other clients get the usual text and image results. The card is a self-contained page with a strict content policy and no network access. Its image comes in the tool result or through a `resources/read` that the host forwards with the agent's token, served only to tokens that may call those tools and audited like a tool call. Its buttons only ask the host to open a link or to run `read_shot` again. The generation-desk and film-joins cards wait for SPEC_19. Checked in a simulated host page (headless Edge), not yet in a real MCP Apps host.
