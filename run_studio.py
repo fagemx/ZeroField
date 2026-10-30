@@ -237,10 +237,14 @@ def seed_showcase_reference_pack(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, 
 
 
 def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id=None):
-    """Add the Previs, Actor Matte and Pose Skeleton columns to the cinema slate once, keeping user media.
+    """Add the Previs, Actor Matte and Pose Skeleton columns to the cinema slate once, keeping user media, and give each
+    shot the storyboard's 3D seed.
 
     The 3D Stage writes all three on Render previs; the matte frees the actor in the Layout Render and the skeleton
-    carries the acting (SPEC_10 §7.7)."""
+    carries the acting (SPEC_10 §7.7). The seed is what a breakdown writes (story_adaptation, ``previsPlan``): the
+    parallax set, whose far card is the shot's @SET picture. Without it the stage opens on its default set, the
+    observatory of the earlier example. A shot that already has a seed keeps it."""
+    from project_docs import story_openapi as story
     actor_id = actor_id or server.DEMO_MEMBERS[0]["actor_id"]
     tab = repo.get_tab_for_update(conn, slug, "cinema-studio")
     if not tab:
@@ -256,7 +260,14 @@ def seed_showcase_previs(conn, slug=SHOWCASE_SLUG, *, samples_dir=None, actor_id
         clean, _ = doc_schema.validate_doc(doc, slug=slug)
         repo.save_tab_doc(conn, slug, "cinema-studio", doc=clean, title=tab["title"], actor_id=actor_id,
                           session_id="studio-previs-seed", base_revision=tab["revision"], force_revision=True)
-    return {"seeded": dirty}
+    planned = 0
+    for row in story.table_rows(conn, slug, "cinema-studio"):
+        identifier = story.shot_id(slug, row)
+        meta = story.shot_meta(conn, identifier)
+        if not meta.get("previsPlan"):
+            story.store(conn, "meta_" + identifier, "shot_meta", {**meta, "previsPlan": {"set": "parallax"}}, slug)
+            planned += 1
+    return {"seeded": dirty, "plans": planned}
 
 
 def load_worker_configs(path, defaults):

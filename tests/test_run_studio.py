@@ -244,6 +244,18 @@ class ShowcaseDatabaseTests(unittest.TestCase):
         self.assertEqual([studio._text(c) for c in s03["content"][-3:]], ["", "", ""])  # a stage render fills them
         self.assertFalse(studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)["seeded"])
 
+    def test_previs_seed_gives_each_shot_the_parallax_set_and_keeps_an_existing_seed(self):
+        from project_docs import story_openapi as story
+        rows = story.table_rows(self.conn, self.slug, "cinema-studio")
+        kept = story.shot_id(self.slug, rows[0])
+        story.store(self.conn, "meta_" + kept, "shot_meta", {"previsPlan": {"set": "empty"}}, self.slug)
+        result = studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)
+        self.assertEqual(result["plans"], len(rows) - 1)
+        self.assertEqual(story.shot_meta(self.conn, kept)["previsPlan"], {"set": "empty"})
+        for row in rows[1:]:
+            self.assertEqual(story.shot_meta(self.conn, story.shot_id(self.slug, row))["previsPlan"], {"set": "parallax"})
+        self.assertEqual(studio.seed_showcase_previs(self.conn, self.slug, actor_id=self.actor)["plans"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
