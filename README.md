@@ -2,9 +2,9 @@
 
 **An open-weights film crew that plans with you — and checks every shot it makes.**
 
-[▶ Demo video (2 min)](TODO_DEMO_URL) · [▶ Updraft one-take (88 s)](samples/updraft/updraft_oner.mp4) · [▶ Exported 10-shot film](samples/updraft/updraft_film.mp4) · [Live demo (read-only)](https://fagem-zerofield-studio.hf.space/projects/zerofield-showcase/) · [Run it locally](#run-locally) · MIT · `#OpenSourceHiggsfield`
+[▶ Demo video (2 min)](https://youtu.be/17MUH505j3s) · [▶ Updraft one-take (88 s)](https://youtu.be/RbmwLYLcuCA) · [▶ Exported 10-shot film](samples/updraft/updraft_film.mp4) · [Live demo (read-only)](https://fagem-zerofield-studio.hf.space/projects/zerofield-showcase/) · [Run it locally](#run-locally) · MIT · `#OpenSourceHiggsfield`
 
-[![Frames from Updraft, an 88-second one-take rendered with LTX-2.5 and FLUX 3 Klein](docs/media/updraft-oner-strip.jpg)](samples/updraft/updraft_oner.mp4)
+[![Frames from Updraft, an 88-second one-take rendered with LTX-2.5 and FLUX 3 Klein](docs/media/updraft-oner-strip.jpg)](https://youtu.be/RbmwLYLcuCA)
 
 ZeroField is an open-source production workspace for AI films, built on ComfyUI for the [Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield). A crew of agents breaks down the script, builds locked character, set and prop assets, compiles each shot's prompt and reference plan, renders it with FLUX 3 Klein and LTX-2.5, and scores the take against the plan before it goes into the cut. Everything the crew writes is a proposal: nothing changes until a person adopts it.
 
@@ -15,7 +15,7 @@ ZeroField is an open-source production workspace for AI films, built on ComfyUI 
 
 ## Start here
 
-1. **Watch the 88-second Updraft one-take**: [`samples/updraft/updraft_oner.mp4`](samples/updraft/updraft_oner.mp4). A single take up a red canyon before dawn, over the rim into the first sun, a quiet hold on the pilot's face, a push into her eye, and through a chain of circles (pupil, rock pool, moon, sun, the glowing balloon) to the child she was on her first flight. [How it was made](#updraft-two-films).
+1. **Watch the 88-second Updraft one-take**: [on YouTube](https://youtu.be/RbmwLYLcuCA) (file: [`samples/updraft/updraft_oner.mp4`](samples/updraft/updraft_oner.mp4)). A single take up a red canyon before dawn, over the rim into the first sun, a quiet hold on the pilot's face, a push into her eye, and through a chain of circles (pupil, rock pool, moon, sun, the glowing balloon) to the child she was on her first flight. [How it was made](#updraft-two-films).
 2. **Watch the episode the studio exported**: [`samples/updraft/updraft_film.mp4`](samples/updraft/updraft_film.mp4), ten shots of the Updraft production, each generated, reviewed and adopted in ZeroField; the launcher seeds the same production with every take, prompt and seed ([samples](samples/README.md)).
 3. **Open it**: [browse it without a GPU](#try-it-without-a-gpu), or run `python run_studio.py --port 3020 --comfy-url http://127.0.0.1:8188` after the install in [Run locally](#run-locally); the Updraft showcase project opens with its cast, sets, props, look and shot slate.
 4. **What it adds to ComfyUI for filmmaking**: asset-first production (cast three-view sheets, prop and set sheets, reference images that state what they are for, a fixed prompt skeleton per shot, [SPEC_21](docs/specs/SPEC_21_ASSET_FIRST_PRODUCTION_AND_UPDRAFT.md)); a 3D Stage whose previs drives the LTX-2.5 Layout-to-Render IC-LoRA, chained into long takes; shot review with takes, adoption and an episode film; a planning crew on a local open-weights model.
@@ -44,7 +44,7 @@ Verified on 2026-10-30 at `b7ea8ce` (later commits change only documentation and
 | Run it locally | [Run locally](#run-locally); [without a GPU](#try-it-without-a-gpu) for browsing only |
 | Workflow files | [`workflows/*.json`](workflows/README.md) and the card contracts in `workflows/cards/` |
 | Other tools used | Ollama with `qwen3.8:27b` for the crew. For the one-take: Blender (previs), ACE-Step 1.5 (score) and Python/OpenCV (push-through, seam fixes, mix), all in [`tools/oner/`](tools/oner/README.md) |
-| Demo video | [2 minutes](TODO_DEMO_URL) |
+| Demo video | [2 minutes](https://youtu.be/17MUH505j3s) |
 | Try it | [Read-only live demo](https://fagem-zerofield-studio.hf.space/projects/zerofield-showcase/) of the Updraft production ([Space](https://huggingface.co/spaces/fagem/zerofield-studio), set up by [`deploy/hf-space/`](deploy/hf-space/Dockerfile)). Nothing can be changed or generated there; generation runs on your own GPU. |
 | SFW, original | Updraft is original; no third-party footage, characters, text or real likenesses |
 
