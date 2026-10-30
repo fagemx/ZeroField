@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-from . import context_compiler, runtime
+from . import context_compiler, layout_guides, runtime
 from . import _compat as legacy
 
 __all__ = [
@@ -711,6 +711,10 @@ def bind_external_workflow(workflow: dict, ctx: dict, config: dict, task: dict, 
     if config.get("seed") is not None:
         ctx["seed"] = int(config["seed"])
     bindings = {}
+    if config.get("chain_guides"):
+        # Chained Layout Render: pin the previous slice's last frame and guide toward the row's Mid / End Key images.
+        options = config["chain_guides"] if isinstance(config["chain_guides"], dict) else None
+        bindings.update(layout_guides.add_chain_guides(workflow, ctx, options))
     scoped = context_compiler._shot_media_candidates(task)
     is_h3_v3 = (
         isinstance(workflow.get("26"), dict)

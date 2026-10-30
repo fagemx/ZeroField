@@ -15,6 +15,7 @@ from project_docs import story_look
 ASSET = lambda n: '/projects/api/demo/assets/pa_' + format(n, '032x')
 NEW_KEYS = {'reference_plan', 'image_reference_prompt', 'video_skeleton_prompt', 'dropped_blocks', 'asset_panel_prompt',
             'edit_prompt'}
+CHAIN_KEYS = {'chain_in_frame', 'mid_keyframe', 'end_keyframe'}  # chained Layout Render rows (layout_guides.py)
 OLD_KEYS = {'compiled_prompt', 'action_prompt', 'seed', 'optical_rig', 'camera_motion', 'camera_moves', 'jutsu_mode',
             'look_film', 'look_color', 'look_light', 'resolved_assets', 'asset_map', 'excluded_refs', 'slot_plan',
             'asset_images', 'reference_image_urls', 'primary_image_url', 'previs_video', 'source_video', 'pose_skeleton',
@@ -552,8 +553,8 @@ class CompatibilityTests(unittest.TestCase):
     def test_new_keys_are_only_additions(self):
         task = shot_task('[0-2s] @CAST-01 grips the valve of @PROP-01 at @SET-01. "Now."', look=LOOK)
         ctx = ctx_of(task)
-        self.assertEqual(set(ctx) - NEW_KEYS, OLD_KEYS)
-        self.assertTrue(NEW_KEYS <= set(ctx))
+        self.assertEqual(set(ctx) - NEW_KEYS - CHAIN_KEYS, OLD_KEYS)
+        self.assertTrue(NEW_KEYS | CHAIN_KEYS <= set(ctx))
         bare = copy.deepcopy(task)
         del bare['input']['asset_meta']
         before = ctx_of(bare)

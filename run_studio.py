@@ -316,7 +316,8 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
         # Layout Render: Klein turns previs frame 0 into a photographic key; the Layout-To-Render IC-LoRA then keeps the
         # previs set and camera and takes the look from that key. The stage's actor matte frees the actor, which the
         # LoRA would otherwise render as the mannequin (docs/research/2026-10-20-motion-control-lab.md), and the
-        # Union-Control IC-LoRA takes his acting from the stage's pose skeleton (SPEC_10 §7.7).
+        # Union-Control IC-LoRA takes his acting from the stage's pose skeleton (SPEC_10 §7.7). A row with Chain In Frame /
+        # Mid Key / End Key images renders a chained slice of a long take (project_assistant/studio/layout_guides.py).
         "layoutkey": {"image_gen": comfy("flux3_klein_look_key.json", prompt_node=None, output_node="9", reference_role="anchor_keyframe",
                                          input_bindings={"20.video": {"source": "previs_video", "upload": "video"},
                                                          "20.frame_load_cap": {"literal": 1},
@@ -325,7 +326,7 @@ def worker_configs(comfy_url, *, platform="local", api_key_env=None):
                                                          "21.image": {"source": "asset_images.0", "upload": "image"},
                                                          "22.image": {"source": "asset_images.1", "upload": "image", "optional": True}})},
         "layout": {"video_gen": comfy("ltx25_layout_render.json", output_node="12", prompt_node="30", prompt_input="string_a",
-                                      seed_node="50", seed_input="noise_seed",
+                                      seed_node="50", seed_input="noise_seed", chain_guides=True,
                                       input_bindings={"20.video": {"source": "previs_video", "upload": "video"},
                                                       "24.video": {"source": "actor_matte", "upload": "video"},
                                                       "44.video": {"source": "pose_skeleton", "upload": "video"},

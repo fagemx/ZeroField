@@ -528,6 +528,10 @@ def resolve_studio_context(task: dict) -> dict:
     references = list(dict.fromkeys(url for asset in resolved for url in asset["reference_urls"]))
     roles = {}
     patterns = {
+        # Chained Layout Render (layout_guides.py), first so "End Key" never reads as the anchor keyframe.
+        "chain_in_frame": r"chain\s*in|previous\s*shot.*frame|接續幀|上一鏡末幀",
+        "mid_keyframe": r"mid\s*key|中段關鍵幀",
+        "end_keyframe": r"end\s*key|結尾關鍵幀",
         "previs_video": r"previs|blockout|預演",
         "source_video": r"source.*video|driving.*video|original.*video|原片",
         "pose_skeleton": r"pose\s*skeleton",  # before motion_structure_video, whose pattern also matches "pose"
